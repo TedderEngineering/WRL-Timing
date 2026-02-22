@@ -61,21 +61,21 @@ export function AdminUploadPage() {
   const [premium, setPremium] = useState(false);
   const [status, setStatus] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
 
-  // Files (keyed by slot key)
+  // Step 2: files (keyed by slot key)
   const [fileMap, setFileMap] = useState<Record<string, File | null>>({});
   const [csvMap, setCsvMap] = useState<Record<string, string | null>>({});
   const [previewMap, setPreviewMap] = useState<Record<string, string | null>>({});
   const [fileError, setFileError] = useState<string | null>(null);
-  const [autoFilled, setAutoFilled] = useState(false);
 
-  // Step 2: validation
+  // Step 3: validation
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
 
-  // Step 3: result
+  // Step 4: result
   const [result, setResult] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [autoFilled, setAutoFilled] = useState(false);
 
   // Load available formats
   useEffect(() => {
@@ -101,14 +101,18 @@ export function AdminUploadPage() {
     setCsvMap({});
     setPreviewMap({});
     setFileError(null);
+    setAutoFilled(false);
     const fmt = formats.find((f) => f.id === fmtId);
     if (fmt) setSeries(fmt.series);
   };
 
-  const filesValid = selectedFormat?.fileSlots.every(
-    (slot) => !slot.required || csvMap[slot.key]
-  ) ?? false;
-  const allStep1Valid = format && name.trim() && date && track.trim() && series.trim() && season && selectedFormat?.implemented && filesValid;
+  const filesValid =
+    selectedFormat?.fileSlots.every(
+      (slot) => !slot.required || csvMap[slot.key]
+    ) ?? false;
+
+  const allStep1Valid =
+    format && name.trim() && date && track.trim() && series.trim() && season && selectedFormat?.implemented && filesValid;
 
   const handleFile = useCallback(async (slotKey: string, file: File) => {
     setFileMap((prev) => ({ ...prev, [slotKey]: file }));
@@ -116,8 +120,9 @@ export function AdminUploadPage() {
     try {
       const text = await file.text();
       setCsvMap((prev) => ({ ...prev, [slotKey]: text }));
-      // Generate preview
       let preview: string;
+      let didFill = false;
+
       if (file.name.endsWith(".json")) {
         try {
           const json = JSON.parse(text.replace(/^\uFEFF/, ""));
@@ -131,10 +136,9 @@ export function AdminUploadPage() {
           }
           preview = lines.join("\n");
 
-          // Auto-fill metadata from IMSA session block
+          // Auto-fill metadata from session block
           if (json.session) {
             const s = json.session;
-            let didFill = false;
             if (s.event_name && !name.trim()) { setName(s.event_name); didFill = true; }
             if (s.circuit?.name && !track.trim()) { setTrack(s.circuit.name); didFill = true; }
             if (s.championship_name && !series.trim()) {
@@ -149,14 +153,56 @@ export function AdminUploadPage() {
                 if (season === String(new Date().getFullYear())) { setSeason(dm[3]); didFill = true; }
               }
             }
-            if (didFill) setAutoFilled(true);
           }
         } catch {
           preview = text.split("\n").slice(0, 4).join("\n");
         }
       } else {
         preview = text.split("\n").slice(0, 4).join("\n");
+
+        // Auto-fill from SpeedHive-style CSV filenames
+        // Pattern: "{SERIES}_{Venue}_{Abbrev}_-_{Track}_-_{RaceInfo}_-_{Duration}_{YYYY-MM-DD}_{type}.csv"
+        // Example: "WORLD_RACING_LEAGUE_Eagles_Canyon_WRL_-_Eagles_Canyon_-_87_Sunday_-_7_Hour_2026-02-04_all_laps.csv"
+        const fn = file.name.replace(/\.csv$/i, "");
+
+        // Extract date (YYYY-MM-DD)
+        const dateMatch = fn.match(/(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch && !date) { setDate(dateMatch[1]); didFill = true; }
+        if (dateMatch) {
+          const yr = dateMatch[1].split("-")[0];
+          if (season === String(new Date().getFullYear()) && yr !== season) { setSeason(yr); didFill = true; }
+        }
+
+        // Split by _-_ separators for structured SpeedHive filenames
+        const segments = fn.split(/_-_/);
+        if (segments.length >= 3) {
+          // Segment 1 has series + venue, segment 2 is track, rest is race info
+          const trackName = segments[1].replace(/_/g, " ").trim();
+          if (trackName && !track.trim()) { setTrack(trackName); didFill = true; }
+
+          // Build race name from segments after track, minus date and file type suffix
+          const raceSegments = segments.slice(2)
+            .join(" - ")
+            .replace(/_/g, " ")
+            .replace(/\d{4}-\d{2}-\d{2}/, "")
+            .replace(/\b(all laps|summary|laps)\b/gi, "")
+            .replace(/\s{2,}/g, " ")
+            .trim()
+            .replace(/^-\s*|\s*-$/g, "")
+            .trim();
+          if (raceSegments && !name.trim()) { setName(raceSegments); didFill = true; }
+
+          // Detect series from first segment
+          const firstSeg = segments[0].toUpperCase();
+          if (!series.trim() || series === "WRL") {
+            if (firstSeg.includes("WORLD_RACING_LEAGUE") || firstSeg.includes("WRL")) {
+              setSeries("WRL");
+            }
+          }
+        }
       }
+
+      if (didFill) setAutoFilled(true);
       setPreviewMap((prev) => ({ ...prev, [slotKey]: preview }));
     } catch {
       setFileError(`Could not read file for ${slotKey}`);
@@ -225,7 +271,7 @@ export function AdminUploadPage() {
         ))}
       </div>
 
-      {/* Step 1: Format, Files & Info */}
+      {/* Step 1: Format + Files + Metadata (unified) */}
       {step === 1 && (
         <div className="space-y-5">
           {/* Format selector */}
@@ -267,24 +313,28 @@ export function AdminUploadPage() {
             )}
           </div>
 
-          {/* File upload drop zones */}
+          {/* File upload (was step 2) */}
           {selectedFormat && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-lg px-4 py-3">
-                Uploading as <b>{selectedFormat.name}</b> format. {selectedFormat.fileSlots.length} file(s) expected.
+            <>
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Data Files — {selectedFormat.fileSlots.length} file(s) expected
+                </label>
+                <div className="space-y-4">
+                  {selectedFormat.fileSlots.map((slot) => (
+                    <FileDropZone
+                      key={slot.key}
+                      label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
+                      description={slot.description}
+                      file={fileMap[slot.key] || null}
+                      accept={slot.accept || ".csv"}
+                      onFile={(f) => handleFile(slot.key, f)}
+                      valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
+                      preview={previewMap[slot.key] || null}
+                    />
+                  ))}
+                </div>
               </div>
-              {selectedFormat.fileSlots.map((slot) => (
-                <FileDropZone
-                  key={slot.key}
-                  label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
-                  description={slot.description}
-                  file={fileMap[slot.key] || null}
-                  accept={slot.accept || ".csv"}
-                  onFile={(f) => handleFile(slot.key, f)}
-                  valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
-                  preview={previewMap[slot.key] || null}
-                />
-              ))}
               {fileError && <p className="text-sm text-red-600 dark:text-red-400">⚠ {fileError}</p>}
               {autoFilled && (
                 <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 rounded-lg px-4 py-2.5 border border-green-200 dark:border-green-900">
@@ -292,34 +342,34 @@ export function AdminUploadPage() {
                   <span>Race info auto-filled from uploaded file — review below</span>
                 </div>
               )}
-            </div>
+            </>
           )}
 
-          {/* Race Info metadata */}
-          <div className="border-t border-gray-200 dark:border-gray-800 pt-5">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Race Info</h3>
-            <div className="space-y-5">
+          {/* Metadata fields */}
+          <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Race Info</label>
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Race Name *</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Race Name *</label>
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Barber 7-Hour Sunday" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date *</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date *</label>
                   <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Track *</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Track *</label>
                   <input type="text" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. Barber Motorsports Park" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Series *</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Series *</label>
                   <input type="text" value={series} onChange={(e) => setSeries(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Season *</label>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Season *</label>
                   <input type="number" value={season} onChange={(e) => setSeason(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
                 </div>
               </div>
@@ -347,7 +397,7 @@ export function AdminUploadPage() {
         </div>
       )}
 
-      {/* Step 2: Validate */}
+      {/* Step 2: Validate (was step 3) */}
       {step === 2 && (
         <div className="space-y-4">
           {validating ? (
@@ -413,7 +463,7 @@ export function AdminUploadPage() {
         </div>
       )}
 
-      {/* Step 3: Complete */}
+      {/* Step 4: Complete */}
       {step === 3 && result && (
         <div className="text-center py-8">
           <div className="text-5xl mb-4">🎉</div>
