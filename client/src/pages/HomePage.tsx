@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { Button } from "@/components/Button";
-import { HeroChart } from "@/components/landing/HeroChart";
-import { FeatureCard } from "@/components/landing/FeatureCard";
+import { useAuth } from "../features/auth/AuthContext";
+import { Button } from "../components/Button";
+import { HeroChart } from "../components/landing/HeroChart";
+import { FeatureCard } from "../components/landing/FeatureCard";
 
 export function HomePage() {
   const { isAuthenticated } = useAuth();
@@ -43,9 +43,9 @@ export function HomePage() {
               </h1>
 
               <p className="mt-6 text-lg text-gray-400 leading-relaxed max-w-lg">
-                Interactive lap charts for the World Racing League. Follow
+                Interactive position trace charts for endurance racing. Follow
                 position battles, identify pit strategy, and uncover the story
-                of every race — lap by lap.
+                of every race — lap by lap. Built by Tedder Engineering.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
@@ -160,7 +160,7 @@ export function HomePage() {
               {
                 step: "02",
                 title: "Select a race",
-                desc: "Browse the full calendar of WRL events. Pick any race from the current or past seasons.",
+                desc: "Browse races from WRL, IMSA, SRO, and more. Pick any race from the current or past seasons.",
               },
               {
                 step: "03",
@@ -301,7 +301,7 @@ export function HomePage() {
             Ready to see the race differently?
           </h2>
           <p className="mt-4 text-lg text-gray-400 max-w-lg mx-auto">
-            Join teams and fans already using WRL Lap Chart to analyze every lap.
+            Join teams and fans already using RaceTrace to analyze every lap.
           </p>
           <div className="mt-8">
             <Link to={isAuthenticated ? "/dashboard" : "/signup"}>

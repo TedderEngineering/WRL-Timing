@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { api } from "@/lib/api";
-import { Button } from "@/components/Button";
-import { cn } from "@/lib/utils";
+import { useAuth } from "../features/auth/AuthContext";
+import { api } from "../lib/api";
+import { Button } from "../components/Button";
+import { cn } from "../lib/utils";
 
 type Theme = "light" | "dark" | "system";
 
@@ -50,7 +50,7 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
         Welcome{name ? `, ${name}` : ""}!
       </h2>
       <p className="text-gray-600 dark:text-gray-400 max-w-sm mx-auto mb-8">
-        You're all set to explore WRL race data. Let's personalize your experience
+        You're all set to explore race data. Let's personalize your experience
         in just a couple of quick steps.
       </p>
       <Button onClick={onNext} size="lg" className="px-10">
@@ -162,7 +162,7 @@ function TourStep({ onFinish }: { onFinish: () => void }) {
         Quick tour
       </h2>
       <p className="text-gray-600 dark:text-gray-400 mb-8">
-        Here's what you can do with WRL Lap Chart.
+        Here's what you can do with RaceTrace.
       </p>
 
       <div className="space-y-4 max-w-md mx-auto text-left mb-8">

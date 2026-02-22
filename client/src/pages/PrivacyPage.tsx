@@ -98,10 +98,10 @@ export function PrivacyPage() {
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             For privacy inquiries, please contact us at{" "}
             <a
-              href="mailto:privacy@wrllapchart.com"
+              href="mailto:privacy@tedderengineering.com"
               className="text-brand-600 dark:text-brand-400 hover:underline"
             >
-              privacy@wrllapchart.com
+              privacy@tedderengineering.com
             </a>
             .
           </p>

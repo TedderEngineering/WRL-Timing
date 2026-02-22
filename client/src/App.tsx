@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./features/auth";
 
@@ -21,6 +21,12 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { RaceListPage } from "./pages/RaceListPage";
 import { RaceDetailPage } from "./pages/RaceDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+
+// Settings pages
+import { SettingsLayout } from "./pages/settings/SettingsLayout";
+import { AccountSettingsPage } from "./pages/settings/AccountSettingsPage";
+import { PreferencesPage } from "./pages/settings/PreferencesPage";
+import { BillingSettingsPage } from "./pages/settings/BillingSettingsPage";
 
 // Admin pages
 import { AdminLayout } from "./features/admin/AdminLayout";
@@ -71,10 +77,20 @@ export function App() {
         <Route path="/races" element={<RaceListPage />} />
         <Route path="/races/:id" element={<RaceDetailPage />} />
 
-        {/* Phase 7: User settings (protected) */}
-        {/* <Route path="/settings/account" element={<ProtectedRoute><AccountSettingsPage /></ProtectedRoute>} /> */}
-        {/* <Route path="/settings/billing" element={<ProtectedRoute><BillingSettingsPage /></ProtectedRoute>} /> */}
-        {/* <Route path="/settings/preferences" element={<ProtectedRoute><PreferencesPage /></ProtectedRoute>} /> */}
+        {/* Settings (protected, nested layout) */}
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="account" replace />} />
+          <Route path="account" element={<AccountSettingsPage />} />
+          <Route path="preferences" element={<PreferencesPage />} />
+          <Route path="billing" element={<BillingSettingsPage />} />
+        </Route>
 
         {/* Admin routes (protected, admin only, nested layout) */}
         <Route

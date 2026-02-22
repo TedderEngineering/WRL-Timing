@@ -14,7 +14,7 @@ export function TermsPage() {
             1. Acceptance of Terms
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            By accessing or using the WRL Lap Chart service ("Service"), you agree to be
+            By accessing or using the RaceTrace service ("Service"), you agree to be
             bound by these Terms of Service ("Terms"). If you do not agree to these Terms,
             you may not use the Service. We reserve the right to update these Terms at any
             time. Continued use of the Service after changes constitutes acceptance of the
@@ -25,7 +25,7 @@ export function TermsPage() {
             2. Description of Service
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            WRL Lap Chart provides interactive race analysis tools including lap charts,
+            RaceTrace provides interactive race analysis tools including lap charts,
             position traces, and timing data visualization for World Racing League events.
             The Service is available via web application and may include free and paid
             subscription tiers with varying levels of access and features.
@@ -68,7 +68,7 @@ export function TermsPage() {
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             All content, design, and technology comprising the Service are the property of
-            WRL Lap Chart or its licensors. Race timing data is provided for informational
+            RaceTrace or its licensors. Race timing data is provided for informational
             purposes and may be subject to third-party licenses. You retain ownership of
             any content you create or upload.
           </p>
@@ -89,10 +89,10 @@ export function TermsPage() {
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             If you have questions about these Terms, please contact us at{" "}
             <a
-              href="mailto:legal@wrllapchart.com"
+              href="mailto:legal@tedderengineering.com"
               className="text-brand-600 dark:text-brand-400 hover:underline"
             >
-              legal@wrllapchart.com
+              legal@tedderengineering.com
             </a>
             .
           </p>

@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { useRaceList, useFilterOptions } from "@/hooks/useChartData";
-import { api } from "@/lib/api";
+import { useAuth } from "../features/auth/AuthContext";
+import { useRaceList, useFilterOptions } from "../hooks/useChartData";
+import { api } from "../lib/api";
 
 
 export function RaceListPage() {

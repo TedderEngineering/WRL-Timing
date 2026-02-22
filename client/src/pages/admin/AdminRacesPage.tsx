@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api } from "../../lib/api";
 
 interface AdminRace {
   id: string;

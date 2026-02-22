@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { api } from "@/lib/api";
+import { api } from "../lib/api";
 import type { ChartDataResponse, RaceChartData, AnnotationData } from "@shared/types";
 
 interface UseChartDataResult {

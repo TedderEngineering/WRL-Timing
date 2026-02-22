@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
-import { AuthLayout } from "@/features/auth/AuthLayout";
-import { useForm } from "@/hooks/useForm";
-import { Input } from "@/components/Input";
-import { Button } from "@/components/Button";
-import { Alert } from "@/components/Alert";
+import { api } from "../lib/api";
+import { AuthLayout } from "../features/auth/AuthLayout";
+import { useForm } from "../hooks/useForm";
+import { Input } from "../components/Input";
+import { Button } from "../components/Button";
+import { Alert } from "../components/Alert";
 
 export function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);

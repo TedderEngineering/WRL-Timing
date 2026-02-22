@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { Alert } from "@/components/Alert";
-import { api } from "@/lib/api";
+import { useAuth } from "../features/auth/AuthContext";
+import { Alert } from "../components/Alert";
+import { api } from "../lib/api";
 
 interface RaceItem {
   id: string;

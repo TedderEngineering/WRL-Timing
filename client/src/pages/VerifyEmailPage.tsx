@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api } from "@/lib/api";
-import { useAuth } from "@/features/auth/AuthContext";
-import { AuthLayout } from "@/features/auth/AuthLayout";
-import { Button } from "@/components/Button";
-import { Alert } from "@/components/Alert";
+import { api } from "../lib/api";
+import { useAuth } from "../features/auth/AuthContext";
+import { AuthLayout } from "../features/auth/AuthLayout";
+import { Button } from "../components/Button";
+import { Alert } from "../components/Alert";
 
 type Status = "verifying" | "success" | "error" | "no-token";
 

@@ -1,4 +1,4 @@
-# WRL Lap Chart — Architecture & Tech Stack Decisions
+# RaceTrace by Tedder Engineering — Architecture & Tech Stack Decisions
 
 ## Tech Stack
 
@@ -67,7 +67,7 @@ S3_BUCKET=wrl-lap-chart-uploads
 
 # Email (Resend)
 RESEND_API_KEY=re_...
-EMAIL_FROM=noreply@wrllapchart.com
+EMAIL_FROM=noreply@tedderengineering.com
 
 # URLs
 FRONTEND_URL=http://localhost:5173

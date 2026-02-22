@@ -1,4 +1,4 @@
-# WRL Lap Chart
+# RaceTrace by Tedder Engineering
 
 Interactive race analysis and lap chart visualization for World Racing League.
 
@@ -61,7 +61,7 @@ The frontend runs at `http://localhost:5173` and proxies API requests to `http:/
 
 | Email | Password | Role |
 |-------|----------|------|
-| admin@wrllapchart.com | admin123456 | Admin |
+| admin@tedderengineering.com | admin123456 | Admin |
 | user@example.com | user123456 | User |
 
 ## Project Structure

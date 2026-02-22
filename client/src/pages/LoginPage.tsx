@@ -1,10 +1,10 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { AuthLayout } from "@/features/auth/AuthLayout";
-import { useForm } from "@/hooks/useForm";
-import { Input } from "@/components/Input";
-import { Button } from "@/components/Button";
-import { Alert } from "@/components/Alert";
+import { useAuth } from "../features/auth/AuthContext";
+import { AuthLayout } from "../features/auth/AuthLayout";
+import { useForm } from "../hooks/useForm";
+import { Input } from "../components/Input";
+import { Button } from "../components/Button";
+import { Alert } from "../components/Alert";
 
 export function LoginPage() {
   const { login } = useAuth();

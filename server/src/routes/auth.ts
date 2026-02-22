@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { loginLimiter, registerLimiter, passwordResetLimiter } from "../middleware/rate-limit.js";
+import { prisma } from "../models/prisma.js";
 import {
   registerSchema,
   loginSchema,
@@ -197,6 +198,68 @@ authRouter.put(
     try {
       await authService.completeOnboarding(req.user!.userId, req.body.theme);
       res.json({ message: "Onboarding complete." });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── PUT /api/auth/profile ──────────────────────────────────────────────────
+
+authRouter.put(
+  "/profile",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { displayName } = req.body;
+      if (!displayName || typeof displayName !== "string") {
+        res.status(400).json({ error: "displayName is required" });
+        return;
+      }
+      await prisma.user.update({
+        where: { id: req.user!.userId },
+        data: { displayName: displayName.trim().slice(0, 100) },
+      });
+      res.json({ message: "Profile updated." });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── PUT /api/auth/password ─────────────────────────────────────────────────
+
+authRouter.put(
+  "/password",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        res.status(400).json({ error: "currentPassword and newPassword are required" });
+        return;
+      }
+      if (newPassword.length < 8) {
+        res.status(400).json({ error: "New password must be at least 8 characters" });
+        return;
+      }
+      const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      const bcrypt = await import("bcrypt");
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) {
+        res.status(400).json({ error: "Current password is incorrect" });
+        return;
+      }
+      const newHash = await bcrypt.hash(newPassword, 12);
+      await prisma.user.update({
+        where: { id: req.user!.userId },
+        data: { passwordHash: newHash },
+      });
+      res.json({ message: "Password changed successfully." });
     } catch (err) {
       next(err);
     }

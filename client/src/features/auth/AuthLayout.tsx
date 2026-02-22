@@ -11,8 +11,9 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
     <div className="container-page flex items-center justify-center min-h-[80vh] py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="text-2xl font-bold text-brand-700 dark:text-brand-400">
-            WRL Lap Chart
+          <Link to="/" className="inline-flex flex-col items-center gap-2">
+            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-10" />
+            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">RaceTrace</span>
           </Link>
           <h1 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-gray-50">
             {title}

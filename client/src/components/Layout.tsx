@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Outlet, Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "../features/auth/AuthContext";
 import { Button } from "./Button";
-import { cn } from "@/lib/utils";
+import { cn } from "../lib/utils";
 
 function UserMenu() {
   const { user, logout } = useAuth();
@@ -59,9 +59,21 @@ function UserMenu() {
               Dashboard
             </Link>
 
-            {/* Phase 7: Settings links */}
-            {/* <Link to="/settings/account" ...>Account Settings</Link> */}
-            {/* <Link to="/settings/billing" ...>Billing</Link> */}
+            <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
+            <Link
+              to="/settings/account"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              Settings
+            </Link>
+            <Link
+              to="/settings/billing"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              Billing
+            </Link>
 
             {user?.role === "ADMIN" && (
               <>
@@ -178,9 +190,10 @@ export function Layout() {
           <div className="flex items-center gap-6">
             <Link
               to={isAuthenticated ? "/dashboard" : "/"}
-              className="text-xl font-bold text-brand-700 dark:text-brand-400"
+              className="flex items-center gap-2"
             >
-              WRL Lap Chart
+              <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 dark:invert-0" />
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</span>
             </Link>
 
             {/* Desktop nav links */}
@@ -238,7 +251,10 @@ export function Layout() {
       {/* Footer */}
       <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
         <div className="container-page flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
-          <p>&copy; {new Date().getFullYear()} WRL Lap Chart. All rights reserved.</p>
+          <div className="flex items-center gap-3">
+            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6" />
+            <p>&copy; {new Date().getFullYear()} Tedder Engineering. All rights reserved.</p>
+          </div>
           <div className="flex gap-6">
             <Link to="/terms" className="hover:text-gray-700 dark:hover:text-gray-300">
               Terms

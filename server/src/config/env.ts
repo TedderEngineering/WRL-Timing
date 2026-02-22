@@ -29,7 +29,7 @@ const envSchema = z.object({
 
   // Email
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().email().default("noreply@wrllapchart.com"),
+  EMAIL_FROM: z.string().email().default("noreply@tedderengineering.com"),
 
   // URLs
   FRONTEND_URL: z.string().url().default("http://localhost:5173"),

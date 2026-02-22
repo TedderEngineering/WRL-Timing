@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api } from "../../lib/api";
 
 type Step = 1 | 2 | 3 | 4;
 

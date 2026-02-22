@@ -1,8 +1,8 @@
 import { useParams, Link } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { useChartData } from "@/hooks/useChartData";
-import { LapChart } from "@/features/chart/LapChart";
-import { api } from "@/lib/api";
+import { useAuth } from "../features/auth/AuthContext";
+import { useChartData } from "../hooks/useChartData";
+import { LapChart } from "../features/chart/LapChart";
+import { api } from "../lib/api";
 import { useState, useEffect } from "react";
 
 export function RaceDetailPage() {

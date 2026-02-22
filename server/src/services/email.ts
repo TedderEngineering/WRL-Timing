@@ -49,10 +49,10 @@ export async function sendVerificationEmail(
 
   await sendEmail({
     to: email,
-    subject: "Verify your email — WRL Lap Chart",
+    subject: "Verify your email — RaceTrace",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #4263eb;">WRL Lap Chart</h2>
+        <h2 style="color: #4263eb;">RaceTrace</h2>
         <p>Thanks for signing up! Please verify your email address by clicking the button below.</p>
         <a href="${verifyUrl}"
            style="display: inline-block; background: #4263eb; color: white; padding: 12px 24px;
@@ -76,10 +76,10 @@ export async function sendPasswordResetEmail(
 
   await sendEmail({
     to: email,
-    subject: "Reset your password — WRL Lap Chart",
+    subject: "Reset your password — RaceTrace",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #4263eb;">WRL Lap Chart</h2>
+        <h2 style="color: #4263eb;">RaceTrace</h2>
         <p>We received a request to reset your password. Click the button below to choose a new one.</p>
         <a href="${resetUrl}"
            style="display: inline-block; background: #4263eb; color: white; padding: 12px 24px;

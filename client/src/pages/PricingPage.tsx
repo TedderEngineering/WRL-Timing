@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthContext";
-import { Button } from "@/components/Button";
-import { cn } from "@/lib/utils";
+import { useAuth } from "../features/auth/AuthContext";
+import { Button } from "../components/Button";
+import { cn } from "../lib/utils";
 
 type Interval = "monthly" | "annual";
 
@@ -95,7 +95,7 @@ export function PricingPage() {
           Choose your plan
         </h1>
         <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-          Start free. Upgrade anytime for full access to every race in the WRL library.
+          Start free. Upgrade anytime for full access to full access to every race in the library.
         </p>
       </div>
 
@@ -277,7 +277,7 @@ export function PricingPage() {
         <p className="text-gray-600 dark:text-gray-400">
           Questions?{" "}
           <a
-            href="mailto:support@wrllapchart.com"
+            href="mailto:support@tedderengineering.com"
             className="text-brand-600 dark:text-brand-400 hover:underline"
           >
             Contact us
