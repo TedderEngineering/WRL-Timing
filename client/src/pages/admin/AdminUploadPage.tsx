@@ -9,6 +9,7 @@ interface FileSlot {
   label: string;
   description: string;
   required: boolean;
+  accept?: string;
 }
 
 interface FormatInfo {
@@ -112,8 +113,27 @@ export function AdminUploadPage() {
     try {
       const text = await file.text();
       setCsvMap((prev) => ({ ...prev, [slotKey]: text }));
-      const lines = text.split("\n").slice(0, 4);
-      setPreviewMap((prev) => ({ ...prev, [slotKey]: lines.join("\n") }));
+      // Generate preview
+      let preview: string;
+      if (file.name.endsWith(".json")) {
+        try {
+          const json = JSON.parse(text.replace(/^\uFEFF/, ""));
+          const keys = Object.keys(json);
+          const lines = [`JSON with ${keys.length} top-level keys: ${keys.join(", ")}`];
+          for (const k of keys) {
+            const v = json[k];
+            if (Array.isArray(v)) lines.push(`  ${k}: array of ${v.length} items`);
+            else if (typeof v === "object" && v) lines.push(`  ${k}: object with ${Object.keys(v).length} fields`);
+            else lines.push(`  ${k}: ${String(v).substring(0, 60)}`);
+          }
+          preview = lines.join("\n");
+        } catch {
+          preview = text.split("\n").slice(0, 4).join("\n");
+        }
+      } else {
+        preview = text.split("\n").slice(0, 4).join("\n");
+      }
+      setPreviewMap((prev) => ({ ...prev, [slotKey]: preview }));
     } catch {
       setFileError(`Could not read file for ${slotKey}`);
       setCsvMap((prev) => ({ ...prev, [slotKey]: null }));
@@ -284,7 +304,7 @@ export function AdminUploadPage() {
               label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
               description={slot.description}
               file={fileMap[slot.key] || null}
-              accept=".csv"
+              accept={slot.accept || ".csv"}
               onFile={(f) => handleFile(slot.key, f)}
               valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
               preview={previewMap[slot.key] || null}
@@ -422,7 +442,7 @@ function FileDropZone({ label, description, file, accept, onFile, valid, preview
             <span className="text-gray-400">({(file.size / 1024).toFixed(0)} KB)</span>
           </div>
         ) : (
-          <div className="text-xs text-gray-400">Drop .csv file here or click to browse</div>
+          <div className="text-xs text-gray-400">Drop {accept} file here or click to browse</div>
         )}
       </div>
       {preview && (

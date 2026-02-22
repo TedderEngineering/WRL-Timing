@@ -21,6 +21,7 @@ export interface FileSlot {
   label: string;      // UI label (e.g. "Summary CSV")
   description: string; // Help text for the upload zone
   required: boolean;
+  accept?: string;    // file extension filter (e.g. ".csv" or ".json"), defaults to ".csv"
 }
 
 /** Every parser format must provide this */
