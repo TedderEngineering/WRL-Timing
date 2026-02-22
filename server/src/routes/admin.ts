@@ -17,7 +17,7 @@ adminRouter.use(requireAuth, requireAdmin);
 adminRouter.get(
   "/formats",
   async (_req: Request, res: Response, _next: NextFunction) => {
-    res.json({ formats: getAllParsers() });
+    res.json({ formats: await getAllParsers() });
   }
 );
 

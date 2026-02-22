@@ -1000,79 +1000,80 @@ function parsePdfFlagPeriods(
   pdfText: string
 ): Array<{ startLap: number; endLap: number }> {
   const results: Array<{ startLap: number; endLap: number }> = [];
-  const lines = pdfText.split(/\n/);
+  const lines = pdfText.split(/\n/).map((l) => l.trim()).filter(Boolean);
+
+  // ── Strategy A: Pair YELLOW→GREEN lines (2025 IMSA format) ──────
+  // Real format:
+  //   FULL COURSE YELLOW  12:36:24.441  36:55.129  15:33.967  16:32.711  25
+  //   GREEN FLAG          12:51:58.408  52:29.096  57.702     36:54.087  32
+  // The last number on each line is the lap number.
+  // FCY period = yellow start lap → green restart lap.
+
+  let pendingYellowLap: number | null = null;
 
   for (const line of lines) {
-    // Skip lines that are clearly green flag or headers
-    const trimmed = line.trim();
-    if (!trimmed) continue;
+    // Extract the last standalone number on the line (the lap column)
+    const lastNumMatch = line.match(/\b(\d{1,3})\s*$/);
+    if (!lastNumMatch) continue;
+    const lapNum = parseInt(lastNumMatch[1], 10);
+    if (lapNum < 1 || lapNum > 500) continue;
 
-    // Only process lines that mention yellow/caution/FCY
-    if (!/yellow|caution|fcy/i.test(trimmed)) continue;
-    // Skip if this is a "pass under yellow" penalty, not a flag period
-    if (/pass\s+under\s+yellow/i.test(trimmed)) continue;
+    const upper = line.toUpperCase();
 
-    // ── Pattern 1: "YELLOW  Lap 16 to Lap 21" or "FCY Lap 16 – Lap 21"
-    const lapToLap = trimmed.match(
-      /(?:yellow|caution|fcy)\s+.*?lap\s*(\d+)\s*(?:to|[-–—])\s*lap\s*(\d+)/i
-    );
-    if (lapToLap) {
-      results.push({
-        startLap: parseInt(lapToLap[1], 10),
-        endLap: parseInt(lapToLap[2], 10),
-      });
-      continue;
+    // Skip penalty/incident lines
+    if (/PASS\s+UNDER\s+YELLOW/i.test(line)) continue;
+
+    if (
+      upper.includes("FULL COURSE YELLOW") ||
+      upper.includes("FULL COURSE CAUTION") ||
+      (/\bYELLOW\b/.test(upper) && !upper.includes("GREEN") && !/PASS|PENALTY/.test(upper)) ||
+      /\bFCY\b/.test(upper)
+    ) {
+      // If we already have a pending yellow without a green, treat it as a 1-lap caution
+      if (pendingYellowLap !== null) {
+        results.push({ startLap: pendingYellowLap, endLap: pendingYellowLap });
+      }
+      pendingYellowLap = lapNum;
+    } else if (upper.includes("GREEN") && pendingYellowLap !== null) {
+      results.push({ startLap: pendingYellowLap, endLap: lapNum });
+      pendingYellowLap = null;
     }
+  }
+  // Close any trailing yellow without a green
+  if (pendingYellowLap !== null) {
+    results.push({ startLap: pendingYellowLap, endLap: pendingYellowLap });
+  }
 
-    // ── Pattern 2: Row with "YELLOW" and two numbers nearby (start/end laps)
-    // e.g. "2  YELLOW  16  21  5:33.456" or "YELLOW  16  21"
-    const rowNums = trimmed.match(
-      /(?:yellow|caution|fcy)\s+(\d+)\s+(\d+)/i
-    );
-    if (rowNums) {
-      const a = parseInt(rowNums[1], 10);
-      const b = parseInt(rowNums[2], 10);
-      // Sanity: both should be reasonable lap numbers
-      if (a >= 1 && a <= 500 && b >= a && b <= 500) {
-        results.push({ startLap: a, endLap: b });
+  // ── Strategy B fallback: explicit "Lap X to Lap Y" patterns ─────
+  // Only used if Strategy A found nothing (older PDF formats)
+  if (results.length === 0) {
+    for (const line of lines) {
+      if (!/yellow|caution|fcy/i.test(line)) continue;
+      if (/pass\s+under\s+yellow/i.test(line)) continue;
+
+      // "YELLOW Lap 16 to Lap 21" or "FCY Lap 16 – Lap 21"
+      const lapToLap = line.match(
+        /(?:yellow|caution|fcy)\s+.*?lap\s*(\d+)\s*(?:to|[-–—])\s*lap\s*(\d+)/i
+      );
+      if (lapToLap) {
+        results.push({
+          startLap: parseInt(lapToLap[1], 10),
+          endLap: parseInt(lapToLap[2], 10),
+        });
         continue;
       }
-    }
 
-    // ── Pattern 3: Number before YELLOW then number(s) after
-    // e.g. "3  YELLOW  16  21" where 3 is the period number
-    const prefixedRow = trimmed.match(
-      /\d+\s+(?:yellow|caution|fcy)\s+(\d+)\s+(\d+)/i
-    );
-    if (prefixedRow) {
-      const a = parseInt(prefixedRow[1], 10);
-      const b = parseInt(prefixedRow[2], 10);
-      if (a >= 1 && a <= 500 && b >= a && b <= 500) {
-        results.push({ startLap: a, endLap: b });
+      // Compact "FCY 16-21" or "YELLOW L16–L21"
+      const compact = line.match(
+        /(?:yellow|caution|fcy)\s+L?(\d+)\s*[-–—]\s*L?(\d+)/i
+      );
+      if (compact) {
+        results.push({
+          startLap: parseInt(compact[1], 10),
+          endLap: parseInt(compact[2], 10),
+        });
         continue;
       }
-    }
-
-    // ── Pattern 4: Compact range "FCY 16-21" or "YELLOW L16–L21"
-    const compact = trimmed.match(
-      /(?:yellow|caution|fcy)\s+L?(\d+)\s*[-–—]\s*L?(\d+)/i
-    );
-    if (compact) {
-      results.push({
-        startLap: parseInt(compact[1], 10),
-        endLap: parseInt(compact[2], 10),
-      });
-      continue;
-    }
-
-    // ── Pattern 5: Single lap yellow "YELLOW Lap 16" (1-lap caution)
-    const singleLap = trimmed.match(
-      /(?:yellow|caution|fcy)\s+.*?lap\s*(\d+)/i
-    );
-    if (singleLap) {
-      const lap = parseInt(singleLap[1], 10);
-      results.push({ startLap: lap, endLap: lap });
-      continue;
     }
   }
 

@@ -60,7 +60,9 @@ export function generateAnnotations(
     for (let l = s; l <= e; l++) fcyLaps.add(l);
   }
 
-  const carList = Object.values(carsRecord) as CarData[];
+  const carList = (Object.values(carsRecord) as CarData[]).filter(
+    (c) => Array.isArray(c.laps)
+  );
   for (const car of carList) {
     const pm = new Map<number, number>();
     const ps = new Set<number>();
@@ -105,6 +107,7 @@ export function generateAnnotations(
   >) {
     const num = car.num;
     const laps = car.laps;
+    if (!Array.isArray(laps)) continue;
     const cls = car.cls;
 
     const reasons: Record<string, string> = {};

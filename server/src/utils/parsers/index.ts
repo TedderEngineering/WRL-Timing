@@ -25,20 +25,21 @@ export function getParser(formatId: string): RaceDataParser | undefined {
 }
 
 /** Get all registered parsers (for the upload wizard format selector) */
-export function getAllParsers(): Array<{
+export async function getAllParsers(): Promise<Array<{
   id: string;
   name: string;
   series: string;
   description: string;
   implemented: boolean;
   fileSlots: RaceDataParser["fileSlots"];
-}> {
-  return PARSERS.map((p) => {
+}>> {
+  const results = [];
+  for (const p of PARSERS) {
     // A parser is "implemented" if calling parse doesn't immediately throw "not yet implemented"
     let implemented = true;
     try {
       // Try with empty files — if it throws "not yet implemented", it's a placeholder
-      p.parse({});
+      await p.parse({});
     } catch (err: any) {
       if (err.message?.includes("not yet implemented")) {
         implemented = false;
@@ -46,15 +47,16 @@ export function getAllParsers(): Array<{
       // Other errors (like "missing CSV") mean it IS implemented, just needs valid input
     }
 
-    return {
+    results.push({
       id: p.id,
       name: p.name,
       series: p.series,
       description: p.description,
       implemented,
       fileSlots: p.fileSlots,
-    };
-  });
+    });
+  }
+  return results;
 }
 
 export type { RaceDataParser, ParsedResult, FileSlot } from "./types.js";

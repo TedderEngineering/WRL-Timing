@@ -66,7 +66,9 @@ export async function extractPdfText(input: string | Buffer): Promise<string> {
   }
 
   const PDFParse = await getPdfParser();
-  const parser = new PDFParse(buf);
-  const result = await parser.parse();
-  return result.text;
+  const uint8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  const parser = new PDFParse(uint8);
+  await parser.load();
+  const text = await parser.getText();
+  return text;
 }
