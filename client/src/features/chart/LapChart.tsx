@@ -14,7 +14,7 @@ import {
   type ChartDimensions,
   type LapInfoData,
 } from "./chart-renderer";
-import { CLASS_COLORS, CHART_STYLE } from "./constants";
+import { CHART_STYLE } from "./constants";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -501,7 +501,7 @@ export function LapChart({ data, annotations }: LapChartProps) {
       </div>
 
       {/* ── Info panel ───────────────────────────────────────────── */}
-      <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
+      <InfoPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
@@ -546,13 +546,11 @@ export function LapChart({ data, annotations }: LapChartProps) {
 
 function InfoPanel({
   info,
-  activeLap,
   focusNum,
   navPrev,
   navNext,
 }: {
   info: LapInfoData | null;
-  activeLap: number | null;
   focusNum: number;
   navPrev: () => void;
   navNext: () => void;
