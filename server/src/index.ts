@@ -14,7 +14,7 @@ async function main() {
 
   const app = createApp();
 
-  app.listen(env.PORT, () => {
+  app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`✓ Server running on port ${env.PORT}`);
     console.log(`  Environment: ${env.NODE_ENV}`);
     console.log(`  Frontend URL: ${env.FRONTEND_URL}`);
