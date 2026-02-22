@@ -192,7 +192,7 @@ export function Layout() {
               to={isAuthenticated ? "/dashboard" : "/"}
               className="flex items-center gap-2"
             >
-              <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 dark:invert-0" />
+              <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 invert dark:invert-0" />
               <span className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</span>
             </Link>
 
@@ -252,7 +252,7 @@ export function Layout() {
       <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
         <div className="container-page flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
           <div className="flex items-center gap-3">
-            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6" />
+            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6 invert dark:invert-0" />
             <p>&copy; {new Date().getFullYear()} Tedder Engineering. All rights reserved.</p>
           </div>
           <div className="flex gap-6">

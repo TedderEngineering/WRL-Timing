@@ -12,7 +12,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex flex-col items-center gap-2">
-            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-10" />
+            <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-10 invert dark:invert-0" />
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100">RaceTrace</span>
           </Link>
           <h1 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-gray-50">

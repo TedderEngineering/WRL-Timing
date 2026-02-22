@@ -197,7 +197,7 @@ export function OnboardingPage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [theme, setTheme] = useState<Theme>("system");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   const applyTheme = (t: Theme) => {
     setTheme(t);

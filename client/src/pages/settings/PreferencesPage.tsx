@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 type Theme = "light" | "dark" | "system";
 
 function getStoredTheme(): Theme {
-  return (localStorage.getItem("theme") as Theme) || "system";
+  return (localStorage.getItem("theme") as Theme) || "dark";
 }
 
 function applyTheme(theme: Theme) {
