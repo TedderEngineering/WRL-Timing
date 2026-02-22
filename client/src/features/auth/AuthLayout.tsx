@@ -1,0 +1,31 @@
+import { Link } from "react-router-dom";
+
+interface AuthLayoutProps {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}
+
+export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
+  return (
+    <div className="container-page flex items-center justify-center min-h-[80vh] py-12">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <Link to="/" className="text-2xl font-bold text-brand-700 dark:text-brand-400">
+            WRL Lap Chart
+          </Link>
+          <h1 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{subtitle}</p>
+          )}
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 shadow-sm">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}

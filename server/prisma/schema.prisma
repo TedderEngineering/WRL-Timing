@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  TEAM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+  INCOMPLETE
+}
+
+enum RaceStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// ─── Users & Auth ─────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String    @map("password_hash")
+  displayName     String?   @map("display_name")
+  avatarUrl       String?   @map("avatar_url")
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  role            UserRole  @default(USER)
+  suspendedAt     DateTime? @map("suspended_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  onboardingDone  Boolean   @default(false) @map("onboarding_done")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens       RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  emailVerifyTokens    EmailVerificationToken[]
+  subscription         Subscription?
+  preferences          UserPreferences?
+  favorites            UserFavorite[]
+  raceViews            UserRaceView[]
+  createdRaces         Race[]       @relation("RaceCreator")
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@map("email_verification_tokens")
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  userId                String             @unique @map("user_id")
+  stripeCustomerId      String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?            @unique @map("stripe_subscription_id")
+  plan                  SubscriptionPlan   @default(FREE)
+  status                SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart    DateTime?          @map("current_period_start")
+  currentPeriodEnd      DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd     Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ─── Race Data ────────────────────────────────────────────────────────────────
+
+model Race {
+  id        String     @id @default(cuid())
+  name      String
+  date      DateTime
+  track     String
+  series    String
+  season    Int
+  status    RaceStatus @default(DRAFT)
+  premium   Boolean    @default(false)
+  maxLap    Int?       @map("max_lap")
+  totalCars Int?       @map("total_cars")
+  createdBy String     @map("created_by")
+  s3DataKey      String? @map("s3_data_key")
+  s3AnnKey       String? @map("s3_ann_key")
+  chartData      Json?   @map("chart_data")      // full DATA object for chart rendering
+  annotationData Json?   @map("annotation_data")  // full ANN object for chart rendering
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  creator   User        @relation("RaceCreator", fields: [createdBy], references: [id])
+  entries   RaceEntry[]
+  laps      RaceLap[]
+  favorites UserFavorite[]
+  views     UserRaceView[]
+
+  @@index([status])
+  @@index([series, season])
+  @@index([date(sort: Desc)])
+  @@map("races")
+}
+
+model RaceEntry {
+  id              String  @id @default(cuid())
+  raceId          String  @map("race_id")
+  carNumber       String  @map("car_number")
+  teamName        String  @map("team_name")
+  driverNames     String  @map("driver_names") // comma-separated or JSON
+  carClass        String  @map("car_class")
+  carColor        String? @map("car_color") // hex color for chart rendering
+  finishPos       Int?    @map("finish_pos")
+  finishPosClass  Int?    @map("finish_pos_class")
+  lapsCompleted   Int?    @map("laps_completed")
+
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@unique([raceId, carNumber])
+  @@index([raceId])
+  @@map("race_entries")
+}
+
+model RaceLap {
+  id               String   @id @default(cuid())
+  raceId           String   @map("race_id")
+  carNumber        String   @map("car_number")
+  lapNumber        Int      @map("lap_number")
+  position         Int                              // overall position
+  classPosition    Int?     @map("class_position")  // in-class position
+  lapTimeFormatted String?  @map("lap_time_formatted") // "M:SS.mmm"
+  lapTimeSec       Float?   @map("lap_time_sec")    // seconds as decimal
+  lapTimeMs        Int?     @map("lap_time_ms")
+  cumulativeTimeMs BigInt?  @map("cumulative_time_ms")
+  gapToLeaderMs    Int?     @map("gap_to_leader_ms")
+  intervalMs       Int?     @map("interval_ms")
+  flag             String?                           // "GF" or "FCY"
+  speed            Float?                            // mph
+  pitStop          Boolean  @default(false) @map("pit_stop")
+  inLap            Boolean  @default(false) @map("in_lap")
+  outLap           Boolean  @default(false) @map("out_lap")
+
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@index([raceId, lapNumber, position])
+  @@index([raceId, carNumber])
+  @@map("race_laps")
+}
+
+// ─── User Preferences & Activity ──────────────────────────────────────────────
+
+model UserFavorite {
+  userId    String   @map("user_id")
+  raceId    String   @map("race_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, raceId])
+  @@map("user_favorites")
+}
+
+model UserRaceView {
+  id       String   @id @default(cuid())
+  userId   String   @map("user_id")
+  raceId   String   @map("race_id")
+  viewedAt DateTime @default(now()) @map("viewed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, viewedAt(sort: Desc)])
+  @@index([raceId])
+  @@map("user_race_views")
+}
+
+model UserPreferences {
+  userId               String @id @map("user_id")
+  theme                String @default("system") // "light" | "dark" | "system"
+  defaultChartSettings Json?  @map("default_chart_settings")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminUserId String   @map("admin_user_id")
+  action      String   // e.g., "DELETE_RACE", "SUSPEND_USER", "PROMOTE_ADMIN"
+  targetType  String   @map("target_type") // e.g., "race", "user"
+  targetId    String   @map("target_id")
+  details     Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  admin User @relation(fields: [adminUserId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([adminUserId])
+  @@map("audit_log")
+}
