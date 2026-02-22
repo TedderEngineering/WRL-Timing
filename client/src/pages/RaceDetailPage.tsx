@@ -122,7 +122,7 @@ export function RaceDetailPage() {
       </div>
 
       {/* Chart */}
-      <LapChart data={data} annotations={annotations} />
+      <LapChart data={data} annotations={annotations} raceId={id} />
     </div>
   );
 }

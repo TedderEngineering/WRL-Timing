@@ -21,44 +21,109 @@ import { CHART_STYLE } from "./constants";
 interface LapChartProps {
   data: RaceChartData;
   annotations: AnnotationData;
+  raceId?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function LapChart({ data, annotations }: LapChartProps) {
+export function LapChart({ data, annotations, raceId }: LapChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── Chart state ─────────────────────────────────────────────────
-  const firstCarNum = useMemo(() => {
-    const nums = Object.keys(data.cars).map(Number);
-    return nums[0] || 0;
+  // ── Find the race winner (overall P1) for default ──────────────
+  const winnerNum = useMemo(() => {
+    let winner = 0;
+    for (const [numStr, car] of Object.entries(data.cars)) {
+      if (car.finishPos === 1) {
+        winner = Number(numStr);
+        break;
+      }
+    }
+    // Fallback to first car if no P1 found
+    return winner || Number(Object.keys(data.cars)[0]) || 0;
   }, [data]);
 
-  const [focusNum, setFocusNum] = useState(firstCarNum);
-  const [compSet, setCompSet] = useState<Set<number>>(() => new Set());
-  const [activeLap, setActiveLap] = useState<number | null>(null);
-  const [classView, setClassView] = useState("");
+  // ── localStorage key for this race's chart state ───────────────
+  const storageKey = raceId ? `racetrace-chart-${raceId}` : null;
+
+  // ── Load saved state or build defaults ─────────────────────────
+  const savedState = useMemo(() => {
+    if (!storageKey) return null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Validate the saved focus car still exists in this data
+      if (parsed.focusNum && data.cars[String(parsed.focusNum)]) {
+        return parsed as {
+          focusNum: number;
+          compSet: number[];
+          classView: string;
+          activeLap: number | null;
+        };
+      }
+    } catch { /* ignore corrupt data */ }
+    return null;
+  }, [storageKey, data]);
+
+  // ── Chart state ────────────────────────────────────────────────
+  const defaultFocus = savedState?.focusNum ?? winnerNum;
+  const [focusNum, setFocusNum] = useState(defaultFocus);
+  const [compSet, setCompSet] = useState<Set<number>>(() => {
+    if (savedState?.compSet) return new Set(savedState.compSet);
+    return new Set<number>();
+  });
+  const [activeLap, setActiveLap] = useState<number | null>(savedState?.activeLap ?? null);
+  const [classView, setClassView] = useState(savedState?.classView ?? "");
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
-  // ── Initialize with focus car's class + same-class comparison ──
+  // ── Initialize: winner's class + all class cars as comparison ──
+  const initializedRef = useRef(false);
   useEffect(() => {
-    const car = data.cars[String(firstCarNum)];
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    // If we loaded from saved state, skip default initialization
+    if (savedState) return;
+
+    const car = data.cars[String(winnerNum)];
     if (car) {
       const cls = car.cls;
       setClassView(cls);
-      setFocusNum(firstCarNum);
+      setFocusNum(winnerNum);
+      // Highlight ALL cars in the race as comparison
       const newComp = new Set<number>();
-      (data.classGroups[cls] || []).forEach((n) => {
-        if (n !== firstCarNum) newComp.add(n);
+      Object.keys(data.cars).forEach((numStr) => {
+        const n = Number(numStr);
+        if (n !== winnerNum) newComp.add(n);
       });
       setCompSet(newComp);
     }
-  }, [data, firstCarNum]);
+  }, [data, winnerNum, savedState]);
+
+  // ── Persist chart state to localStorage on changes ─────────────
+  useEffect(() => {
+    if (!storageKey) return;
+    // Debounce writes slightly
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify({
+            focusNum,
+            compSet: Array.from(compSet),
+            classView,
+            activeLap,
+          })
+        );
+      } catch { /* quota exceeded, ignore */ }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [storageKey, focusNum, compSet, classView, activeLap]);
 
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(
@@ -501,7 +566,7 @@ export function LapChart({ data, annotations }: LapChartProps) {
       </div>
 
       {/* ── Info panel ───────────────────────────────────────────── */}
-      <InfoPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
+      <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
@@ -546,11 +611,13 @@ export function LapChart({ data, annotations }: LapChartProps) {
 
 function InfoPanel({
   info,
+  activeLap: _activeLap,
   focusNum,
   navPrev,
   navNext,
 }: {
   info: LapInfoData | null;
+  activeLap: number | null;
   focusNum: number;
   navPrev: () => void;
   navNext: () => void;
