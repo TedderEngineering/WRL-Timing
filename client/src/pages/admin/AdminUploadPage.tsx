@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/api";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3;
 
 interface FileSlot {
   key: string;
@@ -61,17 +61,18 @@ export function AdminUploadPage() {
   const [premium, setPremium] = useState(false);
   const [status, setStatus] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
 
-  // Step 2: files (keyed by slot key)
+  // Files (keyed by slot key)
   const [fileMap, setFileMap] = useState<Record<string, File | null>>({});
   const [csvMap, setCsvMap] = useState<Record<string, string | null>>({});
   const [previewMap, setPreviewMap] = useState<Record<string, string | null>>({});
   const [fileError, setFileError] = useState<string | null>(null);
+  const [autoFilled, setAutoFilled] = useState(false);
 
-  // Step 3: validation
+  // Step 2: validation
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [validating, setValidating] = useState(false);
 
-  // Step 4: result
+  // Step 3: result
   const [result, setResult] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -104,8 +105,10 @@ export function AdminUploadPage() {
     if (fmt) setSeries(fmt.series);
   };
 
-  const step1Valid =
-    format && name.trim() && date && track.trim() && series.trim() && season && selectedFormat?.implemented;
+  const filesValid = selectedFormat?.fileSlots.every(
+    (slot) => !slot.required || csvMap[slot.key]
+  ) ?? false;
+  const allStep1Valid = format && name.trim() && date && track.trim() && series.trim() && season && selectedFormat?.implemented && filesValid;
 
   const handleFile = useCallback(async (slotKey: string, file: File) => {
     setFileMap((prev) => ({ ...prev, [slotKey]: file }));
@@ -127,6 +130,27 @@ export function AdminUploadPage() {
             else lines.push(`  ${k}: ${String(v).substring(0, 60)}`);
           }
           preview = lines.join("\n");
+
+          // Auto-fill metadata from IMSA session block
+          if (json.session) {
+            const s = json.session;
+            let didFill = false;
+            if (s.event_name && !name.trim()) { setName(s.event_name); didFill = true; }
+            if (s.circuit?.name && !track.trim()) { setTrack(s.circuit.name); didFill = true; }
+            if (s.championship_name && !series.trim()) {
+              setSeries(/imsa/i.test(s.championship_name) ? "IMSA" : s.championship_name);
+              didFill = true;
+            }
+            if (s.session_date) {
+              const dm = s.session_date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+              if (dm) {
+                const isoDate = `${dm[3]}-${dm[2]}-${dm[1]}`;
+                if (!date) { setDate(isoDate); didFill = true; }
+                if (season === String(new Date().getFullYear())) { setSeason(dm[3]); didFill = true; }
+              }
+            }
+            if (didFill) setAutoFilled(true);
+          }
         } catch {
           preview = text.split("\n").slice(0, 4).join("\n");
         }
@@ -138,12 +162,7 @@ export function AdminUploadPage() {
       setFileError(`Could not read file for ${slotKey}`);
       setCsvMap((prev) => ({ ...prev, [slotKey]: null }));
     }
-  }, []);
-
-  const step2Valid =
-    selectedFormat?.fileSlots.every(
-      (slot) => !slot.required || csvMap[slot.key]
-    ) ?? false;
+  }, [name, date, track, series, season]);
 
   const runValidation = async () => {
     setValidating(true);
@@ -180,7 +199,7 @@ export function AdminUploadPage() {
         files,
       });
       setResult(res);
-      setStep(4);
+      setStep(3);
     } catch (err: any) {
       setUploadError(err.message || "Upload failed");
     } finally {
@@ -195,20 +214,21 @@ export function AdminUploadPage() {
 
       {/* Stepper */}
       <div className="flex items-center gap-2 mb-8">
-        {[{ n: 1, label: "Format & Info" }, { n: 2, label: "Data Files" }, { n: 3, label: "Validate" }, { n: 4, label: "Complete" }].map(({ n, label }) => (
+        {[{ n: 1, label: "Format, Files & Info" }, { n: 2, label: "Validate" }, { n: 3, label: "Complete" }].map(({ n, label }) => (
           <div key={n} className="flex items-center gap-2 flex-1">
             <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 ${step >= n ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 dark:border-gray-700 text-gray-400"}`}>
               {step > n ? "✓" : n}
             </div>
             <span className={`text-xs font-medium hidden sm:inline ${step >= n ? "text-gray-900 dark:text-gray-100" : "text-gray-400"}`}>{label}</span>
-            {n < 4 && <div className={`flex-1 h-0.5 ${step > n ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-800"}`} />}
+            {n < 3 && <div className={`flex-1 h-0.5 ${step > n ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-800"}`} />}
           </div>
         ))}
       </div>
 
-      {/* Step 1: Format + Metadata */}
+      {/* Step 1: Format, Files & Info */}
       {step === 1 && (
         <div className="space-y-5">
+          {/* Format selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Data Format *</label>
             {formatsLoading ? (
@@ -247,81 +267,88 @@ export function AdminUploadPage() {
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Race Name *</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Barber 7-Hour Sunday" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date *</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+          {/* File upload drop zones */}
+          {selectedFormat && (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-lg px-4 py-3">
+                Uploading as <b>{selectedFormat.name}</b> format. {selectedFormat.fileSlots.length} file(s) expected.
+              </div>
+              {selectedFormat.fileSlots.map((slot) => (
+                <FileDropZone
+                  key={slot.key}
+                  label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
+                  description={slot.description}
+                  file={fileMap[slot.key] || null}
+                  accept={slot.accept || ".csv"}
+                  onFile={(f) => handleFile(slot.key, f)}
+                  valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
+                  preview={previewMap[slot.key] || null}
+                />
+              ))}
+              {fileError && <p className="text-sm text-red-600 dark:text-red-400">⚠ {fileError}</p>}
+              {autoFilled && (
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 rounded-lg px-4 py-2.5 border border-green-200 dark:border-green-900">
+                  <span>✓</span>
+                  <span>Race info auto-filled from uploaded file — review below</span>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Track *</label>
-              <input type="text" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. Barber Motorsports Park" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Series *</label>
-              <input type="text" value={series} onChange={(e) => setSeries(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Season *</label>
-              <input type="number" value={season} onChange={(e) => setSeason(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input type="checkbox" checked={premium} onChange={(e) => setPremium(e.target.checked)} className="rounded border-gray-300" />
-              Premium (Pro only)
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm">
-                <option value="DRAFT">Draft</option>
-                <option value="PUBLISHED">Published</option>
-              </select>
-              Initial status
-            </label>
-          </div>
-          <div className="flex justify-end pt-2">
-            <button onClick={() => setStep(2)} disabled={!step1Valid} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed">
-              Next: Upload Files →
-            </button>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Step 2: Data Files */}
-      {step === 2 && selectedFormat && (
-        <div className="space-y-6">
-          <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-lg px-4 py-3">
-            Uploading as <b>{selectedFormat.name}</b> format. {selectedFormat.fileSlots.length} file(s) expected.
+          {/* Race Info metadata */}
+          <div className="border-t border-gray-200 dark:border-gray-800 pt-5">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Race Info</h3>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Race Name *</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Barber 7-Hour Sunday" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date *</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Track *</label>
+                  <input type="text" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. Barber Motorsports Park" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Series *</label>
+                  <input type="text" value={series} onChange={(e) => setSeries(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Season *</label>
+                  <input type="number" value={season} onChange={(e) => setSeason(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input type="checkbox" checked={premium} onChange={(e) => setPremium(e.target.checked)} className="rounded border-gray-300" />
+                  Premium (Pro only)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm">
+                    <option value="DRAFT">Draft</option>
+                    <option value="PUBLISHED">Published</option>
+                  </select>
+                  Initial status
+                </label>
+              </div>
+            </div>
           </div>
-          {selectedFormat.fileSlots.map((slot) => (
-            <FileDropZone
-              key={slot.key}
-              label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
-              description={slot.description}
-              file={fileMap[slot.key] || null}
-              accept={slot.accept || ".csv"}
-              onFile={(f) => handleFile(slot.key, f)}
-              valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
-              preview={previewMap[slot.key] || null}
-            />
-          ))}
-          {fileError && <p className="text-sm text-red-600 dark:text-red-400">⚠ {fileError}</p>}
-          <div className="flex justify-between pt-4">
-            <button onClick={() => setStep(1)} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900">← Back</button>
-            <button onClick={() => { setStep(3); runValidation(); }} disabled={!step2Valid} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed">
+
+          <div className="flex justify-end pt-2">
+            <button onClick={() => { setStep(2); runValidation(); }} disabled={!allStep1Valid} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed">
               Next: Validate →
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Validate */}
-      {step === 3 && (
+      {/* Step 2: Validate */}
+      {step === 2 && (
         <div className="space-y-4">
           {validating ? (
             <div className="flex items-center gap-3 py-8 justify-center">
@@ -375,7 +402,7 @@ export function AdminUploadPage() {
             </>
           ) : null}
           <div className="flex justify-between pt-4">
-            <button onClick={() => setStep(2)} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900">← Back</button>
+            <button onClick={() => setStep(1)} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900">← Back</button>
             <div className="flex gap-2">
               <button onClick={runValidation} disabled={validating} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 disabled:opacity-40">Re-validate</button>
               <button onClick={commitUpload} disabled={!validation?.valid || uploading} className="px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -386,8 +413,8 @@ export function AdminUploadPage() {
         </div>
       )}
 
-      {/* Step 4: Complete */}
-      {step === 4 && result && (
+      {/* Step 3: Complete */}
+      {step === 3 && result && (
         <div className="text-center py-8">
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-2">Race Imported Successfully</h2>
