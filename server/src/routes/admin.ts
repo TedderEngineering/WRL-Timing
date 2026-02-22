@@ -5,13 +5,174 @@ import * as raceIngest from "../services/race-ingest.js";
 import * as raceSvc from "../services/races.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
+import { getParser, getAllParsers } from "../utils/parsers/index.js";
 
 export const adminRouter = Router();
 
 // All admin routes require auth + admin role
 adminRouter.use(requireAuth, requireAdmin);
 
-// ─── POST /api/admin/races — Upload new race data ───────────────────────────
+// ─── GET /api/admin/formats — List available data format parsers ─────────────
+
+adminRouter.get(
+  "/formats",
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    res.json({ formats: getAllParsers() });
+  }
+);
+
+// ─── POST /api/admin/races/import — Upload race from any supported format ────
+
+adminRouter.post(
+  "/races/import",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { metadata, format, files } = req.body;
+
+      if (!metadata || !format || !files) {
+        throw new AppError(
+          400,
+          'Request body must include "metadata", "format" (string), and "files" (object with CSV strings)',
+          "MISSING_FIELDS"
+        );
+      }
+
+      const parser = getParser(format);
+      if (!parser) {
+        throw new AppError(400, `Unknown format: "${format}"`, "UNKNOWN_FORMAT");
+      }
+
+      // Check required files are present
+      for (const slot of parser.fileSlots) {
+        if (slot.required && (!files[slot.key] || typeof files[slot.key] !== "string")) {
+          throw new AppError(
+            400,
+            `Missing required file: "${slot.label}" (key: ${slot.key})`,
+            "MISSING_FILE"
+          );
+        }
+      }
+
+      const parsedMeta = raceMetadataSchema.parse(metadata);
+
+      // Parse through format-specific parser
+      const { data, annotations, warnings: parseWarnings } = parser.parse(files);
+
+      // Ingest through existing pipeline
+      const result = await raceIngest.ingestRaceData(
+        parsedMeta,
+        data,
+        annotations,
+        req.user!.userId
+      );
+
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          adminUserId: req.user!.userId,
+          action: "CREATE_RACE",
+          targetType: "race",
+          targetId: result.raceId,
+          details: {
+            name: parsedMeta.name,
+            source: format,
+            parser: parser.name,
+            entries: result.entriesCreated,
+            laps: result.lapsCreated,
+            warnings: [...parseWarnings, ...result.warnings],
+          },
+        },
+      });
+
+      res.status(201).json({
+        message: `Race imported via ${parser.name}`,
+        raceId: result.raceId,
+        entriesCreated: result.entriesCreated,
+        lapsCreated: result.lapsCreated,
+        warnings: [...parseWarnings, ...result.warnings],
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/races/import/validate — Validate without inserting ──────
+
+adminRouter.post(
+  "/races/import/validate",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { metadata, format, files } = req.body;
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      // Validate metadata
+      if (metadata) {
+        const metaResult = raceMetadataSchema.safeParse(metadata);
+        if (!metaResult.success) {
+          metaResult.error.issues.forEach((i) =>
+            errors.push(`metadata.${i.path.join(".")}: ${i.message}`)
+          );
+        }
+      } else {
+        errors.push("Missing metadata");
+      }
+
+      // Validate format
+      if (!format) {
+        errors.push("Missing format");
+      } else {
+        const parser = getParser(format);
+        if (!parser) {
+          errors.push(`Unknown format: "${format}"`);
+        } else {
+          // Check required files
+          for (const slot of parser.fileSlots) {
+            if (slot.required && (!files?.[slot.key] || typeof files[slot.key] !== "string")) {
+              errors.push(`Missing required file: "${slot.label}"`);
+            }
+          }
+
+          // Try parsing if we have the files
+          if (files && errors.length === 0) {
+            try {
+              const { data, warnings: parseWarnings } = parser.parse(files);
+              warnings.push(...parseWarnings);
+
+              const carNums = Object.keys(data.cars);
+              const totalLaps = carNums.reduce(
+                (sum, n) => sum + data.cars[n].laps.length,
+                0
+              );
+
+              const stats = {
+                totalCars: carNums.length,
+                maxLap: data.maxLap,
+                totalLapRecords: totalLaps,
+                classes: Object.keys(data.classGroups),
+                classCarCounts: data.classCarCounts,
+                fcyPeriods: data.fcy.length,
+                greenPaceCutoff: Math.round(data.greenPaceCutoff * 10) / 10,
+              };
+
+              res.json({ valid: errors.length === 0, errors, warnings, stats });
+              return;
+            } catch (parseErr: any) {
+              errors.push(`Parse error: ${parseErr.message}`);
+            }
+          }
+        }
+      }
+
+      res.json({ valid: errors.length === 0, errors, warnings, stats: null });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/races — Upload new race data (JSON) ─────────────────────
 
 adminRouter.post(
   "/races",
