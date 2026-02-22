@@ -39,6 +39,38 @@ racesRouter.get(
   }
 );
 
+// ─── GET /api/races/recently-viewed — User's recently viewed races ──────────
+
+racesRouter.get(
+  "/recently-viewed",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 8, 20);
+      const races = await raceSvc.getRecentlyViewed(req.user!.userId, limit);
+      res.json({ races });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/races/favorites — User's favorited races ──────────────────────
+
+racesRouter.get(
+  "/favorites",
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 12, 50);
+      const races = await raceSvc.getUserFavorites(req.user!.userId, limit);
+      res.json({ races });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ─── GET /api/races/:id — Get race detail with entry list ───────────────────
 
 racesRouter.get(

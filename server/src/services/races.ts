@@ -342,6 +342,92 @@ export async function recordView(userId: string, raceId: string) {
   });
 }
 
+// ─── Recently Viewed ─────────────────────────────────────────────────────────
+
+export async function getRecentlyViewed(userId: string, limit = 8) {
+  // Get the most recent view per race (deduplicated)
+  const views = await prisma.$queryRaw<Array<{ race_id: string; last_viewed: Date }>>`
+    SELECT DISTINCT ON (race_id) race_id, viewed_at AS last_viewed
+    FROM user_race_views
+    WHERE user_id = ${userId}
+    ORDER BY race_id, viewed_at DESC
+  `;
+
+  if (views.length === 0) return [];
+
+  // Sort by most recent and limit
+  const sorted = views.sort((a, b) => new Date(b.last_viewed).getTime() - new Date(a.last_viewed).getTime()).slice(0, limit);
+  const raceIds = sorted.map((v) => v.race_id);
+
+  const races = await prisma.race.findMany({
+    where: { id: { in: raceIds }, status: "PUBLISHED" },
+    include: {
+      _count: { select: { entries: true, laps: true, favorites: true } },
+      favorites: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
+  });
+
+  // Maintain the sorted order
+  const raceMap = new Map(races.map((r) => [r.id, r]));
+  return sorted
+    .map((v) => {
+      const r = raceMap.get(v.race_id);
+      if (!r) return null;
+      return {
+        id: r.id,
+        name: r.name,
+        date: r.date.toISOString(),
+        track: r.track,
+        series: r.series,
+        season: r.season,
+        premium: r.premium,
+        maxLap: r._count.laps > 0 ? r._count.laps : null,
+        totalCars: r._count.entries > 0 ? r._count.entries : null,
+        favoriteCount: r._count.favorites,
+        isFavorited: (r as any).favorites?.length > 0,
+        lastViewed: v.last_viewed,
+      };
+    })
+    .filter(Boolean);
+}
+
+// ─── User Favorites ──────────────────────────────────────────────────────────
+
+export async function getUserFavorites(userId: string, limit = 12) {
+  const favorites = await prisma.userFavorite.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      race: {
+        include: {
+          _count: { select: { entries: true, laps: true, favorites: true } },
+        },
+      },
+    },
+  });
+
+  return favorites
+    .filter((f) => f.race.status === "PUBLISHED")
+    .map((f) => ({
+      id: f.race.id,
+      name: f.race.name,
+      date: f.race.date.toISOString(),
+      track: f.race.track,
+      series: f.race.series,
+      season: f.race.season,
+      premium: f.race.premium,
+      maxLap: f.race._count.laps > 0 ? f.race._count.laps : null,
+      totalCars: f.race._count.entries > 0 ? f.race._count.entries : null,
+      favoriteCount: f.race._count.favorites,
+      isFavorited: true,
+      favoritedAt: f.createdAt,
+    }));
+}
+
 // ─── Distinct filter values ──────────────────────────────────────────────────
 
 export async function getFilterOptions() {
