@@ -17,6 +17,7 @@
 
 import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
+import { generateAnnotations } from "./position-analysis.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -761,17 +762,23 @@ export const imsaParser: RaceDataParser = {
       `Parsed ${totalCars} cars across ${maxLap} laps with ${fcy.length} caution periods, ${totalPenalties} penalties, ${totalPitStops} pit stops, and ${totalDriverChanges} driver changes`
     );
 
+    const raceData: RaceDataJson = {
+      maxLap,
+      totalCars,
+      greenPaceCutoff,
+      cars,
+      fcy,
+      classGroups,
+      classCarCounts,
+    };
+
+    // Merge position-change analysis with IMSA-specific annotations
+    // (driver changes, RC messages, penalties, pit labels)
+    const mergedAnnotations = generateAnnotations(raceData, annotations);
+
     return {
-      data: {
-        maxLap,
-        totalCars,
-        greenPaceCutoff,
-        cars,
-        fcy,
-        classGroups,
-        classCarCounts,
-      },
-      annotations,
+      data: raceData,
+      annotations: mergedAnnotations,
       warnings,
     };
   },

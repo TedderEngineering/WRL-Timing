@@ -15,6 +15,7 @@
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { parseCSV, mapHeaders, col, parseLapTime } from "./csv-utils.js";
+import { generateAnnotations } from "./position-analysis.js";
 
 export const speedhiveParser: RaceDataParser = {
   id: "speedhive",
@@ -231,9 +232,12 @@ export const speedhiveParser: RaceDataParser = {
     const totalCars = Object.keys(cars).length;
     if (totalCars === 0) throw new Error("No valid car data found in CSVs");
 
+    const raceData: RaceDataJson = { maxLap, totalCars, greenPaceCutoff, cars, fcy, classGroups, classCarCounts };
+    const annotations = generateAnnotations(raceData);
+
     return {
-      data: { maxLap, totalCars, greenPaceCutoff, cars, fcy, classGroups, classCarCounts },
-      annotations: {},
+      data: raceData,
+      annotations,
       warnings,
     };
   },

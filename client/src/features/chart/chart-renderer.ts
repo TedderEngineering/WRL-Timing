@@ -426,14 +426,14 @@ export function buildLapInfo(
 
   // Pace comparison
   let paceInfo: LapInfoData["paceInfo"] = null;
-  if (d.ltSec && d.ltSec < data.greenPaceCutoff && d.flag === "GF") {
+  if (d.ltSec && d.ltSec > 1 && d.ltSec < data.greenPaceCutoff && d.flag === "GREEN") {
     let sum = 0;
     let cnt = 0;
     compSet.forEach((cn) => {
       if (cn === focusNum) return;
       const cl = data.cars[String(cn)]?.laps;
       const ld = cl?.find((l) => l.l === lapNum);
-      if (ld && ld.ltSec && ld.ltSec < data.greenPaceCutoff && ld.flag === "GF") {
+      if (ld && ld.ltSec && ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && ld.flag === "GREEN") {
         sum += ld.ltSec;
         cnt++;
       }
