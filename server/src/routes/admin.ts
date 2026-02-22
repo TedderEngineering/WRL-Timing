@@ -142,7 +142,7 @@ adminRouter.post(
 
               const carNums = Object.keys(data.cars);
               const totalLaps = carNums.reduce(
-                (sum, n) => sum + data.cars[n].laps.length,
+                (sum, n) => sum + (Array.isArray(data.cars[n].laps) ? data.cars[n].laps.length : 0),
                 0
               );
 
@@ -298,7 +298,7 @@ adminRouter.post(
         const d = dataResult.data;
         const carNums = Object.keys(d.cars);
         const totalLaps = carNums.reduce(
-          (sum, n) => sum + d.cars[n].laps.length,
+          (sum, n) => sum + (Array.isArray(d.cars[n].laps) ? d.cars[n].laps.length : 0),
           0
         );
         stats = {

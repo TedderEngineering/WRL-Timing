@@ -439,6 +439,7 @@ export const imsaParser: RaceDataParser = {
       const carNum = p.number;
       const laps: CarLapRaw[] = [];
 
+      if (!Array.isArray(p.laps)) continue;
       for (const lap of p.laps) {
         const lapNum = lap.number;
         if (lapNum < 1) continue;

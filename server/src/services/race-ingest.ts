@@ -110,7 +110,7 @@ export async function ingestRaceData(
         carClass: car.cls,
         finishPos: car.finishPos,
         finishPosClass: car.finishPosClass,
-        lapsCompleted: car.laps.length,
+        lapsCompleted: Array.isArray(car.laps) ? car.laps.length : 0,
       };
     });
 
@@ -135,6 +135,7 @@ export async function ingestRaceData(
 
     for (const numStr of carNums) {
       const car = data.cars[numStr];
+      if (!Array.isArray(car.laps)) continue;
       for (const lap of car.laps) {
         lapBatch.push({
           raceId: race.id,
@@ -208,7 +209,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
         carClass: car.cls,
         finishPos: car.finishPos,
         finishPosClass: car.finishPosClass,
-        lapsCompleted: car.laps.length,
+        lapsCompleted: Array.isArray(car.laps) ? car.laps.length : 0,
       };
     });
 
@@ -220,6 +221,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
 
     for (const numStr of carNums) {
       const car = data.cars[numStr];
+      if (!Array.isArray(car.laps)) continue;
       for (const lap of car.laps) {
         batch.push({
           raceId,
