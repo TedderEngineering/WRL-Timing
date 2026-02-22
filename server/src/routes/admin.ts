@@ -56,7 +56,7 @@ adminRouter.post(
       const parsedMeta = raceMetadataSchema.parse(metadata);
 
       // Parse through format-specific parser
-      const { data, annotations, warnings: parseWarnings } = parser.parse(files);
+      const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
 
       // Ingest through existing pipeline
       const result = await raceIngest.ingestRaceData(
@@ -137,7 +137,7 @@ adminRouter.post(
           // Try parsing if we have the files
           if (files && errors.length === 0) {
             try {
-              const { data, warnings: parseWarnings } = parser.parse(files);
+              const { data, warnings: parseWarnings } = await parser.parse(files);
               warnings.push(...parseWarnings);
 
               const carNums = Object.keys(data.cars);

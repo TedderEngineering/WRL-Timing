@@ -46,5 +46,5 @@ export interface RaceDataParser {
    * The `files` keys correspond to the `fileSlot.key` values.
    * Throws on fatal errors, returns warnings for non-fatal issues.
    */
-  parse(files: Record<string, string>): ParsedResult;
+  parse(files: Record<string, string>): ParsedResult | Promise<ParsedResult>;
 }

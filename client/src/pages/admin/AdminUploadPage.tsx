@@ -118,14 +118,30 @@ export function AdminUploadPage() {
     setFileMap((prev) => ({ ...prev, [slotKey]: file }));
     setFileError(null);
     try {
-      const text = await file.text();
-      setCsvMap((prev) => ({ ...prev, [slotKey]: text }));
+      const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+
+      // PDFs must be sent as base64 data URLs (binary); text files use .text()
+      let content: string;
+      if (isPdf) {
+        content = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read PDF"));
+          reader.readAsDataURL(file);
+        });
+      } else {
+        content = await file.text();
+      }
+
+      setCsvMap((prev) => ({ ...prev, [slotKey]: content }));
       let preview: string;
       let didFill = false;
 
-      if (file.name.endsWith(".json")) {
+      if (isPdf) {
+        preview = `PDF file: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+      } else if (file.name.endsWith(".json")) {
         try {
-          const json = JSON.parse(text.replace(/^\uFEFF/, ""));
+          const json = JSON.parse(content.replace(/^\uFEFF/, ""));
           const keys = Object.keys(json);
           const lines = [`JSON with ${keys.length} top-level keys: ${keys.join(", ")}`];
           for (const k of keys) {
@@ -155,10 +171,10 @@ export function AdminUploadPage() {
             }
           }
         } catch {
-          preview = text.split("\n").slice(0, 4).join("\n");
+          preview = content.split("\n").slice(0, 4).join("\n");
         }
       } else {
-        preview = text.split("\n").slice(0, 4).join("\n");
+        preview = content.split("\n").slice(0, 4).join("\n");
 
         // Auto-fill from SpeedHive-style CSV filenames
         // Pattern: "{SERIES}_{Venue}_{Abbrev}_-_{Track}_-_{RaceInfo}_-_{Duration}_{YYYY-MM-DD}_{type}.csv"

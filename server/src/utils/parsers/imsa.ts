@@ -18,6 +18,7 @@
 import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { generateAnnotations } from "./position-analysis.js";
+import { extractBase64, extractPdfText } from "../pdf-extract.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ export const imsaParser: RaceDataParser = {
   name: "IMSA Timing & Scoring",
   series: "IMSA",
   description:
-    "Import from IMSA JSON timing exports (Time Cards + Flags/RC Messages). Supports WeatherTech, Michelin Pilot Challenge, and VP Racing SportsCar Challenge.",
+    "Import from IMSA JSON timing exports. Requires Time Cards JSON; optionally accepts Flags Analysis as JSON (with RC messages) or PDF (flag periods only). If no flags file, caution periods are detected from lap times.",
   fileSlots: [
     {
       key: "timeCardsJson",
@@ -173,25 +174,26 @@ export const imsaParser: RaceDataParser = {
       accept: ".json",
     },
     {
-      key: "flagsJson",
-      label: "Flags & RC Messages JSON",
+      key: "flagsFile",
+      label: "Flags / Flag Analysis",
       description:
-        "IMSA Flags Analysis export (e.g. 25_FlagsAnalysisWithRCMessages_Race.json) — caution periods, penalties, race control messages.",
-      required: true,
-      accept: ".json",
+        "IMSA Flags Analysis — JSON with RC messages (2024 and earlier) or PDF flag analysis (2025+). Optional: caution periods will be detected from lap times if omitted.",
+      required: false,
+      accept: ".json,.pdf",
     },
   ],
 
-  parse(files) {
-    const { timeCardsJson, flagsJson } = files;
+  async parse(files) {
+    const { timeCardsJson, flagsFile, flagsJson: legacyFlagsJson } = files;
     if (!timeCardsJson) throw new Error("Missing Time Cards JSON file");
-    if (!flagsJson) throw new Error("Missing Flags & RC Messages JSON file");
+
+    // Support legacy key "flagsJson" for backward compatibility
+    const flagsInput = flagsFile || legacyFlagsJson || null;
 
     const warnings: string[] = [];
 
-    // ── Parse JSON files (handle BOM) ──────────────────────────────
+    // ── Parse Time Cards JSON (always required) ───────────────────────
     let timeCards: IMSATimeCardsData;
-    let flagsData: IMSAFlagsData;
 
     try {
       timeCards = JSON.parse(timeCardsJson.replace(/^\uFEFF/, ""));
@@ -199,18 +201,49 @@ export const imsaParser: RaceDataParser = {
       throw new Error(`Failed to parse Time Cards JSON: ${e.message}`);
     }
 
-    try {
-      flagsData = JSON.parse(flagsJson.replace(/^\uFEFF/, ""));
-    } catch (e: any) {
-      throw new Error(`Failed to parse Flags JSON: ${e.message}`);
-    }
-
     if (!timeCards.participants?.length) throw new Error("Time Cards has no participants");
 
-    // ── Build time→lap interpolation from flag events ──────────────
-    const flagEvents = (flagsData.flags || []).filter(
-      (f) => f.rec_type === "GF" || f.rec_type === "FCY" || f.rec_type === "FF"
-    );
+    // ── Process flags data (JSON, PDF, or absent) ─────────────────────
+    //
+    // Three paths:
+    //   1. JSON with RC messages (2024 and earlier) → full flag events + penalties/incidents
+    //   2. PDF flag analysis (2025+) → FCY periods only, no RC messages
+    //   3. No flags file → derive FCY from lap time analysis
+
+    let flagsData: IMSAFlagsData | null = null;
+    let pdfFcyPeriods: Array<{ startLap: number; endLap: number }> | null = null;
+
+    if (flagsInput) {
+      const b64 = extractBase64(flagsInput);
+      if (b64) {
+        // ── PDF path ──────────────────────────────────────────
+        try {
+          const pdfText = await extractPdfText(flagsInput);
+          pdfFcyPeriods = parsePdfFlagPeriods(pdfText);
+          warnings.push(
+            `Flags PDF: extracted ${pdfFcyPeriods.length} caution period(s). No RC messages available from PDF format.`
+          );
+        } catch (e: any) {
+          warnings.push(`Could not parse Flags PDF: ${e.message}. FCY will be detected from lap times.`);
+        }
+      } else {
+        // ── JSON path ─────────────────────────────────────────
+        try {
+          flagsData = JSON.parse(flagsInput.replace(/^\uFEFF/, ""));
+        } catch (e: any) {
+          warnings.push(`Could not parse Flags JSON: ${e.message}. FCY will be detected from lap times.`);
+        }
+      }
+    } else {
+      warnings.push("No flags file provided. Caution periods will be detected from lap times.");
+    }
+
+    // ── Build time→lap interpolation from flag events (JSON only) ─────
+    const flagEvents: IMSAFlagEvent[] = flagsData
+      ? (flagsData.flags || []).filter(
+          (f) => f.rec_type === "GF" || f.rec_type === "FCY" || f.rec_type === "FF"
+        )
+      : [];
 
     const anchors: Array<{ timeSec: number; lap: number }> = [];
     for (const fe of flagEvents) {
@@ -238,28 +271,40 @@ export const imsaParser: RaceDataParser = {
       return anchors[anchors.length - 1].lap;
     }
 
-    // ── Build FCY periods from flag events ─────────────────────────
+    // ── Build FCY periods ─────────────────────────────────────────────
+    // Priority: JSON flag events > PDF flag periods > (deferred to lap-time fallback)
     const fcy: Array<[number, number]> = [];
-    let fcyStartLap: number | null = null;
 
-    for (const fe of flagEvents) {
-      if (fe.rec_type === "FCY" && fe.lap > 0) {
-        if (fcyStartLap === null) fcyStartLap = fe.lap;
-      } else if (
-        (fe.rec_type === "GF" || fe.rec_type === "FF") &&
-        fcyStartLap !== null
-      ) {
-        fcy.push([fcyStartLap, Math.max(fcyStartLap, fe.lap - 1)]);
-        fcyStartLap = null;
+    if (flagEvents.length > 0) {
+      // From JSON flag events
+      let fcyStartLap: number | null = null;
+      for (const fe of flagEvents) {
+        if (fe.rec_type === "FCY" && fe.lap > 0) {
+          if (fcyStartLap === null) fcyStartLap = fe.lap;
+        } else if (
+          (fe.rec_type === "GF" || fe.rec_type === "FF") &&
+          fcyStartLap !== null
+        ) {
+          fcy.push([fcyStartLap, Math.max(fcyStartLap, fe.lap - 1)]);
+          fcyStartLap = null;
+        }
+      }
+    } else if (pdfFcyPeriods && pdfFcyPeriods.length > 0) {
+      // From PDF flag analysis
+      for (const p of pdfFcyPeriods) {
+        if (p.startLap > 0 && p.endLap >= p.startLap) {
+          fcy.push([p.startLap, p.endLap]);
+        }
       }
     }
+    // else: fcy remains empty; will be filled by lap-time fallback after positions are computed
 
     const fcyLapSet = new Set<number>();
     for (const [start, end] of fcy) {
       for (let l = start; l <= end; l++) fcyLapSet.add(l);
     }
 
-    // ── Parse RC messages for penalties and incidents ───────────────
+    // ── Parse RC messages for penalties and incidents (JSON only) ──────
     interface CarEvent {
       lap: number;
       type: "penalty" | "pit_enter" | "incident" | "off_course" | "stopped" | "other";
@@ -274,96 +319,98 @@ export const imsaParser: RaceDataParser = {
       carEvents.get(carNum)!.push(event);
     }
 
-    const rcMessages = (flagsData.flags || []).filter(
-      (f) => f.rec_type === "RCMessage" && f.message
-    );
+    if (flagsData) {
+      const rcMessages = (flagsData.flags || []).filter(
+        (f) => f.rec_type === "RCMessage" && f.message
+      );
 
-    for (const rc of rcMessages) {
-      const msg = rc.message.trim();
-      const estimatedLap = timeToLap(rc.time);
+      for (const rc of rcMessages) {
+        const msg = rc.message.trim();
+        const estimatedLap = timeToLap(rc.time);
 
-      // Pattern: "Car NN: Penalty - <description> - <punishment>"
-      const penaltyMatch = msg.match(/^Car\s+(\d+):\s*Penalty\s*-\s*(.+)/i);
-      if (penaltyMatch) {
-        addCarEvent(penaltyMatch[1], {
-          lap: estimatedLap,
-          type: "penalty",
-          message: penaltyMatch[2],
-          time: rc.time,
-        });
-        continue;
-      }
-
-      // Multi-car penalty: "Cars 26, 67, 24: Penalty - ..."
-      const multiPenalty = msg.match(/^Cars?\s+([\d,\s&]+):\s*Penalty\s*-\s*(.+)/i);
-      if (multiPenalty) {
-        const nums = multiPenalty[1].match(/\d+/g) || [];
-        for (const n of nums) {
-          addCarEvent(n, {
+        // Pattern: "Car NN: Penalty - <description> - <punishment>"
+        const penaltyMatch = msg.match(/^Car\s+(\d+):\s*Penalty\s*-\s*(.+)/i);
+        if (penaltyMatch) {
+          addCarEvent(penaltyMatch[1], {
             lap: estimatedLap,
             type: "penalty",
-            message: multiPenalty[2],
+            message: penaltyMatch[2],
             time: rc.time,
           });
+          continue;
         }
-        continue;
-      }
 
-      // "CAR NN ENTERED PIT LANE" / "CAR NN ENTERED CLOSED PIT"
-      const pitMatch = msg.match(/^CAR\s+(\d+)\s+ENTERED\s+(PIT|CLOSED)/i);
-      if (pitMatch) {
-        addCarEvent(pitMatch[1], {
-          lap: estimatedLap,
-          type: "pit_enter",
-          message: msg,
-          time: rc.time,
-        });
-        continue;
-      }
+        // Multi-car penalty: "Cars 26, 67, 24: Penalty - ..."
+        const multiPenalty = msg.match(/^Cars?\s+([\d,\s&]+):\s*Penalty\s*-\s*(.+)/i);
+        if (multiPenalty) {
+          const nums = multiPenalty[1].match(/\d+/g) || [];
+          for (const n of nums) {
+            addCarEvent(n, {
+              lap: estimatedLap,
+              type: "penalty",
+              message: multiPenalty[2],
+              time: rc.time,
+            });
+          }
+          continue;
+        }
 
-      // "CAR NN OFF COURSE..." / "CAR NN STOPPED ON COURSE..."
-      const offMatch = msg.match(
-        /^CAR\s+(\d+)\*?\s+(OFF COURSE|STOPPED ON COURSE)/i
-      );
-      if (offMatch) {
-        addCarEvent(offMatch[1], {
-          lap: estimatedLap,
-          type: offMatch[2].toUpperCase().startsWith("OFF")
-            ? "off_course"
-            : "stopped",
-          message: msg,
-          time: rc.time,
-        });
-        continue;
-      }
+        // "CAR NN ENTERED PIT LANE" / "CAR NN ENTERED CLOSED PIT"
+        const pitMatch = msg.match(/^CAR\s+(\d+)\s+ENTERED\s+(PIT|CLOSED)/i);
+        if (pitMatch) {
+          addCarEvent(pitMatch[1], {
+            lap: estimatedLap,
+            type: "pit_enter",
+            message: msg,
+            time: rc.time,
+          });
+          continue;
+        }
 
-      // "CAR NN SPUN..."
-      const spinMatch = msg.match(/^CAR\s+(\d+)\*?\s+SPUN/i);
-      if (spinMatch) {
-        addCarEvent(spinMatch[1], {
-          lap: estimatedLap,
-          type: "incident",
-          message: msg,
-          time: rc.time,
-        });
-        continue;
-      }
+        // "CAR NN OFF COURSE..." / "CAR NN STOPPED ON COURSE..."
+        const offMatch = msg.match(
+          /^CAR\s+(\d+)\*?\s+(OFF COURSE|STOPPED ON COURSE)/i
+        );
+        if (offMatch) {
+          addCarEvent(offMatch[1], {
+            lap: estimatedLap,
+            type: offMatch[2].toUpperCase().startsWith("OFF")
+              ? "off_course"
+              : "stopped",
+            message: msg,
+            time: rc.time,
+          });
+          continue;
+        }
 
-      // "INCIDENT INVOLVING CARS NN & NN..."
-      const incidentMatch = msg.match(
-        /^INCIDENT INVOLVING (?:CARS?|MULTIPLE)\s+([\d,\s&]+)/i
-      );
-      if (incidentMatch) {
-        const nums = incidentMatch[1].match(/\d+/g) || [];
-        for (const n of nums) {
-          addCarEvent(n, {
+        // "CAR NN SPUN..."
+        const spinMatch = msg.match(/^CAR\s+(\d+)\*?\s+SPUN/i);
+        if (spinMatch) {
+          addCarEvent(spinMatch[1], {
             lap: estimatedLap,
             type: "incident",
             message: msg,
             time: rc.time,
           });
+          continue;
         }
-        continue;
+
+        // "INCIDENT INVOLVING CARS NN & NN..."
+        const incidentMatch = msg.match(
+          /^INCIDENT INVOLVING (?:CARS?|MULTIPLE)\s+([\d,\s&]+)/i
+        );
+        if (incidentMatch) {
+          const nums = incidentMatch[1].match(/\d+/g) || [];
+          for (const n of nums) {
+            addCarEvent(n, {
+              lap: estimatedLap,
+              type: "incident",
+              message: msg,
+              time: rc.time,
+            });
+          }
+          continue;
+        }
       }
     }
 
@@ -434,6 +481,68 @@ export const imsaParser: RaceDataParser = {
         posMap.set(entries[i].num, i + 1);
       }
       lapPositions.set(lap, posMap);
+    }
+
+    // ── Lap-time FCY fallback (when no flags file or PDF) ─────────────
+    // Detect caution periods by looking for laps where the field bunches up:
+    // median lap time is significantly slower than green-flag pace and
+    // lap time variance is low (everyone going the same slow speed).
+    if (fcy.length === 0 && maxLap > 5) {
+      // Collect all lap times per lap number (excluding pit laps)
+      const lapTimesPerLap = new Map<number, number[]>();
+      for (const [, rawLaps] of carLapsRaw) {
+        for (const rl of rawLaps) {
+          if (rl.pit || rl.lapTimeSec <= 0) continue;
+          let arr = lapTimesPerLap.get(rl.lapNum);
+          if (!arr) { arr = []; lapTimesPerLap.set(rl.lapNum, arr); }
+          arr.push(rl.lapTimeSec);
+        }
+      }
+
+      // Compute median of all non-pit lap times as baseline green pace
+      const allTimes: number[] = [];
+      for (const [, times] of lapTimesPerLap) {
+        allTimes.push(...times);
+      }
+      allTimes.sort((a, b) => a - b);
+      const greenMedian = allTimes.length > 0
+        ? allTimes[Math.floor(allTimes.length * 0.25)] // 25th percentile = fast green pace
+        : 120;
+
+      // A lap is FCY-candidate if its median time is >130% of green pace
+      // AND it has enough cars to be meaningful
+      const fcyCandidates = new Set<number>();
+      for (let lap = 1; lap <= maxLap; lap++) {
+        const times = lapTimesPerLap.get(lap);
+        if (!times || times.length < 3) continue;
+        times.sort((a, b) => a - b);
+        const median = times[Math.floor(times.length / 2)];
+        if (median > greenMedian * 1.3) {
+          fcyCandidates.add(lap);
+        }
+      }
+
+      // Merge consecutive FCY candidate laps into periods
+      let fcyStart: number | null = null;
+      for (let lap = 1; lap <= maxLap; lap++) {
+        if (fcyCandidates.has(lap)) {
+          if (fcyStart === null) fcyStart = lap;
+        } else if (fcyStart !== null) {
+          fcy.push([fcyStart, lap - 1]);
+          fcyStart = null;
+        }
+      }
+      if (fcyStart !== null) fcy.push([fcyStart, maxLap]);
+
+      // Rebuild fcyLapSet
+      fcyLapSet.clear();
+      for (const [start, end] of fcy) {
+        for (let l = start; l <= end; l++) fcyLapSet.add(l);
+      }
+
+      if (fcy.length > 0) {
+        warnings.push(`Detected ${fcy.length} caution period(s) from lap time analysis (no flags file).`);
+      }
     }
 
     // ── Build car data ─────────────────────────────────────────────
@@ -872,4 +981,112 @@ function shortenIncident(msg: string): string {
   }
   if (/continued/i.test(msg)) return "Continued";
   return msg.length > 25 ? msg.substring(0, 23) + "…" : msg;
+}
+
+// ─── PDF Flag Analysis Parser ────────────────────────────────────────────────
+
+/**
+ * Extract FCY (full-course yellow / caution) periods from IMSA Flag Analysis PDF text.
+ *
+ * Handles multiple PDF table formats:
+ *   - Tabular with columns: Flag, Start Lap, End Lap (or Laps range)
+ *   - Line-based: "YELLOW  Lap 16 to Lap 21"
+ *   - Compact: "FCY  16-21" or "Caution  L16–L21"
+ *   - Row-based with duration: "2  YELLOW  16  21  5:33.456"
+ *
+ * Returns an array of { startLap, endLap } for each yellow/caution period.
+ */
+function parsePdfFlagPeriods(
+  pdfText: string
+): Array<{ startLap: number; endLap: number }> {
+  const results: Array<{ startLap: number; endLap: number }> = [];
+  const lines = pdfText.split(/\n/);
+
+  for (const line of lines) {
+    // Skip lines that are clearly green flag or headers
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Only process lines that mention yellow/caution/FCY
+    if (!/yellow|caution|fcy/i.test(trimmed)) continue;
+    // Skip if this is a "pass under yellow" penalty, not a flag period
+    if (/pass\s+under\s+yellow/i.test(trimmed)) continue;
+
+    // ── Pattern 1: "YELLOW  Lap 16 to Lap 21" or "FCY Lap 16 – Lap 21"
+    const lapToLap = trimmed.match(
+      /(?:yellow|caution|fcy)\s+.*?lap\s*(\d+)\s*(?:to|[-–—])\s*lap\s*(\d+)/i
+    );
+    if (lapToLap) {
+      results.push({
+        startLap: parseInt(lapToLap[1], 10),
+        endLap: parseInt(lapToLap[2], 10),
+      });
+      continue;
+    }
+
+    // ── Pattern 2: Row with "YELLOW" and two numbers nearby (start/end laps)
+    // e.g. "2  YELLOW  16  21  5:33.456" or "YELLOW  16  21"
+    const rowNums = trimmed.match(
+      /(?:yellow|caution|fcy)\s+(\d+)\s+(\d+)/i
+    );
+    if (rowNums) {
+      const a = parseInt(rowNums[1], 10);
+      const b = parseInt(rowNums[2], 10);
+      // Sanity: both should be reasonable lap numbers
+      if (a >= 1 && a <= 500 && b >= a && b <= 500) {
+        results.push({ startLap: a, endLap: b });
+        continue;
+      }
+    }
+
+    // ── Pattern 3: Number before YELLOW then number(s) after
+    // e.g. "3  YELLOW  16  21" where 3 is the period number
+    const prefixedRow = trimmed.match(
+      /\d+\s+(?:yellow|caution|fcy)\s+(\d+)\s+(\d+)/i
+    );
+    if (prefixedRow) {
+      const a = parseInt(prefixedRow[1], 10);
+      const b = parseInt(prefixedRow[2], 10);
+      if (a >= 1 && a <= 500 && b >= a && b <= 500) {
+        results.push({ startLap: a, endLap: b });
+        continue;
+      }
+    }
+
+    // ── Pattern 4: Compact range "FCY 16-21" or "YELLOW L16–L21"
+    const compact = trimmed.match(
+      /(?:yellow|caution|fcy)\s+L?(\d+)\s*[-–—]\s*L?(\d+)/i
+    );
+    if (compact) {
+      results.push({
+        startLap: parseInt(compact[1], 10),
+        endLap: parseInt(compact[2], 10),
+      });
+      continue;
+    }
+
+    // ── Pattern 5: Single lap yellow "YELLOW Lap 16" (1-lap caution)
+    const singleLap = trimmed.match(
+      /(?:yellow|caution|fcy)\s+.*?lap\s*(\d+)/i
+    );
+    if (singleLap) {
+      const lap = parseInt(singleLap[1], 10);
+      results.push({ startLap: lap, endLap: lap });
+      continue;
+    }
+  }
+
+  // Deduplicate and sort
+  const seen = new Set<string>();
+  const unique: Array<{ startLap: number; endLap: number }> = [];
+  for (const r of results) {
+    const key = `${r.startLap}-${r.endLap}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(r);
+    }
+  }
+  unique.sort((a, b) => a.startLap - b.startLap);
+
+  return unique;
 }
