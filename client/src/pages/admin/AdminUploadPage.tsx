@@ -176,43 +176,60 @@ export function AdminUploadPage() {
       } else {
         preview = content.split("\n").slice(0, 4).join("\n");
 
-        // Auto-fill from SpeedHive-style CSV filenames
-        // Pattern: "{SERIES}_{Venue}_{Abbrev}_-_{Track}_-_{RaceInfo}_-_{Duration}_{YYYY-MM-DD}_{type}.csv"
-        // Example: "WORLD_RACING_LEAGUE_Eagles_Canyon_WRL_-_Eagles_Canyon_-_87_Sunday_-_7_Hour_2026-02-04_all_laps.csv"
+        // ── SpeedHive CSV auto-fill ──────────────────────────────
         const fn = file.name.replace(/\.csv$/i, "");
 
-        // Extract date (YYYY-MM-DD)
-        const dateMatch = fn.match(/(\d{4}-\d{2}-\d{2})/);
-        if (dateMatch && !date) { setDate(dateMatch[1]); didFill = true; }
-        if (dateMatch) {
-          const yr = dateMatch[1].split("-")[0];
-          if (season === String(new Date().getFullYear()) && yr !== season) { setSeason(yr); didFill = true; }
+        // Pattern 1: "speedhive_{Day}_{N}_hour_{sessionId}_{type}"
+        // e.g. "speedhive_Sunday_7_hour_11586857_summary" → "Sunday 7-Hour"
+        const shMatch = fn.match(/speedhive_(\w+?)_(\d+)_hour_/i);
+        if (shMatch && !name.trim()) {
+          const day = shMatch[1].charAt(0).toUpperCase() + shMatch[1].slice(1).toLowerCase();
+          setName(`${day} ${shMatch[2]}-Hour`);
+          didFill = true;
         }
 
-        // Split by _-_ separators for structured SpeedHive filenames
+        // Pattern 2: "WORLD_RACING_LEAGUE_..._-_..._-_..._YYYY-MM-DD_type"
         const segments = fn.split(/_-_/);
         if (segments.length >= 3) {
-          // Segment 1 has series + venue, segment 2 is track, rest is race info
           const trackName = segments[1].replace(/_/g, " ").trim();
           if (trackName && !track.trim()) { setTrack(trackName); didFill = true; }
 
-          // Build race name from segments after track, minus date and file type suffix
-          const raceSegments = segments.slice(2)
-            .join(" - ")
-            .replace(/_/g, " ")
-            .replace(/\d{4}-\d{2}-\d{2}/, "")
-            .replace(/\b(all laps|summary|laps)\b/gi, "")
-            .replace(/\s{2,}/g, " ")
-            .trim()
-            .replace(/^-\s*|\s*-$/g, "")
-            .trim();
-          if (raceSegments && !name.trim()) { setName(raceSegments); didFill = true; }
+          if (!name.trim()) {
+            const raceSegments = segments.slice(2)
+              .join(" - ")
+              .replace(/_/g, " ")
+              .replace(/\d{4}-\d{2}-\d{2}/, "")
+              .replace(/\b(all laps|summary|laps)\b/gi, "")
+              .replace(/\s{2,}/g, " ").trim()
+              .replace(/^-\s*|\s*-$/g, "").trim();
+            if (raceSegments) { setName(raceSegments); didFill = true; }
+          }
+        }
 
-          // Detect series from first segment
-          const firstSeg = segments[0].toUpperCase();
-          if (!series.trim() || series === "WRL") {
-            if (firstSeg.includes("WORLD_RACING_LEAGUE") || firstSeg.includes("WRL")) {
-              setSeries("WRL");
+        // Extract date from filename if present (YYYY-MM-DD)
+        const dateInFn = fn.match(/(\d{4}-\d{2}-\d{2})/);
+        if (dateInFn && !date) { setDate(dateInFn[1]); didFill = true; }
+        if (dateInFn) {
+          const yr = dateInFn[1].split("-")[0];
+          if (season === String(new Date().getFullYear()) && yr !== season) { setSeason(yr); didFill = true; }
+        }
+
+        // Extract date/season from CSV "Time of Day" column (ISO timestamps)
+        // e.g. "2025-12-06T08:03:16.901" in the all_laps CSV
+        if (!date || season === String(new Date().getFullYear())) {
+          const csvLines = content.split("\n");
+          const header = csvLines[0] || "";
+          const cols = header.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+          const todIdx = cols.findIndex((c) => /time\s*of\s*day/i.test(c));
+          if (todIdx >= 0 && csvLines.length > 1) {
+            const firstRow = csvLines[1].split(",");
+            const todVal = (firstRow[todIdx] || "").replace(/^"|"$/g, "").trim();
+            const isoMatch = todVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) {
+              if (!date) { setDate(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`); didFill = true; }
+              if (season === String(new Date().getFullYear()) && isoMatch[1] !== season) {
+                setSeason(isoMatch[1]); didFill = true;
+              }
             }
           }
         }

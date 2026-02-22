@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useRaceList, useFilterOptions } from "../hooks/useChartData";
@@ -13,6 +13,9 @@ export function RaceListPage() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
+  // Track optimistic favorite toggles: raceId → toggled state
+  const [favOverrides, setFavOverrides] = useState<Record<string, boolean>>({});
+
   const filters = useFilterOptions();
   const params = useMemo(
     () => ({ page, series: series || undefined, season, search: search || undefined }),
@@ -26,16 +29,17 @@ export function RaceListPage() {
     setPage(1);
   };
 
-  const handleFavorite = async (raceId: string) => {
+  const handleFavorite = useCallback(async (raceId: string, currentlyFavorited: boolean) => {
     if (!isAuthenticated) return;
+    // Optimistic toggle
+    setFavOverrides((prev) => ({ ...prev, [raceId]: !currentlyFavorited }));
     try {
       await api.post(`/races/${raceId}/favorite`);
-      // Optimistic UI would be better, but this works for now
-      window.location.reload();
     } catch {
-      // ignore
+      // Revert on failure
+      setFavOverrides((prev) => ({ ...prev, [raceId]: currentlyFavorited }));
     }
-  };
+  }, [isAuthenticated]);
 
   return (
     <div className="container-page py-8 lg:py-12">
@@ -152,14 +156,17 @@ export function RaceListPage() {
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {result.races.map((race) => (
-                <RaceCard
-                  key={race.id}
-                  race={race}
-                  isAuthenticated={isAuthenticated}
-                  onFavorite={handleFavorite}
-                />
-              ))}
+              {result.races.map((race) => {
+                const isFav = favOverrides[race.id] ?? race.isFavorited;
+                return (
+                  <RaceCard
+                    key={race.id}
+                    race={{ ...race, isFavorited: isFav }}
+                    isAuthenticated={isAuthenticated}
+                    onFavorite={handleFavorite}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -212,7 +219,7 @@ function RaceCard({
     isFavorited: boolean;
   };
   isAuthenticated: boolean;
-  onFavorite: (id: string) => void;
+  onFavorite: (id: string, currentlyFavorited: boolean) => void;
 }) {
   const dateStr = new Date(race.date).toLocaleDateString("en-US", {
     month: "short",
@@ -270,7 +277,7 @@ function RaceCard({
         <button
           onClick={(e) => {
             e.preventDefault();
-            onFavorite(race.id);
+            onFavorite(race.id, race.isFavorited);
           }}
           className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           title={race.isFavorited ? "Remove from favorites" : "Add to favorites"}

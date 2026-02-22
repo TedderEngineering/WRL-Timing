@@ -69,6 +69,9 @@ export async function extractPdfText(input: string | Buffer): Promise<string> {
   const uint8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   const parser = new PDFParse(uint8);
   await parser.load();
-  const text = await parser.getText();
-  return text;
+  const result = await parser.getText();
+  // pdf-parse v2 getText() returns an object { text, pages, total }, not a string
+  if (typeof result === "string") return result;
+  if (result && typeof result === "object" && typeof result.text === "string") return result.text;
+  return String(result);
 }

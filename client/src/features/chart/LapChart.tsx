@@ -92,8 +92,7 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
 
     const car = data.cars[String(winnerNum)];
     if (car) {
-      const cls = car.cls;
-      setClassView(cls);
+      setClassView("");
       setFocusNum(winnerNum);
       // Highlight ALL cars in the race as comparison
       const newComp = new Set<number>();
