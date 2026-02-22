@@ -4,14 +4,15 @@
  * Used by: IMSA WeatherTech, IMSA Michelin Pilot Challenge, IMSA VP Racing SportsCar Challenge
  *
  * Expects two JSON files from IMSA timing exports:
- *   1. Lap Chart JSON (12_Lap_Chart_Race.json): session, participants, laps (position per lap)
+ *   1. Time Cards JSON (23_Time_Cards_Race.json): session, participants with per-lap data
+ *      - Lap times, pit lane crossings, driver numbers, speeds, sector times, validity
  *   2. Flags/RC Messages JSON (25_FlagsAnalysisWithRCMessages_Race.json): session, flags
+ *      - Flag transitions (GREEN, FCY, CHEQUERED) with lap numbers
+ *      - Race Control messages: penalties, incidents, pit events
  *
- * The lap chart provides position data per lap. The flags file provides:
- *   - Flag transitions (GREEN, FCY, CHEQUERED) with lap numbers
- *   - Race Control messages with timestamps: penalties, incidents, pit events
- *
- * Since RC messages have timestamps but lap=0, we interpolate laps from flag events.
+ * Positions are computed from session_elapsed times (who completed each lap first).
+ * Pit stops come from `crossing_pit_finish_lane`. Driver stints from `driver_number`.
+ * Penalties, incidents, and caution periods from the flags file.
  */
 
 import type { RaceDataParser, ParsedResult } from "./types.js";
@@ -27,6 +28,7 @@ interface IMSASession {
   circuit: { name: string; length: number; country: string };
   weather?: { air_temperature: string; track_temperature: string; track_status: string };
   finalize_type?: { type: string; time_in_seconds?: number };
+  report_message?: string;
   [key: string]: any;
 }
 
@@ -39,31 +41,45 @@ interface IMSADriver {
   [key: string]: any;
 }
 
+interface IMSASectorTime {
+  index: number;
+  time: string;
+  hour: string;
+  is_session_best: boolean;
+  is_personal_best: boolean;
+}
+
+interface IMSALap {
+  number: number;
+  driver_number: string;
+  time: string;                    // "1:58.002"
+  is_session_best: boolean;
+  is_personal_best: boolean;
+  top_speed_kph: string;
+  session_elapsed: string;         // "4:03.626" or "1:02:15.123"
+  hour: string;                    // "13:49:46.113" wall-clock
+  average_speed_kph: string;
+  is_valid: boolean;
+  manually_invalidated: boolean;
+  crossing_pit_finish_lane: boolean;
+  sector_times: IMSASectorTime[];
+  [key: string]: any;
+}
+
 interface IMSAParticipant {
   number: string;
-  grid_position: number;
   team: string;
   class: string;
   vehicle: string;
   manufacturer: string;
   drivers: IMSADriver[];
+  laps: IMSALap[];
   [key: string]: any;
 }
 
-interface IMSALapPosition {
-  position: number;
-  number: string;
-}
-
-interface IMSALap {
-  lap_number: number;
-  positions: IMSALapPosition[];
-}
-
-interface IMSALapChartData {
+interface IMSATimeCardsData {
   session: IMSASession;
   participants: IMSAParticipant[];
-  laps: IMSALap[];
 }
 
 interface IMSAFlagEvent {
@@ -85,22 +101,58 @@ interface IMSAFlagsData {
 
 // ─── Time utilities ──────────────────────────────────────────────────────────
 
-function parseTimeToSeconds(t: string): number {
-  // Format: "HH:MM:SS.mmm"
-  const parts = t.split(":");
-  if (parts.length < 3) return 0;
-  const h = parseInt(parts[0], 10) || 0;
-  const m = parseInt(parts[1], 10) || 0;
-  const s = parseFloat(parts[2]) || 0;
-  return h * 3600 + m * 60 + s;
+/** Parse "M:SS.mmm" or "H:MM:SS.mmm" to seconds */
+function parseElapsed(s: string): number {
+  if (!s) return 0;
+  const parts = s.split(":");
+  if (parts.length === 2) {
+    return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+  } else if (parts.length === 3) {
+    return (
+      parseInt(parts[0], 10) * 3600 +
+      parseInt(parts[1], 10) * 60 +
+      parseFloat(parts[2])
+    );
+  }
+  return 0;
 }
 
-// ─── Annotation color palette ────────────────────────────────────────────────
+/** Parse wall-clock "HH:MM:SS.mmm" to seconds-of-day */
+function parseTimeOfDay(t: string): number {
+  const parts = t.split(":");
+  if (parts.length < 3) return 0;
+  return (
+    parseInt(parts[0], 10) * 3600 +
+    parseInt(parts[1], 10) * 60 +
+    parseFloat(parts[2])
+  );
+}
 
-const PIT_COLOR = "#fbbf24";    // yellow
-const PENALTY_COLOR = "#f87171"; // red
-const INCIDENT_COLOR = "#fb923c"; // orange
-const SETTLE_COLOR = "#f87171";  // red
+/** Parse lap time "M:SS.mmm" or "SS.mmm" to seconds */
+function parseLapTimeStr(t: string): number {
+  if (!t) return 0;
+  const parts = t.split(":");
+  if (parts.length === 1) return parseFloat(parts[0]) || 0;
+  if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+  if (parts.length === 3)
+    return (
+      parseInt(parts[0], 10) * 3600 +
+      parseInt(parts[1], 10) * 60 +
+      parseFloat(parts[2])
+    );
+  return 0;
+}
+
+/** Convert kph string to mph number */
+function kphToMph(kph: string): number {
+  const v = parseFloat(kph);
+  return v > 0 ? v * 0.621371 : 0;
+}
+
+// ─── Annotation helpers ──────────────────────────────────────────────────────
+
+const PIT_COLOR = "#fbbf24"; // yellow
+const SETTLE_COLOR = "#f87171"; // red
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
 
@@ -109,13 +161,13 @@ export const imsaParser: RaceDataParser = {
   name: "IMSA Timing & Scoring",
   series: "IMSA",
   description:
-    "Import from IMSA JSON timing exports (Lap Chart + Flags/RC Messages). Supports WeatherTech, Michelin Pilot Challenge, and VP Racing SportsCar Challenge.",
+    "Import from IMSA JSON timing exports (Time Cards + Flags/RC Messages). Supports WeatherTech, Michelin Pilot Challenge, and VP Racing SportsCar Challenge.",
   fileSlots: [
     {
-      key: "lapChartJson",
-      label: "Lap Chart JSON",
+      key: "timeCardsJson",
+      label: "Time Cards JSON",
       description:
-        "IMSA Lap Chart export (e.g. 12_Lap_Chart_Race.json) with session info, participants, and lap positions.",
+        "IMSA Time Cards export (e.g. 23_Time_Cards_Race.json) — lap times, pit crossings, driver stints, speeds.",
       required: true,
       accept: ".json",
     },
@@ -123,67 +175,55 @@ export const imsaParser: RaceDataParser = {
       key: "flagsJson",
       label: "Flags & RC Messages JSON",
       description:
-        "IMSA Flags Analysis export (e.g. 25_FlagsAnalysisWithRCMessages_Race.json) with flag changes, penalties, and race control messages.",
+        "IMSA Flags Analysis export (e.g. 25_FlagsAnalysisWithRCMessages_Race.json) — caution periods, penalties, race control messages.",
       required: true,
       accept: ".json",
     },
   ],
 
   parse(files) {
-    const { lapChartJson, flagsJson } = files;
-    if (!lapChartJson) throw new Error("Missing Lap Chart JSON file");
+    const { timeCardsJson, flagsJson } = files;
+    if (!timeCardsJson) throw new Error("Missing Time Cards JSON file");
     if (!flagsJson) throw new Error("Missing Flags & RC Messages JSON file");
 
     const warnings: string[] = [];
 
     // ── Parse JSON files (handle BOM) ──────────────────────────────
-    let lapChart: IMSALapChartData;
+    let timeCards: IMSATimeCardsData;
     let flagsData: IMSAFlagsData;
 
     try {
-      const cleanLap = lapChartJson.replace(/^\uFEFF/, "");
-      lapChart = JSON.parse(cleanLap);
+      timeCards = JSON.parse(timeCardsJson.replace(/^\uFEFF/, ""));
     } catch (e: any) {
-      throw new Error(`Failed to parse Lap Chart JSON: ${e.message}`);
+      throw new Error(`Failed to parse Time Cards JSON: ${e.message}`);
     }
 
     try {
-      const cleanFlags = flagsJson.replace(/^\uFEFF/, "");
-      flagsData = JSON.parse(cleanFlags);
+      flagsData = JSON.parse(flagsJson.replace(/^\uFEFF/, ""));
     } catch (e: any) {
       throw new Error(`Failed to parse Flags JSON: ${e.message}`);
     }
 
-    if (!lapChart.participants?.length) throw new Error("Lap Chart has no participants");
-    if (!lapChart.laps?.length) throw new Error("Lap Chart has no lap data");
-
-    // ── Build participant map ──────────────────────────────────────
-    const participantMap = new Map<string, IMSAParticipant>();
-    for (const p of lapChart.participants) {
-      participantMap.set(p.number, p);
-    }
+    if (!timeCards.participants?.length) throw new Error("Time Cards has no participants");
 
     // ── Build time→lap interpolation from flag events ──────────────
     const flagEvents = (flagsData.flags || []).filter(
       (f) => f.rec_type === "GF" || f.rec_type === "FCY" || f.rec_type === "FF"
     );
 
-    // Anchor points: [{timeSec, lap}]
     const anchors: Array<{ timeSec: number; lap: number }> = [];
     for (const fe of flagEvents) {
       if (fe.lap > 0 && fe.time) {
-        anchors.push({ timeSec: parseTimeToSeconds(fe.time), lap: fe.lap });
+        anchors.push({ timeSec: parseTimeOfDay(fe.time), lap: fe.lap });
       }
     }
     anchors.sort((a, b) => a.timeSec - b.timeSec);
 
     function timeToLap(timeStr: string): number {
       if (!timeStr || anchors.length === 0) return 0;
-      const t = parseTimeToSeconds(timeStr);
+      const t = parseTimeOfDay(timeStr);
       if (t <= anchors[0].timeSec) return anchors[0].lap;
       if (t >= anchors[anchors.length - 1].timeSec) return anchors[anchors.length - 1].lap;
-
-      // Linear interpolation between closest anchors
       for (let i = 0; i < anchors.length - 1; i++) {
         if (t >= anchors[i].timeSec && t <= anchors[i + 1].timeSec) {
           const frac =
@@ -204,23 +244,21 @@ export const imsaParser: RaceDataParser = {
     for (const fe of flagEvents) {
       if (fe.rec_type === "FCY" && fe.lap > 0) {
         if (fcyStartLap === null) fcyStartLap = fe.lap;
-      } else if ((fe.rec_type === "GF" || fe.rec_type === "FF") && fcyStartLap !== null) {
-        // Green or finish ends the caution — caution runs through the lap BEFORE restart
+      } else if (
+        (fe.rec_type === "GF" || fe.rec_type === "FF") &&
+        fcyStartLap !== null
+      ) {
         fcy.push([fcyStartLap, Math.max(fcyStartLap, fe.lap - 1)]);
         fcyStartLap = null;
       }
     }
-    if (fcyStartLap !== null) {
-      fcy.push([fcyStartLap, lapChart.laps[lapChart.laps.length - 1].lap_number]);
-    }
 
-    // Build a set of FCY laps for quick lookup
     const fcyLapSet = new Set<number>();
     for (const [start, end] of fcy) {
       for (let l = start; l <= end; l++) fcyLapSet.add(l);
     }
 
-    // ── Parse RC messages into per-car events ──────────────────────
+    // ── Parse RC messages for penalties and incidents ───────────────
     interface CarEvent {
       lap: number;
       type: "penalty" | "pit_enter" | "incident" | "off_course" | "stopped" | "other";
@@ -229,7 +267,6 @@ export const imsaParser: RaceDataParser = {
     }
 
     const carEvents = new Map<string, CarEvent[]>();
-    const globalEvents: CarEvent[] = []; // events not tied to a specific car
 
     function addCarEvent(carNum: string, event: CarEvent) {
       if (!carEvents.has(carNum)) carEvents.set(carNum, []);
@@ -247,34 +284,31 @@ export const imsaParser: RaceDataParser = {
       // Pattern: "Car NN: Penalty - <description> - <punishment>"
       const penaltyMatch = msg.match(/^Car\s+(\d+):\s*Penalty\s*-\s*(.+)/i);
       if (penaltyMatch) {
-        const carNum = penaltyMatch[1];
-        const detail = penaltyMatch[2];
-        addCarEvent(carNum, {
+        addCarEvent(penaltyMatch[1], {
           lap: estimatedLap,
           type: "penalty",
-          message: detail,
+          message: penaltyMatch[2],
           time: rc.time,
         });
         continue;
       }
 
-      // Multi-car penalty: "Car 26, 67, 24: Penalty - ..."
+      // Multi-car penalty: "Cars 26, 67, 24: Penalty - ..."
       const multiPenalty = msg.match(/^Cars?\s+([\d,\s&]+):\s*Penalty\s*-\s*(.+)/i);
       if (multiPenalty) {
         const nums = multiPenalty[1].match(/\d+/g) || [];
-        const detail = multiPenalty[2];
         for (const n of nums) {
           addCarEvent(n, {
             lap: estimatedLap,
             type: "penalty",
-            message: detail,
+            message: multiPenalty[2],
             time: rc.time,
           });
         }
         continue;
       }
 
-      // "CAR NN ENTERED PIT LANE" or "CAR NN ENTERED CLOSED PIT"
+      // "CAR NN ENTERED PIT LANE" / "CAR NN ENTERED CLOSED PIT"
       const pitMatch = msg.match(/^CAR\s+(\d+)\s+ENTERED\s+(PIT|CLOSED)/i);
       if (pitMatch) {
         addCarEvent(pitMatch[1], {
@@ -286,12 +320,16 @@ export const imsaParser: RaceDataParser = {
         continue;
       }
 
-      // "CAR NN OFF COURSE..." or "CAR NN STOPPED ON COURSE..."
-      const offMatch = msg.match(/^CAR\s+(\d+)\*?\s+(OFF COURSE|STOPPED ON COURSE)/i);
+      // "CAR NN OFF COURSE..." / "CAR NN STOPPED ON COURSE..."
+      const offMatch = msg.match(
+        /^CAR\s+(\d+)\*?\s+(OFF COURSE|STOPPED ON COURSE)/i
+      );
       if (offMatch) {
         addCarEvent(offMatch[1], {
           lap: estimatedLap,
-          type: offMatch[2].toUpperCase().startsWith("OFF") ? "off_course" : "stopped",
+          type: offMatch[2].toUpperCase().startsWith("OFF")
+            ? "off_course"
+            : "stopped",
           message: msg,
           time: rc.time,
         });
@@ -326,74 +364,90 @@ export const imsaParser: RaceDataParser = {
         }
         continue;
       }
+    }
 
-      // Anything else with a car number
-      const genericCar = msg.match(/^CAR\s+(\d+)/i);
-      if (genericCar) {
-        addCarEvent(genericCar[1], {
-          lap: estimatedLap,
-          type: "other",
-          message: msg,
-          time: rc.time,
+    // ── Compute positions from session_elapsed ─────────────────────
+    // For each lap N, gather all cars that completed lap N, sort by elapsed
+    // This matches official IMSA timing positions exactly.
+
+    let maxLap = 0;
+
+    // First pass: build per-car lap data with parsed times
+    interface CarLapRaw {
+      num: string;
+      lapNum: number;
+      elapsedSec: number;
+      lapTimeSec: number;
+      lapTimeStr: string;
+      pit: boolean;
+      speedMph: number;
+      driverNum: string;
+      hour: string;
+    }
+
+    const carLapsRaw = new Map<string, CarLapRaw[]>();
+
+    for (const p of timeCards.participants) {
+      const carNum = p.number;
+      const laps: CarLapRaw[] = [];
+
+      for (const lap of p.laps) {
+        const lapNum = lap.number;
+        if (lapNum < 1) continue;
+        if (lapNum > maxLap) maxLap = lapNum;
+
+        laps.push({
+          num: carNum,
+          lapNum,
+          elapsedSec: parseElapsed(lap.session_elapsed),
+          lapTimeSec: parseLapTimeStr(lap.time),
+          lapTimeStr: lap.time,
+          pit: !!lap.crossing_pit_finish_lane,
+          speedMph: kphToMph(lap.average_speed_kph || "0"),
+          driverNum: lap.driver_number,
+          hour: lap.hour,
         });
-        continue;
       }
 
-      // Global events (PITS OPEN, etc.)
-      globalEvents.push({
-        lap: estimatedLap,
-        type: "other",
-        message: msg,
-        time: rc.time,
-      });
-    }
-
-    // ── Process laps: build position data per car ──────────────────
-    const maxLap = lapChart.laps[lapChart.laps.length - 1].lap_number;
-
-    // Track positions per car per lap
-    const carPositions = new Map<string, Map<number, number>>(); // carNum → (lap → position)
-    const allCarNums = new Set<string>();
-
-    for (const lapEntry of lapChart.laps) {
-      for (const pos of lapEntry.positions) {
-        allCarNums.add(pos.number);
-        if (!carPositions.has(pos.number)) carPositions.set(pos.number, new Map());
-        carPositions.get(pos.number)!.set(lapEntry.lap_number, pos.position);
+      if (laps.length > 0) {
+        carLapsRaw.set(carNum, laps);
       }
     }
 
-    // ── Detect pit stops from position drops ───────────────────────
-    // A car dropping 5+ positions in a single lap during/near a FCY is likely pitting
-    const PIT_DROP_THRESHOLD = 5;
+    // Compute positions per lap
+    const lapPositions = new Map<number, Map<string, number>>(); // lap → (carNum → position)
 
-    for (const [carNum, posMap] of carPositions) {
-      const laps = Array.from(posMap.keys()).sort((a, b) => a - b);
-      for (let i = 1; i < laps.length; i++) {
-        const prevPos = posMap.get(laps[i - 1])!;
-        const currPos = posMap.get(laps[i])!;
-        const drop = currPos - prevPos;
+    for (let lap = 1; lap <= maxLap; lap++) {
+      const entries: Array<{ num: string; elapsed: number }> = [];
 
-        if (drop >= PIT_DROP_THRESHOLD) {
-          // Check if there's already a pit_enter event near this lap
-          const events = carEvents.get(carNum) || [];
-          const hasPitEvent = events.some(
-            (e) => e.type === "pit_enter" && Math.abs(e.lap - laps[i]) <= 2
-          );
-
-          if (!hasPitEvent) {
-            addCarEvent(carNum, {
-              lap: laps[i],
-              type: "pit_enter",
-              message: `Position drop P${prevPos}→P${currPos} (inferred pit)`,
-              time: "",
-            });
-          }
+      for (const [carNum, laps] of carLapsRaw) {
+        const lapData = laps.find((l) => l.lapNum === lap);
+        if (lapData) {
+          entries.push({ num: carNum, elapsed: lapData.elapsedSec });
         }
       }
+
+      entries.sort((a, b) => a.elapsed - b.elapsed);
+      const posMap = new Map<string, number>();
+      for (let i = 0; i < entries.length; i++) {
+        posMap.set(entries[i].num, i + 1);
+      }
+      lapPositions.set(lap, posMap);
     }
 
-    // ── Build car data and annotations ─────────────────────────────
+    // ── Build car data ─────────────────────────────────────────────
+    const participantMap = new Map<string, IMSAParticipant>();
+    for (const p of timeCards.participants) {
+      participantMap.set(p.number, p);
+    }
+
+    // Final positions from last lap
+    const finalPosMap = lapPositions.get(maxLap) || new Map();
+
+    // For cars that didn't finish on the last lap, use their last completed lap's position
+    // plus offset them behind all finishers
+    const finisherCount = finalPosMap.size;
+
     const cars: RaceDataJson["cars"] = {};
     const classGroups: Record<string, number[]> = {};
     const classCarCounts: Record<string, number> = {};
@@ -406,17 +460,35 @@ export const imsaParser: RaceDataParser = {
       }
     > = {};
 
-    // Final positions from last lap
-    const finalLap = lapChart.laps[lapChart.laps.length - 1];
-    const finalPositions = new Map<string, number>();
-    for (const p of finalLap.positions) {
-      finalPositions.set(p.number, p.position);
+    // Sort all cars by (laps completed desc, final elapsed asc) for finish positions
+    const carFinishOrder: Array<{
+      num: string;
+      lapsCompleted: number;
+      finalElapsed: number;
+    }> = [];
+
+    for (const [carNum, laps] of carLapsRaw) {
+      const lastLap = laps[laps.length - 1];
+      carFinishOrder.push({
+        num: carNum,
+        lapsCompleted: laps.length,
+        finalElapsed: lastLap.elapsedSec,
+      });
     }
 
-    for (const carNum of allCarNums) {
+    carFinishOrder.sort((a, b) => {
+      if (b.lapsCompleted !== a.lapsCompleted)
+        return b.lapsCompleted - a.lapsCompleted;
+      return a.finalElapsed - b.finalElapsed;
+    });
+
+    const overallFinishPos = new Map<string, number>();
+    carFinishOrder.forEach((c, i) => overallFinishPos.set(c.num, i + 1));
+
+    for (const [carNum, rawLaps] of carLapsRaw) {
       const participant = participantMap.get(carNum);
       if (!participant) {
-        warnings.push(`Car #${carNum} found in laps but not in participants`);
+        warnings.push(`Car #${carNum} has laps but no participant entry`);
         continue;
       }
 
@@ -424,51 +496,37 @@ export const imsaParser: RaceDataParser = {
       if (isNaN(num)) continue;
 
       const cls = participant.class || "Unknown";
-      const team = participant.team || `Car #${carNum}`;
-      const posMap = carPositions.get(carNum) || new Map();
-      const finishPos = finalPositions.get(carNum) || 999;
+      const driverSurnames = participant.drivers
+        .map((d) => d.surname)
+        .filter(Boolean)
+        .join(" / ");
+      const team = driverSurnames
+        ? `${participant.team || `Car #${carNum}`} (${driverSurnames})`
+        : participant.team || `Car #${carNum}`;
+      const finishPos = overallFinishPos.get(carNum) || 999;
 
-      // Build laps array
-      const lapEntries = Array.from(posMap.entries())
-        .sort(([a], [b]) => a - b)
-        .map(([lapNum, pos]) => ({
-          l: lapNum,
-          p: pos,
+      // Build laps array with positions
+      const lapEntries = rawLaps.map((rl) => {
+        const posMap = lapPositions.get(rl.lapNum);
+        const p = posMap?.get(carNum) || 999;
+        return {
+          l: rl.lapNum,
+          p,
           cp: 0, // computed below
-          lt: "",
-          ltSec: 0,
-          flag: fcyLapSet.has(lapNum) ? "FCY" : ("GREEN" as string),
-          pit: 0 as 0 | 1,
-          spd: 0,
-        }));
-
-      if (lapEntries.length === 0) continue;
-
-      // Mark pit laps from events
-      const events = carEvents.get(carNum) || [];
-      const pitLaps = new Set<number>();
-      for (const ev of events) {
-        if (ev.type === "pit_enter" && ev.lap > 0) {
-          pitLaps.add(ev.lap);
-          // Also mark adjacent laps (in/out)
-          pitLaps.add(ev.lap + 1);
-        }
-      }
-
-      for (const le of lapEntries) {
-        if (pitLaps.has(le.l)) le.pit = 1;
-      }
-
-      // Compute finish position in class
-      // (will be recomputed globally below, just set a placeholder)
-      const finishPosClass = 0;
+          lt: rl.lapTimeStr,
+          ltSec: rl.lapTimeSec > 0 ? rl.lapTimeSec : 0.001,
+          flag: fcyLapSet.has(rl.lapNum) ? "FCY" : ("GREEN" as string),
+          pit: (rl.pit ? 1 : 0) as 0 | 1,
+          spd: rl.speedMph,
+        };
+      });
 
       cars[String(num)] = {
         num,
         team,
         cls,
         finishPos,
-        finishPosClass,
+        finishPosClass: 0, // computed below
         laps: lapEntries,
       };
 
@@ -476,69 +534,146 @@ export const imsaParser: RaceDataParser = {
       classGroups[cls].push(num);
       classCarCounts[cls] = (classCarCounts[cls] || 0) + 1;
 
-      // ── Build annotations for this car ───────────────────────────
+      // ── Build annotations ──────────────────────────────────────
       const reasons: Record<string, string> = {};
-      const pits: Array<{ l: number; lb: string; c: string; yo: number; da: number }> = [];
-      const settles: Array<{ l: number; p: number; lb: string; su: string; c: string }> = [];
+      const pits: Array<{
+        l: number;
+        lb: string;
+        c: string;
+        yo: number;
+        da: number;
+      }> = [];
+      const settles: Array<{
+        l: number;
+        p: number;
+        lb: string;
+        su: string;
+        c: string;
+      }> = [];
 
-      // Track stint number
+      // Pit annotations from crossing_pit_finish_lane with driver change tracking
       let stintNum = 1;
 
-      // Sort events by estimated lap
-      const sortedEvents = [...events].sort((a, b) => a.lap - b.lap);
+      // Figure out starting driver name
+      const startingDriverNum = rawLaps.length > 0 ? rawLaps[0].driverNum : "1";
+      const getDriverLabel = (drvNum: string): string => {
+        const driver = participant.drivers.find(
+          (d) => String(d.number) === drvNum
+        );
+        return driver ? driver.surname : `D${drvNum}`;
+      };
 
-      for (const ev of sortedEvents) {
-        if (ev.lap < 1 || ev.lap > maxLap) continue;
-        const lapKey = String(ev.lap);
+      let currentDriverNum = startingDriverNum;
+      let currentDriverLabel = getDriverLabel(currentDriverNum);
 
-        if (ev.type === "penalty") {
-          // Shorten penalty description for the label
-          const shortPenalty = shortenPenalty(ev.message);
-          const existing = reasons[lapKey];
-          reasons[lapKey] = existing ? `${existing}; ${shortPenalty}` : shortPenalty;
-        } else if (ev.type === "pit_enter") {
-          const pos = posMap.get(ev.lap) || 0;
-          const prevPos = posMap.get(ev.lap - 1) || pos;
-          const delta = pos - prevPos;
+      for (const rl of rawLaps) {
+        // Detect driver change even without pit (e.g. between laps)
+        if (rl.driverNum !== currentDriverNum) {
+          const newDriverLabel = getDriverLabel(rl.driverNum);
+
+          // If this isn't a pit lap, still note the driver change in reasons
+          if (!rl.pit) {
+            const lapKey = String(rl.lapNum);
+            const changeNote = `Driver → ${newDriverLabel}`;
+            const existing = reasons[lapKey];
+            reasons[lapKey] = existing
+              ? `${existing}; ${changeNote}`
+              : changeNote;
+          }
+
+          currentDriverNum = rl.driverNum;
+          currentDriverLabel = newDriverLabel;
+        }
+
+        if (rl.pit) {
+          const posMap = lapPositions.get(rl.lapNum);
+          const posAfter = posMap?.get(carNum) || 0;
+          const prevPosMap = lapPositions.get(rl.lapNum - 1);
+          const posBefore = prevPosMap?.get(carNum) || posAfter;
+          const delta = posAfter - posBefore;
+
+          // Check if this pit has a driver change
+          const prevLap = rawLaps.find((l) => l.lapNum === rl.lapNum - 1);
+          const isDriverChange =
+            prevLap && prevLap.driverNum !== rl.driverNum;
+          const newDriverLabel = getDriverLabel(rl.driverNum);
+
+          // Build pit label: "S1→S2 Surname" on driver change, "S2 Pit" otherwise
+          let pitLabel: string;
+          if (isDriverChange) {
+            pitLabel = `S${stintNum}→S${stintNum + 1} ${newDriverLabel}`;
+          } else {
+            pitLabel = `S${stintNum} ${currentDriverLabel}`;
+          }
 
           pits.push({
-            l: ev.lap,
-            lb: `S${stintNum} Pit`,
+            l: rl.lapNum,
+            lb: pitLabel,
             c: PIT_COLOR,
             yo: 0,
             da: delta,
           });
-          stintNum++;
 
-          if (!reasons[lapKey]) {
-            reasons[lapKey] = `Pit stop`;
+          // Add reason for driver change
+          if (isDriverChange) {
+            const lapKey = String(rl.lapNum);
+            const changeNote = `Driver → ${newDriverLabel}`;
+            const existing = reasons[lapKey];
+            reasons[lapKey] = existing
+              ? `${existing}; ${changeNote}`
+              : changeNote;
           }
-        } else if (ev.type === "incident" || ev.type === "off_course" || ev.type === "stopped") {
-          const shortMsg = shortenIncident(ev.message);
-          const existing = reasons[lapKey];
-          reasons[lapKey] = existing ? `${existing}; ${shortMsg}` : shortMsg;
+
+          stintNum++;
         }
       }
 
-      // ── Detect settle events (big position changes after FCY) ────
+      // Penalty and incident annotations from RC messages
+      const events = carEvents.get(carNum) || [];
+      for (const ev of events) {
+        if (ev.lap < 1 || ev.lap > maxLap) continue;
+        const lapKey = String(ev.lap);
+
+        if (ev.type === "penalty") {
+          const shortPenalty = shortenPenalty(ev.message);
+          const existing = reasons[lapKey];
+          reasons[lapKey] = existing
+            ? `${existing}; ${shortPenalty}`
+            : shortPenalty;
+        } else if (
+          ev.type === "incident" ||
+          ev.type === "off_course" ||
+          ev.type === "stopped"
+        ) {
+          const shortMsg = shortenIncident(ev.message);
+          const existing = reasons[lapKey];
+          reasons[lapKey] = existing
+            ? `${existing}; ${shortMsg}`
+            : shortMsg;
+        }
+      }
+
+      // Settle markers: position changes across caution periods
       for (const [fcyStart, fcyEnd] of fcy) {
-        // Look at position just before caution vs. position after restart
-        const prePos = posMap.get(fcyStart - 1) || posMap.get(fcyStart);
-        const postPos = posMap.get(fcyEnd + 1) || posMap.get(fcyEnd);
+        const prePosMap = lapPositions.get(fcyStart - 1);
+        const postPosMap = lapPositions.get(
+          Math.min(fcyEnd + 1, maxLap)
+        );
+
+        const prePos = prePosMap?.get(carNum);
+        const postPos = postPosMap?.get(carNum);
 
         if (prePos && postPos) {
           const delta = postPos - prePos;
           if (Math.abs(delta) >= 3) {
-            const settleLap = fcyEnd + 1;
-            if (settleLap <= maxLap) {
-              settles.push({
-                l: settleLap,
-                p: postPos,
-                lb: `Settled P${postPos}`,
-                su: `Was P${prePos} · ${delta > 0 ? "Lost" : "Gained"} ${Math.abs(delta)}`,
-                c: SETTLE_COLOR,
-              });
-            }
+            const settleLap = Math.min(fcyEnd + 1, maxLap);
+            settles.push({
+              l: settleLap,
+              p: postPos,
+              lb: `Settled P${postPos}`,
+              su: `Was P${prePos} · ${delta > 0 ? "Lost" : "Gained"} ${Math.abs(delta)}`,
+              c: SETTLE_COLOR,
+            });
           }
         }
       }
@@ -548,14 +683,19 @@ export const imsaParser: RaceDataParser = {
 
     // ── Compute class positions per lap ────────────────────────────
     for (let lap = 1; lap <= maxLap; lap++) {
-      const classLapEntries = new Map<string, Array<{ num: number; pos: number }>>();
+      const classLapEntries = new Map<
+        string,
+        Array<{ num: number; pos: number }>
+      >();
 
       for (const [numStr, car] of Object.entries(cars)) {
         const lapData = car.laps.find((l: any) => l.l === lap);
         if (!lapData) continue;
-
-        if (!classLapEntries.has(car.cls)) classLapEntries.set(car.cls, []);
-        classLapEntries.get(car.cls)!.push({ num: car.num, pos: (lapData as any).p });
+        if (!classLapEntries.has(car.cls))
+          classLapEntries.set(car.cls, []);
+        classLapEntries
+          .get(car.cls)!
+          .push({ num: car.num, pos: (lapData as any).p });
       }
 
       for (const [, entries] of classLapEntries) {
@@ -569,37 +709,57 @@ export const imsaParser: RaceDataParser = {
     }
 
     // ── Compute finish positions in class ──────────────────────────
-    for (const [cls, nums] of Object.entries(classGroups)) {
-      const sorted = nums.slice().sort(
-        (a, b) => (cars[String(a)].finishPos) - (cars[String(b)].finishPos)
-      );
+    for (const [, nums] of Object.entries(classGroups)) {
+      const sorted = nums
+        .slice()
+        .sort(
+          (a, b) => cars[String(a)].finishPos - cars[String(b)].finishPos
+        );
       for (let i = 0; i < sorted.length; i++) {
         cars[String(sorted[i])].finishPosClass = i + 1;
       }
     }
 
-    // ── Green pace cutoff (estimate from position stability) ───────
-    // Since we don't have actual lap times, use a generous default
-    const greenPaceCutoff = 300;
+    // ── Green pace cutoff ────────────────────────────────────────
+    const greenLapTimes: number[] = [];
+    for (const [, car] of Object.entries(cars)) {
+      for (const lap of car.laps) {
+        const ld = lap as any;
+        if (ld.flag === "GREEN" && ld.pit === 0 && ld.ltSec > 1) {
+          greenLapTimes.push(ld.ltSec);
+        }
+      }
+    }
+
+    let greenPaceCutoff = 300;
+    if (greenLapTimes.length > 10) {
+      greenLapTimes.sort((a, b) => a - b);
+      const p95Idx = Math.floor(greenLapTimes.length * 0.95);
+      greenPaceCutoff = greenLapTimes[p95Idx] * 1.1;
+    }
 
     const totalCars = Object.keys(cars).length;
-    if (totalCars === 0) throw new Error("No valid car data found in IMSA JSON files");
+    if (totalCars === 0)
+      throw new Error("No valid car data found in IMSA JSON files");
 
-    // ── Summary info ───────────────────────────────────────────────
+    // ── Summary ───────────────────────────────────────────────────
     const totalPenalties = Array.from(carEvents.values())
       .flat()
       .filter((e) => e.type === "penalty").length;
-    const totalFCYPeriods = fcy.length;
-
-    warnings.push(
-      `Parsed ${totalCars} cars across ${maxLap} laps with ${totalFCYPeriods} caution periods and ${totalPenalties} penalties`
+    const totalPitStops = Object.values(annotations).reduce(
+      (sum, a) => sum + a.pits.length,
+      0
+    );
+    const totalDriverChanges = Object.values(annotations).reduce(
+      (sum, a) =>
+        sum +
+        Object.values(a.reasons).filter((r) => r.includes("Driver →")).length,
+      0
     );
 
-    if (!anchors.length) {
-      warnings.push(
-        "No flag event timestamps found — RC message lap mapping may be inaccurate"
-      );
-    }
+    warnings.push(
+      `Parsed ${totalCars} cars across ${maxLap} laps with ${fcy.length} caution periods, ${totalPenalties} penalties, ${totalPitStops} pit stops, and ${totalDriverChanges} driver changes`
+    );
 
     return {
       data: {
@@ -620,17 +780,15 @@ export const imsaParser: RaceDataParser = {
 // ─── Helper functions ────────────────────────────────────────────────────────
 
 function shortenPenalty(detail: string): string {
-  // "Pit Lane Speed Violation - (+1) Drive Through" → "Pit Speed +1 - DT"
-  // "Too many crew over wall... - Drive Through" → "Crew Violation - DT"
-  // "Leaving with equipment attached - Drive Through" → "Equipment - DT"
-
   const punishment = extractPunishment(detail);
 
   let desc = detail
-    .replace(/\s*-\s*(Drive Through|Stop\s*\+?\s*\d*(?::\d+)?(?:\s*min)?\s*$)/i, "")
+    .replace(
+      /\s*-\s*(Drive Through|Stop\s*\+?\s*\d*(?::\d+)?(?:\s*min)?\s*$)/i,
+      ""
+    )
     .trim();
 
-  // Shorten common penalty types
   if (/pit lane speed/i.test(desc)) {
     const over = desc.match(/\(\+(\d+)\)/);
     desc = over ? `Pit Speed +${over[1]}` : "Pit Speed";
@@ -681,20 +839,13 @@ function shortenPenalty(detail: string): string {
 }
 
 function extractPunishment(detail: string): string {
-  const dt = detail.match(/Drive Through/i);
-  if (dt) return "DT";
-
+  if (/drive through/i.test(detail)) return "DT";
   const stop = detail.match(/Stop\s*\+?\s*(\d+(?::\d+)?(?:\s*min)?)/i);
   if (stop) return `Stop+${stop[1]}`;
-
   return "";
 }
 
 function shortenIncident(msg: string): string {
-  // "CAR 5 OFF COURSE, TURN 4 CONT" → "Off T4"
-  // "CAR 8 STOPPED ON COURSE, TURN 3" → "Stopped T3"
-  // "INCIDENT INVOLVING CARS 2 & 22 UNDER REVIEW" → "Incident w/22"
-
   if (/off course/i.test(msg)) {
     const turn = msg.match(/turn\s+(\S+)/i);
     return turn ? `Off T${turn[1]}` : "Off Course";
@@ -709,10 +860,9 @@ function shortenIncident(msg: string): string {
   }
   if (/incident involving/i.test(msg)) {
     if (/no action/i.test(msg)) return "Incident - No Action";
-    if (/under review/i.test(msg)) return "Incident Under Review";
+    if (/under review/i.test(msg)) return "Under Review";
     return "Incident";
   }
   if (/continued/i.test(msg)) return "Continued";
-
   return msg.length > 25 ? msg.substring(0, 23) + "…" : msg;
 }
