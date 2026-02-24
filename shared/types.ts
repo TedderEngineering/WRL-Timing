@@ -100,6 +100,7 @@ export interface CarData {
   num: number;
   team: string;
   cls: string;
+  make?: string;
   finishPos: number;
   finishPosClass: number;
   laps: LapData[];
@@ -113,6 +114,7 @@ export interface RaceChartData {
   fcy: [number, number][];
   classGroups: Record<string, number[]>;
   classCarCounts: Record<string, number>;
+  makeGroups?: Record<string, number[]>;
 }
 
 export interface PitMarker {

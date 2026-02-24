@@ -154,7 +154,6 @@ function kphToMph(kph: string): number {
 // ─── Annotation helpers ──────────────────────────────────────────────────────
 
 const PIT_COLOR = "#fbbf24"; // yellow
-const SETTLE_COLOR = "#f87171"; // red
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
 
@@ -562,6 +561,7 @@ export const imsaParser: RaceDataParser = {
     const cars: RaceDataJson["cars"] = {};
     const classGroups: Record<string, number[]> = {};
     const classCarCounts: Record<string, number> = {};
+    const makeGroups: Record<string, number[]> = {};
     const annotations: Record<
       string,
       {
@@ -607,6 +607,7 @@ export const imsaParser: RaceDataParser = {
       if (isNaN(num)) continue;
 
       const cls = participant.class || "Unknown";
+      const make = participant.manufacturer || "";
       const driverSurnames = participant.drivers
         .map((d) => d.surname)
         .filter(Boolean)
@@ -636,6 +637,7 @@ export const imsaParser: RaceDataParser = {
         num,
         team,
         cls,
+        ...(make ? { make } : {}),
         finishPos,
         finishPosClass: 0, // computed below
         laps: lapEntries,
@@ -644,6 +646,11 @@ export const imsaParser: RaceDataParser = {
       if (!classGroups[cls]) classGroups[cls] = [];
       classGroups[cls].push(num);
       classCarCounts[cls] = (classCarCounts[cls] || 0) + 1;
+
+      if (make) {
+        if (!makeGroups[make]) makeGroups[make] = [];
+        makeGroups[make].push(num);
+      }
 
       // ── Build annotations ──────────────────────────────────────
       const reasons: Record<string, string> = {};
@@ -664,6 +671,8 @@ export const imsaParser: RaceDataParser = {
 
       // Pit annotations from crossing_pit_finish_lane with driver change tracking
       let stintNum = 1;
+      const stintLapRanges: Array<{ stint: number; start: number; end: number }> = [];
+      let stintStartLap = rawLaps[0]?.lapNum || 1;
 
       // Figure out starting driver name
       const startingDriverNum = rawLaps.length > 0 ? rawLaps[0].driverNum : "1";
@@ -735,12 +744,20 @@ export const imsaParser: RaceDataParser = {
               : changeNote;
           }
 
+          stintLapRanges.push({ stint: stintNum, start: stintStartLap, end: rl.lapNum });
+          stintStartLap = rl.lapNum + 1;
           stintNum++;
         }
       }
 
+      // Close final stint range
+      stintLapRanges.push({ stint: stintNum, start: stintStartLap, end: maxLap });
+
       // Penalty and incident annotations from RC messages
+      const PENALTY_COLOR = "#f87171"; // red
       const events = carEvents.get(carNum) || [];
+      let penaltyYOffset = 0; // stagger multiple penalty labels
+      const dtPenaltyLaps: number[] = []; // Track DT penalties for "DT Served" detection
       for (const ev of events) {
         if (ev.lap < 1 || ev.lap > maxLap) continue;
         const lapKey = String(ev.lap);
@@ -751,6 +768,28 @@ export const imsaParser: RaceDataParser = {
           reasons[lapKey] = existing
             ? `${existing}; ${shortPenalty}`
             : shortPenalty;
+
+          // Add visual penalty marker (vertical red line on chart)
+          const punishment = extractPunishment(ev.message);
+          const penaltyLabel = punishment || shortPenalty;
+
+          // Prefix with stint number for context
+          const stintRange = stintLapRanges.find(r => ev.lap >= r.start && ev.lap <= r.end);
+          const stintPrefix = stintRange ? `S${stintRange.stint} ` : "";
+
+          pits.push({
+            l: ev.lap,
+            lb: `${stintPrefix}${penaltyLabel}`,
+            c: PENALTY_COLOR,
+            yo: penaltyYOffset,
+            da: 0,
+          });
+          penaltyYOffset += 12; // stagger if multiple penalties on nearby laps
+
+          // Track DT penalties for served detection
+          if (/^DT$/i.test(punishment)) {
+            dtPenaltyLaps.push(ev.lap);
+          }
         } else if (
           ev.type === "incident" ||
           ev.type === "off_course" ||
@@ -764,30 +803,29 @@ export const imsaParser: RaceDataParser = {
         }
       }
 
-      // Settle markers: position changes across caution periods
-      for (const [fcyStart, fcyEnd] of fcy) {
-        const prePosMap = lapPositions.get(fcyStart - 1);
-        const postPosMap = lapPositions.get(
-          Math.min(fcyEnd + 1, maxLap)
-        );
+      // Add "DT Served" markers: find the next pit stop after each DT penalty
+      for (const dtLap of dtPenaltyLaps) {
+        const nextPit = rawLaps.find(rl => rl.lapNum > dtLap && rl.pit);
+        if (nextPit) {
+          const stintRange = stintLapRanges.find(r => nextPit.lapNum >= r.start && nextPit.lapNum <= r.end);
+          const stintPrefix = stintRange ? `S${stintRange.stint} ` : "";
+          pits.push({
+            l: nextPit.lapNum,
+            lb: `${stintPrefix}DT Served`,
+            c: PENALTY_COLOR,
+            yo: penaltyYOffset,
+            da: 0,
+          });
+          penaltyYOffset += 12;
 
-        const prePos = prePosMap?.get(carNum);
-        const postPos = postPosMap?.get(carNum);
-
-        if (prePos && postPos) {
-          const delta = postPos - prePos;
-          if (Math.abs(delta) >= 3) {
-            const settleLap = Math.min(fcyEnd + 1, maxLap);
-            settles.push({
-              l: settleLap,
-              p: postPos,
-              lb: `Settled P${postPos}`,
-              su: `Was P${prePos} · ${delta > 0 ? "Lost" : "Gained"} ${Math.abs(delta)}`,
-              c: SETTLE_COLOR,
-            });
-          }
+          const lapKey = String(nextPit.lapNum);
+          const existingReason = reasons[lapKey];
+          reasons[lapKey] = existingReason ? `${existingReason}; DT Served` : "DT Served";
         }
       }
+
+      // Settle markers are generated by position-analysis.ts with correct
+      // conditional colors (green for gains, red for losses, gray for holds)
 
       annotations[String(num)] = { reasons, pits, settles };
     }
@@ -880,6 +918,7 @@ export const imsaParser: RaceDataParser = {
       fcy,
       classGroups,
       classCarCounts,
+      ...(Object.keys(makeGroups).length > 0 ? { makeGroups } : {}),
     };
 
     // Merge position-change analysis with IMSA-specific annotations

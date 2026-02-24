@@ -21,11 +21,9 @@ const envSchema = z.object({
   STRIPE_PRICE_TEAM_MONTHLY: z.string().optional(),
   STRIPE_PRICE_TEAM_ANNUAL: z.string().optional(),
 
-  // AWS S3
-  AWS_ACCESS_KEY_ID: z.string().optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  AWS_REGION: z.string().default("us-east-1"),
-  S3_BUCKET: z.string().optional(),
+  // Supabase
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
   // Email
   RESEND_API_KEY: z.string().optional(),

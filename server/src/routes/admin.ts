@@ -6,6 +6,7 @@ import * as raceSvc from "../services/races.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
+import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
 
 export const adminRouter = Router();
 
@@ -65,6 +66,15 @@ adminRouter.post(
         annotations,
         req.user!.userId
       );
+
+      // Archive raw files to Supabase Storage
+      const storagePaths = await uploadRaceFiles(result.raceId, files, format);
+      if (Object.keys(storagePaths).length > 0) {
+        await prisma.race.update({
+          where: { id: result.raceId },
+          data: { sourceFiles: storagePaths },
+        });
+      }
 
       // Audit log
       await prisma.auditLog.create({
@@ -416,6 +426,80 @@ adminRouter.post(
       res.json({
         message: "Race reprocessed",
         ...result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/races/:id/reparse — Re-parse from stored source files ──
+
+adminRouter.post(
+  "/races/:id/reparse",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const race = await prisma.race.findUnique({ where: { id: req.params.id } });
+      if (!race) throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
+
+      const sourceFiles = race.sourceFiles as Record<string, string> | null;
+      if (!sourceFiles || Object.keys(sourceFiles).length === 0) {
+        throw new AppError(400, "No source files stored for this race", "NO_SOURCE_FILES");
+      }
+
+      // Determine parser from series
+      const seriesLower = race.series.toLowerCase();
+      const format = seriesLower.includes("imsa")
+        ? "imsa"
+        : seriesLower.includes("sro")
+          ? "sro"
+          : "speedhive";
+      const parser = getParser(format);
+      if (!parser) {
+        throw new AppError(400, `No parser for series: ${race.series}`, "NO_PARSER");
+      }
+
+      // Download source files from storage
+      const files = await downloadRaceFiles(sourceFiles);
+
+      // Re-parse with latest parser code
+      const { data, annotations, warnings } = await parser.parse(files);
+
+      // Update stored chartData and annotationData
+      await prisma.race.update({
+        where: { id: race.id },
+        data: {
+          chartData: data as any,
+          annotationData: annotations as any,
+          maxLap: data.maxLap,
+          totalCars: data.totalCars,
+        },
+      });
+
+      // Re-create entries and laps from new data
+      const result = await raceIngest.reprocessRace(race.id);
+
+      await prisma.auditLog.create({
+        data: {
+          adminUserId: req.user!.userId,
+          action: "REPARSE_RACE",
+          targetType: "race",
+          targetId: race.id,
+          details: {
+            parser: parser.name,
+            entries: result.entriesCreated,
+            laps: result.lapsCreated,
+            warnings,
+          },
+        },
+      });
+
+      res.json({
+        message: `Race re-parsed with ${parser.name}`,
+        raceId: race.id,
+        entriesCreated: result.entriesCreated,
+        lapsCreated: result.lapsCreated,
+        warnings,
       });
     } catch (err) {
       next(err);

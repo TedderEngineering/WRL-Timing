@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -20,6 +23,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
+    "@supabase/supabase-js": "^2.97.0",
     "@types/pdf-parse": "^1.1.5",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",

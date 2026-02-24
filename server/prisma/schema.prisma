@@ -138,9 +138,8 @@ model Race {
   maxLap    Int?       @map("max_lap")
   totalCars Int?       @map("total_cars")
   createdBy String     @map("created_by")
-  s3DataKey      String? @map("s3_data_key")
-  s3AnnKey       String? @map("s3_ann_key")
-  chartData      Json?   @map("chart_data")      // full DATA object for chart rendering
+  sourceFiles    Json?   @map("source_files")     // Supabase Storage paths for raw uploaded files
+  chartData      Json?   @map("chart_data")       // full DATA object for chart rendering
   annotationData Json?   @map("annotation_data")  // full ANN object for chart rendering
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")

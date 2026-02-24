@@ -382,9 +382,24 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
   // ── Presets ─────────────────────────────────────────────────────
   const presets = useMemo(() => {
     if (classView) {
-      return [
-        { label: `All ${classView}`, cars: data.classGroups[classView] || [] },
-      ];
+      const classCars = data.classGroups[classView] || [];
+      const allClassPreset = { label: `All ${classView}`, cars: classCars };
+
+      // If makeGroups exist (IMSA), show manufacturer presets within this class
+      if (data.makeGroups && Object.keys(data.makeGroups).length > 0) {
+        const classCarSet = new Set(classCars);
+        const makePresets = Object.entries(data.makeGroups)
+          .map(([make, cars]) => ({
+            label: make,
+            cars: cars.filter((n) => classCarSet.has(n)),
+          }))
+          .filter((p) => p.cars.length > 0)
+          .sort((a, b) => a.label.localeCompare(b.label));
+
+        return [allClassPreset, ...makePresets];
+      }
+
+      return [allClassPreset];
     }
     return [
       { label: "All Cars", cars: Object.keys(data.cars).map(Number) },
@@ -445,9 +460,10 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
             {visibleCars.map((n) => {
               const c = data.cars[String(n)];
               const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
+              const tag = c.make || c.cls;
               return (
                 <option key={n} value={n}>
-                  #{n} {c.team} ({c.cls}) — {posLabel}
+                  #{n} {c.team} ({tag}) — {posLabel}
                 </option>
               );
             })}

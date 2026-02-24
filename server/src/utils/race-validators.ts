@@ -17,6 +17,7 @@ const carDataSchema = z.object({
   num: z.number().int().positive(),
   team: z.string().min(1),
   cls: z.string().min(1),
+  make: z.string().optional(),
   finishPos: z.number().int().positive(),
   finishPosClass: z.number().int().positive(),
   laps: z.array(lapDataSchema).min(1),
@@ -30,6 +31,7 @@ export const raceDataJsonSchema = z.object({
   fcy: z.array(z.tuple([z.number(), z.number()])).default([]),
   classGroups: z.record(z.string(), z.array(z.number())),
   classCarCounts: z.record(z.string(), z.number()),
+  makeGroups: z.record(z.string(), z.array(z.number())).optional(),
 });
 
 export type RaceDataJson = z.infer<typeof raceDataJsonSchema>;

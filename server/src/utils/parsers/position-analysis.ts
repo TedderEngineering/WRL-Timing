@@ -245,6 +245,9 @@ export function generateAnnotations(
       if (laps[i].pit !== 1) continue;
       if (i === 0) continue;
 
+      // Skip pit settles during FCY — the FCY settle already captures the net effect
+      if (fcyLaps.has(laps[i].l)) continue;
+
       const prePitPos = laps[i - 1].p;
       let sLap: LapData | null = null;
 
@@ -273,33 +276,21 @@ export function generateAnnotations(
       settles.push(makeSettle(sLap.l, sLap.p, prePitPos, net));
     }
 
-    // ── Merge & deduplicate ──────────────────────────────────
-    const allPits = [...existingPits, ...pits].sort((a, b) => a.l - b.l);
-    const dedupedPits: PitMarker[] = [];
-    const seenPL = new Set<number>();
-    for (const p of allPits) {
-      if (!seenPL.has(p.l)) {
-        seenPL.add(p.l);
-        dedupedPits.push(p);
-      }
-    }
+    // ── Merge: keep all existing markers, add non-overlapping new ones ──
+    const existingPitLaps = new Set(existingPits.map(p => p.l));
+    const newPits = pits.filter(p => !existingPitLaps.has(p.l));
+    const allPits = [...existingPits, ...newPits].sort((a, b) => a.l - b.l);
 
-    const allSettles = [...existingSettles, ...settles].sort(
+    const existingSettleLaps = new Set(existingSettles.map(s => s.l));
+    const newSettles = settles.filter(s => !existingSettleLaps.has(s.l));
+    const allSettles = [...existingSettles, ...newSettles].sort(
       (a, b) => a.l - b.l
     );
-    const dedupedSettles: SettleMarker[] = [];
-    const seenSL = new Set<number>();
-    for (const s of allSettles) {
-      if (!seenSL.has(s.l)) {
-        seenSL.add(s.l);
-        dedupedSettles.push(s);
-      }
-    }
 
     annotations[numStr] = {
       reasons,
-      pits: dedupedPits,
-      settles: dedupedSettles,
+      pits: allPits,
+      settles: allSettles,
     };
   }
 
