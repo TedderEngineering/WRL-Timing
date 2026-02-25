@@ -200,7 +200,7 @@ export function HomePage() {
             {
               name: "Free",
               price: "$0",
-              desc: "Explore the basics",
+              desc: "Perfect for curious fans",
               features: ["3 most recent races", "Basic chart viewing", "Up to 5 favorites"],
               cta: "Get Started",
               href: "/signup",
@@ -208,22 +208,24 @@ export function HomePage() {
             },
             {
               name: "Pro",
-              price: "$9.99",
-              period: "/mo",
-              desc: "Full race library",
+              price: "$200",
+              period: "/yr",
+              secondaryPrice: "$17/mo billed annually",
+              desc: "For dedicated analysts",
               features: ["All races, all seasons", "Filter, zoom, & export", "Unlimited favorites", "CSV & PNG export"],
               cta: "Start Pro",
-              href: "/pricing",
+              href: "/signup",
               highlighted: true,
             },
             {
               name: "Team",
-              price: "$29.99",
-              period: "/mo",
-              desc: "For race teams",
+              price: "$500",
+              period: "/yr",
+              secondaryPrice: "$42/mo billed annually",
+              desc: "For race teams & groups",
               features: ["Everything in Pro", "Up to 10 team members", "API access", "Priority support"],
               cta: "Start Team",
-              href: "/pricing",
+              href: "/signup",
               highlighted: false,
             },
           ].map((tier) => (
@@ -254,6 +256,11 @@ export function HomePage() {
                   <span className="text-gray-500 dark:text-gray-400">
                     {tier.period}
                   </span>
+                )}
+                {tier.secondaryPrice && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {tier.secondaryPrice}
+                  </p>
                 )}
               </div>
               <ul className="space-y-3 mb-8 flex-1">
