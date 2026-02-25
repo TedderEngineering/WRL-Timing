@@ -21,6 +21,7 @@ export interface ChartState {
   compSet: Set<number>;
   activeLap: number | null;
   classView: string; // "" = all, or "GTU", "GTO" etc.
+  showWatermark?: boolean;
 }
 
 export interface ChartDimensions {
@@ -396,7 +397,7 @@ export function drawChart(
   ctx.restore();
 
   // ── 10. Watermark overlay ───────────────────────────────────────
-  if (watermarkEmail) {
+  if (watermarkEmail && state.showWatermark !== false) {
     ctx.save();
     ctx.globalAlpha = 0.06;
     ctx.font = "14px system-ui";

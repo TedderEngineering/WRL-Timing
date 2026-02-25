@@ -15,6 +15,7 @@ import {
   type LapInfoData,
 } from "./chart-renderer";
 import { CHART_STYLE } from "./constants";
+import { useAuth } from "../../features/auth/AuthContext";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,9 @@ interface LapChartProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function LapChart({ data, annotations, raceId, watermarkEmail }: LapChartProps) {
+  const { user } = useAuth();
+  const isPaid = user?.subscription?.plan === "PRO" || user?.subscription?.plan === "TEAM" || user?.role === "ADMIN";
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -127,8 +131,8 @@ export function LapChart({ data, annotations, raceId, watermarkEmail }: LapChart
 
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(
-    () => ({ focusNum, compSet, activeLap, classView }),
-    [focusNum, compSet, activeLap, classView]
+    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid }),
+    [focusNum, compSet, activeLap, classView, isPaid]
   );
 
   // ── Resize & draw ──────────────────────────────────────────────
