@@ -188,14 +188,14 @@ export function Layout() {
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
         <nav className="container-page flex items-center justify-between h-16">
           <div className="flex items-center gap-6">
-            <Link
-              to={isAuthenticated ? "/dashboard" : "/"}
+            <a
+              href="https://tedderengineering.com"
               className="flex items-center gap-2"
             >
               <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-8 dark:hidden" />
               <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 hidden dark:block" />
               <span className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</span>
-            </Link>
+            </a>
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-4">
@@ -252,11 +252,11 @@ export function Layout() {
       {/* Footer */}
       <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
         <div className="container-page flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
-          <div className="flex items-center gap-3">
+          <a href="https://tedderengineering.com" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-6 dark:hidden" />
             <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6 hidden dark:block" />
             <p>&copy; {new Date().getFullYear()} Tedder Engineering. All rights reserved.</p>
-          </div>
+          </a>
           <div className="flex gap-6">
             <Link to="/terms" className="hover:text-gray-700 dark:hover:text-gray-300">
               Terms
