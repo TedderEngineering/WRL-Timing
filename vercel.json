@@ -7,6 +7,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://wrl-timing-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
     }
   ]
 }
