@@ -182,6 +182,203 @@ adminRouter.post(
   }
 );
 
+// ─── POST /api/admin/races/validate-bulk — Validate multiple races ───────────
+
+adminRouter.post(
+  "/races/validate-bulk",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { races } = req.body;
+      if (!Array.isArray(races) || races.length === 0) {
+        throw new AppError(400, '"races" must be a non-empty array', "MISSING_FIELDS");
+      }
+      if (races.length > 20) {
+        throw new AppError(400, "Maximum 20 races per request", "TOO_MANY_RACES");
+      }
+
+      const results = [];
+
+      for (const race of races) {
+        const { groupKey, format, metadata, files } = race;
+        const errors: string[] = [];
+        const warnings: string[] = [];
+        let stats = null;
+        let duplicate = false;
+
+        try {
+          // Validate metadata
+          if (metadata) {
+            const metaResult = raceMetadataSchema.safeParse(metadata);
+            if (!metaResult.success) {
+              metaResult.error.issues.forEach((i: any) =>
+                errors.push(`metadata.${i.path.join(".")}: ${i.message}`)
+              );
+            }
+          } else {
+            errors.push("Missing metadata");
+          }
+
+          // Validate format
+          if (!format) {
+            errors.push("Missing format");
+          } else {
+            const parser = getParser(format);
+            if (!parser) {
+              errors.push(`Unknown format: "${format}"`);
+            } else {
+              for (const slot of parser.fileSlots) {
+                if (slot.required && (!files?.[slot.key] || typeof files[slot.key] !== "string")) {
+                  errors.push(`Missing required file: "${slot.label}"`);
+                }
+              }
+
+              if (files && errors.length === 0) {
+                try {
+                  const { data, warnings: parseWarnings } = await parser.parse(files);
+                  warnings.push(...parseWarnings);
+
+                  const carNums = Object.keys(data.cars);
+                  const totalLaps = carNums.reduce(
+                    (sum, n) => sum + (Array.isArray(data.cars[n].laps) ? data.cars[n].laps.length : 0),
+                    0
+                  );
+                  stats = {
+                    totalCars: carNums.length,
+                    maxLap: data.maxLap,
+                    totalLapRecords: totalLaps,
+                    classes: Object.keys(data.classGroups),
+                    classCarCounts: data.classCarCounts,
+                    fcyPeriods: data.fcy.length,
+                    greenPaceCutoff: Math.round(data.greenPaceCutoff * 10) / 10,
+                  };
+                } catch (parseErr: any) {
+                  errors.push(`Parse error: ${parseErr.message}`);
+                }
+              }
+            }
+          }
+
+          // Duplicate check
+          if (metadata?.name && metadata?.date) {
+            const existing = await prisma.race.findFirst({
+              where: {
+                name: metadata.name,
+                date: new Date(metadata.date),
+                ...(metadata.series ? { series: metadata.series } : {}),
+              },
+            });
+            if (existing) duplicate = true;
+          }
+        } catch (err: any) {
+          errors.push(`Unexpected error: ${err.message}`);
+        }
+
+        results.push({
+          groupKey,
+          valid: errors.length === 0,
+          errors,
+          warnings,
+          stats,
+          duplicate,
+        });
+      }
+
+      res.json({ results });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/races/import-bulk — Import multiple races ───────────────
+
+adminRouter.post(
+  "/races/import-bulk",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { races } = req.body;
+      if (!Array.isArray(races) || races.length === 0) {
+        throw new AppError(400, '"races" must be a non-empty array', "MISSING_FIELDS");
+      }
+      if (races.length > 20) {
+        throw new AppError(400, "Maximum 20 races per request", "TOO_MANY_RACES");
+      }
+
+      const results = [];
+
+      // Sequential to avoid DB pool exhaustion
+      for (const race of races) {
+        const { groupKey, format, metadata, files } = race;
+        try {
+          if (!metadata || !format || !files) {
+            results.push({ groupKey, success: false, error: "Missing metadata, format, or files" });
+            continue;
+          }
+
+          const parser = getParser(format);
+          if (!parser) {
+            results.push({ groupKey, success: false, error: `Unknown format: "${format}"` });
+            continue;
+          }
+
+          const parsedMeta = raceMetadataSchema.parse(metadata);
+          const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
+
+          const result = await raceIngest.ingestRaceData(
+            parsedMeta,
+            data,
+            annotations,
+            req.user!.userId
+          );
+
+          // Archive raw files
+          const storagePaths = await uploadRaceFiles(result.raceId, files, format);
+          if (Object.keys(storagePaths).length > 0) {
+            await prisma.race.update({
+              where: { id: result.raceId },
+              data: { sourceFiles: storagePaths },
+            });
+          }
+
+          // Audit log
+          await prisma.auditLog.create({
+            data: {
+              adminUserId: req.user!.userId,
+              action: "CREATE_RACE",
+              targetType: "race",
+              targetId: result.raceId,
+              details: {
+                name: parsedMeta.name,
+                source: format,
+                parser: parser.name,
+                entries: result.entriesCreated,
+                laps: result.lapsCreated,
+                warnings: [...parseWarnings, ...result.warnings],
+                bulk: true,
+              },
+            },
+          });
+
+          results.push({
+            groupKey,
+            success: true,
+            raceId: result.raceId,
+            entriesCreated: result.entriesCreated,
+            lapsCreated: result.lapsCreated,
+            warnings: [...parseWarnings, ...result.warnings],
+          });
+        } catch (err: any) {
+          results.push({ groupKey, success: false, error: err.message || "Import failed" });
+        }
+      }
+
+      res.status(201).json({ results });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ─── POST /api/admin/races — Upload new race data (JSON) ─────────────────────
 
 adminRouter.post(

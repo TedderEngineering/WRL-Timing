@@ -18,6 +18,7 @@ const carDataSchema = z.object({
   team: z.string().min(1),
   cls: z.string().min(1),
   make: z.string().optional(),
+  vehicle: z.string().optional(),
   finishPos: z.number().int().positive(),
   finishPosClass: z.number().int().positive(),
   laps: z.array(lapDataSchema).min(1),

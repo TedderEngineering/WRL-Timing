@@ -38,7 +38,6 @@ export function AdminRacesPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminRace | null>(null);
-  const [deleteInput, setDeleteInput] = useState("");
   const [editRace, setEditRace] = useState<AdminRace | null>(null);
 
   const fetchRaces = useCallback(async () => {
@@ -76,12 +75,11 @@ export function AdminRacesPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteConfirm || deleteInput !== deleteConfirm.name) return;
+    if (!deleteConfirm) return;
     setActionLoading(deleteConfirm.id);
     try {
       await api.delete(`/admin/races/${deleteConfirm.id}`);
       setDeleteConfirm(null);
-      setDeleteInput("");
       await fetchRaces();
     } catch {
       // ignore
@@ -250,29 +248,30 @@ export function AdminRacesPage() {
 
       {/* Delete modal */}
       {deleteConfirm && (
-        <Modal onClose={() => { setDeleteConfirm(null); setDeleteInput(""); }}>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">Delete Race</h3>
+        <Modal onClose={() => setDeleteConfirm(null)}>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">Delete Race?</h3>
+          <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+            <div className="font-semibold text-gray-900 dark:text-gray-100">{deleteConfirm.name}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">{deleteConfirm.track}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              {new Date(deleteConfirm.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            This will permanently delete <b>{deleteConfirm.name}</b> and all associated entries, laps, and favorites. This cannot be undone.
+            This will permanently delete the race and all associated lap data.
           </p>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Type the race name to confirm:
-          </label>
-          <input
-            type="text"
-            value={deleteInput}
-            onChange={(e) => setDeleteInput(e.target.value)}
-            placeholder={deleteConfirm.name}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm mb-4"
-          />
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setDeleteConfirm(null); setDeleteInput(""); }} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900">
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              autoFocus
+              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900"
+            >
               Cancel
             </button>
             <button
               onClick={handleDelete}
-              disabled={deleteInput !== deleteConfirm.name || actionLoading === deleteConfirm.id}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={actionLoading === deleteConfirm.id}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
             >
               {actionLoading === deleteConfirm.id ? "Deleting…" : "Delete Race"}
             </button>

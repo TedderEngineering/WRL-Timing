@@ -251,7 +251,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
     }
 
     return { entriesCreated: entryData.length, lapsCreated: totalLaps };
-  });
+  }, { timeout: 30000 });
 
   return { raceId, ...result, warnings: [] };
 }

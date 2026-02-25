@@ -101,6 +101,7 @@ export interface CarData {
   team: string;
   cls: string;
   make?: string;
+  vehicle?: string;
   finishPos: number;
   finishPosClass: number;
   laps: LapData[];

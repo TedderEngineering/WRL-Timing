@@ -1,515 +1,742 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
+import {
+  classifyFiles,
+  buildFilesPayload,
+  FILE_TYPE_LABELS,
+  type RaceGroup,
+  type RaceGroupMetadata,
+  type DetectedFile,
+  type ValidationState,
+  type FormatId,
+} from "../../lib/file-classifier";
 
-type Step = 1 | 2 | 3;
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface FileSlot {
-  key: string;
-  label: string;
-  description: string;
-  required: boolean;
-  accept?: string;
-}
-
-interface FormatInfo {
-  id: string;
-  name: string;
-  series: string;
-  description: string;
-  implemented: boolean;
-  fileSlots: FileSlot[];
-}
-
-interface ValidationResult {
+interface BulkValidateResult {
+  groupKey: string;
   valid: boolean;
   errors: string[];
   warnings: string[];
-  stats: {
-    totalCars: number;
-    maxLap: number;
-    totalLapRecords: number;
-    classes: string[];
-    classCarCounts: Record<string, number>;
-    fcyPeriods: number;
-    greenPaceCutoff: number;
-  } | null;
+  stats: ValidationState["stats"];
+  duplicate: boolean;
 }
 
-interface UploadResult {
-  raceId: string;
-  entriesCreated: number;
-  lapsCreated: number;
-  warnings: string[];
+interface BulkImportResult {
+  groupKey: string;
+  success: boolean;
+  raceId?: string;
+  entriesCreated?: number;
+  lapsCreated?: number;
+  warnings?: string[];
+  error?: string;
 }
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function AdminUploadPage() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState<Step>(1);
+  const [groups, setGroups] = useState<Map<string, RaceGroup>>(new Map());
+  const [unmatchedFiles, setUnmatchedFiles] = useState<DetectedFile[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importDone, setImportDone] = useState(false);
 
-  // Available formats (loaded from API)
-  const [formats, setFormats] = useState<FormatInfo[]>([]);
-  const [formatsLoading, setFormatsLoading] = useState(true);
+  // Debounced validation
+  const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const validationSeq = useRef(0);
 
-  // Step 1: metadata + format
-  const [format, setFormat] = useState("");
-  const [name, setName] = useState("");
-  const [date, setDate] = useState("");
-  const [track, setTrack] = useState("");
-  const [series, setSeries] = useState("");
-  const [season, setSeason] = useState(String(new Date().getFullYear()));
-  const [premium, setPremium] = useState(false);
-  const [status, setStatus] = useState<"DRAFT" | "PUBLISHED">("DRAFT");
+  const hasFiles = groups.size > 0 || unmatchedFiles.length > 0;
 
-  // Step 2: files (keyed by slot key)
-  const [fileMap, setFileMap] = useState<Record<string, File | null>>({});
-  const [csvMap, setCsvMap] = useState<Record<string, string | null>>({});
-  const [previewMap, setPreviewMap] = useState<Record<string, string | null>>({});
-  const [fileError, setFileError] = useState<string | null>(null);
+  // ── File handling ────────────────────────────────────────────────────────
 
-  // Step 3: validation
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [validating, setValidating] = useState(false);
+  const handleFiles = useCallback(
+    async (fileList: FileList) => {
+      setProcessing(true);
+      const { groups: newGroups, unmatched } = await classifyFiles(
+        Array.from(fileList),
+        groups,
+        unmatchedFiles
+      );
+      setGroups(newGroups);
+      setUnmatchedFiles(unmatched);
+      setProcessing(false);
+      setImportDone(false);
+    },
+    [groups, unmatchedFiles]
+  );
 
-  // Step 4: result
-  const [result, setResult] = useState<UploadResult | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [autoFilled, setAutoFilled] = useState(false);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    },
+    [handleFiles]
+  );
 
-  // Load available formats
-  useEffect(() => {
-    api
-      .get<{ formats: FormatInfo[] }>("/admin/formats")
-      .then((res) => {
-        setFormats(res.formats);
-        const first = res.formats.find((f) => f.implemented);
-        if (first) {
-          setFormat(first.id);
-          setSeries(first.series);
+  const onFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleFiles(e.target.files);
+        e.target.value = ""; // allow re-selecting same files
+      }
+    },
+    [handleFiles]
+  );
+
+  // ── Metadata editing ────────────────────────────────────────────────────
+
+  const updateMetadata = useCallback(
+    (groupId: string, field: keyof RaceGroupMetadata, value: string) => {
+      setGroups((prev) => {
+        const next = new Map(prev);
+        const g = next.get(groupId);
+        if (g) {
+          next.set(groupId, {
+            ...g,
+            metadata: { ...g.metadata, [field]: value },
+            validation: null, // clear validation on edit
+          });
         }
-      })
-      .catch(() => {})
-      .finally(() => setFormatsLoading(false));
+        return next;
+      });
+    },
+    []
+  );
+
+  const removeGroup = useCallback((groupId: string) => {
+    setGroups((prev) => {
+      const next = new Map(prev);
+      next.delete(groupId);
+      return next;
+    });
   }, []);
 
-  const selectedFormat = formats.find((f) => f.id === format);
+  const removeUnmatched = useCallback((idx: number) => {
+    setUnmatchedFiles((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
 
-  const handleFormatChange = (fmtId: string) => {
-    setFormat(fmtId);
-    setFileMap({});
-    setCsvMap({});
-    setPreviewMap({});
-    setFileError(null);
-    setAutoFilled(false);
-    const fmt = formats.find((f) => f.id === fmtId);
-    if (fmt) setSeries(fmt.series);
-  };
+  // ── Auto-validation (debounced) ─────────────────────────────────────────
 
-  const filesValid =
-    selectedFormat?.fileSlots.every(
-      (slot) => !slot.required || csvMap[slot.key]
-    ) ?? false;
+  useEffect(() => {
+    if (validateTimer.current) clearTimeout(validateTimer.current);
 
-  const allStep1Valid =
-    format && name.trim() && date && track.trim() && series.trim() && season && selectedFormat?.implemented && filesValid;
+    const completeGroups = Array.from(groups.values()).filter(
+      (g) => g.complete && g.importStatus === "idle" && g.metadata.name.trim()
+    );
 
-  const handleFile = useCallback(async (slotKey: string, file: File) => {
-    setFileMap((prev) => ({ ...prev, [slotKey]: file }));
-    setFileError(null);
-    try {
-      const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+    // Only validate groups that haven't been validated yet
+    const needsValidation = completeGroups.filter((g) => !g.validation);
+    if (needsValidation.length === 0) return;
 
-      // PDFs must be sent as base64 data URLs (binary); text files use .text()
-      let content: string;
-      if (isPdf) {
-        content = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error("Failed to read PDF"));
-          reader.readAsDataURL(file);
+    validateTimer.current = setTimeout(async () => {
+      const seq = ++validationSeq.current;
+
+      // Mark as validating
+      setGroups((prev) => {
+        const next = new Map(prev);
+        for (const g of needsValidation) {
+          const current = next.get(g.id);
+          if (current && !current.validation) {
+            next.set(g.id, {
+              ...current,
+              validation: { status: "validating", errors: [], warnings: [], stats: null, duplicate: false },
+            });
+          }
+        }
+        return next;
+      });
+
+      try {
+        const payload = needsValidation.map((g) => ({
+          groupKey: g.id,
+          format: g.format,
+          metadata: {
+            name: g.metadata.name.trim(),
+            date: g.metadata.date,
+            track: g.metadata.track.trim(),
+            series: g.metadata.series.trim(),
+            season: Number(g.metadata.season),
+            premium: false,
+            status: "DRAFT",
+          },
+          files: buildFilesPayload(g),
+        }));
+
+        const res = await api.post<{ results: BulkValidateResult[] }>(
+          "/admin/races/validate-bulk",
+          { races: payload }
+        );
+
+        // Only apply if still the latest sequence
+        if (seq !== validationSeq.current) return;
+
+        setGroups((prev) => {
+          const next = new Map(prev);
+          for (const r of res.results) {
+            const current = next.get(r.groupKey);
+            if (current) {
+              next.set(r.groupKey, {
+                ...current,
+                validation: {
+                  status: r.valid ? (r.warnings.length > 0 ? "warning" : "valid") : "invalid",
+                  errors: r.errors,
+                  warnings: r.warnings,
+                  stats: r.stats,
+                  duplicate: r.duplicate,
+                },
+              });
+            }
+          }
+          return next;
         });
-      } else {
-        content = await file.text();
+      } catch {
+        if (seq !== validationSeq.current) return;
+        setGroups((prev) => {
+          const next = new Map(prev);
+          for (const g of needsValidation) {
+            const current = next.get(g.id);
+            if (current) {
+              next.set(g.id, {
+                ...current,
+                validation: {
+                  status: "invalid",
+                  errors: ["Validation request failed"],
+                  warnings: [],
+                  stats: null,
+                  duplicate: false,
+                },
+              });
+            }
+          }
+          return next;
+        });
       }
+    }, 500);
 
-      setCsvMap((prev) => ({ ...prev, [slotKey]: content }));
-      let preview: string;
-      let didFill = false;
+    return () => {
+      if (validateTimer.current) clearTimeout(validateTimer.current);
+    };
+  }, [groups]);
 
-      if (isPdf) {
-        preview = `PDF file: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
-      } else if (file.name.endsWith(".json")) {
-        try {
-          const json = JSON.parse(content.replace(/^\uFEFF/, ""));
-          const keys = Object.keys(json);
-          const lines = [`JSON with ${keys.length} top-level keys: ${keys.join(", ")}`];
-          for (const k of keys) {
-            const v = json[k];
-            if (Array.isArray(v)) lines.push(`  ${k}: array of ${v.length} items`);
-            else if (typeof v === "object" && v) lines.push(`  ${k}: object with ${Object.keys(v).length} fields`);
-            else lines.push(`  ${k}: ${String(v).substring(0, 60)}`);
-          }
-          preview = lines.join("\n");
+  // ── Bulk import ─────────────────────────────────────────────────────────
 
-          // Auto-fill metadata from session block
-          if (json.session) {
-            const s = json.session;
-            if (s.event_name && !name.trim()) { setName(s.event_name); didFill = true; }
-            if (s.circuit?.name && !track.trim()) { setTrack(s.circuit.name); didFill = true; }
-            if (s.championship_name && !series.trim()) {
-              setSeries(/imsa/i.test(s.championship_name) ? "IMSA" : s.championship_name);
-              didFill = true;
-            }
-            if (s.session_date) {
-              const dm = s.session_date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-              if (dm) {
-                const isoDate = `${dm[3]}-${dm[2]}-${dm[1]}`;
-                if (!date) { setDate(isoDate); didFill = true; }
-                if (season === String(new Date().getFullYear())) { setSeason(dm[3]); didFill = true; }
-              }
-            }
-          }
-        } catch {
-          preview = content.split("\n").slice(0, 4).join("\n");
-        }
-      } else {
-        preview = content.split("\n").slice(0, 4).join("\n");
+  const importableGroups = Array.from(groups.values()).filter(
+    (g) =>
+      g.complete &&
+      g.importStatus === "idle" &&
+      g.validation?.status !== "invalid" &&
+      g.validation?.status !== "validating" &&
+      g.metadata.name.trim()
+  );
 
-        // ── SpeedHive CSV auto-fill ──────────────────────────────
-        const fn = file.name.replace(/\.csv$/i, "");
+  const handleImport = useCallback(async () => {
+    if (importableGroups.length === 0) return;
+    setImporting(true);
 
-        // Pattern 1: "speedhive_{Day}_{N}_hour_{sessionId}_{type}"
-        // e.g. "speedhive_Sunday_7_hour_11586857_summary" → "Sunday 7-Hour"
-        const shMatch = fn.match(/speedhive_(\w+?)_(\d+)_hour_/i);
-        if (shMatch && !name.trim()) {
-          const day = shMatch[1].charAt(0).toUpperCase() + shMatch[1].slice(1).toLowerCase();
-          setName(`${day} ${shMatch[2]}-Hour`);
-          didFill = true;
-        }
-
-        // Pattern 2: "WORLD_RACING_LEAGUE_..._-_..._-_..._YYYY-MM-DD_type"
-        const segments = fn.split(/_-_/);
-        if (segments.length >= 3) {
-          const trackName = segments[1].replace(/_/g, " ").trim();
-          if (trackName && !track.trim()) { setTrack(trackName); didFill = true; }
-
-          if (!name.trim()) {
-            const raceSegments = segments.slice(2)
-              .join(" - ")
-              .replace(/_/g, " ")
-              .replace(/\d{4}-\d{2}-\d{2}/, "")
-              .replace(/\b(all laps|summary|laps)\b/gi, "")
-              .replace(/\s{2,}/g, " ").trim()
-              .replace(/^-\s*|\s*-$/g, "").trim();
-            if (raceSegments) { setName(raceSegments); didFill = true; }
-          }
-        }
-
-        // Extract date from filename if present (YYYY-MM-DD)
-        const dateInFn = fn.match(/(\d{4}-\d{2}-\d{2})/);
-        if (dateInFn && !date) { setDate(dateInFn[1]); didFill = true; }
-        if (dateInFn) {
-          const yr = dateInFn[1].split("-")[0];
-          if (season === String(new Date().getFullYear()) && yr !== season) { setSeason(yr); didFill = true; }
-        }
-
-        // Extract date/season from CSV "Time of Day" column (ISO timestamps)
-        // e.g. "2025-12-06T08:03:16.901" in the all_laps CSV
-        if (!date || season === String(new Date().getFullYear())) {
-          const csvLines = content.split("\n");
-          const header = csvLines[0] || "";
-          const cols = header.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
-          const todIdx = cols.findIndex((c) => /time\s*of\s*day/i.test(c));
-          if (todIdx >= 0 && csvLines.length > 1) {
-            const firstRow = csvLines[1].split(",");
-            const todVal = (firstRow[todIdx] || "").replace(/^"|"$/g, "").trim();
-            const isoMatch = todVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (isoMatch) {
-              if (!date) { setDate(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`); didFill = true; }
-              if (season === String(new Date().getFullYear()) && isoMatch[1] !== season) {
-                setSeason(isoMatch[1]); didFill = true;
-              }
-            }
-          }
-        }
+    // Mark importing
+    setGroups((prev) => {
+      const next = new Map(prev);
+      for (const g of importableGroups) {
+        const current = next.get(g.id);
+        if (current) next.set(g.id, { ...current, importStatus: "importing" });
       }
+      return next;
+    });
 
-      if (didFill) setAutoFilled(true);
-      setPreviewMap((prev) => ({ ...prev, [slotKey]: preview }));
-    } catch {
-      setFileError(`Could not read file for ${slotKey}`);
-      setCsvMap((prev) => ({ ...prev, [slotKey]: null }));
-    }
-  }, [name, date, track, series, season]);
-
-  const runValidation = async () => {
-    setValidating(true);
-    setValidation(null);
     try {
-      const files: Record<string, string> = {};
-      for (const [key, csv] of Object.entries(csvMap)) {
-        if (csv) files[key] = csv;
-      }
-      const res = await api.post<ValidationResult>("/admin/races/import/validate", {
-        metadata: { name: name.trim(), date, track: track.trim(), series: series.trim(), season: Number(season), premium, status },
-        format,
-        files,
-      });
-      setValidation(res);
-    } catch (err: any) {
-      setValidation({ valid: false, errors: [err.message || "Validation request failed"], warnings: [], stats: null });
-    } finally {
-      setValidating(false);
-    }
-  };
+      const payload = importableGroups.map((g) => ({
+        groupKey: g.id,
+        format: g.format,
+        metadata: {
+          name: g.metadata.name.trim(),
+          date: g.metadata.date,
+          track: g.metadata.track.trim(),
+          series: g.metadata.series.trim(),
+          season: Number(g.metadata.season),
+          premium: false,
+          status: "DRAFT",
+        },
+        files: buildFilesPayload(g),
+      }));
 
-  const commitUpload = async () => {
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const files: Record<string, string> = {};
-      for (const [key, csv] of Object.entries(csvMap)) {
-        if (csv) files[key] = csv;
-      }
-      const res = await api.post<UploadResult>("/admin/races/import", {
-        metadata: { name: name.trim(), date, track: track.trim(), series: series.trim(), season: Number(season), premium, status },
-        format,
-        files,
+      const res = await api.post<{ results: BulkImportResult[] }>(
+        "/admin/races/import-bulk",
+        { races: payload }
+      );
+
+      setGroups((prev) => {
+        const next = new Map(prev);
+        for (const r of res.results) {
+          const current = next.get(r.groupKey);
+          if (current) {
+            if (r.success) {
+              next.set(r.groupKey, {
+                ...current,
+                importStatus: "success",
+                importResult: {
+                  raceId: r.raceId!,
+                  entriesCreated: r.entriesCreated!,
+                  lapsCreated: r.lapsCreated!,
+                },
+              });
+            } else {
+              next.set(r.groupKey, {
+                ...current,
+                importStatus: "error",
+                importError: r.error || "Import failed",
+              });
+            }
+          }
+        }
+        return next;
       });
-      setResult(res);
-      setStep(3);
     } catch (err: any) {
-      setUploadError(err.message || "Upload failed");
+      setGroups((prev) => {
+        const next = new Map(prev);
+        for (const g of importableGroups) {
+          const current = next.get(g.id);
+          if (current && current.importStatus === "importing") {
+            next.set(g.id, {
+              ...current,
+              importStatus: "error",
+              importError: err.message || "Network error",
+            });
+          }
+        }
+        return next;
+      });
     } finally {
-      setUploading(false);
+      setImporting(false);
+      setImportDone(true);
     }
-  };
+  }, [importableGroups]);
+
+  // ── Derived state ───────────────────────────────────────────────────────
+
+  const groupsList = Array.from(groups.values());
+  const successCount = groupsList.filter((g) => g.importStatus === "success").length;
+  const errorCount = groupsList.filter((g) => g.importStatus === "error").length;
+
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-2">Upload Race Data</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Import race data from supported timing systems.</p>
-
-      {/* Stepper */}
-      <div className="flex items-center gap-2 mb-8">
-        {[{ n: 1, label: "Format, Files & Info" }, { n: 2, label: "Validate" }, { n: 3, label: "Complete" }].map(({ n, label }) => (
-          <div key={n} className="flex items-center gap-2 flex-1">
-            <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 ${step >= n ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 dark:border-gray-700 text-gray-400"}`}>
-              {step > n ? "✓" : n}
-            </div>
-            <span className={`text-xs font-medium hidden sm:inline ${step >= n ? "text-gray-900 dark:text-gray-100" : "text-gray-400"}`}>{label}</span>
-            {n < 3 && <div className={`flex-1 h-0.5 ${step > n ? "bg-brand-500" : "bg-gray-200 dark:bg-gray-800"}`} />}
-          </div>
-        ))}
+    <div className="p-6 lg:p-8 max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">Upload Race Data</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          Drop files to auto-detect format, group, and import races.
+        </p>
       </div>
 
-      {/* Step 1: Format + Files + Metadata (unified) */}
-      {step === 1 && (
-        <div className="space-y-5">
-          {/* Format selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Data Format *</label>
-            {formatsLoading ? (
-              <div className="h-20 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
-            ) : (
-              <div className="grid gap-2">
-                {formats.map((fmt) => (
-                  <button
-                    key={fmt.id}
-                    onClick={() => handleFormatChange(fmt.id)}
-                    disabled={!fmt.implemented}
-                    className={`text-left px-4 py-3 rounded-lg border-2 transition-colors ${
-                      format === fmt.id
-                        ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20"
-                        : fmt.implemented
-                        ? "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
-                        : "border-gray-100 dark:border-gray-900 opacity-60 cursor-not-allowed"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{fmt.name}</span>
-                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{fmt.series}</span>
-                      </div>
-                      {!fmt.implemented && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Coming Soon</span>
-                      )}
-                      {format === fmt.id && fmt.implemented && (
-                        <span className="text-brand-600 dark:text-brand-400 text-sm">✓</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{fmt.description}</p>
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Drop zone */}
+      <div
+        className={`relative border-2 border-dashed rounded-xl text-center transition-colors ${
+          hasFiles ? "p-6 mb-4" : "p-16 mb-6"
+        } ${
+          dragOver
+            ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20"
+            : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        <input
+          type="file"
+          accept=".json,.csv,.pdf"
+          multiple
+          onChange={onFileInput}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+        />
+        {!hasFiles && <div className="text-4xl mb-3 opacity-40">📁</div>}
+        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          {processing
+            ? "Processing files..."
+            : hasFiles
+              ? "Drop more files here to add them"
+              : "Drop .json, .csv, and .pdf files here"}
+        </div>
+        {!hasFiles && (
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Supports IMSA JSON (Lap Chart, Flags, Pit Stops, PDF) and SpeedHive CSV (Summary, All Laps)
           </div>
+        )}
+      </div>
 
-          {/* File upload (was step 2) */}
-          {selectedFormat && (
-            <>
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Data Files — {selectedFormat.fileSlots.length} file(s) expected
-                </label>
-                <div className="space-y-4">
-                  {selectedFormat.fileSlots.map((slot) => (
-                    <FileDropZone
-                      key={slot.key}
-                      label={`${slot.label}${slot.required ? " *" : " (optional)"}`}
-                      description={slot.description}
-                      file={fileMap[slot.key] || null}
-                      accept={slot.accept || ".csv"}
-                      onFile={(f) => handleFile(slot.key, f)}
-                      valid={csvMap[slot.key] !== null && csvMap[slot.key] !== undefined}
-                      preview={previewMap[slot.key] || null}
-                    />
-                  ))}
-                </div>
-              </div>
-              {fileError && <p className="text-sm text-red-600 dark:text-red-400">⚠ {fileError}</p>}
-              {autoFilled && (
-                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 rounded-lg px-4 py-2.5 border border-green-200 dark:border-green-900">
-                  <span>✓</span>
-                  <span>Race info auto-filled from uploaded file — review below</span>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Metadata fields */}
-          <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Race Info</label>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Race Name *</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Barber 7-Hour Sunday" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Date *</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Track *</label>
-                  <input type="text" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. Barber Motorsports Park" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Series *</label>
-                  <input type="text" value={series} onChange={(e) => setSeries(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Season *</label>
-                  <input type="number" value={season} onChange={(e) => setSeason(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm" />
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                  <input type="checkbox" checked={premium} onChange={(e) => setPremium(e.target.checked)} className="rounded border-gray-300" />
-                  Premium (Pro only)
-                </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                  <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm">
-                    <option value="DRAFT">Draft</option>
-                    <option value="PUBLISHED">Published</option>
-                  </select>
-                  Initial status
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button onClick={() => { setStep(2); runValidation(); }} disabled={!allStep1Valid} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed">
-              Next: Validate →
-            </button>
-          </div>
+      {/* Race groups */}
+      {groupsList.length > 0 && (
+        <div className="space-y-3 mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Detected Races ({groupsList.length})
+          </h2>
+          {groupsList.map((group) => (
+            <RaceGroupCard
+              key={group.id}
+              group={group}
+              onUpdateMetadata={(field, value) => updateMetadata(group.id, field, value)}
+              onRemove={() => removeGroup(group.id)}
+            />
+          ))}
         </div>
       )}
 
-      {/* Step 2: Validate (was step 3) */}
-      {step === 2 && (
-        <div className="space-y-4">
-          {validating ? (
-            <div className="flex items-center gap-3 py-8 justify-center">
-              <div className="h-6 w-6 border-3 border-brand-600 border-t-transparent rounded-full animate-spin" />
-              <span className="text-gray-500 dark:text-gray-400">Parsing and validating data…</span>
-            </div>
-          ) : validation ? (
-            <>
-              <div className={`rounded-lg p-4 ${validation.valid ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"}`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{validation.valid ? "✅" : "❌"}</span>
-                  <span className={`font-semibold ${validation.valid ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}`}>
-                    {validation.valid ? "Data parsed and validated successfully" : "Validation failed"}
+      {/* Unmatched files */}
+      {unmatchedFiles.length > 0 && (
+        <div className="space-y-2 mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Unmatched Files ({unmatchedFiles.length})
+          </h2>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-200 dark:divide-gray-800">
+            {unmatchedFiles.map((df, idx) => (
+              <div key={idx} className="flex items-center justify-between px-4 py-2.5">
+                <div>
+                  <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
+                    {df.file.name}
+                  </span>
+                  <span className="ml-2 text-xs text-gray-400">
+                    ({(df.file.size / 1024).toFixed(0)} KB)
                   </span>
                 </div>
+                <button
+                  onClick={() => removeUnmatched(idx)}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  Remove
+                </button>
               </div>
-              {validation.errors.length > 0 && (
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Errors ({validation.errors.length})</h3>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {validation.errors.map((e, i) => (
-                      <div key={i} className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-3 py-1.5 rounded">{e}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {validation.warnings.length > 0 && (
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">Warnings ({validation.warnings.length})</h3>
-                  {validation.warnings.map((w, i) => (
-                    <div key={i} className="text-sm text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-1.5 rounded">{w}</div>
-                  ))}
-                </div>
-              )}
-              {validation.stats && (
-                <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Parsed Data Summary</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div><span className="text-gray-500">Cars:</span> <b>{validation.stats.totalCars}</b></div>
-                    <div><span className="text-gray-500">Max Lap:</span> <b>{validation.stats.maxLap}</b></div>
-                    <div><span className="text-gray-500">Lap Records:</span> <b>{validation.stats.totalLapRecords.toLocaleString()}</b></div>
-                    <div><span className="text-gray-500">FCY Periods:</span> <b>{validation.stats.fcyPeriods}</b></div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">Classes: {Object.entries(validation.stats.classCarCounts).map(([c, n]) => `${c}: ${n}`).join(" · ")}</div>
-                  <div className="mt-1 text-xs text-gray-500">Green pace cutoff: {validation.stats.greenPaceCutoff}s</div>
-                </div>
-              )}
-              {uploadError && (
-                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-4 py-3 rounded-lg">Import failed: {uploadError}</div>
-              )}
-            </>
-          ) : null}
-          <div className="flex justify-between pt-4">
-            <button onClick={() => setStep(1)} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900">← Back</button>
-            <div className="flex gap-2">
-              <button onClick={runValidation} disabled={validating} className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 disabled:opacity-40">Re-validate</button>
-              <button onClick={commitUpload} disabled={!validation?.valid || uploading} className="px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                {uploading ? "Importing…" : "✓ Import Race Data"}
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Step 4: Complete */}
-      {step === 3 && result && (
-        <div className="text-center py-8">
-          <div className="text-5xl mb-4">🎉</div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50 mb-2">Race Imported Successfully</h2>
-          <div className="text-gray-600 dark:text-gray-400 mb-6">
-            <p>{result.entriesCreated} entries · {result.lapsCreated.toLocaleString()} lap records</p>
-            {result.warnings.length > 0 && (
-              <p className="text-yellow-600 dark:text-yellow-400 text-sm mt-2">{result.warnings.length} warning(s) — data was still imported.</p>
+      {/* Empty state */}
+      {!hasFiles && !processing && (
+        <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
+          No files dropped yet. Drag files above or click to browse.
+        </div>
+      )}
+
+      {/* Import done summary */}
+      {importDone && (successCount > 0 || errorCount > 0) && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4 mb-4">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            Import Complete
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {successCount > 0 && (
+              <span className="text-green-600 dark:text-green-400">
+                {successCount} imported successfully
+              </span>
+            )}
+            {successCount > 0 && errorCount > 0 && " · "}
+            {errorCount > 0 && (
+              <span className="text-red-600 dark:text-red-400">{errorCount} failed</span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Sticky bottom action bar */}
+      {groupsList.length > 0 && (
+        <div className="sticky bottom-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 -mx-6 lg:-mx-8 px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {importableGroups.length} race{importableGroups.length !== 1 ? "s" : ""} ready
+            {groupsList.some((g) => !g.complete) && (
+              <span className="ml-2 text-amber-600 dark:text-amber-400">
+                · {groupsList.filter((g) => !g.complete).length} incomplete
+              </span>
             )}
           </div>
-          <div className="flex justify-center gap-3">
-            <button onClick={() => navigate(`/races/${result.raceId}`)} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700">View Chart →</button>
-            <button onClick={() => navigate("/admin/races")} className="px-6 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-900">Manage Races</button>
+          <button
+            onClick={handleImport}
+            disabled={importableGroups.length === 0 || importing}
+            className="px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {importing
+              ? "Importing..."
+              : `Import ${importableGroups.length} Race${importableGroups.length !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Race Group Card ─────────────────────────────────────────────────────────
+
+function RaceGroupCard({
+  group,
+  onUpdateMetadata,
+  onRemove,
+}: {
+  group: RaceGroup;
+  onUpdateMetadata: (field: keyof RaceGroupMetadata, value: string) => void;
+  onRemove: () => void;
+}) {
+  const needsTrack = group.format === "speedhive" && !group.metadata.track.trim();
+  const [expanded, setExpanded] = useState(needsTrack);
+
+  const formatColors: Record<FormatId, string> = {
+    imsa: "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400",
+    speedhive: "bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400",
+  };
+
+  const borderColor =
+    group.importStatus === "success"
+      ? "border-green-400 dark:border-green-700"
+      : group.importStatus === "error"
+        ? "border-red-400 dark:border-red-700"
+        : group.importStatus === "importing"
+          ? "border-brand-400 dark:border-brand-600"
+          : !group.complete
+            ? "border-amber-300 dark:border-amber-800"
+            : "border-gray-200 dark:border-gray-800";
+
+  const fileEntries = Array.from(group.files.entries());
+  const v = group.validation;
+
+  return (
+    <div className={`border rounded-xl transition-colors ${borderColor}`}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${formatColors[group.format]}`}>
+              {group.format === "imsa" ? "IMSA" : "SpeedHive"}
+            </span>
+            <ValidationBadge validation={v} />
+            {!group.complete && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                Missing: {group.missingRequired.join(", ")}
+              </span>
+            )}
+            {v?.duplicate && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400">
+                Duplicate
+              </span>
+            )}
+            {group.importStatus === "success" && (
+              <span className="text-green-600 dark:text-green-400 text-xs font-semibold">
+                Imported
+              </span>
+            )}
+            {group.importStatus === "importing" && (
+              <span className="text-brand-600 dark:text-brand-400 text-xs">Importing...</span>
+            )}
+            {group.importStatus === "error" && (
+              <span className="text-red-600 dark:text-red-400 text-xs font-semibold">Failed</span>
+            )}
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mt-1 truncate">
+            {group.metadata.name || "Unnamed Race"}
+          </h3>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {group.metadata.track ? (
+              <span>{group.metadata.track}</span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">No track</span>
+            )}
+            {group.metadata.date && <span> · {group.metadata.date}</span>}
+            {group.metadata.series && <span> · {group.metadata.series}</span>}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {group.importStatus === "idle" && (
+            <>
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="px-2.5 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900"
+              >
+                {expanded ? "Collapse" : "Edit"}
+              </button>
+              <button
+                onClick={onRemove}
+                className="px-2 py-1 text-xs text-red-500 hover:text-red-700"
+              >
+                Remove
+              </button>
+            </>
+          )}
+          {group.importStatus === "success" && group.importResult && (
+            <Link
+              to={`/races/${group.importResult.raceId}`}
+              className="px-3 py-1 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700"
+            >
+              View Chart
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && group.importStatus === "idle" && (
+        <div className="border-t border-gray-200 dark:border-gray-800 p-4 space-y-3">
+          {/* Metadata fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Race Name *
+              </label>
+              <input
+                type="text"
+                value={group.metadata.name}
+                onChange={(e) => onUpdateMetadata("name", e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+              />
+            </div>
+            <div>
+              <label
+                className={`block text-xs font-medium mb-1 ${
+                  needsTrack
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                Track *{needsTrack && " (required)"}
+              </label>
+              <input
+                type="text"
+                value={group.metadata.track}
+                onChange={(e) => onUpdateMetadata("track", e.target.value)}
+                placeholder="e.g. Barber Motorsports Park"
+                className={`w-full px-2.5 py-1.5 border rounded-lg bg-white dark:bg-gray-900 text-sm ${
+                  needsTrack
+                    ? "border-amber-400 dark:border-amber-600 ring-1 ring-amber-200 dark:ring-amber-800"
+                    : "border-gray-300 dark:border-gray-700"
+                }`}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={group.metadata.date}
+                onChange={(e) => onUpdateMetadata("date", e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Series
+              </label>
+              <input
+                type="text"
+                value={group.metadata.series}
+                onChange={(e) => onUpdateMetadata("series", e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Season
+              </label>
+              <input
+                type="number"
+                value={group.metadata.season}
+                onChange={(e) => onUpdateMetadata("season", e.target.value)}
+                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* File list */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              Files
+            </label>
+            <div className="space-y-1">
+              {fileEntries.map(([type, df]) => (
+                <div key={type} className="flex items-center gap-2 text-sm">
+                  <span className="text-green-500">&#10003;</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {FILE_TYPE_LABELS[type]}
+                  </span>
+                  <span className="font-mono text-xs text-gray-400 truncate">
+                    ({df.file.name})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Validation details */}
+          {v && v.status !== "validating" && (
+            <div className="space-y-2">
+              {v.errors.length > 0 && (
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {v.errors.map((e, i) => (
+                    <div
+                      key={i}
+                      className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-3 py-1.5 rounded"
+                    >
+                      {e}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {v.warnings.length > 0 && (
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {v.warnings.map((w, i) => (
+                    <div
+                      key={i}
+                      className="text-sm text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 px-3 py-1.5 rounded"
+                    >
+                      {w}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {v.stats && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {v.stats.totalCars} cars · {v.stats.maxLap} laps ·{" "}
+                  {v.stats.totalLapRecords.toLocaleString()} records · {v.stats.fcyPeriods} FCY
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error message */}
+      {group.importError && (
+        <div className="border-t border-red-200 dark:border-red-900 px-4 py-2.5">
+          <div className="text-sm text-red-600 dark:text-red-400">{group.importError}</div>
+        </div>
+      )}
+
+      {/* Success result */}
+      {group.importResult && (
+        <div className="border-t border-green-200 dark:border-green-900 px-4 py-2.5">
+          <div className="text-sm text-green-600 dark:text-green-400">
+            {group.importResult.entriesCreated} entries ·{" "}
+            {group.importResult.lapsCreated.toLocaleString()} laps
+          </div>
+        </div>
+      )}
+
+      {/* Collapsed file summary */}
+      {!expanded && group.importStatus === "idle" && (
+        <div className="border-t border-gray-100 dark:border-gray-900 px-4 py-2">
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            {fileEntries.map(([type]) => (
+              <span key={type}>{FILE_TYPE_LABELS[type]}</span>
+            ))}
+            {v?.stats && (
+              <span className="ml-auto">
+                {v.stats.totalCars} cars · {v.stats.maxLap} laps
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -517,49 +744,24 @@ export function AdminUploadPage() {
   );
 }
 
-function FileDropZone({ label, description, file, accept, onFile, valid, preview }: {
-  label: string; description: string; file: File | null; accept: string;
-  onFile: (f: File) => void; valid: boolean; preview: string | null;
-}) {
-  const [dragOver, setDragOver] = useState(false);
+// ─── Validation badge ────────────────────────────────────────────────────────
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f) onFile(f);
-  };
+function ValidationBadge({ validation }: { validation: ValidationState | null }) {
+  if (!validation) return null;
 
-  return (
-    <div>
-      <div
-        className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-          dragOver ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20"
-          : file ? (valid ? "border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/10" : "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/10")
-          : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
-        }`}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-      >
-        <input type="file" accept={accept} onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
-        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{description}</div>
-        {file ? (
-          <div className="flex items-center justify-center gap-2 text-sm">
-            <span className={valid ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{valid ? "✓" : "✗"}</span>
-            <span className="text-gray-700 dark:text-gray-300 font-mono">{file.name}</span>
-            <span className="text-gray-400">({(file.size / 1024).toFixed(0)} KB)</span>
-          </div>
-        ) : (
-          <div className="text-xs text-gray-400">Drop {accept} file here or click to browse</div>
-        )}
-      </div>
-      {preview && (
-        <div className="mt-2 bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 overflow-x-auto">
-          <pre className="text-[10px] text-gray-500 dark:text-gray-400 font-mono leading-tight whitespace-pre">{preview}</pre>
-        </div>
-      )}
-    </div>
-  );
+  switch (validation.status) {
+    case "validating":
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+          <span className="h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          Validating
+        </span>
+      );
+    case "valid":
+      return <span className="text-xs text-green-600 dark:text-green-400 font-medium">&#10003; Valid</span>;
+    case "warning":
+      return <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">&#9888; Warnings</span>;
+    case "invalid":
+      return <span className="text-xs text-red-600 dark:text-red-400 font-medium">&#10007; Invalid</span>;
+  }
 }

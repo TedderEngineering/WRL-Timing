@@ -383,23 +383,20 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
   const presets = useMemo(() => {
     if (classView) {
       const classCars = data.classGroups[classView] || [];
-      const allClassPreset = { label: `All ${classView}`, cars: classCars };
-
-      // If makeGroups exist (IMSA), show manufacturer presets within this class
-      if (data.makeGroups && Object.keys(data.makeGroups).length > 0) {
-        const classCarSet = new Set(classCars);
-        const makePresets = Object.entries(data.makeGroups)
-          .map(([make, cars]) => ({
-            label: make,
-            cars: cars.filter((n) => classCarSet.has(n)),
-          }))
-          .filter((p) => p.cars.length > 0)
-          .sort((a, b) => a.label.localeCompare(b.label));
-
-        return [allClassPreset, ...makePresets];
+      const result: Array<{ label: string; cars: number[] }> = [
+        { label: `All ${classView}`, cars: classCars },
+      ];
+      // Show manufacturer presets within the selected class (IMSA races)
+      if ((data as any).makeGroups) {
+        const mg = (data as any).makeGroups as Record<string, number[]>;
+        for (const [make, makeCars] of Object.entries(mg).sort()) {
+          const inClass = makeCars.filter((n) => classCars.includes(n));
+          if (inClass.length > 0) {
+            result.push({ label: make, cars: inClass });
+          }
+        }
       }
-
-      return [allClassPreset];
+      return result;
     }
     return [
       { label: "All Cars", cars: Object.keys(data.cars).map(Number) },
@@ -522,7 +519,7 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
                     opacity: isFocus ? 0.3 : 1,
                     pointerEvents: isFocus ? "none" : undefined,
                   }}
-                  title={`${data.cars[String(n)]?.team} (${data.cars[String(n)]?.cls})`}
+                  title={`${data.cars[String(n)]?.team}${data.cars[String(n)]?.make ? ` · ${data.cars[String(n)]?.make}` : ''} (${data.cars[String(n)]?.cls})`}
                 >
                   #{n}
                 </button>

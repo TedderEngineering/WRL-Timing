@@ -124,6 +124,9 @@ export function generateAnnotations(
     const existingSettles: SettleMarker[] =
       (ex?.settles as SettleMarker[]) || [];
 
+    // If parser already provided settles (e.g., from pit stop JSON data), skip inference
+    const skipSettleInference = existingSettles.length > 0;
+
     for (let i = 1; i < laps.length; i++) {
       const d = laps[i];
       const prev = laps[i - 1];
@@ -209,71 +212,74 @@ export function generateAnnotations(
       }
     }
 
-    // ── Settle markers after FCY periods ─────────────────────
-    for (const [fcyStart, fcyEnd] of data.fcy) {
-      const preFcyLap =
-        laps.find((ld: LapData) => ld.l === fcyStart - 1) ||
-        laps.find((ld: LapData) => ld.l === fcyStart);
-      if (!preFcyLap) continue;
+    // ── Settle markers (skipped if parser already provided settles) ──
+    if (!skipSettleInference) {
+      // ── Settle markers after FCY periods ─────────────────────
+      for (const [fcyStart, fcyEnd] of data.fcy) {
+        const preFcyLap =
+          laps.find((ld: LapData) => ld.l === fcyStart - 1) ||
+          laps.find((ld: LapData) => ld.l === fcyStart);
+        if (!preFcyLap) continue;
 
-      let settleLap: LapData | null = null;
-      for (
-        let sl = fcyEnd + 1;
-        sl <= Math.min(fcyEnd + 5, data.maxLap);
-        sl++
-      ) {
-        const ld = laps.find((x: LapData) => x.l === sl);
-        if (ld && ld.pit === 0 && !fcyLaps.has(sl)) {
-          settleLap = ld;
-          break;
+        let settleLap: LapData | null = null;
+        for (
+          let sl = fcyEnd + 1;
+          sl <= Math.min(fcyEnd + 5, data.maxLap);
+          sl++
+        ) {
+          const ld = laps.find((x: LapData) => x.l === sl);
+          if (ld && ld.pit === 0 && !fcyLaps.has(sl)) {
+            settleLap = ld;
+            break;
+          }
         }
-      }
-      if (!settleLap) {
-        settleLap =
-          laps.find((ld: LapData) => ld.l > fcyEnd && ld.pit === 0) || null;
-      }
-      if (!settleLap) continue;
-
-      if (existingSettles.some((es) => es.l === settleLap!.l)) continue;
-
-      const net = preFcyLap.p - settleLap.p;
-      settles.push(makeSettle(settleLap.l, settleLap.p, preFcyLap.p, net));
-    }
-
-    // ── Settle markers after pit stops ───────────────────────
-    for (let i = 0; i < laps.length; i++) {
-      if (laps[i].pit !== 1) continue;
-      if (i === 0) continue;
-
-      // Skip pit settles during FCY — the FCY settle already captures the net effect
-      if (fcyLaps.has(laps[i].l)) continue;
-
-      const prePitPos = laps[i - 1].p;
-      let sLap: LapData | null = null;
-
-      for (let j = i + 1; j < laps.length && j <= i + 6; j++) {
-        if (laps[j].pit === 0 && !fcyLaps.has(laps[j].l)) {
-          sLap = laps[j];
-          break;
+        if (!settleLap) {
+          settleLap =
+            laps.find((ld: LapData) => ld.l > fcyEnd && ld.pit === 0) || null;
         }
+        if (!settleLap) continue;
+
+        if (existingSettles.some((es) => es.l === settleLap!.l)) continue;
+
+        const net = preFcyLap.p - settleLap.p;
+        settles.push(makeSettle(settleLap.l, settleLap.p, preFcyLap.p, net));
       }
-      if (!sLap) {
-        for (let j = i + 1; j < laps.length && j <= i + 10; j++) {
-          if (laps[j].pit === 0) {
+
+      // ── Settle markers after pit stops ───────────────────────
+      for (let i = 0; i < laps.length; i++) {
+        if (laps[i].pit !== 1) continue;
+        if (i === 0) continue;
+
+        // Skip pit settles during FCY — the FCY settle already captures the net effect
+        if (fcyLaps.has(laps[i].l)) continue;
+
+        const prePitPos = laps[i - 1].p;
+        let sLap: LapData | null = null;
+
+        for (let j = i + 1; j < laps.length && j <= i + 6; j++) {
+          if (laps[j].pit === 0 && !fcyLaps.has(laps[j].l)) {
             sLap = laps[j];
             break;
           }
         }
+        if (!sLap) {
+          for (let j = i + 1; j < laps.length && j <= i + 10; j++) {
+            if (laps[j].pit === 0) {
+              sLap = laps[j];
+              break;
+            }
+          }
+        }
+        if (!sLap) continue;
+
+        const nearbySettle =
+          settles.some((s) => Math.abs(s.l - sLap!.l) <= 2) ||
+          existingSettles.some((s) => Math.abs(s.l - sLap!.l) <= 2);
+        if (nearbySettle) continue;
+
+        const net = prePitPos - sLap.p;
+        settles.push(makeSettle(sLap.l, sLap.p, prePitPos, net));
       }
-      if (!sLap) continue;
-
-      const nearbySettle =
-        settles.some((s) => Math.abs(s.l - sLap!.l) <= 2) ||
-        existingSettles.some((s) => Math.abs(s.l - sLap!.l) <= 2);
-      if (nearbySettle) continue;
-
-      const net = prePitPos - sLap.p;
-      settles.push(makeSettle(sLap.l, sLap.p, prePitPos, net));
     }
 
     // ── Merge: keep all existing markers, add non-overlapping new ones ──
