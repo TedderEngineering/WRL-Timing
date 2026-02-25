@@ -75,19 +75,6 @@ function UserMenu() {
               Billing
             </Link>
 
-            {user?.role === "ADMIN" && (
-              <>
-                <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
-                <Link
-                  to="/admin"
-                  onClick={() => setOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  Admin Panel
-                </Link>
-              </>
-            )}
-
             <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
             <button
               onClick={() => {
@@ -146,11 +133,6 @@ function MobileMenu() {
                 <Link to="/dashboard" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
                   Dashboard
                 </Link>
-                {user?.role === "ADMIN" && (
-                  <Link to="/admin" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
-                    Admin
-                  </Link>
-                )}
                 <button
                   onClick={async () => {
                     setOpen(false);
