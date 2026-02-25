@@ -57,3 +57,17 @@
     transform: translateY(0);
   }
 }
+
+@media print {
+  canvas {
+    display: none !important;
+  }
+  body::after {
+    content: "Visit racetrace.tedderengineering.com to view charts.";
+    display: block;
+    text-align: center;
+    font-size: 18px;
+    padding: 40px;
+    color: #666;
+  }
+}

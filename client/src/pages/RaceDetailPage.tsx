@@ -7,8 +7,8 @@ import { useState, useEffect } from "react";
 
 export function RaceDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { isAuthenticated } = useAuth();
-  const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
+  const { isAuthenticated, user } = useAuth();
+  const { data, annotations, raceMeta, isLoading, error, errorCode } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
 
   // Fetch favorite status from race detail endpoint
@@ -35,7 +35,42 @@ export function RaceDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <div className="h-10 w-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-500 dark:text-gray-400">Loading race data…</p>
+        <p className="text-gray-500 dark:text-gray-400">Loading race data...</p>
+      </div>
+    );
+  }
+
+  // ── Subscription required overlay ────────────────────────────────
+  if (errorCode === "SUBSCRIPTION_REQUIRED") {
+    return (
+      <div className="container-page py-20 text-center">
+        <div className="max-w-md mx-auto">
+          <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-6">
+            <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-3">
+            Pro Access Required
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            This race chart is available to Pro and Team subscribers. Upgrade your plan to unlock full access to every race in the library.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              to="/pricing"
+              className="inline-block px-6 py-3 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 transition-colors"
+            >
+              View Plans
+            </Link>
+            <Link
+              to="/races"
+              className="inline-block px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              Back to Races
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -54,7 +89,7 @@ export function RaceDetailPage() {
           to="/races"
           className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
         >
-          ← Back to races
+          Back to races
         </Link>
       </div>
     );
@@ -79,7 +114,7 @@ export function RaceDetailPage() {
               to="/races"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
             >
-              ← Races
+              Races
             </Link>
             <span className="text-gray-300 dark:text-gray-600">/</span>
             <span className="text-sm text-brand-600 dark:text-brand-400 font-medium">
@@ -122,7 +157,7 @@ export function RaceDetailPage() {
       </div>
 
       {/* Chart */}
-      <LapChart data={data} annotations={annotations} raceId={id} />
+      <LapChart data={data} annotations={annotations} raceId={id} watermarkEmail={user?.email} />
     </div>
   );
 }

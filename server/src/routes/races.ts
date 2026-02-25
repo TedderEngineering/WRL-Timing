@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { raceListQuerySchema } from "../utils/race-validators.js";
+import { prisma } from "../models/prisma.js";
 import * as raceSvc from "../services/races.js";
 
 export const racesRouter = Router();
@@ -98,18 +99,50 @@ racesRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const chartData = await raceSvc.getChartData(req.params.id);
+      const raceId = req.params.id;
+      const chartData = await raceSvc.getChartData(raceId);
 
-      // TODO: Phase 6 — subscription gating for premium races
-      // For now, serve all chart data to all users
+      // Subscription gating: check access
+      const isAdmin = req.user?.role === "ADMIN";
+      if (!isAdmin) {
+        let hasPaidAccess = false;
+        if (req.user?.userId) {
+          const subscription = await prisma.subscription.findUnique({
+            where: { userId: req.user.userId },
+          });
+          if (subscription) {
+            const isPaid = subscription.plan === "PRO" || subscription.plan === "TEAM";
+            const isActive = subscription.status === "ACTIVE" || subscription.status === "TRIALING";
+            const inGracePeriod =
+              subscription.status === "CANCELED" &&
+              subscription.currentPeriodEnd &&
+              subscription.currentPeriodEnd > new Date();
+            hasPaidAccess = isPaid && (isActive || !!inGracePeriod);
+          }
+        }
+
+        if (!hasPaidAccess) {
+          const isFree = await raceSvc.isFreeAccessRace(raceId);
+          if (!isFree) {
+            res.status(403).json({
+              error: "This race requires a Pro subscription or higher.",
+              code: "SUBSCRIPTION_REQUIRED",
+            });
+            return;
+          }
+        }
+      }
 
       // Record view if authenticated
       if (req.user?.userId) {
-        raceSvc.recordView(req.user.userId, req.params.id).catch(() => {});
+        raceSvc.recordView(req.user.userId, raceId).catch(() => {});
       }
 
-      // Cache for 5 minutes (chart data doesn't change often)
-      res.set("Cache-Control", "public, max-age=300");
+      // Cache privately when authenticated
+      res.set(
+        "Cache-Control",
+        req.user ? "private, max-age=300" : "public, max-age=300"
+      );
       res.json(chartData);
     } catch (err) {
       next(err);

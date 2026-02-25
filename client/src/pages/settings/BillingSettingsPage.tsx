@@ -1,14 +1,59 @@
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthContext";
+import { api } from "../../lib/api";
 
 export function BillingSettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+
   const plan = user?.subscription?.plan || "FREE";
   const status = user?.subscription?.status || "active";
+  const periodEnd = user?.subscription?.currentPeriodEnd;
+  const cancelAtPeriodEnd = user?.subscription?.cancelAtPeriodEnd;
+
+  // Handle checkout success redirect
+  useEffect(() => {
+    if (searchParams.has("session_id")) {
+      refreshUser();
+      setShowSuccess(true);
+      setSearchParams({}, { replace: true });
+      const timer = setTimeout(() => setShowSuccess(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handlePortal() {
+    setPortalLoading(true);
+    try {
+      const { url } = await api.post<{ url: string }>("/billing/create-portal-session");
+      window.location.href = url;
+    } catch (err: any) {
+      alert(err.message || "Failed to open billing portal");
+      setPortalLoading(false);
+    }
+  }
+
+  const periodEndStr = periodEnd
+    ? new Date(periodEnd).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <div className="space-y-8 max-w-lg">
       <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">Billing</h2>
+
+      {/* Success banner */}
+      {showSuccess && (
+        <div className="rounded-lg border border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 text-sm text-green-800 dark:text-green-300">
+          Subscription activated! Your account has been upgraded.
+        </div>
+      )}
 
       {/* Current Plan */}
       <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-5">
@@ -23,14 +68,14 @@ export function BillingSettingsPage() {
               </span>
               <span
                 className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  status === "active"
+                  status === "active" || status === "ACTIVE"
                     ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : status === "past_due"
+                    : status === "past_due" || status === "PAST_DUE"
                     ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
                     : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                 }`}
               >
-                {status === "active" ? "Active" : status === "past_due" ? "Past Due" : "Canceled"}
+                {status === "active" || status === "ACTIVE" ? "Active" : status === "past_due" || status === "PAST_DUE" ? "Past Due" : "Canceled"}
               </span>
             </div>
             {plan === "FREE" && (
@@ -38,7 +83,14 @@ export function BillingSettingsPage() {
                 Limited access. Upgrade to unlock all races and features.
               </p>
             )}
-            {plan !== "FREE" && (
+            {plan !== "FREE" && periodEndStr && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {cancelAtPeriodEnd
+                  ? `Your plan will cancel on ${periodEndStr}. You have access until then.`
+                  : `Renews on ${periodEndStr}.`}
+              </p>
+            )}
+            {plan !== "FREE" && !periodEndStr && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Full access to all races and analysis tools.
               </p>
@@ -71,7 +123,7 @@ export function BillingSettingsPage() {
               "Priority support",
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span className="text-brand-500">✦</span>
+                <span className="text-brand-500">+</span>
                 {feature}
               </div>
             ))}
@@ -79,7 +131,7 @@ export function BillingSettingsPage() {
         </div>
       )}
 
-      {/* Billing Management (when Stripe is connected) */}
+      {/* Billing Management */}
       {plan !== "FREE" && (
         <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-5">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
@@ -89,10 +141,11 @@ export function BillingSettingsPage() {
             Update payment method, view invoices, or change your plan.
           </p>
           <button
-            disabled
-            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed"
+            onClick={handlePortal}
+            disabled={portalLoading}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
-            Open Billing Portal (coming soon)
+            {portalLoading ? "Opening..." : "Open Billing Portal"}
           </button>
         </div>
       )}
@@ -108,7 +161,7 @@ export function BillingSettingsPage() {
           </p>
         ) : (
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Invoice history will be available once Stripe billing is connected.
+            View and download invoices from the billing portal above.
           </p>
         )}
       </div>

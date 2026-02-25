@@ -2,11 +2,12 @@ import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useRaceList, useFilterOptions } from "../hooks/useChartData";
-import { api } from "../lib/api";
+import { api, ApiClientError } from "../lib/api";
 
 
 export function RaceListPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const userPlan = user?.subscription?.plan ?? "FREE";
   const [page, setPage] = useState(1);
   const [series, setSeries] = useState("");
   const [season, setSeason] = useState<number | undefined>();
@@ -35,9 +36,12 @@ export function RaceListPage() {
     setFavOverrides((prev) => ({ ...prev, [raceId]: !currentlyFavorited }));
     try {
       await api.post(`/races/${raceId}/favorite`);
-    } catch {
+    } catch (err) {
       // Revert on failure
       setFavOverrides((prev) => ({ ...prev, [raceId]: currentlyFavorited }));
+      if (err instanceof ApiClientError && err.code === "FAVORITES_LIMIT") {
+        alert("Free accounts are limited to 5 favorites. Upgrade to Pro for unlimited favorites.");
+      }
     }
   }, [isAuthenticated]);
 
@@ -164,6 +168,7 @@ export function RaceListPage() {
                     race={{ ...race, isFavorited: isFav }}
                     isAuthenticated={isAuthenticated}
                     onFavorite={handleFavorite}
+                    showLock={!(race as any).freeAccess && userPlan === "FREE"}
                   />
                 );
               })}
@@ -204,6 +209,7 @@ function RaceCard({
   race,
   isAuthenticated,
   onFavorite,
+  showLock,
 }: {
   race: {
     id: string;
@@ -220,6 +226,7 @@ function RaceCard({
   };
   isAuthenticated: boolean;
   onFavorite: (id: string, currentlyFavorited: boolean) => void;
+  showLock?: boolean;
 }) {
   const dateStr = new Date(race.date).toLocaleDateString("en-US", {
     month: "short",
@@ -240,7 +247,18 @@ function RaceCard({
           </span>
           <span>·</span>
           <span>{dateStr}</span>
-          {race.premium && (
+          {showLock && (
+            <>
+              <span>·</span>
+              <span className="inline-flex items-center gap-0.5 text-gray-400 dark:text-gray-500">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                <span className="text-[10px] font-semibold">PRO</span>
+              </span>
+            </>
+          )}
+          {race.premium && !showLock && (
             <>
               <span>·</span>
               <span className="inline-flex items-center gap-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded text-[10px] font-semibold">

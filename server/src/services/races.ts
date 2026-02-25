@@ -14,6 +14,23 @@ interface RaceListParams {
   sortOrder: "asc" | "desc";
 }
 
+// ─── Free Access Races (top 3 most recent published) ────────────────────────
+
+export async function getFreeAccessRaceIds(): Promise<string[]> {
+  const races = await prisma.race.findMany({
+    where: { status: "PUBLISHED" },
+    orderBy: { date: "desc" },
+    take: 3,
+    select: { id: true },
+  });
+  return races.map((r) => r.id);
+}
+
+export async function isFreeAccessRace(raceId: string): Promise<boolean> {
+  const ids = await getFreeAccessRaceIds();
+  return ids.includes(raceId);
+}
+
 // ─── List Races ──────────────────────────────────────────────────────────────
 
 export async function listRaces(params: RaceListParams, userId?: string) {
@@ -69,6 +86,8 @@ export async function listRaces(params: RaceListParams, userId?: string) {
     prisma.race.count({ where }),
   ]);
 
+  const freeAccessIds = await getFreeAccessRaceIds();
+
   return {
     races: races.map((r: any) => ({
       id: r.id,
@@ -84,6 +103,7 @@ export async function listRaces(params: RaceListParams, userId?: string) {
       entryCount: r._count.entries,
       favoriteCount: r._count.favorites,
       isFavorited: userId ? r.favorites?.length > 0 : false,
+      freeAccess: freeAccessIds.includes(r.id),
       createdAt: r.createdAt.toISOString(),
     })),
     total,
@@ -327,6 +347,21 @@ export async function toggleFavorite(
     });
     return false; // unfavorited
   } else {
+    // Check favorites limit for FREE tier users
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+    if (!subscription || subscription.plan === "FREE") {
+      const count = await prisma.userFavorite.count({ where: { userId } });
+      if (count >= 5) {
+        throw new AppError(
+          403,
+          "Free accounts are limited to 5 favorites. Upgrade to Pro for unlimited.",
+          "FAVORITES_LIMIT"
+        );
+      }
+    }
+
     await prisma.userFavorite.create({
       data: { userId, raceId },
     });

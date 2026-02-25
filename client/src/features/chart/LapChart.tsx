@@ -22,11 +22,12 @@ interface LapChartProps {
   data: RaceChartData;
   annotations: AnnotationData;
   raceId?: string;
+  watermarkEmail?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function LapChart({ data, annotations, raceId }: LapChartProps) {
+export function LapChart({ data, annotations, raceId, watermarkEmail }: LapChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -153,8 +154,8 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
       inner.style.height = d.H + "px";
     }
 
-    drawChart(canvas, data, annotations, chartState, d);
-  }, [data, annotations, chartState, dim, resize]);
+    drawChart(canvas, data, annotations, chartState, d, watermarkEmail);
+  }, [data, annotations, chartState, dim, resize, watermarkEmail]);
 
   // Resize on window resize
   useEffect(() => {
@@ -553,6 +554,7 @@ export function LapChart({ data, annotations, raceId }: LapChartProps) {
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
               style={{ display: "block", cursor: "crosshair" }}
             />
           </div>

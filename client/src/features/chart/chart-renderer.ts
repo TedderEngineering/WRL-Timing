@@ -138,7 +138,8 @@ export function drawChart(
   data: RaceChartData,
   annotations: AnnotationData,
   state: ChartState,
-  dim: ChartDimensions
+  dim: ChartDimensions,
+  watermarkEmail?: string
 ) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = dim.W * dpr;
@@ -393,6 +394,34 @@ export function drawChart(
   ctx.rotate(-Math.PI / 2);
   ctx.fillText(classView ? classView + " Position" : "Overall Position", 0, 0);
   ctx.restore();
+
+  // ── 10. Watermark overlay ───────────────────────────────────────
+  if (watermarkEmail) {
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.font = "14px system-ui";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const angle = (-30 * Math.PI) / 180;
+    const spacing = 240;
+    const lineHeight = 80;
+    // Cover the full canvas diagonally
+    const diagonal = Math.sqrt(dim.W * dim.W + dim.H * dim.H);
+    const cols = Math.ceil(diagonal / spacing) + 2;
+    const rows = Math.ceil(diagonal / lineHeight) + 2;
+
+    ctx.translate(dim.W / 2, dim.H / 2);
+    ctx.rotate(angle);
+
+    for (let row = -rows; row <= rows; row++) {
+      for (let col = -cols; col <= cols; col++) {
+        ctx.fillText(watermarkEmail, col * spacing, row * lineHeight);
+      }
+    }
+    ctx.restore();
+  }
 }
 
 // ─── Build info data for a given active lap ──────────────────────────────────

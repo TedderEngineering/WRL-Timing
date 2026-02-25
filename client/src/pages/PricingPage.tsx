@@ -1,18 +1,15 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
+import { api } from "../lib/api";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
-
-type Interval = "monthly" | "annual";
 
 const TIERS = [
   {
     id: "free" as const,
     name: "Free",
     description: "Perfect for curious fans",
-    monthlyPrice: 0,
-    annualPrice: 0,
+    price: 0,
     cta: "Get Started",
     highlighted: false,
   },
@@ -20,8 +17,7 @@ const TIERS = [
     id: "pro" as const,
     name: "Pro",
     description: "For dedicated analysts",
-    monthlyPrice: 9.99,
-    annualPrice: 99,
+    price: 200,
     cta: "Start Pro",
     highlighted: true,
   },
@@ -29,8 +25,7 @@ const TIERS = [
     id: "team" as const,
     name: "Team",
     description: "For race teams & groups",
-    monthlyPrice: 29.99,
-    annualPrice: 299,
+    price: 500,
     cta: "Start Team",
     highlighted: false,
   },
@@ -57,7 +52,7 @@ const COMPARISON: FeatureRow[] = [
 
 function formatPrice(price: number): string {
   if (price === 0) return "$0";
-  return `$${price % 1 === 0 ? price : price.toFixed(2)}`;
+  return `$${price}`;
 }
 
 function CellValue({ value }: { value: string | boolean }) {
@@ -76,15 +71,22 @@ function CellValue({ value }: { value: string | boolean }) {
 }
 
 export function PricingPage() {
-  const [interval, setInterval] = useState<Interval>("monthly");
+  const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
 
   const currentPlan = user?.subscription?.plan ?? "FREE";
 
-  function ctaForTier(tierId: string) {
-    if (!isAuthenticated) return tierId === "free" ? "/signup" : "/signup";
-    if (tierId.toUpperCase() === currentPlan) return null; // current plan
-    return "/settings/billing"; // upgrade path
+  async function handleCheckout(tier: "PRO" | "TEAM") {
+    if (!isAuthenticated) {
+      navigate("/signup");
+      return;
+    }
+    try {
+      const { url } = await api.post<{ url: string }>("/billing/create-checkout-session", { tier });
+      window.location.href = url;
+    } catch (err: any) {
+      alert(err.message || "Failed to start checkout");
+    }
   }
 
   return (
@@ -95,45 +97,14 @@ export function PricingPage() {
           Choose your plan
         </h1>
         <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-          Start free. Upgrade anytime for full access to full access to every race in the library.
+          Start free. Upgrade anytime for full access to every race in the library.
         </p>
-      </div>
-
-      {/* Interval toggle */}
-      <div className="flex items-center justify-center gap-3 mb-12">
-        <button
-          onClick={() => setInterval("monthly")}
-          className={cn(
-            "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-            interval === "monthly"
-              ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-          )}
-        >
-          Monthly
-        </button>
-        <button
-          onClick={() => setInterval("annual")}
-          className={cn(
-            "px-4 py-2 text-sm font-medium rounded-lg transition-colors relative",
-            interval === "annual"
-              ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-          )}
-        >
-          Annual
-          <span className="absolute -top-2 -right-12 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-            Save 17%
-          </span>
-        </button>
       </div>
 
       {/* Tier cards */}
       <div className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto mb-20">
         {TIERS.map((tier) => {
-          const price = interval === "monthly" ? tier.monthlyPrice : tier.annualPrice;
           const isCurrentPlan = isAuthenticated && tier.id.toUpperCase() === currentPlan;
-          const href = ctaForTier(tier.id);
 
           return (
             <div
@@ -160,16 +131,16 @@ export function PricingPage() {
 
               <div className="mb-8">
                 <span className="text-5xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
-                  {formatPrice(price)}
+                  {formatPrice(tier.price)}
                 </span>
-                {price > 0 && (
+                {tier.price > 0 && (
                   <span className="text-gray-500 dark:text-gray-400 ml-1">
-                    /{interval === "monthly" ? "mo" : "yr"}
+                    /yr
                   </span>
                 )}
-                {interval === "annual" && price > 0 && (
+                {tier.price > 0 && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {formatPrice(price / 12)}/mo billed annually
+                    {formatPrice(Math.round(tier.price / 12))}/mo billed annually
                   </p>
                 )}
               </div>
@@ -180,17 +151,27 @@ export function PricingPage() {
                 <Button variant="secondary" disabled className="w-full">
                   Current Plan
                 </Button>
-              ) : href ? (
-                <Link to={href}>
+              ) : tier.id === "free" ? (
+                !isAuthenticated ? (
                   <Button
-                    variant={tier.highlighted ? "primary" : "secondary"}
+                    variant="secondary"
                     className="w-full"
                     size="lg"
+                    onClick={() => navigate("/signup")}
                   >
                     {tier.cta}
                   </Button>
-                </Link>
-              ) : null}
+                ) : null
+              ) : (
+                <Button
+                  variant={tier.highlighted ? "primary" : "secondary"}
+                  className="w-full"
+                  size="lg"
+                  onClick={() => handleCheckout(tier.id.toUpperCase() as "PRO" | "TEAM")}
+                >
+                  {tier.cta}
+                </Button>
+              )}
             </div>
           );
         })}

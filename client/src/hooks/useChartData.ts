@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { api } from "../lib/api";
+import { api, ApiClientError } from "../lib/api";
 import type { ChartDataResponse, RaceChartData, AnnotationData } from "@shared/types";
 
 interface UseChartDataResult {
@@ -8,6 +8,7 @@ interface UseChartDataResult {
   raceMeta: ChartDataResponse["race"] | null;
   isLoading: boolean;
   error: string | null;
+  errorCode: string | null;
 }
 
 export function useChartData(raceId: string | undefined): UseChartDataResult {
@@ -16,6 +17,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
   const [raceMeta, setRaceMeta] = useState<ChartDataResponse["race"] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
 
     setIsLoading(true);
     setError(null);
+    setErrorCode(null);
 
     api
       .get<ChartDataResponse>(`/races/${raceId}/chart-data`)
@@ -45,13 +48,16 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
       .catch((err) => {
         if (controller.signal.aborted) return;
         setError(err.message || "Failed to load chart data");
+        if (err instanceof ApiClientError) {
+          setErrorCode(err.code ?? null);
+        }
         setIsLoading(false);
       });
 
     return () => controller.abort();
   }, [raceId]);
 
-  return { data, annotations, raceMeta, isLoading, error };
+  return { data, annotations, raceMeta, isLoading, error, errorCode };
 }
 
 // ─── Race list fetching ──────────────────────────────────────────────────────
@@ -70,6 +76,7 @@ export interface RaceListItem {
   entryCount: number;
   favoriteCount: number;
   isFavorited: boolean;
+  freeAccess?: boolean;
   createdAt: string;
 }
 

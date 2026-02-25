@@ -38,9 +38,11 @@ export function createApp() {
   );
 
   // ─── Body Parsing ──────────────────────────────────────────────────────────
-  // Note: Stripe webhook needs raw body, so it's handled before json parsing
-  // in the billing router
-  app.use(express.json({ limit: "50mb" }));  // Race data JSON can be 1-2MB
+  // Stripe webhook needs raw body — skip JSON parsing for that route
+  app.use((req, res, next) => {
+    if (req.path === "/api/billing/webhook") return next();
+    express.json({ limit: "50mb" })(req, res, next);
+  });
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 
