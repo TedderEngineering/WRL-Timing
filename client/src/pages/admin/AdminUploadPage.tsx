@@ -364,7 +364,7 @@ export function AdminUploadPage() {
         </div>
         {!hasFiles && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Supports IMSA JSON (Lap Chart, Flags, Pit Stops, PDF) and SpeedHive CSV (Summary, All Laps)
+            Supports IMSA JSON, SpeedHive CSV, and WRL Website CSV (Summary + All Laps)
           </div>
         )}
       </div>
@@ -479,12 +479,13 @@ function RaceGroupCard({
   onUpdateMetadata: (field: keyof RaceGroupMetadata, value: string) => void;
   onRemove: () => void;
 }) {
-  const needsTrack = group.format === "speedhive" && !group.metadata.track.trim();
+  const needsTrack = (group.format === "speedhive" || group.format === "wrl-website") && !group.metadata.track.trim();
   const [expanded, setExpanded] = useState(needsTrack);
 
   const formatColors: Record<FormatId, string> = {
     imsa: "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400",
     speedhive: "bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400",
+    "wrl-website": "bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400",
   };
 
   const borderColor =
@@ -508,7 +509,7 @@ function RaceGroupCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${formatColors[group.format]}`}>
-              {group.format === "imsa" ? "IMSA" : "SpeedHive"}
+              {group.format === "imsa" ? "IMSA" : group.format === "wrl-website" ? "WRL Website" : "SpeedHive"}
             </span>
             <ValidationBadge validation={v} />
             {!group.complete && (

@@ -9,7 +9,7 @@ export type FileType =
   | "flagsPdf"
   | "unknown";
 
-export type FormatId = "imsa" | "speedhive";
+export type FormatId = "imsa" | "speedhive" | "wrl-website";
 
 export interface DetectedFile {
   file: File;
@@ -64,6 +64,7 @@ export interface ValidationStats {
 const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
   imsa: ["lapChartJson"],
   speedhive: ["summaryCsv", "lapsCsv"],
+  "wrl-website": ["summaryCsv", "lapsCsv"],
 };
 
 /** Maps internal FileType to the server-side slot key */
@@ -162,8 +163,26 @@ export function classifyFile(file: File, content: string): DetectedFile {
     }
   }
 
-  // SpeedHive CSV detection
+  // CSV detection — check headers to distinguish WRL Website vs SpeedHive
   if (file.name.toLowerCase().endsWith(".csv")) {
+    const headerLine = clean.split("\n")[0] || "";
+    const headerLower = headerLine.toLowerCase();
+
+    // WRL Website CSVs: underscore-separated headers like Overall_Position, Car_Number
+    if (headerLower.includes("overall_position") || headerLower.includes("car_number,team_name,sponsor")) {
+      const isSummary = headerLower.includes("overall_position") && headerLower.includes("laps_completed");
+      const isLaps = headerLower.includes("lap_number") && headerLower.includes("lap_time");
+
+      if (isSummary || isLaps) {
+        result.type = isSummary ? "summaryCsv" : "lapsCsv";
+        result.format = "wrl-website";
+        result.metadata = extractWrlWebsiteMetadata(file.name, content);
+        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_(summary|all_laps)\.csv$/i, "")}`;
+        return result;
+      }
+    }
+
+    // SpeedHive CSVs: filename pattern or space-separated headers like "Start Number"
     const fn = file.name.toLowerCase();
     const shSummary = fn.match(/(\d+)_summary\.csv$/);
     const shLaps = fn.match(/(\d+)_all_laps\.csv$/);
@@ -365,6 +384,39 @@ function extractSpeedhiveMetadata(filename: string, content: string): Partial<Ra
         meta.season = isoMatch[1];
       }
     }
+  }
+
+  return meta;
+}
+
+function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<RaceGroupMetadata> {
+  const meta: Partial<RaceGroupMetadata> = { series: "WRL" };
+  const fn = filename.replace(/\.csv$/i, "");
+
+  // Date: YYYY-MM-DD or YYYYMMDD before _summary/_all_laps
+  const isoDate = fn.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const compactDate = fn.match(/(\d{4})(\d{2})(\d{2})(?:_(?:summary|all_laps))/);
+  if (isoDate) {
+    meta.date = isoDate[0];
+    meta.season = isoDate[1];
+  } else if (compactDate) {
+    meta.date = `${compactDate[1]}-${compactDate[2]}-${compactDate[3]}`;
+    meta.season = compactDate[1];
+  }
+
+  // Race name: extract Day and N from "{Day}_{N}_hour" → "Saturday 8-Hour"
+  const dayHourMatch = fn.match(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)_(\d+)_hour/i);
+  if (dayHourMatch) {
+    const dayMatch = fn.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)!;
+    const day = dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1).toLowerCase();
+    meta.name = `${day} ${dayHourMatch[1]}-Hour`;
+  }
+
+  // Track: text between "World_Racing_League_" and the day/hour portion
+  // Handles both _-_ separator and __ (double underscore)
+  const trackMatch = fn.match(/World_Racing_League_(.+?)(?:_-_|__)/i);
+  if (trackMatch) {
+    meta.track = trackMatch[1].replace(/_/g, " ");
   }
 
   return meta;
