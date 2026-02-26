@@ -188,14 +188,13 @@ export function Layout() {
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
         <nav className="container-page flex items-center justify-between h-16">
           <div className="flex items-center gap-6">
-            <a
-              href="https://tedderengineering.com"
-              className="flex items-center gap-2"
-            >
-              <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-8 dark:hidden" />
-              <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 hidden dark:block" />
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</span>
-            </a>
+            <div className="flex items-center gap-2">
+              <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer">
+                <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-8 dark:hidden" />
+                <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 hidden dark:block" />
+              </a>
+              <Link to="/" className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</Link>
+            </div>
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-4">
