@@ -62,6 +62,8 @@ export function DashboardPage() {
     fetchAll();
   }, []);
 
+  const isFree = !user?.subscription?.plan || user.subscription.plan === "FREE";
+
   // Featured race = most recent
   const featured = latestRaces[0] || null;
   // Races they haven't viewed yet
@@ -140,6 +142,9 @@ export function DashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </span>
+              {isFree && (
+                <p className="text-xs text-indigo-300/70 mt-2">1 of 3 free races this week</p>
+              )}
             </div>
           </div>
         </Link>
@@ -158,7 +163,18 @@ export function DashboardPage() {
       )}
 
       {/* Favorites */}
-      {favorites.length > 0 && (
+      {isFree ? (
+        <Link
+          to="/settings/billing"
+          className="block bg-gray-800/50 border border-gray-700/50 rounded-xl p-5 text-center hover:border-indigo-500/30 transition-colors"
+        >
+          <svg className="h-6 w-6 text-gray-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+          </svg>
+          <p className="text-gray-400 text-sm">Save your favorite races for quick access</p>
+          <p className="text-indigo-400 text-xs font-medium mt-1">Available on Pro</p>
+        </Link>
+      ) : favorites.length > 0 ? (
         <section>
           <SectionHeader title="Your Favorites" linkTo="/races" linkText="View all" />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -167,7 +183,7 @@ export function DashboardPage() {
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
       {/* New to Analyze / Latest */}
       {!loading && (
@@ -179,15 +195,17 @@ export function DashboardPage() {
           />
           {newToAnalyze.length > 0 ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {newToAnalyze.map((race) => (
+              {(isFree ? newToAnalyze.slice(0, 3) : newToAnalyze).map((race) => (
                 <RaceCard key={race.id} race={race} />
               ))}
+              {isFree && newToAnalyze.length > 3 && <UpsellCard count={newToAnalyze.length - 3} />}
             </div>
           ) : latestRaces.length > 0 ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {latestRaces.slice(0, 6).map((race) => (
+              {latestRaces.slice(0, isFree ? 3 : 6).map((race) => (
                 <RaceCard key={race.id} race={race} />
               ))}
+              {isFree && latestRaces.length > 3 && <UpsellCard count={latestRaces.length - 3} />}
             </div>
           ) : (
             <EmptyState message="No races available yet. Check back soon!" />
@@ -215,16 +233,33 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Quick Stats Footer */}
+      {/* Quick Stats Footer / Upgrade CTA */}
       {!loading && latestRaces.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <MiniStat label="Races Analyzed" value={String(recentlyViewed.length)} />
-          <MiniStat label="Favorites" value={String(favorites.length)} />
-          <MiniStat
-            label="Plan"
-            value={capitalize(user?.subscription?.plan || "Free")}
-          />
-        </div>
+        isFree ? (
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800/80 border border-gray-700 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-semibold text-white">Ready to go deeper?</h3>
+              <p className="text-gray-400 text-sm mt-1 max-w-lg">
+                Pro members unlock every race, unlimited favorites, and advanced filtering — everything you need to analyze full seasons.
+              </p>
+            </div>
+            <Link
+              to="/settings/billing"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors whitespace-nowrap"
+            >
+              Upgrade to Pro
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <MiniStat label="Races Analyzed" value={String(recentlyViewed.length)} />
+            <MiniStat label="Favorites" value={String(favorites.length)} />
+            <MiniStat
+              label="Plan"
+              value={capitalize(user?.subscription?.plan || "Free")}
+            />
+          </div>
+        )
       )}
     </div>
   );
@@ -276,6 +311,24 @@ function RaceCard({ race }: { race: RaceItem }) {
         {race.maxLap && <span>{race.maxLap} laps</span>}
         {race.isFavorited && <span className="text-amber-500">★</span>}
       </div>
+    </Link>
+  );
+}
+
+function UpsellCard({ count }: { count: number }) {
+  return (
+    <Link
+      to="/settings/billing"
+      className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-500/20 border-dashed rounded-xl flex flex-col items-center justify-center p-6 text-center hover:border-indigo-500/40 transition-colors"
+    >
+      <svg className="h-8 w-8 text-indigo-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+      </svg>
+      <span className="text-white font-semibold">{count}+ more races</span>
+      <span className="text-gray-400 text-sm mt-1">available with Pro</span>
+      <span className="text-indigo-400 hover:text-indigo-300 text-sm font-medium mt-3 inline-block">
+        See plans →
+      </span>
     </Link>
   );
 }
