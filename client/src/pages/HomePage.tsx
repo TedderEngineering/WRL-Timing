@@ -1,11 +1,42 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
+import { api } from "../lib/api";
 import { Button } from "../components/Button";
+import { Alert } from "../components/Alert";
 import { HeroChart } from "../components/landing/HeroChart";
 import { FeatureCard } from "../components/landing/FeatureCard";
 
+const PRICE_IDS: Record<string, string | undefined> = {
+  PRO: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
+  TEAM: import.meta.env.VITE_STRIPE_TEAM_PRICE_ID,
+};
+
 export function HomePage() {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function handleCheckout(tier: "PRO" | "TEAM") {
+    if (!isAuthenticated) {
+      navigate("/signup");
+      return;
+    }
+    setCheckoutError(null);
+
+    const priceId = PRICE_IDS[tier];
+    if (!priceId) {
+      setCheckoutError(`No price configured for ${tier} plan.`);
+      return;
+    }
+
+    try {
+      const { url } = await api.post<{ url: string }>("/billing/create-checkout-session", { priceId });
+      window.location.href = url;
+    } catch (err: any) {
+      setCheckoutError(err.message || "Failed to start checkout. Please try again.");
+    }
+  }
 
   return (
     <div className="overflow-hidden">
@@ -195,6 +226,12 @@ export function HomePage() {
           </p>
         </div>
 
+        {checkoutError && (
+          <div className="max-w-4xl mx-auto mb-6">
+            <Alert variant="error">{checkoutError}</Alert>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {[
             {
@@ -203,7 +240,7 @@ export function HomePage() {
               desc: "Perfect for curious fans",
               features: ["3 most recent races", "Basic chart viewing", "Up to 5 favorites"],
               cta: "Get Started",
-              href: "/signup",
+              tier: null as null,
               highlighted: false,
             },
             {
@@ -214,7 +251,7 @@ export function HomePage() {
               desc: "For dedicated analysts",
               features: ["All races, all seasons", "Filter, zoom, & export", "Unlimited favorites", "CSV & PNG export"],
               cta: "Start Pro",
-              href: "/signup",
+              tier: "PRO" as const,
               highlighted: true,
             },
             {
@@ -225,46 +262,46 @@ export function HomePage() {
               desc: "For race teams & groups",
               features: ["Everything in Pro", "Up to 10 team members", "API access", "Priority support"],
               cta: "Start Team",
-              href: "/signup",
+              tier: "TEAM" as const,
               highlighted: false,
             },
-          ].map((tier) => (
+          ].map((t) => (
             <div
-              key={tier.name}
+              key={t.name}
               className={`relative rounded-xl border p-6 lg:p-8 flex flex-col ${
-                tier.highlighted
+                t.highlighted
                   ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20 shadow-lg shadow-brand-500/10"
                   : "border-gray-200 dark:border-gray-800"
               }`}
             >
-              {tier.highlighted && (
+              {t.highlighted && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
                   Most Popular
                 </div>
               )}
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-50">
-                {tier.name}
+                {t.name}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {tier.desc}
+                {t.desc}
               </p>
               <div className="mt-4 mb-6">
                 <span className="text-4xl font-bold text-gray-900 dark:text-gray-50">
-                  {tier.price}
+                  {t.price}
                 </span>
-                {tier.period && (
+                {t.period && (
                   <span className="text-gray-500 dark:text-gray-400">
-                    {tier.period}
+                    {t.period}
                   </span>
                 )}
-                {tier.secondaryPrice && (
+                {t.secondaryPrice && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {tier.secondaryPrice}
+                    {t.secondaryPrice}
                   </p>
                 )}
               </div>
               <ul className="space-y-3 mb-8 flex-1">
-                {tier.features.map((f) => (
+                {t.features.map((f) => (
                   <li key={f} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <svg className="h-5 w-5 text-brand-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -273,14 +310,21 @@ export function HomePage() {
                   </li>
                 ))}
               </ul>
-              <Link to={tier.href}>
+              {t.tier ? (
                 <Button
-                  variant={tier.highlighted ? "primary" : "secondary"}
+                  variant={t.highlighted ? "primary" : "secondary"}
                   className="w-full"
+                  onClick={() => handleCheckout(t.tier!)}
                 >
-                  {tier.cta}
+                  {t.cta}
                 </Button>
-              </Link>
+              ) : (
+                <Link to="/signup">
+                  <Button variant="secondary" className="w-full">
+                    {t.cta}
+                  </Button>
+                </Link>
+              )}
             </div>
           ))}
         </div>
