@@ -3,6 +3,7 @@ import { requireAuth, optionalAuth } from "../middleware/auth.js";
 import { raceListQuerySchema } from "../utils/race-validators.js";
 import { prisma } from "../models/prisma.js";
 import * as raceSvc from "../services/races.js";
+import { AppError } from "../middleware/error-handler.js";
 
 export const racesRouter = Router();
 
@@ -102,34 +103,34 @@ racesRouter.get(
       const raceId = req.params.id;
       const chartData = await raceSvc.getChartData(raceId);
 
-      // Subscription gating: check access
-      const isAdmin = req.user?.role === "ADMIN";
-      if (!isAdmin) {
-        let hasPaidAccess = false;
+      // Access gating
+      const race = await prisma.race.findUnique({
+        where: { id: raceId },
+        select: { id: true, createdAt: true, premium: true },
+      });
+      if (race) {
+        let userPlan: string | null = null;
+        const userRole = req.user?.role ?? null;
         if (req.user?.userId) {
-          const subscription = await prisma.subscription.findUnique({
+          const sub = await prisma.subscription.findUnique({
             where: { userId: req.user.userId },
           });
-          if (subscription) {
-            const isPaid = subscription.plan === "PRO" || subscription.plan === "TEAM";
-            const isActive = subscription.status === "ACTIVE" || subscription.status === "TRIALING";
+          if (sub) {
+            const isActive = sub.status === "ACTIVE" || sub.status === "TRIALING";
             const inGracePeriod =
-              subscription.status === "CANCELED" &&
-              subscription.currentPeriodEnd &&
-              subscription.currentPeriodEnd > new Date();
-            hasPaidAccess = isPaid && (isActive || !!inGracePeriod);
+              sub.status === "CANCELED" &&
+              sub.currentPeriodEnd &&
+              sub.currentPeriodEnd > new Date();
+            userPlan = isActive || inGracePeriod ? sub.plan : null;
           }
         }
 
-        if (!hasPaidAccess) {
-          const isFree = await raceSvc.isFreeAccessRace(raceId);
-          if (!isFree) {
-            res.status(403).json({
-              error: "This race requires a Pro subscription or higher.",
-              code: "SUBSCRIPTION_REQUIRED",
-            });
-            return;
+        const access = await raceSvc.canUserAccessRace(race, userPlan, userRole);
+        if (!access.accessible) {
+          if (access.reason === "available_soon") {
+            throw new AppError(403, "This race will be available to free members shortly", "AVAILABLE_SOON");
           }
+          throw new AppError(403, "Upgrade to Pro to access the full race library", "INSUFFICIENT_TIER");
         }
       }
 
@@ -171,6 +172,19 @@ racesRouter.post(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (req.user!.role !== "ADMIN") {
+        const sub = await prisma.subscription.findUnique({
+          where: { userId: req.user!.userId },
+        });
+        if (!sub || sub.plan === "FREE") {
+          throw new AppError(
+            403,
+            "Favorites are a Pro feature — upgrade to save your favorite races",
+            "INSUFFICIENT_TIER"
+          );
+        }
+      }
+
       const isFavorited = await raceSvc.toggleFavorite(
         req.user!.userId,
         req.params.id

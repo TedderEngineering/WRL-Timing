@@ -2,13 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import { api, ApiClientError } from "../lib/api";
 import type { ChartDataResponse, RaceChartData, AnnotationData } from "@shared/types";
 
+export interface ChartDataError {
+  message: string;
+  code?: string;
+  status?: number;
+}
+
 interface UseChartDataResult {
   data: RaceChartData | null;
   annotations: AnnotationData | null;
   raceMeta: ChartDataResponse["race"] | null;
   isLoading: boolean;
-  error: string | null;
-  errorCode: string | null;
+  error: ChartDataError | null;
 }
 
 export function useChartData(raceId: string | undefined): UseChartDataResult {
@@ -16,14 +21,13 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
   const [annotations, setAnnotations] = useState<AnnotationData | null>(null);
   const [raceMeta, setRaceMeta] = useState<ChartDataResponse["race"] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [error, setError] = useState<ChartDataError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!raceId) {
       setIsLoading(false);
-      setError("No race ID provided");
+      setError({ message: "No race ID provided" });
       return;
     }
 
@@ -34,7 +38,6 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
 
     setIsLoading(true);
     setError(null);
-    setErrorCode(null);
 
     api
       .get<ChartDataResponse>(`/races/${raceId}/chart-data`)
@@ -47,9 +50,10 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setError(err.message || "Failed to load chart data");
         if (err instanceof ApiClientError) {
-          setErrorCode(err.code ?? null);
+          setError({ message: err.message, code: err.code, status: err.status });
+        } else {
+          setError({ message: err.message || "Failed to load chart data" });
         }
         setIsLoading(false);
       });
@@ -57,7 +61,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     return () => controller.abort();
   }, [raceId]);
 
-  return { data, annotations, raceMeta, isLoading, error, errorCode };
+  return { data, annotations, raceMeta, isLoading, error };
 }
 
 // ─── Race list fetching ──────────────────────────────────────────────────────
@@ -76,7 +80,7 @@ export interface RaceListItem {
   entryCount: number;
   favoriteCount: number;
   isFavorited: boolean;
-  freeAccess?: boolean;
+  accessibleToFree?: boolean;
   createdAt: string;
 }
 

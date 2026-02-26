@@ -14,11 +14,12 @@ interface RaceListParams {
   sortOrder: "asc" | "desc";
 }
 
-// ─── Free Access Races (top 3 most recent published) ────────────────────────
+// ─── Free Access Races (top 3 most recent published, >10 hrs old) ───────────
 
 export async function getFreeAccessRaceIds(): Promise<string[]> {
+  const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
   const races = await prisma.race.findMany({
-    where: { status: "PUBLISHED" },
+    where: { status: "PUBLISHED", createdAt: { lte: tenHoursAgo } },
     orderBy: { date: "desc" },
     take: 3,
     select: { id: true },
@@ -26,9 +27,34 @@ export async function getFreeAccessRaceIds(): Promise<string[]> {
   return races.map((r) => r.id);
 }
 
-export async function isFreeAccessRace(raceId: string): Promise<boolean> {
-  const ids = await getFreeAccessRaceIds();
-  return ids.includes(raceId);
+// ─── Access Check ───────────────────────────────────────────────────────────
+
+export async function canUserAccessRace(
+  race: { id: string; createdAt: Date; premium: boolean },
+  userPlan: string | null,
+  userRole: string | null
+): Promise<{ accessible: boolean; reason?: string }> {
+  if (userRole === "ADMIN") return { accessible: true };
+  if (userPlan === "PRO" || userPlan === "TEAM") return { accessible: true };
+
+  // FREE / no subscription: check 10-hour rule then top-3
+  const tenHoursAgo = new Date(Date.now() - 10 * 60 * 60 * 1000);
+  if (race.createdAt > tenHoursAgo) {
+    return { accessible: false, reason: "available_soon" };
+  }
+
+  const topThree = await prisma.race.findMany({
+    where: { status: "PUBLISHED", createdAt: { lte: tenHoursAgo } },
+    orderBy: { date: "desc" },
+    take: 3,
+    select: { id: true },
+  });
+
+  if (topThree.some((r) => r.id === race.id)) {
+    return { accessible: true };
+  }
+
+  return { accessible: false, reason: "pro_required" };
 }
 
 // ─── List Races ──────────────────────────────────────────────────────────────
@@ -103,7 +129,7 @@ export async function listRaces(params: RaceListParams, userId?: string) {
       entryCount: r._count.entries,
       favoriteCount: r._count.favorites,
       isFavorited: userId ? r.favorites?.length > 0 : false,
-      freeAccess: freeAccessIds.includes(r.id),
+      accessibleToFree: freeAccessIds.includes(r.id),
       createdAt: r.createdAt.toISOString(),
     })),
     total,

@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 export function RaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { isAuthenticated, user } = useAuth();
-  const { data, annotations, raceMeta, isLoading, error, errorCode } = useChartData(id);
+  const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
 
   // Fetch favorite status from race detail endpoint
@@ -40,57 +40,108 @@ export function RaceDetailPage() {
     );
   }
 
-  // ── Subscription required overlay ────────────────────────────────
-  if (errorCode === "SUBSCRIPTION_REQUIRED") {
-    return (
-      <div className="container-page py-20 text-center">
-        <div className="max-w-md mx-auto">
-          <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-6">
-            <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-3">
-            Pro Access Required
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
-            This race chart is available to Pro and Team subscribers. Upgrade your plan to unlock full access to every race in the library.
+  // ── Error ───────────────────────────────────────────────────────
+  if (error || !data || !annotations || !raceMeta) {
+    const cardClass = "bg-gray-800 border border-gray-700 rounded-xl p-8 text-center max-w-md mx-auto mt-12";
+
+    let errorContent: React.ReactNode;
+
+    if (error?.code === "AVAILABLE_SOON") {
+      errorContent = (
+        <div className={cardClass}>
+          <svg className="h-12 w-12 text-indigo-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2 className="text-xl font-semibold text-white">Almost there</h2>
+          <p className="text-gray-400 mt-2">
+            This race analysis is being prepared and will be available to free members shortly. Pro members get instant access to every race.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              to="/pricing"
-              className="inline-block px-6 py-3 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 transition-colors"
-            >
-              View Plans
-            </Link>
-            <Link
-              to="/races"
-              className="inline-block px-6 py-3 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Back to Races
+          <Link
+            to="/settings/billing"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-5 inline-block transition-colors"
+          >
+            Get Instant Access
+          </Link>
+          <div className="mt-3">
+            <Link to="/races" className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
+              Browse available races
             </Link>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    } else if (error?.code === "INSUFFICIENT_TIER") {
+      errorContent = (
+        <div className={cardClass}>
+          <svg className="h-12 w-12 text-indigo-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+          </svg>
+          <h2 className="text-xl font-semibold text-white">Go deeper with Pro</h2>
+          <p className="text-gray-400 mt-2">
+            Unlock this race and the entire library of race analytics. See position battles, pit strategy impact, and performance trends across full seasons.
+          </p>
+          <Link
+            to="/settings/billing"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-5 inline-block transition-colors"
+          >
+            Upgrade to Pro
+          </Link>
+          <div className="mt-3">
+            <Link to="/races" className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
+              Browse free races
+            </Link>
+          </div>
+        </div>
+      );
+    } else if (error?.status === 401) {
+      errorContent = (
+        <div className={cardClass}>
+          <svg className="h-12 w-12 text-gray-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          <h2 className="text-xl font-semibold text-white">Sign in to continue</h2>
+          <p className="text-gray-400 mt-2">
+            Create a free account to start exploring race analytics.
+          </p>
+          <Link
+            to="/login"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-5 inline-block transition-colors"
+          >
+            Sign In
+          </Link>
+        </div>
+      );
+    } else {
+      errorContent = (
+        <div className="text-center mt-12">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-4">
+            {error?.message === "Race not found" ? "Race Not Found" : "Error Loading Race"}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {error?.message || "The chart data could not be loaded."}
+          </p>
+          <Link
+            to="/races"
+            className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
+          >
+            Back to races
+          </Link>
+        </div>
+      );
+    }
 
-  // ── Error ───────────────────────────────────────────────────────
-  if (error || !data || !annotations || !raceMeta) {
     return (
-      <div className="container-page py-20 text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-4">
-          {error === "Race not found" ? "Race Not Found" : "Error Loading Race"}
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
-          {error || "The chart data could not be loaded."}
-        </p>
-        <Link
-          to="/races"
-          className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
-        >
-          Back to races
-        </Link>
+      <div className="container-page py-20">
+        {raceMeta && (
+          <div className="mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
+              {raceMeta.name}
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {raceMeta.track} · {raceMeta.series} {raceMeta.season}
+            </p>
+          </div>
+        )}
+        {errorContent}
       </div>
     );
   }
