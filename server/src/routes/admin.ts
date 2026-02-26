@@ -555,14 +555,14 @@ adminRouter.put(
         }
       }
 
-      const race = await raceSvc.updateRace(req.params.id, updateData);
+      const race = await raceSvc.updateRace(req.params.id as string, updateData);
 
       await prisma.auditLog.create({
         data: {
           adminUserId: req.user!.userId,
           action: "UPDATE_RACE",
           targetType: "race",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
           details: updateData,
         },
       });
@@ -580,19 +580,19 @@ adminRouter.delete(
   "/races/:id",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const race = await raceSvc.deleteRace(req.params.id);
+      const race = await raceSvc.deleteRace(req.params.id as string);
 
       await prisma.auditLog.create({
         data: {
           adminUserId: req.user!.userId,
           action: "DELETE_RACE",
           targetType: "race",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
           details: { name: race.name, track: race.track },
         },
       });
 
-      res.json({ message: "Race deleted", id: req.params.id });
+      res.json({ message: "Race deleted", id: req.params.id as string });
     } catch (err) {
       next(err);
     }
@@ -605,14 +605,14 @@ adminRouter.post(
   "/races/:id/reprocess",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await raceIngest.reprocessRace(req.params.id);
+      const result = await raceIngest.reprocessRace(req.params.id as string);
 
       await prisma.auditLog.create({
         data: {
           adminUserId: req.user!.userId,
           action: "REPROCESS_RACE",
           targetType: "race",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
           details: {
             entries: result.entriesCreated,
             laps: result.lapsCreated,
@@ -636,7 +636,7 @@ adminRouter.post(
   "/races/:id/reparse",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const race = await prisma.race.findUnique({ where: { id: req.params.id } });
+      const race = await prisma.race.findUnique({ where: { id: req.params.id as string } });
       if (!race) throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
 
       const sourceFiles = race.sourceFiles as Record<string, string> | null;
@@ -715,14 +715,14 @@ adminRouter.put(
         throw new AppError(400, 'Status must be "DRAFT" or "PUBLISHED"', "INVALID_STATUS");
       }
 
-      await raceSvc.updateRace(req.params.id, { status });
+      await raceSvc.updateRace(req.params.id as string, { status });
 
       await prisma.auditLog.create({
         data: {
           adminUserId: req.user!.userId,
           action: status === "PUBLISHED" ? "PUBLISH_RACE" : "UNPUBLISH_RACE",
           targetType: "race",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
         },
       });
 
@@ -743,10 +743,12 @@ adminRouter.get(
         prisma.user.count(),
         prisma.subscription.groupBy({
           by: ["plan"],
+          orderBy: { plan: "asc" },
           _count: { plan: true },
         }),
         prisma.race.groupBy({
           by: ["status"],
+          orderBy: { status: "asc" },
           _count: { status: true },
         }),
       ]);
@@ -754,10 +756,10 @@ adminRouter.get(
       res.json({
         totalUsers: userCount,
         subscriptions: Object.fromEntries(
-          subCounts.map((s) => [s.plan, s._count.plan])
+          subCounts.map((s) => [s.plan, (s._count as { plan: number }).plan])
         ),
         races: Object.fromEntries(
-          raceCounts.map((r) => [r.status, r._count.status])
+          raceCounts.map((r) => [r.status, (r._count as { status: number }).status])
         ),
       });
     } catch (err) {
@@ -883,7 +885,7 @@ adminRouter.put(
   "/users/:id/suspend",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+      const target = await prisma.user.findUnique({ where: { id: req.params.id as string } });
       if (!target) throw new AppError(404, "User not found", "USER_NOT_FOUND");
       if (target.id === req.user!.userId) {
         throw new AppError(400, "Cannot suspend yourself", "SELF_SUSPEND");
@@ -891,7 +893,7 @@ adminRouter.put(
 
       const isSuspended = !!target.suspendedAt;
       await prisma.user.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { suspendedAt: isSuspended ? null : new Date() },
       });
 
@@ -900,7 +902,7 @@ adminRouter.put(
           adminUserId: req.user!.userId,
           action: isSuspended ? "UNSUSPEND_USER" : "SUSPEND_USER",
           targetType: "user",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
           details: { email: target.email },
         },
       });
@@ -926,14 +928,14 @@ adminRouter.put(
         throw new AppError(400, 'Role must be "USER" or "ADMIN"', "INVALID_ROLE");
       }
 
-      const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+      const target = await prisma.user.findUnique({ where: { id: req.params.id as string } });
       if (!target) throw new AppError(404, "User not found", "USER_NOT_FOUND");
       if (target.id === req.user!.userId && role !== "ADMIN") {
         throw new AppError(400, "Cannot demote yourself", "SELF_DEMOTE");
       }
 
       await prisma.user.update({
-        where: { id: req.params.id },
+        where: { id: req.params.id as string },
         data: { role },
       });
 
@@ -942,7 +944,7 @@ adminRouter.put(
           adminUserId: req.user!.userId,
           action: role === "ADMIN" ? "PROMOTE_ADMIN" : "DEMOTE_USER",
           targetType: "user",
-          targetId: req.params.id,
+          targetId: req.params.id as string,
           details: { email: target.email, newRole: role },
         },
       });

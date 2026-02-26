@@ -17,6 +17,8 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
+  STRIPE_PRO_PRICE_ID: z.string().startsWith("price_"),
+  STRIPE_TEAM_PRICE_ID: z.string().startsWith("price_"),
   STRIPE_PRICE_PRO_ANNUAL: z.string().optional(),
   STRIPE_PRICE_TEAM_ANNUAL: z.string().optional(),
 
@@ -51,6 +53,8 @@ const parseEnv = () => {
         STRIPE_SECRET_KEY: z.string().default("sk_test_placeholder"),
         STRIPE_PUBLISHABLE_KEY: z.string().default("pk_test_placeholder"),
         STRIPE_WEBHOOK_SECRET: z.string().default("whsec_placeholder"),
+        STRIPE_PRO_PRICE_ID: z.string().default("price_pro_placeholder"),
+        STRIPE_TEAM_PRICE_ID: z.string().default("price_team_placeholder"),
         STRIPE_PRICE_PRO_ANNUAL: z.string().default("price_pro_placeholder"),
         STRIPE_PRICE_TEAM_ANNUAL: z.string().default("price_team_placeholder"),
       })

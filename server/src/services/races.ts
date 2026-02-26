@@ -426,7 +426,7 @@ export async function getRecentlyViewed(userId: string, limit = 8) {
       _count: { select: { entries: true, laps: true, favorites: true } },
       favorites: {
         where: { userId },
-        select: { id: true },
+        select: { userId: true },
       },
     },
   });

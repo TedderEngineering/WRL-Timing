@@ -1,8 +1,15 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { api } from "../lib/api";
 import { Button } from "../components/Button";
+import { Alert } from "../components/Alert";
 import { cn } from "../lib/utils";
+
+const PRICE_IDS: Record<string, string | undefined> = {
+  PRO: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
+  TEAM: import.meta.env.VITE_STRIPE_TEAM_PRICE_ID,
+};
 
 const TIERS = [
   {
@@ -73,6 +80,7 @@ function CellValue({ value }: { value: string | boolean }) {
 export function PricingPage() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
   const currentPlan = user?.subscription?.plan ?? "FREE";
 
@@ -81,11 +89,19 @@ export function PricingPage() {
       navigate("/signup");
       return;
     }
+    setError(null);
+
+    const priceId = PRICE_IDS[tier];
+    if (!priceId) {
+      setError(`No price configured for ${tier} plan.`);
+      return;
+    }
+
     try {
-      const { url } = await api.post<{ url: string }>("/billing/create-checkout-session", { tier });
+      const { url } = await api.post<{ url: string }>("/billing/create-checkout-session", { priceId });
       window.location.href = url;
     } catch (err: any) {
-      alert(err.message || "Failed to start checkout");
+      setError(err.message || "Failed to start checkout. Please try again.");
     }
   }
 
@@ -100,6 +116,12 @@ export function PricingPage() {
           Start free. Upgrade anytime for full access to every race in the library.
         </p>
       </div>
+
+      {error && (
+        <div className="max-w-5xl mx-auto mb-6">
+          <Alert variant="error">{error}</Alert>
+        </div>
+      )}
 
       {/* Tier cards */}
       <div className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto mb-20">

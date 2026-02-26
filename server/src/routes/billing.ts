@@ -3,6 +3,7 @@ import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { stripe } from "../lib/stripe.js";
 import { env } from "../config/env.js";
+import { prisma } from "../models/prisma.js";
 import * as billingSvc from "../services/billing.js";
 
 export const billingRouter = Router();
@@ -39,17 +40,51 @@ billingRouter.post(
 billingRouter.post(
   "/create-checkout-session",
   requireAuth,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response) => {
     try {
-      const tier = req.body?.tier;
-      if (tier !== "PRO" && tier !== "TEAM") {
-        res.status(400).json({ error: "Invalid tier. Must be PRO or TEAM.", code: "INVALID_TIER" });
+      const { priceId } = req.body as { priceId: string };
+      if (!priceId) {
+        res.status(400).json({ error: "priceId is required" });
         return;
       }
-      const url = await billingSvc.createCheckoutSession(req.user!.userId, tier);
-      res.json({ url });
-    } catch (err) {
-      next(err);
+
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        include: { subscription: true },
+      });
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      // Get or create Stripe customer
+      let customerId = user.subscription?.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id;
+
+        await prisma.subscription.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, stripeCustomerId: customerId, plan: "FREE", status: "ACTIVE" },
+          update: { stripeCustomerId: customerId },
+        });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${env.FRONTEND_URL}/pricing?success=true`,
+        cancel_url: `${env.FRONTEND_URL}/pricing?canceled=true`,
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Checkout session error:", err.message);
+      res.status(500).json({ error: err.message });
     }
   }
 );

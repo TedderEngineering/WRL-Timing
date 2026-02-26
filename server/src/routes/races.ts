@@ -80,7 +80,7 @@ racesRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const race = await raceSvc.getRaceDetail(req.params.id, req.user?.userId);
+      const race = await raceSvc.getRaceDetail(req.params.id as string, req.user?.userId);
       // Non-admin can't see drafts
       if (race.status === "DRAFT" && req.user?.role !== "ADMIN") {
         res.status(404).json({ error: "Race not found", code: "RACE_NOT_FOUND" });
@@ -100,7 +100,7 @@ racesRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const raceId = req.params.id;
+      const raceId = req.params.id as string;
       const chartData = await raceSvc.getChartData(raceId);
 
       // Access gating
@@ -157,7 +157,7 @@ racesRouter.get(
   "/:id/entries",
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const entries = await raceSvc.getRaceEntries(req.params.id);
+      const entries = await raceSvc.getRaceEntries(req.params.id as string);
       res.json({ entries });
     } catch (err) {
       next(err);
@@ -187,7 +187,7 @@ racesRouter.post(
 
       const isFavorited = await raceSvc.toggleFavorite(
         req.user!.userId,
-        req.params.id
+        req.params.id as string
       );
       res.json({ isFavorited });
     } catch (err) {
