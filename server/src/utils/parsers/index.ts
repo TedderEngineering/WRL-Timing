@@ -12,9 +12,11 @@ import type { RaceDataParser } from "./types.js";
 import { speedhiveParser } from "./speedhive.js";
 import { imsaParser } from "./imsa.js";
 import { sroParser } from "./sro.js";
+import { wrlWebsiteParser } from "./wrl-website.js";
 
 const PARSERS: RaceDataParser[] = [
   speedhiveParser,
+  wrlWebsiteParser,
   imsaParser,
   sroParser,
 ];
