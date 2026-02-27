@@ -12,7 +12,10 @@ interface SendEmailParams {
  */
 async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
   if (!env.RESEND_API_KEY || env.NODE_ENV === "development") {
-    console.log("─── Email (dev mode) ───────────────────────");
+    if (!env.RESEND_API_KEY && env.NODE_ENV === "production") {
+      console.error("⚠️ RESEND_API_KEY not set — email not sent. Set it in Railway environment variables.");
+    }
+    console.log("─── Email (not sent) ───────────────────────");
     console.log(`To: ${to}`);
     console.log(`Subject: ${subject}`);
     console.log(`Body:\n${html}`);

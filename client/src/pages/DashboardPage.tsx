@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Alert } from "../components/Alert";
@@ -64,6 +64,24 @@ export function DashboardPage() {
 
   const isFree = !user?.subscription?.plan || user.subscription.plan === "FREE";
 
+  // Resend verification email
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "rate-limited" | "error">("idle");
+  const handleResend = useCallback(async () => {
+    setResendStatus("sending");
+    try {
+      await api.post("/auth/resend-verification");
+      setResendStatus("sent");
+      setTimeout(() => setResendStatus("idle"), 60_000);
+    } catch (err: any) {
+      if (err?.code === "RATE_LIMITED" || err?.status === 429) {
+        setResendStatus("rate-limited");
+        setTimeout(() => setResendStatus("idle"), 60_000);
+      } else {
+        setResendStatus("error");
+      }
+    }
+  }, []);
+
   // Featured race = most recent
   const featured = latestRaces[0] || null;
   // Races they haven't viewed yet
@@ -86,7 +104,20 @@ export function DashboardPage() {
 
       {user && !user.emailVerified && (
         <Alert variant="warning">
-          Your email hasn't been verified yet. Check your inbox for a verification link.
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>Your email hasn't been verified yet. Check your inbox for a verification link.</span>
+            <button
+              onClick={handleResend}
+              disabled={resendStatus === "sending" || resendStatus === "sent" || resendStatus === "rate-limited"}
+              className="shrink-0 px-3 py-1 text-xs font-medium rounded-md border border-amber-600 dark:border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {resendStatus === "sending" && "Sending..."}
+              {resendStatus === "sent" && "Verification email sent!"}
+              {resendStatus === "rate-limited" && "Please wait before requesting another email"}
+              {resendStatus === "error" && "Failed to send — try again"}
+              {resendStatus === "idle" && "Resend verification email"}
+            </button>
+          </div>
         </Alert>
       )}
 

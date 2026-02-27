@@ -17,6 +17,24 @@ export function AccountSettingsPage() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Email verification resend
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "rate-limited" | "error">("idle");
+  const handleResend = async () => {
+    setResendStatus("sending");
+    try {
+      await api.post("/auth/resend-verification");
+      setResendStatus("sent");
+      setTimeout(() => setResendStatus("idle"), 60_000);
+    } catch (err: any) {
+      if (err?.code === "RATE_LIMITED" || err?.status === 429) {
+        setResendStatus("rate-limited");
+        setTimeout(() => setResendStatus("idle"), 60_000);
+      } else {
+        setResendStatus("error");
+      }
+    }
+  };
+
   // Delete
   const [showDelete, setShowDelete] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
@@ -71,6 +89,31 @@ export function AccountSettingsPage() {
           disabled
           className="w-full px-3 py-2 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-900/50 text-sm text-gray-500 cursor-not-allowed"
         />
+        {user?.emailVerified ? (
+          <p className="text-xs text-green-600 dark:text-green-400 mt-1.5 flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Email verified
+          </p>
+        ) : (
+          <div className="mt-1.5">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-amber-600 dark:text-amber-400">Your email is not yet verified.</p>
+              <button
+                onClick={handleResend}
+                disabled={resendStatus === "sending" || resendStatus === "sent" || resendStatus === "rate-limited"}
+                className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+              >
+                {resendStatus === "sending" && "Sending..."}
+                {resendStatus === "sent" && "Verification email sent!"}
+                {resendStatus === "rate-limited" && "Please wait before requesting another email"}
+                {resendStatus === "error" && "Failed to send — try again"}
+                {resendStatus === "idle" && "Resend verification email"}
+            </button>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-gray-400 mt-1">
           Contact support to change your email address.
         </p>
