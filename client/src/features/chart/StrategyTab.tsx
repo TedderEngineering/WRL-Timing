@@ -114,7 +114,7 @@ export function StrategyTab({
 
   // Determine active class
   const classes = Object.keys(data.classGroups).sort();
-  const activeClass = classView || classes[0] || "";
+  const activeClass = classView; // "" means all classes
 
   // Filter by class
   const classMetrics = useMemo(
@@ -137,7 +137,7 @@ export function StrategyTab({
 
   // Insights for active class
   const insights = useMemo(
-    () => allInsights.filter((i) => i.cls === activeClass),
+    () => activeClass ? allInsights.filter((i) => i.cls === activeClass) : allInsights,
     [allInsights, activeClass],
   );
 
@@ -183,6 +183,28 @@ export function StrategyTab({
 
       {/* ── Class tabs (pills) ───────────────────────────────────── */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        <button
+          onClick={() => {
+            setClassView("");
+            setSelectedCar(null);
+            setSortKey("classPos");
+            setSortDir("asc");
+          }}
+          style={{
+            padding: "6px 16px",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            fontFamily: "'JetBrains Mono', monospace",
+            background: activeClass === "" ? S.acc : S.bg2,
+            border: `1px solid ${activeClass === "" ? S.acc : S.bdr}`,
+            color: activeClass === "" ? "#fff" : S.dim,
+            transition: "all .2s",
+          }}
+        >
+          All
+        </button>
         {classes.map((cls) => {
           const isActive = cls === activeClass;
           return (
@@ -242,7 +264,7 @@ export function StrategyTab({
       <div style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
         Strategy Leaderboard
         <span style={{ fontSize: "0.72rem", color: S.dim, fontWeight: 400 }}>
-          — {rows.length} cars in {activeClass}
+          — {rows.length} cars{activeClass ? ` in ${activeClass}` : ""}
         </span>
         <span style={{ flex: 1, height: 1, background: S.bdr }} />
       </div>
@@ -530,7 +552,7 @@ function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
           background: "rgba(34,197,94,0.15)",
           color: S.grn,
         }}>
-          P{m.classPos} in {activeClass}
+          P{m.classPos}{activeClass ? ` in ${activeClass}` : ` in ${m.cls}`}
         </span>
         <button
           onClick={onGoToTrace}
