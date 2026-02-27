@@ -1,11 +1,17 @@
 import { useMemo, useState } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
-import { CHART_STYLE, CLASS_COLORS } from "./constants";
-import { computeStrategyMetrics, type StrategyMetrics } from "./strategy-engine";
+import { CLASS_COLORS } from "./constants";
+import {
+  computeStrategyMetrics,
+  computeRaceConditions,
+  computeClassStats,
+  computeInsights,
+  type StrategyMetrics,
+  type StintData,
+} from "./strategy-engine";
 
 // ─── Format helpers ─────────────────────────────────────────────────────────
 
-/** Seconds → M:SS.m (one decimal on fractional seconds) */
 function fmtPace(s: number): string {
   if (!s) return "—";
   const m = Math.floor(s / 60);
@@ -13,51 +19,68 @@ function fmtPace(s: number): string {
   return m + ":" + sec.toFixed(1).padStart(4, "0");
 }
 
-/** Seconds → M:SS (whole seconds) */
-function fmtPit(s: number): string {
+function fmtPaceFull(s: number): string {
   if (!s) return "—";
   const m = Math.floor(s / 60);
-  const sec = Math.round(s - m * 60);
-  return m + ":" + String(sec).padStart(2, "0");
+  const sec = s - m * 60;
+  return m + ":" + sec.toFixed(3).padStart(6, "0");
 }
 
-/** Seconds → SS.m (one decimal, no minutes) */
-function fmtAvgPit(s: number): string {
+function fmtTime(s: number): string {
   if (!s) return "—";
-  return s.toFixed(1);
+  const m = Math.floor(s / 60);
+  const sec = s - m * 60;
+  return m + ":" + sec.toFixed(3).padStart(6, "0");
 }
 
-/** Percentage with 0 decimals */
-function fmtPct(v: number): string {
-  return Math.round(v) + "%";
-}
+// ─── Table column definitions ───────────────────────────────────────────────
 
-// ─── Column definitions ─────────────────────────────────────────────────────
-
-type SortKey = keyof StrategyMetrics;
+type SortKey = string;
 
 interface Column {
   key: SortKey;
   label: string;
-  shortLabel?: string;
+  getValue: (m: StrategyMetrics) => number | string;
   fmt: (m: StrategyMetrics) => string;
-  align: "left" | "right";
-  mono: boolean;
+  type: "num" | "str";
+  defaultDir: "asc" | "desc";
   width?: string;
 }
 
 const COLUMNS: Column[] = [
-  { key: "classPos", label: "Pos", fmt: (m) => `P${m.classPos}`, align: "right", mono: true, width: "48px" },
-  { key: "carNum", label: "Car #", fmt: (m) => `#${m.carNum}`, align: "left", mono: true, width: "60px" },
-  { key: "team", label: "Team", fmt: (m) => m.team, align: "left", mono: false },
-  { key: "stintCount", label: "Stints", fmt: (m) => String(m.stintCount), align: "right", mono: true, width: "56px" },
-  { key: "avgGreenPace", label: "Avg Pace", fmt: (m) => fmtPace(m.avgGreenPace), align: "right", mono: true, width: "80px" },
-  { key: "bestLap", label: "Best Lap", fmt: (m) => fmtPace(m.bestLap), align: "right", mono: true, width: "80px" },
-  { key: "totalPitTime", label: "Pit Time", fmt: (m) => fmtPit(m.totalPitTime), align: "right", mono: true, width: "72px" },
-  { key: "avgPitDuration", label: "Avg Pit", shortLabel: "Avg Pit", fmt: (m) => fmtAvgPit(m.avgPitDuration), align: "right", mono: true, width: "64px" },
-  { key: "yellowPitPct", label: "Yel Pits", fmt: (m) => fmtPct(m.yellowPitPct), align: "right", mono: true, width: "68px" },
-  { key: "strategyScore", label: "Score", fmt: (m) => String(m.strategyScore), align: "right", mono: true, width: "56px" },
+  { key: "classPos", label: "Pos", getValue: (m) => m.classPos, fmt: (m) => `P${m.classPos}`, type: "num", defaultDir: "asc", width: "48px" },
+  { key: "carNum", label: "Car", getValue: (m) => m.carNum, fmt: (m) => `#${m.carNum}`, type: "num", defaultDir: "asc", width: "56px" },
+  { key: "team", label: "Team", getValue: (m) => m.team, fmt: (m) => m.team, type: "str", defaultDir: "asc" },
+  { key: "lapsCompleted", label: "Laps", getValue: (m) => m.lapsCompleted, fmt: (m) => String(m.lapsCompleted), type: "num", defaultDir: "desc", width: "52px" },
+  { key: "stintCount", label: "Stops", getValue: (m) => m.stintCount - 1, fmt: (m) => String(m.stintCount - 1), type: "num", defaultDir: "asc", width: "52px" },
+  { key: "avgGreenPace", label: "Avg Pace", getValue: (m) => m.avgGreenPace || 99999, fmt: (m) => fmtPace(m.avgGreenPace), type: "num", defaultDir: "asc", width: "80px" },
+  { key: "bestLap", label: "Best Lap", getValue: (m) => m.bestLap || 99999, fmt: (m) => fmtPace(m.bestLap), type: "num", defaultDir: "asc", width: "80px" },
+  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => fmtTime(m.totalPitTime), type: "num", defaultDir: "asc", width: "80px" },
+  { key: "pitPct", label: "Pit %", getValue: (m) => m.pitPct, fmt: (m) => m.pitPct.toFixed(1) + "%", type: "num", defaultDir: "asc", width: "56px" },
+  { key: "yellowPitPct", label: "Yellow Pits", getValue: (m) => m.yellowPitPct, fmt: (m) => m.yellowPitPct.toFixed(0) + "%", type: "num", defaultDir: "desc", width: "76px" },
+  { key: "avgStintLen", label: "Avg Stint", getValue: (m) => m.avgStintLen, fmt: (m) => m.avgStintLen.toFixed(1) + "L", type: "num", defaultDir: "desc", width: "68px" },
+  { key: "maxStintLen", label: "Max Stint", getValue: (m) => m.maxStintLen, fmt: (m) => m.maxStintLen + "L", type: "num", defaultDir: "desc", width: "68px" },
+  { key: "strategyScore", label: "Strategy Score", getValue: (m) => m.strategyScore, fmt: (m) => m.strategyScore.toFixed(1), type: "num", defaultDir: "desc", width: "130px" },
 ];
+
+// ─── Inline style constants (matching reference design) ─────────────────────
+
+const S = {
+  bg: "#07080e",
+  bg2: "#0c0e18",
+  card: "#111425",
+  bdr: "#1a1e36",
+  bdr2: "#262b4a",
+  txt: "#d0d4e8",
+  txt2: "#8890b5",
+  dim: "#555e88",
+  acc: "#4a9eff",
+  acc2: "#7b61ff",
+  grn: "#22c55e",
+  yel: "#eab308",
+  red: "#ef4444",
+  pit: "#ff6b9d",
+} as const;
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -76,109 +99,201 @@ interface StrategyTabProps {
 export function StrategyTab({
   data, annotations,
   classView, setClassView,
-  focusNum, setFocusNum,
+  setFocusNum,
   onSwitchToTrace,
 }: StrategyTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>("classPos");
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selectedCar, setSelectedCar] = useState<number | null>(null);
 
-  // Compute all metrics once
-  const allMetrics = useMemo(
-    () => computeStrategyMetrics(data, annotations),
-    [data, annotations],
+  // Compute all data
+  const allMetrics = useMemo(() => computeStrategyMetrics(data, annotations), [data, annotations]);
+  const conditions = useMemo(() => computeRaceConditions(data), [data]);
+  const classStats = useMemo(() => computeClassStats(data, allMetrics), [data, allMetrics]);
+  const allInsights = useMemo(() => computeInsights(data, allMetrics), [data, allMetrics]);
+
+  // Determine active class
+  const classes = Object.keys(data.classGroups).sort();
+  const activeClass = classView || classes[0] || "";
+
+  // Filter by class
+  const classMetrics = useMemo(
+    () => activeClass ? allMetrics.filter((m) => m.cls === activeClass) : allMetrics,
+    [allMetrics, activeClass],
   );
 
-  // Filter by class and sort
+  // Sort
   const rows = useMemo(() => {
-    let filtered = classView
-      ? allMetrics.filter((m) => m.cls === classView)
-      : allMetrics;
-
-    const sorted = [...filtered].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (typeof av === "string" && typeof bv === "string") {
-        return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-      }
-      const na = av as number;
-      const nb = bv as number;
-      return sortAsc ? na - nb : nb - na;
+    const col = COLUMNS.find((c) => c.key === sortKey);
+    if (!col) return classMetrics;
+    return [...classMetrics].sort((a, b) => {
+      const av = col.getValue(a);
+      const bv = col.getValue(b);
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (typeof av === "string" && typeof bv === "string") return dir * av.localeCompare(bv);
+      return dir * ((av as number) - (bv as number));
     });
-    return sorted;
-  }, [allMetrics, classView, sortKey, sortAsc]);
+  }, [classMetrics, sortKey, sortDir]);
+
+  // Insights for active class
+  const insights = useMemo(
+    () => allInsights.filter((i) => i.cls === activeClass),
+    [allInsights, activeClass],
+  );
+
+  const stats = classStats[activeClass];
+  const selectedMetrics = selectedCar != null ? allMetrics.find((m) => m.carNum === selectedCar) : null;
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
-      setSortAsc((prev) => !prev);
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
+      const col = COLUMNS.find((c) => c.key === key);
       setSortKey(key);
-      setSortAsc(true);
+      setSortDir(col?.defaultDir ?? "asc");
     }
   };
 
   const handleRowClick = (carNum: number) => {
+    setSelectedCar(selectedCar === carNum ? null : carNum);
+  };
+
+  const handleGoToTrace = (carNum: number) => {
     setFocusNum(carNum);
     onSwitchToTrace();
   };
 
   return (
-    <div className="flex flex-col gap-1.5" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* Class selector */}
-      <div className="px-1">
-        <div className="shrink-0" style={{ minWidth: 140, maxWidth: 240 }}>
-          <label
-            className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5"
-            style={{ color: CHART_STYLE.muted }}
-          >
-            Class View
-          </label>
-          <select
-            value={classView}
-            onChange={(e) => setClassView(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md text-sm font-mono text-white border cursor-pointer appearance-none"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            <option value="">All Classes ({data.totalCars})</option>
-            {Object.entries(data.classGroups)
-              .sort()
-              .map(([cls, cars]) => (
-                <option key={cls} value={cls}>
-                  {cls} ({cars.length} cars)
-                </option>
-              ))}
-          </select>
-        </div>
+    <div style={{ color: S.txt, fontFamily: "'Outfit', system-ui, sans-serif" }}>
+      {/* ── Conditions cards ─────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
+        <CondCard label="Total Cars" value={String(data.totalCars)} color={S.acc} />
+        <CondCard label="Leader Laps" value={String(conditions.totalLaps)} color={S.acc} />
+        <CondCard label="Green Laps" value={`${conditions.greenLaps} (${(100 - conditions.pctYellow).toFixed(0)}%)`} color={S.grn} />
+        <CondCard label="Yellow Laps" value={`${conditions.yellowLaps} (${conditions.pctYellow.toFixed(0)}%)`} color={S.yel} />
+        {stats && (
+          <>
+            <CondCard label={`${activeClass} Cars`} value={String(stats.count)} color={S.acc} />
+            <CondCard label={`${activeClass} Best Pace`} value={fmtPaceFull(stats.bestPace)} color={S.grn} mono />
+            <CondCard label={`${activeClass} Avg Stops`} value={stats.avgStops.toFixed(1)} color={S.acc} />
+            <CondCard label={`${activeClass} Avg Stint`} value={stats.avgStint.toFixed(1) + "L"} color={S.acc} />
+          </>
+        )}
       </div>
 
-      {/* Table */}
+      {/* ── Class tabs (pills) ───────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {classes.map((cls) => {
+          const isActive = cls === activeClass;
+          return (
+            <button
+              key={cls}
+              onClick={() => {
+                setClassView(cls);
+                setSelectedCar(null);
+                setSortKey("classPos");
+                setSortDir("asc");
+              }}
+              style={{
+                padding: "6px 16px",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                background: isActive ? (CLASS_COLORS[cls] || S.acc) : S.bg2,
+                border: `1px solid ${isActive ? (CLASS_COLORS[cls] || S.acc) : S.bdr}`,
+                color: isActive ? "#fff" : S.dim,
+                transition: "all .2s",
+              }}
+            >
+              {cls}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Insights ─────────────────────────────────────────────── */}
+      {insights.length > 0 && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 24 }}>
+          {insights.map((ins, i) => (
+            <div
+              key={i}
+              style={{
+                background: S.card,
+                border: `1px solid ${S.bdr}`,
+                borderRadius: 10,
+                padding: "14px 18px",
+                borderLeft: `3px solid ${S.acc2}`,
+              }}
+            >
+              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: S.acc, marginBottom: 4 }}>
+                {ins.title}
+              </div>
+              <div style={{ fontSize: "0.82rem", color: S.txt2, lineHeight: 1.55 }}>
+                {ins.text}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Strategy Leaderboard header ──────────────────────────── */}
+      <div style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+        Strategy Leaderboard
+        <span style={{ fontSize: "0.72rem", color: S.dim, fontWeight: 400 }}>
+          — {rows.length} cars in {activeClass}
+        </span>
+        <span style={{ flex: 1, height: 1, background: S.bdr }} />
+      </div>
+
+      {/* ── Table ────────────────────────────────────────────────── */}
       <div
-        className="rounded-lg border overflow-x-auto"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
+        style={{
+          overflowX: "auto",
+          marginBottom: 24,
+          borderRadius: 10,
+          border: `1px solid ${S.bdr}`,
+        }}
       >
-        <table className="w-full border-collapse" style={{ minWidth: 720 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
           <thead>
-            <tr style={{ borderBottom: `1px solid ${CHART_STYLE.border}` }}>
+            <tr>
               {COLUMNS.map((col) => {
-                const active = sortKey === col.key;
+                const isSorted = sortKey === col.key;
                 return (
                   <th
                     key={col.key}
                     onClick={() => handleSort(col.key)}
-                    className="px-2 py-2 text-[11px] uppercase tracking-wider font-semibold cursor-pointer select-none whitespace-nowrap"
                     style={{
-                      textAlign: col.align,
-                      color: active ? CHART_STYLE.text : CHART_STYLE.muted,
-                      background: active ? CHART_STYLE.border + "60" : undefined,
+                      background: S.bg2,
+                      color: isSorted ? S.acc : S.txt2,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      fontSize: "0.68rem",
+                      padding: "10px 12px",
+                      textAlign: "left",
+                      whiteSpace: "nowrap",
+                      borderBottom: `1px solid ${S.bdr2}`,
+                      cursor: "pointer",
+                      userSelect: "none",
                       width: col.width,
+                      transition: "color .15s",
                     }}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {col.shortLabel ?? col.label}
-                      {active && (
-                        <span style={{ fontSize: 9 }}>
-                          {sortAsc ? "▲" : "▼"}
-                        </span>
-                      )}
+                    {col.label}
+                    <span
+                      style={{
+                        display: "inline-block",
+                        marginLeft: 4,
+                        fontSize: "0.6rem",
+                        opacity: isSorted ? 1 : 0.3,
+                        transition: "opacity .15s, transform .15s",
+                        transform: isSorted && sortDir === "desc" ? "rotate(180deg)" : undefined,
+                      }}
+                    >
+                      ▲
                     </span>
                   </th>
                 );
@@ -187,76 +302,142 @@ export function StrategyTab({
           </thead>
           <tbody>
             {rows.map((m) => {
-              const isFocus = m.carNum === focusNum;
-              const clsColor = CLASS_COLORS[m.cls] || "#4472C4";
+              const isSelected = m.carNum === selectedCar;
+              const clsColor = CLASS_COLORS[m.cls] || S.acc;
               return (
                 <tr
                   key={m.carNum}
                   onClick={() => handleRowClick(m.carNum)}
-                  className="cursor-pointer transition-colors"
                   style={{
-                    borderBottom: `1px solid ${CHART_STYLE.border}`,
-                    background: isFocus ? clsColor + "18" : undefined,
+                    cursor: "pointer",
+                    background: isSelected ? "rgba(74,158,255,0.08)" : undefined,
+                    transition: "background .15s",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isFocus) e.currentTarget.style.background = CHART_STYLE.border + "40";
+                    if (!isSelected) e.currentTarget.style.background = "rgba(74,158,255,0.04)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isFocus ? clsColor + "18" : "";
+                    e.currentTarget.style.background = isSelected ? "rgba(74,158,255,0.08)" : "";
                   }}
                 >
                   {COLUMNS.map((col) => {
                     const val = col.fmt(m);
-                    // Special rendering for Car # column: colored badge
-                    if (col.key === "carNum") {
+                    // Position column
+                    if (col.key === "classPos") {
                       return (
-                        <td key={col.key} className="px-2 py-1.5">
-                          <span
-                            className="inline-block px-1.5 py-0.5 rounded text-[11px] font-mono font-semibold"
-                            style={{
-                              background: clsColor + "25",
-                              color: clsColor,
-                              border: `1px solid ${clsColor}40`,
-                            }}
-                          >
+                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
+                          <span style={{ fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: S.acc, fontSize: "0.9rem" }}>
                             {val}
                           </span>
                         </td>
                       );
                     }
-                    // Team column: truncate
+                    // Car number
+                    if (col.key === "carNum") {
+                      return (
+                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontWeight: 700,
+                            background: clsColor + "20",
+                            color: clsColor,
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            display: "inline-block",
+                          }}>
+                            {val}
+                          </span>
+                        </td>
+                      );
+                    }
+                    // Team column
                     if (col.key === "team") {
                       return (
-                        <td
-                          key={col.key}
-                          className="px-2 py-1.5 text-xs truncate max-w-[200px]"
-                          style={{ color: isFocus ? "#fff" : CHART_STYLE.text }}
-                          title={val}
-                        >
+                        <td key={col.key} style={{
+                          padding: "8px 12px",
+                          borderBottom: `1px solid ${S.bdr}`,
+                          maxWidth: 180,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
                           {val}
                         </td>
                       );
                     }
-                    // Score column: color coded
-                    if (col.key === "strategyScore") {
-                      const sc = m.strategyScore;
-                      const scoreColor = sc >= 70 ? "#4ade80" : sc >= 40 ? "#fbbf24" : "#f87171";
+                    // Best Lap column
+                    if (col.key === "bestLap") {
                       return (
-                        <td
-                          key={col.key}
-                          className="px-2 py-1.5 text-xs font-mono font-bold"
-                          style={{ textAlign: col.align, color: scoreColor }}
-                        >
+                        <td key={col.key} style={{
+                          padding: "8px 12px",
+                          borderBottom: `1px solid ${S.bdr}`,
+                          whiteSpace: "nowrap",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          color: S.grn,
+                        }}>
                           {val}
                         </td>
                       );
                     }
+                    // Yellow Pits column - tag style
+                    if (col.key === "yellowPitPct") {
+                      const pct = m.yellowPitPct;
+                      const isYellow = pct >= 50;
+                      return (
+                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
+                          <span style={{
+                            fontSize: "0.65rem",
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            fontWeight: 700,
+                            display: "inline-block",
+                            background: isYellow ? "rgba(234,179,8,0.15)" : "rgba(34,197,94,0.15)",
+                            color: isYellow ? S.yel : S.grn,
+                          }}>
+                            {val}
+                          </span>
+                        </td>
+                      );
+                    }
+                    // Strategy score column with bar
+                    if (col.key === "strategyScore") {
+                      return (
+                        <td key={col.key} style={{
+                          padding: "8px 12px",
+                          borderBottom: `1px solid ${S.bdr}`,
+                          whiteSpace: "nowrap",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>
+                          {val}
+                          <span style={{
+                            height: 6,
+                            borderRadius: 3,
+                            background: S.bdr,
+                            overflow: "hidden",
+                            width: 80,
+                            display: "inline-block",
+                            verticalAlign: "middle",
+                            marginLeft: 6,
+                          }}>
+                            <span style={{
+                              height: "100%",
+                              borderRadius: 3,
+                              background: `linear-gradient(90deg, ${S.acc}, ${S.acc2})`,
+                              display: "block",
+                              width: `${Math.min(100, Math.max(0, m.strategyScore))}%`,
+                            }} />
+                          </span>
+                        </td>
+                      );
+                    }
+                    // Default numeric cell
                     return (
-                      <td
-                        key={col.key}
-                        className={`px-2 py-1.5 text-xs ${col.mono ? "font-mono" : ""}`}
-                        style={{ textAlign: col.align, color: CHART_STYLE.text }}
-                      >
+                      <td key={col.key} style={{
+                        padding: "8px 12px",
+                        borderBottom: `1px solid ${S.bdr}`,
+                        whiteSpace: "nowrap",
+                        fontFamily: col.type === "num" ? "'JetBrains Mono', monospace" : undefined,
+                      }}>
                         {val}
                       </td>
                     );
@@ -268,14 +449,313 @@ export function StrategyTab({
         </table>
       </div>
 
-      {/* Footnote */}
-      <div
-        className="px-3 py-2 rounded-md text-[11px] leading-relaxed border"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.dim }}
-      >
-        Score: 40% pace + 30% yellow pit timing + 20% pit efficiency + 10% consistency.
-        Click any row to view that car on the position trace.
+      {/* ── Detail Panel ─────────────────────────────────────────── */}
+      {selectedMetrics && (
+        <DetailPanel
+          m={selectedMetrics}
+          totalLaps={conditions.totalLaps}
+          onClose={() => setSelectedCar(null)}
+          onGoToTrace={() => handleGoToTrace(selectedMetrics.carNum)}
+          activeClass={activeClass}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Condition Card ──────────────────────────────────────────────────────────
+
+function CondCard({ label, value, color, mono }: { label: string; value: string; color: string; mono?: boolean }) {
+  return (
+    <div style={{
+      background: S.card,
+      border: `1px solid ${S.bdr}`,
+      borderRadius: 10,
+      padding: "12px 16px",
+    }}>
+      <div style={{
+        fontSize: "0.7rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        color: S.txt2,
+        marginBottom: 4,
+        fontWeight: 600,
+      }}>
+        {label}
       </div>
+      <div style={{
+        fontSize: "1.4rem",
+        fontWeight: 800,
+        letterSpacing: "-0.02em",
+        color,
+        fontFamily: mono ? "'JetBrains Mono', monospace" : undefined,
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail Panel ────────────────────────────────────────────────────────────
+
+function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
+  m: StrategyMetrics;
+  totalLaps: number;
+  onClose: () => void;
+  onGoToTrace: () => void;
+  activeClass: string;
+}) {
+  const clsColor = CLASS_COLORS[m.cls] || S.acc;
+  const maxStintLaps = Math.max(...m.stints.map((s) => s.laps), 1);
+
+  return (
+    <div style={{
+      background: S.card,
+      border: `1px solid ${S.bdr}`,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 24,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.3rem", fontWeight: 800, color: clsColor }}>
+          #{m.carNum}
+        </span>
+        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{m.team}</h3>
+        <span style={{
+          fontSize: "0.65rem",
+          padding: "1px 6px",
+          borderRadius: 4,
+          fontWeight: 700,
+          background: "rgba(34,197,94,0.15)",
+          color: S.grn,
+        }}>
+          P{m.classPos} in {activeClass}
+        </span>
+        <button
+          onClick={onGoToTrace}
+          style={{
+            fontSize: "0.72rem",
+            color: S.acc,
+            background: "none",
+            border: `1px solid ${S.bdr}`,
+            borderRadius: 6,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          View on Trace
+        </button>
+        <span
+          onClick={onClose}
+          style={{ marginLeft: "auto", fontSize: "0.75rem", color: S.txt2, cursor: "pointer" }}
+        >
+          ✕ Close
+        </span>
+      </div>
+
+      {/* Stint Map */}
+      <SectionHeader>Stint Map</SectionHeader>
+      <div style={{ fontSize: "0.65rem", color: S.dim, marginBottom: 8 }}>
+        <span style={{ display: "inline-block", width: 10, height: 10, background: S.grn, borderRadius: 2, verticalAlign: "middle", marginRight: 3 }} /> Green laps
+        <span style={{ display: "inline-block", width: 10, height: 10, background: S.yel, borderRadius: 2, verticalAlign: "middle", marginLeft: 10, marginRight: 3 }} /> Yellow laps
+      </div>
+      <div style={{ display: "flex", gap: 2, alignItems: "end", height: 120, marginBottom: 12, padding: "8px 0" }}>
+        {m.stints.map((s) => (
+          <StintBar key={s.n} stint={s} maxLaps={maxStintLaps} />
+        ))}
+      </div>
+
+      {/* Pit Stop Timeline */}
+      <SectionHeader>Pit Stop Timeline</SectionHeader>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        height: 40,
+        position: "relative",
+        background: S.bg2,
+        borderRadius: 6,
+        overflow: "hidden",
+        marginBottom: 2,
+      }}>
+        {m.pits.map((p, i) => {
+          const leftPct = totalLaps > 0 ? ((p.lap / totalLaps) * 100).toFixed(1) : "0";
+          const posChange = p.pa - p.pb;
+          const posStr = posChange > 0 ? `\u2193${posChange}` : posChange < 0 ? `\u2191${Math.abs(posChange)}` : "—";
+          return (
+            <PitMarker
+              key={i}
+              leftPct={leftPct}
+              isYellow={p.yel}
+              tooltip={`Lap ${p.lap} · ${p.yel ? "Yellow" : "Green"}\nDuration: ~${p.dur > 0 ? p.dur.toFixed(0) + "s" : "< 1s"}\nPosition: P${p.pb} → P${p.pa} (${posStr})`}
+            />
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6rem", color: S.dim, marginTop: 2, marginBottom: 16 }}>
+        <span>Lap 1</span><span>Lap {totalLaps}</span>
+      </div>
+
+      {/* Stint Detail Table */}
+      <SectionHeader>Stint Detail</SectionHeader>
+      <div style={{ overflowX: "auto", borderRadius: 8, border: `1px solid ${S.bdr}` }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+          <thead>
+            <tr>
+              {["#", "Laps", "Green", "Yellow", "Avg Pace", "Degradation", "Pos In", "Pos Out"].map((h) => (
+                <th
+                  key={h}
+                  style={{
+                    background: S.bg2,
+                    color: S.txt2,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    fontSize: "0.68rem",
+                    padding: "8px 12px",
+                    textAlign: "left",
+                    whiteSpace: "nowrap",
+                    borderBottom: `1px solid ${S.bdr2}`,
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {m.stints.map((s) => (
+              <tr key={s.n}>
+                <td style={{ ...tdStyle, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>S{s.n}</td>
+                <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>{s.laps}</td>
+                <td style={tdStyle}>
+                  <span style={{ fontSize: "0.65rem", padding: "1px 6px", borderRadius: 4, fontWeight: 700, background: "rgba(34,197,94,0.15)", color: S.grn }}>
+                    {s.gl}
+                  </span>
+                </td>
+                <td style={tdStyle}>
+                  {s.yl > 0 ? (
+                    <span style={{ fontSize: "0.65rem", padding: "1px 6px", borderRadius: 4, fontWeight: 700, background: "rgba(234,179,8,0.15)", color: S.yel }}>
+                      {s.yl}
+                    </span>
+                  ) : (
+                    <span style={{ color: S.dim }}>0</span>
+                  )}
+                </td>
+                <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: s.pace > 0 ? S.grn : S.dim }}>
+                  {s.pace > 0 ? fmtPaceFull(s.pace) : "—"}
+                </td>
+                <td style={{
+                  ...tdStyle,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: s.deg > 0.01 ? S.red : s.deg < -0.01 ? S.grn : S.dim,
+                }}>
+                  {s.deg !== 0 ? (s.deg > 0 ? "+" : "") + s.deg.toFixed(3) + "s/L" : "—"}
+                </td>
+                <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>P{s.ps}</td>
+                <td style={{
+                  ...tdStyle,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: s.pe < s.ps ? S.grn : s.pe > s.ps ? S.red : S.txt2,
+                }}>
+                  P{s.pe}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderBottom: `1px solid ${S.bdr}`,
+  whiteSpace: "nowrap",
+};
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      {children}
+      <span style={{ flex: 1, height: 1, background: S.bdr }} />
+    </div>
+  );
+}
+
+function StintBar({ stint, maxLaps }: { stint: StintData; maxLaps: number }) {
+  const totalH = Math.max(8, ((stint.gl + stint.yl) / maxLaps) * 100);
+  const greenPct = stint.gl + stint.yl > 0 ? (stint.gl / (stint.gl + stint.yl)) * 100 : 100;
+  const yellowPct = 100 - greenPct;
+
+  return (
+    <div
+      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 16, maxWidth: 60 }}
+      title={`Stint ${stint.n}: ${stint.laps}L (${stint.gl}G/${stint.yl}Y)\nPace: ${stint.pace > 0 ? fmtPaceFull(stint.pace) : "—"}\nDeg: ${stint.deg > 0 ? "+" : ""}${stint.deg.toFixed(3)}s/lap\nPos: P${stint.ps}→P${stint.pe}`}
+    >
+      <div style={{
+        width: "100%",
+        height: `${totalH}%`,
+        borderRadius: "3px 3px 0 0",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}>
+        {stint.yl > 0 && (
+          <div style={{ height: `${yellowPct}%`, background: S.yel }} />
+        )}
+        <div style={{ flex: 1, background: S.grn, borderRadius: stint.yl > 0 ? 0 : "3px 3px 0 0" }} />
+      </div>
+      <div style={{ fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: S.txt2, marginTop: 2 }}>
+        {stint.laps}L
+      </div>
+      <div style={{ fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace", color: S.dim, textAlign: "center" }}>
+        {stint.pace > 0 ? fmtPace(stint.pace) : ""}
+      </div>
+    </div>
+  );
+}
+
+function PitMarker({ leftPct, isYellow, tooltip }: { leftPct: string; isYellow: boolean; tooltip: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        width: hovered ? 5 : 3,
+        height: "100%",
+        left: `${leftPct}%`,
+        background: isYellow ? S.yel : S.pit,
+        cursor: "pointer",
+        transition: "all .15s",
+        zIndex: hovered ? 2 : 1,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {hovered && (
+        <div style={{
+          position: "absolute",
+          bottom: "calc(100% + 6px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: S.card,
+          border: `1px solid ${S.bdr2}`,
+          borderRadius: 6,
+          padding: "6px 10px",
+          fontSize: "0.7rem",
+          whiteSpace: "pre-line",
+          pointerEvents: "none",
+          zIndex: 10,
+          color: S.txt,
+        }}>
+          {tooltip}
+        </div>
+      )}
     </div>
   );
 }
