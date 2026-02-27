@@ -192,11 +192,11 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-4 sm:py-6">
+    <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-2 sm:py-3">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-0">
             <Link
               to="/races"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -208,10 +208,10 @@ export function RaceDetailPage() {
               {raceMeta.series} {raceMeta.season}
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
             {raceMeta.name}
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
             {raceMeta.track} · {dateStr}
           </p>
         </div>
@@ -257,7 +257,7 @@ export function RaceDetailPage() {
         return (
           <>
             <div
-              className="flex gap-1 mb-3 border-b"
+              className="flex gap-1 mb-2 border-b"
               style={{ borderColor: CHART_STYLE.border }}
             >
               {tabs.map((tab) => {
