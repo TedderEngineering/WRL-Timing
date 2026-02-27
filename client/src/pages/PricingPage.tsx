@@ -46,14 +46,13 @@ interface FeatureRow {
 }
 
 const COMPARISON: FeatureRow[] = [
-  { feature: "Race chart access", free: "3 most recent", pro: "All races", team: "All races" },
+  { feature: "Race chart access", free: "3 most recent (10hr delay)", pro: "All races", team: "All races" },
   { feature: "Historical seasons", free: false, pro: true, team: true },
   { feature: "Chart interactivity", free: "View only", pro: "Full (filter, zoom)", team: "Full (filter, zoom)" },
-  { feature: "Favorites", free: "Up to 5", pro: "Unlimited", team: "Unlimited" },
-  { feature: "CSV export", free: false, pro: true, team: true },
-  { feature: "PNG chart export", free: false, pro: true, team: true },
-  { feature: "API access", free: false, pro: false, team: true },
-  { feature: "Team members", free: "1", pro: "1", team: "Up to 10" },
+  { feature: "Favorites", free: false, pro: "Unlimited", team: "Unlimited" },
+  { feature: "Export (filter, zoom, export)", free: false, pro: true, team: true },
+  { feature: "Race pace analysis", free: false, pro: false, team: true },
+  { feature: "Strategy analysis", free: false, pro: false, team: true },
   { feature: "Priority support", free: false, pro: false, team: true },
 ];
 

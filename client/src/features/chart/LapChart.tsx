@@ -22,13 +22,24 @@ import { useAuth } from "../../features/auth/AuthContext";
 interface LapChartProps {
   data: RaceChartData;
   annotations: AnnotationData;
-  raceId?: string;
   watermarkEmail?: string;
+  focusNum: number;
+  setFocusNum: React.Dispatch<React.SetStateAction<number>>;
+  compSet: Set<number>;
+  setCompSet: React.Dispatch<React.SetStateAction<Set<number>>>;
+  classView: string;
+  setClassView: React.Dispatch<React.SetStateAction<string>>;
+  activeLap: number | null;
+  setActiveLap: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function LapChart({ data, annotations, raceId, watermarkEmail }: LapChartProps) {
+export function LapChart({
+  data, annotations, watermarkEmail,
+  focusNum, setFocusNum, compSet, setCompSet,
+  classView, setClassView, activeLap, setActiveLap,
+}: LapChartProps) {
   const { user } = useAuth();
   const isPaid = user?.subscription?.plan === "PRO" || user?.subscription?.plan === "TEAM" || user?.role === "ADMIN";
 
@@ -36,98 +47,11 @@ export function LapChart({ data, annotations, raceId, watermarkEmail }: LapChart
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ── Find the race winner (overall P1) for default ──────────────
-  const winnerNum = useMemo(() => {
-    let winner = 0;
-    for (const [numStr, car] of Object.entries(data.cars)) {
-      if (car.finishPos === 1) {
-        winner = Number(numStr);
-        break;
-      }
-    }
-    // Fallback to first car if no P1 found
-    return winner || Number(Object.keys(data.cars)[0]) || 0;
-  }, [data]);
-
-  // ── localStorage key for this race's chart state ───────────────
-  const storageKey = raceId ? `racetrace-chart-${raceId}` : null;
-
-  // ── Load saved state or build defaults ─────────────────────────
-  const savedState = useMemo(() => {
-    if (!storageKey) return null;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      // Validate the saved focus car still exists in this data
-      if (parsed.focusNum && data.cars[String(parsed.focusNum)]) {
-        return parsed as {
-          focusNum: number;
-          compSet: number[];
-          classView: string;
-          activeLap: number | null;
-        };
-      }
-    } catch { /* ignore corrupt data */ }
-    return null;
-  }, [storageKey, data]);
-
-  // ── Chart state ────────────────────────────────────────────────
-  const defaultFocus = savedState?.focusNum ?? winnerNum;
-  const [focusNum, setFocusNum] = useState(defaultFocus);
-  const [compSet, setCompSet] = useState<Set<number>>(() => {
-    if (savedState?.compSet) return new Set(savedState.compSet);
-    return new Set<number>();
-  });
-  const [activeLap, setActiveLap] = useState<number | null>(savedState?.activeLap ?? null);
-  const [classView, setClassView] = useState(savedState?.classView ?? "");
+  // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
-
-  // ── Initialize: winner's class + all class cars as comparison ──
-  const initializedRef = useRef(false);
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    // If we loaded from saved state, skip default initialization
-    if (savedState) return;
-
-    const car = data.cars[String(winnerNum)];
-    if (car) {
-      setClassView("");
-      setFocusNum(winnerNum);
-      // Highlight ALL cars in the race as comparison
-      const newComp = new Set<number>();
-      Object.keys(data.cars).forEach((numStr) => {
-        const n = Number(numStr);
-        if (n !== winnerNum) newComp.add(n);
-      });
-      setCompSet(newComp);
-    }
-  }, [data, winnerNum, savedState]);
-
-  // ── Persist chart state to localStorage on changes ─────────────
-  useEffect(() => {
-    if (!storageKey) return;
-    // Debounce writes slightly
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          storageKey,
-          JSON.stringify({
-            focusNum,
-            compSet: Array.from(compSet),
-            classView,
-            activeLap,
-          })
-        );
-      } catch { /* quota exceeded, ignore */ }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [storageKey, focusNum, compSet, classView, activeLap]);
 
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(

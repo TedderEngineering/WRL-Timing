@@ -2,14 +2,50 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
+import { LapTimeChart } from "../features/chart/LapTimeChart";
+import { StrategyTab } from "../features/chart/StrategyTab";
+import { CHART_STYLE } from "../features/chart";
 import { api } from "../lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function RaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { isAuthenticated, user } = useAuth();
   const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy">("position");
+  const [lockedMsg, setLockedMsg] = useState<string | null>(null);
+
+  // ── Shared chart state (lifted from LapChart for cross-tab access) ──
+  const [focusNum, setFocusNum] = useState(0);
+  const [compSet, setCompSet] = useState<Set<number>>(new Set());
+  const [classView, setClassView] = useState("");
+  const [activeLap, setActiveLap] = useState<number | null>(null);
+
+  // Initialize chart state when race data loads (or when race changes)
+  const chartInitId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data || !id || chartInitId.current === id) return;
+    chartInitId.current = id;
+
+    // Default: focus on race winner, compare against all cars
+    let winner = 0;
+    for (const [numStr, car] of Object.entries(data.cars)) {
+      if (car.finishPos === 1) { winner = Number(numStr); break; }
+    }
+    winner = winner || Number(Object.keys(data.cars)[0]) || 0;
+
+    setFocusNum(winner);
+    setClassView("");
+    setActiveLap(null);
+
+    const allOthers = new Set<number>();
+    Object.keys(data.cars).forEach((n) => {
+      const num = Number(n);
+      if (num !== winner) allOthers.add(num);
+    });
+    setCompSet(allOthers);
+  }, [data, id]);
 
   // Fetch favorite status from race detail endpoint
   useEffect(() => {
@@ -207,8 +243,112 @@ export function RaceDetailPage() {
         </div>
       </div>
 
-      {/* Chart */}
-      <LapChart data={data} annotations={annotations} raceId={id} watermarkEmail={user?.email} />
+      {/* Tab bar */}
+      {(() => {
+        const userPlan = user?.subscription?.plan;
+        const isTeam = userPlan === "TEAM" || user?.role === "ADMIN";
+
+        const tabs = [
+          { id: "position" as const, label: "Position Trace", locked: false },
+          { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
+          { id: "strategy" as const, label: "Strategy", locked: !isTeam },
+        ];
+
+        return (
+          <>
+            <div
+              className="flex gap-1 mb-3 border-b"
+              style={{ borderColor: CHART_STYLE.border }}
+            >
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      if (tab.locked) {
+                        setLockedMsg(tab.id);
+                        return;
+                      }
+                      setLockedMsg(null);
+                      setActiveTab(tab.id);
+                    }}
+                    className="relative px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-2"
+                    style={{
+                      color: isActive ? "#fff" : CHART_STYLE.muted,
+                      borderBottom: isActive ? "2px solid #5c7cfa" : "2px solid transparent",
+                      marginBottom: "-1px",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.color = CHART_STYLE.text;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.color = CHART_STYLE.muted;
+                    }}
+                  >
+                    {tab.label}
+                    {tab.locked && (
+                      <>
+                        <svg className="h-3.5 w-3.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                        </svg>
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                          style={{ background: CHART_STYLE.border, color: CHART_STYLE.muted }}
+                        >
+                          Team
+                        </span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {lockedMsg && (
+              <div
+                className="text-sm mb-3 px-3 py-2 rounded-lg inline-flex items-center gap-2"
+                style={{ background: CHART_STYLE.card, border: `1px solid ${CHART_STYLE.border}`, color: CHART_STYLE.muted }}
+              >
+                Upgrade to Team to unlock.{" "}
+                <Link to="/pricing" className="text-brand-400 hover:text-brand-300 underline">
+                  View pricing
+                </Link>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {/* Chart — kept mounted to preserve internal state (focusNum, compSet, classView) */}
+      <div className={activeTab !== "position" ? "hidden" : undefined}>
+        <LapChart
+          data={data} annotations={annotations} watermarkEmail={user?.email}
+          focusNum={focusNum} setFocusNum={setFocusNum}
+          compSet={compSet} setCompSet={setCompSet}
+          classView={classView} setClassView={setClassView}
+          activeLap={activeLap} setActiveLap={setActiveLap}
+        />
+      </div>
+
+      {activeTab === "laptimes" && (
+        <LapTimeChart
+          data={data} annotations={annotations} watermarkEmail={user?.email}
+          focusNum={focusNum} setFocusNum={setFocusNum}
+          compSet={compSet} setCompSet={setCompSet}
+          classView={classView} setClassView={setClassView}
+          activeLap={activeLap} setActiveLap={setActiveLap}
+        />
+      )}
+
+      {activeTab === "strategy" && (
+        <StrategyTab
+          data={data} annotations={annotations}
+          classView={classView} setClassView={setClassView}
+          focusNum={focusNum} setFocusNum={setFocusNum}
+          onSwitchToTrace={() => setActiveTab("position")}
+        />
+      )}
     </div>
   );
 }
