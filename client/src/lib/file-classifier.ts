@@ -4,6 +4,7 @@ export type FileType =
   | "lapChartJson"
   | "flagsJson"
   | "pitStopJson"
+  | "timeCardsCsv"
   | "summaryCsv"
   | "lapsCsv"
   | "flagsPdf"
@@ -72,6 +73,7 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   lapChartJson: "lapChartJson",
   flagsJson: "flagsJson",
   pitStopJson: "pitStopJson",
+  timeCardsCsv: "timeCardsCsv",
   summaryCsv: "summaryCsv",
   lapsCsv: "lapsCsv",
   flagsPdf: "flagsJson", // PDF flags map to flagsJson slot (server handles base64)
@@ -82,6 +84,7 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   lapChartJson: "Lap Chart JSON",
   flagsJson: "Flags & RC Messages JSON",
   pitStopJson: "Pit Stops JSON",
+  timeCardsCsv: "Time Cards CSV",
   summaryCsv: "Summary CSV",
   lapsCsv: "All Laps CSV",
   flagsPdf: "Flags PDF",
@@ -124,49 +127,65 @@ export function classifyFile(file: File, content: string): DetectedFile {
     return result;
   }
 
-  // JSON detection
+  // JSON detection — use string peek instead of full JSON.parse (avoids parsing multi-MB files)
   if (file.name.toLowerCase().endsWith(".json")) {
-    try {
-      const json = JSON.parse(clean);
+    const peek = clean.slice(0, 4000);
 
-      if (json.participants && Array.isArray(json.participants) && json.participants[0]?.laps) {
-        result.type = "lapChartJson";
-        result.format = "imsa";
-        if (json.session) {
-          result.groupKey = `${json.session.event_name || ""}|${json.session.session_date || ""}`;
-          result.metadata = extractImsaMetadata(json.session);
-        }
-        return result;
+    // IMSA Lap Chart or Time Cards JSON: has "participants" array
+    if (/"participants"\s*:\s*\[/.test(peek)) {
+      result.type = "lapChartJson";
+      result.format = "imsa";
+      const meta = extractImsaMetadataFromPeek(peek);
+      result.metadata = meta;
+      if (meta.name || meta.date) {
+        result.groupKey = `${meta.name || ""}|${meta._sessionDate || ""}`;
       }
+      return result;
+    }
 
-      if (json.flags && Array.isArray(json.flags)) {
-        result.type = "flagsJson";
-        result.format = "imsa";
-        if (json.session) {
-          result.groupKey = `${json.session.event_name || ""}|${json.session.session_date || ""}`;
-          result.metadata = extractImsaMetadata(json.session);
-        }
-        return result;
+    // IMSA Flags/RC Messages JSON: has "flags" array
+    if (/"flags"\s*:\s*\[/.test(peek)) {
+      result.type = "flagsJson";
+      result.format = "imsa";
+      const meta = extractImsaMetadataFromPeek(peek);
+      result.metadata = meta;
+      if (meta.name || meta.date) {
+        result.groupKey = `${meta.name || ""}|${meta._sessionDate || ""}`;
       }
+      return result;
+    }
 
-      if (json.pit_stop_analysis && Array.isArray(json.pit_stop_analysis)) {
-        result.type = "pitStopJson";
-        result.format = "imsa";
-        if (json.session) {
-          result.groupKey = `${json.session.event_name || ""}|${json.session.session_date || ""}`;
-          result.metadata = extractImsaMetadata(json.session);
-        }
-        return result;
+    // IMSA Pit Stops JSON: has "pit_stop_analysis" array
+    if (/"pit_stop_analysis"\s*:\s*\[/.test(peek)) {
+      result.type = "pitStopJson";
+      result.format = "imsa";
+      const meta = extractImsaMetadataFromPeek(peek);
+      result.metadata = meta;
+      if (meta.name || meta.date) {
+        result.groupKey = `${meta.name || ""}|${meta._sessionDate || ""}`;
       }
-    } catch {
-      // Not valid JSON
+      return result;
     }
   }
 
-  // CSV detection — check headers to distinguish WRL Website vs SpeedHive
+  // CSV detection
   if (file.name.toLowerCase().endsWith(".csv")) {
     const headerLine = clean.split("\n")[0] || "";
     const headerLower = headerLine.toLowerCase();
+
+    // IMSA Time Cards CSV: semicolon-delimited with NUMBER, DRIVER_NUMBER, LAP_NUMBER, ELAPSED
+    if (
+      headerLower.includes("number") &&
+      headerLower.includes("driver_number") &&
+      headerLower.includes("lap_number") &&
+      headerLower.includes("elapsed")
+    ) {
+      result.type = "timeCardsCsv";
+      result.format = "imsa";
+      // Group with any existing IMSA group (resolved later like PDFs)
+      result.groupKey = "__imsa_csv_pending__";
+      return result;
+    }
 
     // WRL Website CSVs: underscore-separated headers like Overall_Position, Car_Number
     if (headerLower.includes("overall_position") || headerLower.includes("car_number,team_name,sponsor")) {
@@ -216,7 +235,7 @@ export async function classifyFiles(
 ): Promise<{ groups: Map<string, RaceGroup>; unmatched: DetectedFile[] }> {
   const groups = new Map(existingGroups);
   const unmatched = [...existingUnmatched];
-  const pendingPdfs: DetectedFile[] = [];
+  const pendingImsa: DetectedFile[] = [];
 
   for (const file of files) {
     try {
@@ -228,9 +247,9 @@ export async function classifyFiles(
         continue;
       }
 
-      // PDFs wait for IMSA group resolution
-      if (detected.groupKey === "__pdf_pending__") {
-        pendingPdfs.push(detected);
+      // PDFs and IMSA CSVs wait for IMSA group resolution
+      if (detected.groupKey === "__pdf_pending__" || detected.groupKey === "__imsa_csv_pending__") {
+        pendingImsa.push(detected);
         continue;
       }
 
@@ -252,14 +271,14 @@ export async function classifyFiles(
     }
   }
 
-  // Resolve pending PDFs: attach to first IMSA group, or leave unmatched
-  for (const pdf of pendingPdfs) {
+  // Resolve pending IMSA files (PDFs, CSVs): attach to first IMSA group, or leave unmatched
+  for (const pending of pendingImsa) {
     const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
     if (imsaGroup) {
-      pdf.groupKey = imsaGroup.id;
-      mergeIntoGroup(groups, pdf);
+      pending.groupKey = imsaGroup.id;
+      mergeIntoGroup(groups, pending);
     } else {
-      unmatched.push(pdf);
+      unmatched.push(pending);
     }
   }
 
@@ -331,20 +350,32 @@ function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequir
   return { complete: missingRequired.length === 0, missingRequired };
 }
 
-function extractImsaMetadata(session: any): Partial<RaceGroupMetadata> {
-  const meta: Partial<RaceGroupMetadata> = {};
-  if (session.event_name) meta.name = session.event_name;
-  if (session.circuit?.name) meta.track = session.circuit.name;
-  if (session.championship_name) {
-    meta.series = /imsa/i.test(session.championship_name) ? "IMSA" : session.championship_name;
+/** Extract IMSA session metadata from a string peek (first ~2000 chars) using regex.
+ *  The session object always appears at the start of every IMSA JSON file. */
+function extractImsaMetadataFromPeek(peek: string): Partial<RaceGroupMetadata> & { _sessionDate?: string } {
+  const meta: Partial<RaceGroupMetadata> & { _sessionDate?: string } = {};
+
+  const eventName = peek.match(/"event_name"\s*:\s*"([^"]+)"/);
+  if (eventName) meta.name = eventName[1];
+
+  const circuit = peek.match(/"circuit"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/);
+  if (circuit) meta.track = circuit[1];
+
+  const championship = peek.match(/"championship_name"\s*:\s*"([^"]+)"/);
+  if (championship) {
+    meta.series = /imsa/i.test(championship[1]) ? "IMSA" : championship[1];
   }
-  if (session.session_date) {
-    const dm = session.session_date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+
+  const sessionDate = peek.match(/"session_date"\s*:\s*"([^"]+)"/);
+  if (sessionDate) {
+    meta._sessionDate = sessionDate[1]; // raw value for groupKey
+    const dm = sessionDate[1].match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (dm) {
       meta.date = `${dm[3]}-${dm[2]}-${dm[1]}`;
       meta.season = dm[3];
     }
   }
+
   return meta;
 }
 

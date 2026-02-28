@@ -19,6 +19,7 @@ import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { generateAnnotations } from "./position-analysis.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
+import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -188,26 +189,38 @@ export const imsaParser: RaceDataParser = {
       required: false,
       accept: ".json",
     },
+    {
+      key: "timeCardsCsv",
+      label: "Time Cards CSV (optional)",
+      description:
+        "IMSA Time Cards CSV export (e.g. 23_Time_Cards_Race.csv) — per-lap timing with flag status, driver names, pit times. Enriches lap data with FLAG_AT_FL.",
+      required: false,
+      accept: ".csv",
+    },
   ],
 
   async parse(files) {
-    const { lapChartJson, flagsJson, pitStopJson } = files;
+    const { lapChartJson, flagsJson, pitStopJson, timeCardsCsv } = files;
     const mainJson = lapChartJson;
-    if (!mainJson) throw new Error("Missing Lap Chart JSON file");
+    if (!mainJson && !timeCardsCsv) throw new Error("Missing Lap Chart JSON or Time Cards CSV file");
     const flagsInput = flagsJson || null;
 
     const warnings: string[] = [];
 
-    // ── Parse Lap Chart / Time Cards JSON (always required) ────────────
-    let timeCards: IMSATimeCardsData;
+    // ── Parse Lap Chart / Time Cards JSON (required unless CSV provides lap data) ─
+    let timeCards: IMSATimeCardsData | null = null;
 
-    try {
-      timeCards = JSON.parse(mainJson.replace(/^\uFEFF/, ""));
-    } catch (e: any) {
-      throw new Error(`Failed to parse Lap Chart JSON: ${e.message}`);
+    if (mainJson && mainJson.trim().length > 0) {
+      try {
+        timeCards = JSON.parse(mainJson.replace(/^\uFEFF/, ""));
+      } catch (e: any) {
+        warnings.push(`Could not parse Lap Chart JSON: ${e.message}. Will use CSV data if available.`);
+      }
     }
 
-    if (!timeCards.participants?.length) throw new Error("Lap Chart JSON has no participants");
+    if (!timeCards?.participants?.length && !timeCardsCsv) {
+      throw new Error("Lap Chart JSON has no participants and no Time Cards CSV provided");
+    }
 
     // ── Process flags data (JSON, PDF, or absent) ─────────────────────
     //
@@ -456,35 +469,123 @@ export const imsaParser: RaceDataParser = {
       speedMph: number;
       driverNum: string;
       hour: string;
+      csvFlag?: string; // per-lap flag from CSV FLAG_AT_FL ("GF", "FCY", etc.)
     }
 
     const carLapsRaw = new Map<string, CarLapRaw[]>();
 
-    for (const p of timeCards.participants) {
-      const carNum = p.number;
-      const laps: CarLapRaw[] = [];
+    // ── CSV-derived participant metadata (when Lap Chart JSON lacks roster) ──
+    // Maps carNum → { class, team, manufacturer, driverName }
+    const csvParticipants = new Map<string, {
+      cls: string;
+      team: string;
+      manufacturer: string;
+      driverNames: Set<string>;
+    }>();
 
-      if (!Array.isArray(p.laps)) continue;
-      for (const lap of p.laps) {
-        const lapNum = lap.number;
-        if (lapNum < 1) continue;
-        if (lapNum > maxLap) maxLap = lapNum;
+    // ── Time Cards CSV path: build carLapsRaw from CSV data ─────────────
+    let hasCsvLaps = false;
+    if (timeCardsCsv) {
+      try {
+        const csvRows = parseDelimitedCSV(timeCardsCsv);
+        if (csvRows.length < 2) throw new Error("CSV has no data rows");
+        const hdr = mapHeaders(csvRows[0]);
 
-        laps.push({
-          num: carNum,
-          lapNum,
-          elapsedSec: parseElapsed(lap.session_elapsed),
-          lapTimeSec: parseLapTimeStr(lap.time),
-          lapTimeStr: lap.time,
-          pit: !!lap.crossing_pit_finish_lane,
-          speedMph: kphToMph(lap.average_speed_kph || "0"),
-          driverNum: lap.driver_number,
-          hour: lap.hour,
-        });
+        // Verify required columns exist
+        const required = ["number", "lap_number", "lap_time", "elapsed"];
+        for (const h of required) {
+          if (!hdr.has(h)) throw new Error(`Missing required CSV column: ${h.toUpperCase()}`);
+        }
+
+        for (let i = 1; i < csvRows.length; i++) {
+          const row = csvRows[i];
+          const carNum = col(row, hdr, "number");
+          const lapNum = parseInt(col(row, hdr, "lap_number"), 10);
+          if (!carNum || isNaN(lapNum) || lapNum < 1) continue;
+          if (lapNum > maxLap) maxLap = lapNum;
+
+          const lapTimeStr = col(row, hdr, "lap_time");
+          const elapsedStr = col(row, hdr, "elapsed");
+          const pitField = col(row, hdr, "crossing_finish_line_in_pit");
+          const isPit = pitField === "1" || pitField.toUpperCase() === "B" || /true|yes|pit/i.test(pitField);
+          const kph = col(row, hdr, "kph");
+          const topSpeed = col(row, hdr, "top_speed");
+          const driverNum = col(row, hdr, "driver_number");
+          const driverName = col(row, hdr, "driver_name");
+          const flagAtFl = col(row, hdr, "flag_at_fl").toUpperCase();
+          const hour = col(row, hdr, "hour");
+          const cls = col(row, hdr, "class");
+          const team = col(row, hdr, "team");
+          const manufacturer = col(row, hdr, "manufacturer");
+
+          if (!carLapsRaw.has(carNum)) carLapsRaw.set(carNum, []);
+          carLapsRaw.get(carNum)!.push({
+            num: carNum,
+            lapNum,
+            elapsedSec: parseElapsed(elapsedStr),
+            lapTimeSec: parseLapTimeStr(lapTimeStr),
+            lapTimeStr,
+            pit: isPit,
+            speedMph: kphToMph(topSpeed || kph || "0"),
+            driverNum: driverNum || "1",
+            hour,
+            csvFlag: flagAtFl || undefined,
+          });
+
+          // Collect participant metadata from CSV rows
+          if (!csvParticipants.has(carNum)) {
+            csvParticipants.set(carNum, {
+              cls: cls || "Unknown",
+              team: team || `Car #${carNum}`,
+              manufacturer: manufacturer || "",
+              driverNames: new Set(),
+            });
+          }
+          if (driverName) csvParticipants.get(carNum)!.driverNames.add(driverName);
+          // Update class/team if a later row has them and previous didn't
+          const cp = csvParticipants.get(carNum)!;
+          if (cls && cp.cls === "Unknown") cp.cls = cls;
+          if (team && cp.team === `Car #${carNum}`) cp.team = team;
+          if (manufacturer && !cp.manufacturer) cp.manufacturer = manufacturer;
+        }
+
+        hasCsvLaps = carLapsRaw.size > 0;
+        if (hasCsvLaps) {
+          warnings.push(`Time Cards CSV: loaded ${carLapsRaw.size} cars with per-lap flag data`);
+        }
+      } catch (e: any) {
+        warnings.push(`Could not parse Time Cards CSV: ${e.message}. Falling back to JSON data.`);
       }
+    }
 
-      if (laps.length > 0) {
-        carLapsRaw.set(carNum, laps);
+    // ── JSON path: build carLapsRaw from JSON participants (if CSV didn't provide laps)
+    if (!hasCsvLaps && timeCards?.participants) {
+      for (const p of timeCards.participants) {
+        const carNum = p.number;
+        const laps: CarLapRaw[] = [];
+
+        if (!Array.isArray(p.laps)) continue;
+        for (const lap of p.laps) {
+          const lapNum = lap.number;
+          if (lapNum < 1) continue;
+          if (lapNum > maxLap) maxLap = lapNum;
+
+          laps.push({
+            num: carNum,
+            lapNum,
+            elapsedSec: parseElapsed(lap.session_elapsed),
+            lapTimeSec: parseLapTimeStr(lap.time),
+            lapTimeStr: lap.time,
+            pit: !!lap.crossing_pit_finish_lane,
+            speedMph: kphToMph(lap.average_speed_kph || "0"),
+            driverNum: lap.driver_number,
+            hour: lap.hour,
+          });
+        }
+
+        if (laps.length > 0) {
+          carLapsRaw.set(carNum, laps);
+        }
       }
     }
 
@@ -571,10 +672,50 @@ export const imsaParser: RaceDataParser = {
       }
     }
 
+    // ── Build FCY periods from CSV flag data (when CSV provides per-lap flags) ──
+    if (hasCsvLaps && fcy.length === 0) {
+      // Use FLAG_AT_FL from CSV to build precise FCY periods
+      const fcyLapsFromCsv = new Set<number>();
+      for (const [, laps] of carLapsRaw) {
+        for (const rl of laps) {
+          if (rl.csvFlag === "FCY" || rl.csvFlag === "YELLOW") {
+            fcyLapsFromCsv.add(rl.lapNum);
+          }
+        }
+      }
+
+      // Merge consecutive FCY laps into periods
+      const sortedFcyLaps = Array.from(fcyLapsFromCsv).sort((a, b) => a - b);
+      let fcyStart: number | null = null;
+      for (const lap of sortedFcyLaps) {
+        if (fcyStart === null) {
+          fcyStart = lap;
+        } else if (lap > sortedFcyLaps[sortedFcyLaps.indexOf(lap) - 1] + 1) {
+          fcy.push([fcyStart, sortedFcyLaps[sortedFcyLaps.indexOf(lap) - 1]]);
+          fcyStart = lap;
+        }
+      }
+      if (fcyStart !== null) {
+        fcy.push([fcyStart, sortedFcyLaps[sortedFcyLaps.length - 1]]);
+      }
+
+      // Rebuild fcyLapSet
+      fcyLapSet.clear();
+      for (const [start, end] of fcy) {
+        for (let l = start; l <= end; l++) fcyLapSet.add(l);
+      }
+
+      if (fcy.length > 0) {
+        warnings.push(`Detected ${fcy.length} caution period(s) from CSV FLAG_AT_FL data.`);
+      }
+    }
+
     // ── Build car data ─────────────────────────────────────────────
     const participantMap = new Map<string, IMSAParticipant>();
-    for (const p of timeCards.participants) {
-      participantMap.set(p.number, p);
+    if (timeCards?.participants) {
+      for (const p of timeCards.participants) {
+        participantMap.set(p.number, p);
+      }
     }
 
     // Final positions from last lap
@@ -624,7 +765,10 @@ export const imsaParser: RaceDataParser = {
 
     for (const [carNum, rawLaps] of carLapsRaw) {
       const participant = participantMap.get(carNum);
-      if (!participant) {
+      const csvMeta = csvParticipants.get(carNum);
+
+      // Need at least one source of participant info (JSON roster, CSV metadata, or pit stop data)
+      if (!participant && !csvMeta) {
         warnings.push(`Car #${carNum} has laps but no participant entry`);
         continue;
       }
@@ -632,30 +776,51 @@ export const imsaParser: RaceDataParser = {
       const num = parseInt(carNum, 10);
       if (isNaN(num)) continue;
 
-      const cls = participant.class || "Unknown";
+      const cls = participant?.class || csvMeta?.cls || "Unknown";
       const pitEntry = pitStopMap?.get(num);
-      const make = pitEntry?.manufacturer || participant.manufacturer || "";
-      const vehicle = pitEntry?.vehicle || participant.vehicle || "";
-      const driverSurnames = participant.drivers
-        .map((d) => d.surname)
-        .filter(Boolean)
-        .join(" / ");
-      const team = driverSurnames
-        ? `${participant.team || `Car #${carNum}`} (${driverSurnames})`
-        : participant.team || `Car #${carNum}`;
+      const make = pitEntry?.manufacturer || participant?.manufacturer || csvMeta?.manufacturer || "";
+      const vehicle = pitEntry?.vehicle || participant?.vehicle || "";
+
+      let team: string;
+      if (participant) {
+        const driverSurnames = participant.drivers
+          .map((d) => d.surname)
+          .filter(Boolean)
+          .join(" / ");
+        team = driverSurnames
+          ? `${participant.team || `Car #${carNum}`} (${driverSurnames})`
+          : participant.team || `Car #${carNum}`;
+      } else if (csvMeta) {
+        const driverList = Array.from(csvMeta.driverNames).join(" / ");
+        team = driverList
+          ? `${csvMeta.team} (${driverList})`
+          : csvMeta.team;
+      } else {
+        team = `Car #${carNum}`;
+      }
       const finishPos = overallFinishPos.get(carNum) || 999;
 
       // Build laps array with positions
       const lapEntries = rawLaps.map((rl) => {
         const posMap = lapPositions.get(rl.lapNum);
         const p = posMap?.get(carNum) || 999;
+
+        // Per-lap flag: prefer CSV FLAG_AT_FL, fall back to fcyLapSet
+        let flag: string;
+        if (rl.csvFlag) {
+          // GF = green flag, FCY/YELLOW = full course yellow, FF = checkered (green)
+          flag = rl.csvFlag === "FCY" || rl.csvFlag === "YELLOW" ? "FCY" : "GREEN";
+        } else {
+          flag = fcyLapSet.has(rl.lapNum) ? "FCY" : "GREEN";
+        }
+
         return {
           l: rl.lapNum,
           p,
           cp: 0, // computed below
           lt: rl.lapTimeStr,
           ltSec: rl.lapTimeSec > 0 ? rl.lapTimeSec : 0.001,
-          flag: fcyLapSet.has(rl.lapNum) ? "FCY" : ("GREEN" as string),
+          flag,
           pit: (rl.pit ? 1 : 0) as 0 | 1,
           spd: rl.speedMph,
         };
@@ -706,10 +871,13 @@ export const imsaParser: RaceDataParser = {
       // Figure out starting driver name
       const startingDriverNum = rawLaps.length > 0 ? rawLaps[0].driverNum : "1";
       const getDriverLabel = (drvNum: string): string => {
-        const driver = participant.drivers.find(
-          (d) => String(d.number) === drvNum
-        );
-        return driver ? driver.surname : `D${drvNum}`;
+        if (participant) {
+          const driver = participant.drivers.find(
+            (d) => String(d.number) === drvNum
+          );
+          if (driver) return driver.surname;
+        }
+        return `D${drvNum}`;
       };
 
       let currentDriverNum = startingDriverNum;

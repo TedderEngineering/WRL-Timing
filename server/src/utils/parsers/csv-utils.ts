@@ -74,6 +74,67 @@ export function col(row: string[], hdr: Map<string, number>, name: string): stri
 }
 
 /**
+ * Parse a delimited CSV/TSV string with auto-detected delimiter.
+ * Strips BOM, handles trailing delimiters, trims whitespace from all values.
+ * Returns [headers, ...dataRows] where each row is a string array.
+ *
+ * Delimiter detection order: semicolon (;), tab (\t), comma (,).
+ */
+export function parseDelimitedCSV(text: string, delimiter?: string): string[][] {
+  const clean = text.replace(/^\uFEFF/, "");
+  const firstLine = clean.split(/\r?\n/)[0] || "";
+
+  // Auto-detect delimiter from first line
+  const delim =
+    delimiter ||
+    (firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",");
+
+  const lines = clean.split(/\r?\n/);
+  const rows: string[][] = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    // Split on delimiter, handle quoted fields
+    const fields: string[] = [];
+    let field = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          field += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delim) {
+        fields.push(field.trim());
+        field = "";
+      } else {
+        field += ch;
+      }
+    }
+    // Push last field (but skip if empty from trailing delimiter)
+    const trimmed = field.trim();
+    if (trimmed || fields.length === 0) {
+      fields.push(trimmed);
+    }
+
+    if (fields.length > 1 || fields[0] !== "") {
+      rows.push(fields);
+    }
+  }
+
+  return rows;
+}
+
+/**
  * Parse a "M:SS.mmm", "H:MM:SS.mmm", or "SS.mmm" lap time string into seconds.
  */
 export function parseLapTime(lt: string): number {
