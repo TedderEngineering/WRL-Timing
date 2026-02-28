@@ -252,7 +252,7 @@ export function HomePage() {
               features: ["All races, all seasons", "Filter, zoom, & export", "Unlimited favorites"],
               cta: "Start Pro",
               tier: "PRO" as const,
-              highlighted: true,
+              highlighted: false,
             },
             {
               name: "Team",
@@ -263,7 +263,7 @@ export function HomePage() {
               features: ["Everything in Pro", "Race pace analysis", "Strategy analysis", "Priority support"],
               cta: "Start Team",
               tier: "TEAM" as const,
-              highlighted: false,
+              highlighted: true,
             },
           ].map((t) => (
             <div

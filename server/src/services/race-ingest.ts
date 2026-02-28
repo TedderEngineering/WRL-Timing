@@ -170,7 +170,7 @@ export async function ingestRaceData(
       entriesCreated: entryData.length,
       lapsCreated: totalLaps,
     };
-  });
+  }, { timeout: 60000 });
 
   return { ...result, warnings };
 }

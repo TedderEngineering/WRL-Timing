@@ -26,7 +26,7 @@ const TIERS = [
     description: "For dedicated analysts",
     price: 200,
     cta: "Start Pro",
-    highlighted: true,
+    highlighted: false,
   },
   {
     id: "team" as const,
@@ -34,7 +34,7 @@ const TIERS = [
     description: "For race teams & groups",
     price: 500,
     cta: "Start Team",
-    highlighted: false,
+    highlighted: true,
   },
 ];
 
@@ -237,10 +237,10 @@ export function PricingPage() {
                   <td className="py-3.5 px-4 text-center">
                     <CellValue value={row.free} />
                   </td>
-                  <td className="py-3.5 px-4 text-center bg-brand-50/30 dark:bg-brand-950/10">
+                  <td className="py-3.5 px-4 text-center">
                     <CellValue value={row.pro} />
                   </td>
-                  <td className="py-3.5 px-4 text-center">
+                  <td className="py-3.5 px-4 text-center bg-brand-50/30 dark:bg-brand-950/10">
                     <CellValue value={row.team} />
                   </td>
                 </tr>
