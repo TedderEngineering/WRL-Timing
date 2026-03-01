@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { hasFullAccess } from "../../lib/utils";
 import type {
   RaceChartData,
   AnnotationData,
@@ -41,7 +42,7 @@ export function LapChart({
   classView, setClassView, activeLap, setActiveLap,
 }: LapChartProps) {
   const { user } = useAuth();
-  const isPaid = user?.subscription?.plan === "PRO" || user?.subscription?.plan === "TEAM" || user?.role === "ADMIN";
+  const isPaid = hasFullAccess(user);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);

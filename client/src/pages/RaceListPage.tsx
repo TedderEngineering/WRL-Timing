@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useRaceList, useFilterOptions } from "../hooks/useChartData";
 import { api } from "../lib/api";
+import { hasFullAccess as checkFullAccess } from "../lib/utils";
 
 
 export function RaceListPage() {
   const { isAuthenticated, user } = useAuth();
   const userPlan = user?.subscription?.plan ?? "FREE";
-  const hasFullAccess = userPlan === "PRO" || userPlan === "TEAM" || user?.role === "ADMIN";
+  const hasFullAccess = checkFullAccess(user);
   const [page, setPage] = useState(1);
   const [series, setSeries] = useState("");
   const [season, setSeason] = useState<number | undefined>();

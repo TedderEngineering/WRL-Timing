@@ -6,6 +6,7 @@ import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { CHART_STYLE } from "../features/chart";
 import { api } from "../lib/api";
+import { hasTeamAccess } from "../lib/utils";
 import { useState, useEffect, useRef } from "react";
 
 export function RaceDetailPage() {
@@ -247,8 +248,7 @@ export function RaceDetailPage() {
 
       {/* Tab bar */}
       {(() => {
-        const userPlan = user?.subscription?.plan;
-        const isTeam = userPlan === "TEAM" || user?.role === "ADMIN";
+        const isTeam = hasTeamAccess(user);
 
         const tabs = [
           { id: "position" as const, label: "Position Trace", locked: false },

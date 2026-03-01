@@ -2,14 +2,15 @@ import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthContext";
 import { api } from "../../lib/api";
-
 export function BillingSettingsPage() {
   const { user, refreshUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showSuccess, setShowSuccess] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  const isAdmin = user?.role === "ADMIN";
   const plan = user?.subscription?.plan || "FREE";
+  const effectivePlan = isAdmin ? "ADMIN" : plan;
   const status = user?.subscription?.status || "active";
   const periodEnd = user?.subscription?.currentPeriodEnd;
   const cancelAtPeriodEnd = user?.subscription?.cancelAtPeriodEnd;
@@ -78,9 +79,14 @@ export function BillingSettingsPage() {
                 {status === "active" || status === "ACTIVE" ? "Active" : status === "past_due" || status === "PAST_DUE" ? "Past Due" : "Canceled"}
               </span>
             </div>
-            {plan === "FREE" && (
+            {effectivePlan === "FREE" && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Limited access. Upgrade to unlock all races and features.
+              </p>
+            )}
+            {isAdmin && plan === "FREE" && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Full access (admin).
               </p>
             )}
             {plan !== "FREE" && periodEndStr && (
@@ -98,7 +104,7 @@ export function BillingSettingsPage() {
           </div>
         </div>
 
-        {plan === "FREE" && (
+        {effectivePlan === "FREE" && (
           <Link
             to="/pricing"
             className="inline-block mt-4 px-5 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
@@ -109,7 +115,7 @@ export function BillingSettingsPage() {
       </div>
 
       {/* Plan Comparison */}
-      {plan === "FREE" && (
+      {effectivePlan === "FREE" && (
         <div className="border border-gray-200 dark:border-gray-800 rounded-lg p-5">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
             What you're missing
@@ -155,7 +161,7 @@ export function BillingSettingsPage() {
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
           Invoice History
         </h3>
-        {plan === "FREE" ? (
+        {effectivePlan === "FREE" ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No invoices — you're on the free plan.
           </p>

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { hasFullAccess } from "../../lib/utils";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import {
   computeDimensions,
@@ -366,7 +367,7 @@ export function LapTimeChart({
   classView, setClassView, activeLap, setActiveLap,
 }: LapTimeChartProps) {
   const { user } = useAuth();
-  const isPaid = user?.subscription?.plan === "PRO" || user?.subscription?.plan === "TEAM" || user?.role === "ADMIN";
+  const isPaid = hasFullAccess(user);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);

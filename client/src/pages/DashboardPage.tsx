@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Alert } from "../components/Alert";
 import { api } from "../lib/api";
+import { hasFullAccess } from "../lib/utils";
 
 interface RaceItem {
   id: string;
@@ -62,7 +63,7 @@ export function DashboardPage() {
     fetchAll();
   }, []);
 
-  const isFree = !user?.subscription?.plan || user.subscription.plan === "FREE";
+  const isFree = !hasFullAccess(user);
 
   // Resend verification email
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "rate-limited" | "error">("idle");
