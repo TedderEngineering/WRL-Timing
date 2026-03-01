@@ -22,6 +22,7 @@ export interface ChartState {
   activeLap: number | null;
   classView: string; // "" = all, or "GTU", "GTO" etc.
   showWatermark?: boolean;
+  xAxisMode: "laps" | "hours" | "both";
 }
 
 export interface ChartDimensions {
@@ -80,6 +81,26 @@ export function getCompColor(compSet: Set<number>, focusNum: number, carNum: num
   return COMP_PALETTE[idx % COMP_PALETTE.length];
 }
 
+export function computeLapElapsedHours(data: RaceChartData): Map<number, number> {
+  const cars = Object.values(data.cars);
+  cars.sort((a, b) => b.laps.length - a.laps.length);
+  const leader = cars[0];
+  const map = new Map<number, number>();
+  if (!leader) return map;
+  let runningSum = 0;
+  for (const lap of leader.laps) {
+    runningSum += lap.ltSec;
+    map.set(lap.l, runningSum / 3600);
+  }
+  return map;
+}
+
+export function formatHour(h: number): string {
+  const hours = Math.floor(h);
+  const minutes = Math.round((h % 1) * 60);
+  return `${hours}:${String(minutes).padStart(2, "0")}`;
+}
+
 // ─── Coordinate mapping ──────────────────────────────────────────────────────
 
 function xOf(lap: number, maxLap: number, dim: ChartDimensions): number {
@@ -116,7 +137,8 @@ export function computeDimensions(
   containerW: number,
   containerH: number,
   maxLap: number,
-  isMobile: boolean
+  isMobile: boolean,
+  xAxisMode?: "laps" | "hours" | "both"
 ): ChartDimensions {
   const minW = Math.max(1200, maxLap * 5);
   const W = containerW < minW ? minW : Math.floor(containerW);
@@ -125,7 +147,8 @@ export function computeDimensions(
   const ML = isMobile ? 40 : 50;
   const MR = isMobile ? 10 : 20;
   const MT = isMobile ? 40 : 60;
-  const MB = isMobile ? 30 : 40;
+  const baseMB = isMobile ? 30 : 40;
+  const MB = xAxisMode === "both" ? baseMB + 14 : baseMB;
   const CW = W - ML - MR;
   const CH = H - MT - MB;
 
@@ -154,6 +177,11 @@ export function drawChart(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, dim.W, dim.H);
 
+  // Adjust dimensions for dual-row axis labels
+  const adjDim: ChartDimensions = state.xAxisMode === "both"
+    ? { ...dim, MB: dim.MB + 14, CH: dim.CH - 14 }
+    : dim;
+
   const { focusNum, compSet, activeLap, classView } = state;
   const maxLap = data.maxLap;
   const maxPos = getMaxPos(data, classView);
@@ -169,8 +197,8 @@ export function drawChart(
     settles: [],
   };
 
-  const x = (l: number) => xOf(l, maxLap, dim);
-  const y = (p: number) => yOf(p, maxPos, dim);
+  const x = (l: number) => xOf(l, maxLap, adjDim);
+  const y = (p: number) => yOf(p, maxPos, adjDim);
 
   // ── 1. Grid ────────────────────────────────────────────────────
   ctx.strokeStyle = CHART_STYLE.gridLine;
@@ -179,22 +207,22 @@ export function drawChart(
   for (let p = 1; p <= maxPos; p += posStep) {
     const py = y(p);
     ctx.beginPath();
-    ctx.moveTo(dim.ML, py);
-    ctx.lineTo(dim.W - dim.MR, py);
+    ctx.moveTo(adjDim.ML, py);
+    ctx.lineTo(adjDim.W - adjDim.MR, py);
     ctx.stroke();
   }
   for (let l = 1; l <= maxLap; l += 10) {
     const lx = x(l);
     ctx.beginPath();
-    ctx.moveTo(lx, dim.MT);
-    ctx.lineTo(lx, dim.H - dim.MB);
+    ctx.moveTo(lx, adjDim.MT);
+    ctx.lineTo(lx, adjDim.H - adjDim.MB);
     ctx.stroke();
   }
 
   // ── 2. FCY bands ───────────────────────────────────────────────
   (data.fcy || []).forEach(([s, e]) => {
     ctx.fillStyle = CHART_STYLE.fcyBand;
-    ctx.fillRect(x(s - 0.4), dim.MT, x(e + 0.4) - x(s - 0.4), dim.CH);
+    ctx.fillRect(x(s - 0.4), adjDim.MT, x(e + 0.4) - x(s - 0.4), adjDim.CH);
   });
 
   // ── 3. Pit stop vertical lines ────────────────────────────────
@@ -205,13 +233,13 @@ export function drawChart(
     ctx.setLineDash([]);
     ctx.strokeStyle = p.c;
     ctx.lineWidth = 1;
-    ctx.moveTo(px, dim.MT);
-    ctx.lineTo(px, dim.H - dim.MB);
+    ctx.moveTo(px, adjDim.MT);
+    ctx.lineTo(px, adjDim.H - adjDim.MB);
     ctx.stroke();
     ctx.font = "500 9px system-ui";
     ctx.fillStyle = p.c;
     ctx.textAlign = "left";
-    ctx.fillText(p.lb, px + 3, dim.MT + 10 + (p.yo || 0));
+    ctx.fillText(p.lb, px + 3, adjDim.MT + 10 + (p.yo || 0));
     ctx.restore();
   });
 
@@ -335,8 +363,8 @@ export function drawChart(
       ctx.strokeStyle = CHART_STYLE.crosshair;
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
-      ctx.moveTo(ax, dim.MT);
-      ctx.lineTo(ax, dim.H - dim.MB);
+      ctx.moveTo(ax, adjDim.MT);
+      ctx.lineTo(ax, adjDim.H - adjDim.MB);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -380,18 +408,60 @@ export function drawChart(
   ctx.fillStyle = CHART_STYLE.muted;
   ctx.textAlign = "right";
   for (let p = 1; p <= maxPos; p += posStep) {
-    ctx.fillText("P" + p, dim.ML - 6, y(p) + 4);
+    ctx.fillText("P" + p, adjDim.ML - 6, y(p) + 4);
   }
+  // Bottom axis: lap numbers, hour markers, or both
+  const lapHours = computeLapElapsedHours(data);
+  const xAxisMode = state.xAxisMode ?? "laps";
+
   ctx.textAlign = "center";
-  for (let l = 1; l <= maxLap; l += 10) {
-    ctx.fillText(String(l), x(l), dim.H - dim.MB + 16);
+  if (xAxisMode === "laps" || xAxisMode === "both") {
+    ctx.font = "500 10px monospace";
+    ctx.fillStyle = CHART_STYLE.muted;
+    const lapY = xAxisMode === "both" ? adjDim.H - adjDim.MB + 14 : adjDim.H - adjDim.MB + 16;
+    for (let l = 1; l <= maxLap; l += 10) {
+      ctx.fillText(String(l), x(l), lapY);
+    }
   }
+  if (xAxisMode === "hours" || xAxisMode === "both") {
+    const isSecondary = xAxisMode === "both";
+    ctx.font = isSecondary ? "500 9px monospace" : "500 10px monospace";
+    ctx.fillStyle = isSecondary ? hexA(CHART_STYLE.muted, 0.6) : CHART_STYLE.muted;
+    const hourY = isSecondary ? adjDim.H - adjDim.MB + 26 : adjDim.H - adjDim.MB + 16;
+    // Find max whole hour
+    let maxHour = 0;
+    for (const h of lapHours.values()) {
+      if (h > maxHour) maxHour = h;
+    }
+    for (let hr = 0; hr <= Math.floor(maxHour); hr++) {
+      // Find first lap where elapsed >= hr
+      let boundaryLap: number | null = null;
+      for (const [lap, h] of lapHours) {
+        if (h >= hr) { boundaryLap = lap; break; }
+      }
+      if (boundaryLap === null) continue;
+      const bx = x(boundaryLap);
+      ctx.fillText(formatHour(hr), bx, hourY);
+      // Vertical tick mark
+      if (!isSecondary) {
+        ctx.beginPath();
+        ctx.strokeStyle = hexA(CHART_STYLE.muted, 0.3);
+        ctx.lineWidth = 1;
+        ctx.moveTo(bx, adjDim.MT);
+        ctx.lineTo(bx, adjDim.MT + adjDim.CH);
+        ctx.stroke();
+      }
+    }
+  }
+  const axisLabel = xAxisMode === "hours" ? "Race Time"
+    : xAxisMode === "both" ? "Lap / Time"
+    : "Lap";
   ctx.font = "500 12px system-ui";
   ctx.fillStyle = CHART_STYLE.muted;
   ctx.textAlign = "center";
-  ctx.fillText("Lap", dim.ML + dim.CW / 2, dim.H - 4);
+  ctx.fillText(axisLabel, adjDim.ML + adjDim.CW / 2, adjDim.H - 4);
   ctx.save();
-  ctx.translate(14, dim.MT + dim.CH / 2);
+  ctx.translate(14, adjDim.MT + adjDim.CH / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.fillText(classView ? classView + " Position" : "Overall Position", 0, 0);
   ctx.restore();
@@ -409,11 +479,11 @@ export function drawChart(
     const spacing = 240;
     const lineHeight = 80;
     // Cover the full canvas diagonally
-    const diagonal = Math.sqrt(dim.W * dim.W + dim.H * dim.H);
+    const diagonal = Math.sqrt(adjDim.W * adjDim.W + adjDim.H * adjDim.H);
     const cols = Math.ceil(diagonal / spacing) + 2;
     const rows = Math.ceil(diagonal / lineHeight) + 2;
 
-    ctx.translate(dim.W / 2, dim.H / 2);
+    ctx.translate(adjDim.W / 2, adjDim.H / 2);
     ctx.rotate(angle);
 
     for (let row = -rows; row <= rows; row++) {

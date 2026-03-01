@@ -8,6 +8,8 @@ import {
   drawChart,
   buildLapInfo,
   computeDimensions,
+  computeLapElapsedHours,
+  formatHour,
   lapOfX,
   getVisibleCars,
   getCompColor,
@@ -51,6 +53,7 @@ export function LapChart({
   // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
+  const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
   const activeLapRef = useRef(activeLap);
   activeLapRef.current = activeLap;
 
@@ -58,19 +61,22 @@ export function LapChart({
 
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(
-    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid }),
-    [focusNum, compSet, activeLap, classView, isPaid]
+    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid, xAxisMode }),
+    [focusNum, compSet, activeLap, classView, isPaid, xAxisMode]
   );
+
+  // ── Lap elapsed hours for time axis ────────────────────────────
+  const lapHours = useMemo(() => computeLapElapsedHours(data), [data]);
 
   // ── Resize & draw ──────────────────────────────────────────────
   const resize = useCallback(() => {
     if (!wrapperRef.current || !scrollRef.current) return;
     const containerW = scrollRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, data.maxLap, isMobile);
+    const newDim = computeDimensions(containerW, containerH, data.maxLap, isMobile, xAxisMode);
     setDim(newDim);
     return newDim;
-  }, [data.maxLap, isMobile]);
+  }, [data.maxLap, isMobile, xAxisMode]);
 
   // Draw whenever state or dimensions change
   useEffect(() => {
@@ -461,6 +467,28 @@ export function LapChart({
             })}
           </div>
         </div>
+
+        {/* X-Axis mode */}
+        <div className="shrink-0">
+          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
+            X-Axis
+          </label>
+          <div className="flex gap-0.5">
+            {(["laps", "hours", "both"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setXAxisMode(mode)}
+                className="px-2 py-1 text-xs rounded font-mono cursor-pointer transition-colors"
+                style={{
+                  background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
+                  color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
+                }}
+              >
+                {mode === "laps" ? "Laps" : mode === "hours" ? "Hours" : "Both"}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Chart canvas ────────────────────────────────────────── */}
@@ -513,7 +541,7 @@ export function LapChart({
       </div>
 
       {/* ── Info panel ───────────────────────────────────────────── */}
-      <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
+      <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} lapHours={lapHours} xAxisMode={xAxisMode} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
@@ -562,12 +590,16 @@ function InfoPanel({
   focusNum,
   navPrev,
   navNext,
+  lapHours,
+  xAxisMode,
 }: {
   info: LapInfoData | null;
   activeLap: number | null;
   focusNum: number;
   navPrev: () => void;
   navNext: () => void;
+  lapHours: Map<number, number>;
+  xAxisMode: "laps" | "hours" | "both";
 }) {
   if (!info) {
     return (
@@ -615,8 +647,12 @@ function InfoPanel({
         <div className="flex flex-wrap items-baseline gap-2 sm:gap-4">
           {/* Left: lap/pos info */}
           <div className="flex items-baseline gap-2.5 shrink-0 flex-wrap">
-            <span className="font-bold text-[15px] font-mono text-white">L{info.lap.l}</span>
-            <span className="font-bold text-[15px] font-mono text-white">{info.posLabel}</span>
+            <span className="font-bold text-[15px] font-mono text-white">
+              L{info.lap.l} {info.posLabel}
+              {xAxisMode !== "laps" && lapHours.has(info.lap.l) && (
+                <span className="text-xs font-normal" style={{ color: CHART_STYLE.muted }}> · {formatHour(lapHours.get(info.lap.l)!)}</span>
+              )}
+            </span>
             <span className="text-xs" style={{ color: CHART_STYLE.muted }}>
               {info.flagLabel}{info.isPit ? " — PIT" : ""}
             </span>
