@@ -78,6 +78,35 @@ export async function createPortalSession(userId: string): Promise<string> {
 
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.mode !== "subscription" || !session.subscription) break;
+
+      const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+      if (!customerId) break;
+
+      // Find user by metadata or customer email
+      const userId = session.metadata?.userId
+        || (session.customer_email
+          ? (await prisma.user.findUnique({ where: { email: session.customer_email }, select: { id: true } }))?.id
+          : undefined);
+
+      if (userId) {
+        // Ensure subscription record exists with stripeCustomerId
+        await prisma.subscription.upsert({
+          where: { userId },
+          create: { userId, stripeCustomerId: customerId, plan: "FREE", status: "ACTIVE" },
+          update: { stripeCustomerId: customerId },
+        });
+      }
+
+      // Retrieve and sync the full subscription object
+      const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
+      const sub = await stripe.subscriptions.retrieve(subId);
+      await syncSubscription(sub);
+      break;
+    }
+
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
@@ -96,6 +125,23 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
           cancelAtPeriodEnd: false,
         },
       });
+      break;
+    }
+
+    case "invoice.paid": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+      if (customerId && invoice.lines?.data?.[0]?.period) {
+        const period = invoice.lines.data[0].period;
+        await prisma.subscription.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: {
+            status: "ACTIVE",
+            currentPeriodStart: new Date(period.start * 1000),
+            currentPeriodEnd: new Date(period.end * 1000),
+          },
+        });
+      }
       break;
     }
 

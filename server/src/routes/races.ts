@@ -97,53 +97,45 @@ racesRouter.get(
 
 racesRouter.get(
   "/:id/chart-data",
-  optionalAuth,
+  requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const raceId = req.params.id as string;
       const chartData = await raceSvc.getChartData(raceId);
 
-      // Access gating
+      // Premium access gating
       const race = await prisma.race.findUnique({
         where: { id: raceId },
-        select: { id: true, createdAt: true, premium: true },
+        select: { id: true, premium: true },
       });
-      if (race) {
-        let userPlan: string | null = null;
-        const userRole = req.user?.role ?? null;
-        if (req.user?.userId) {
+      if (race?.premium) {
+        if (req.user!.role !== "ADMIN") {
           const sub = await prisma.subscription.findUnique({
-            where: { userId: req.user.userId },
+            where: { userId: req.user!.userId },
           });
-          if (sub) {
-            const isActive = sub.status === "ACTIVE" || sub.status === "TRIALING";
-            const inGracePeriod =
-              sub.status === "CANCELED" &&
-              sub.currentPeriodEnd &&
-              sub.currentPeriodEnd > new Date();
-            userPlan = isActive || inGracePeriod ? sub.plan : null;
-          }
-        }
+          const isPaid = sub && (sub.plan === "PRO" || sub.plan === "TEAM");
+          const isActive = isPaid && sub.status === "ACTIVE";
+          const inGracePeriod =
+            isPaid &&
+            sub.status === "CANCELED" &&
+            sub.currentPeriodEnd &&
+            sub.currentPeriodEnd > new Date();
 
-        const access = await raceSvc.canUserAccessRace(race, userPlan, userRole);
-        if (!access.accessible) {
-          if (access.reason === "available_soon") {
-            throw new AppError(403, "This race will be available to free members shortly", "AVAILABLE_SOON");
+          if (!isActive && !inGracePeriod) {
+            throw new AppError(
+              403,
+              "Upgrade to Pro or Team to access this race.",
+              "SUBSCRIPTION_REQUIRED"
+            );
           }
-          throw new AppError(403, "Upgrade to Pro to access the full race library", "INSUFFICIENT_TIER");
         }
       }
 
-      // Record view if authenticated
-      if (req.user?.userId) {
-        raceSvc.recordView(req.user.userId, raceId).catch(() => {});
-      }
+      // Record view
+      raceSvc.recordView(req.user!.userId, raceId).catch(() => {});
 
-      // Cache privately when authenticated
-      res.set(
-        "Cache-Control",
-        req.user ? "private, max-age=300" : "public, max-age=300"
-      );
+      // Cache privately
+      res.set("Cache-Control", "private, max-age=300");
       res.json(chartData);
     } catch (err) {
       next(err);
