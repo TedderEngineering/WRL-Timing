@@ -14,6 +14,9 @@ import { billingRouter } from "./routes/billing.js";
 export function createApp() {
   const app = express();
 
+  // Trust proxy (Railway / Vercel reverse proxy)
+  app.set("trust proxy", 1);
+
   // ─── Security ───────────────────────────────────────────────────────────────
   app.use(
     helmet({
