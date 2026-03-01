@@ -452,27 +452,6 @@ export function LapChart({
           </div>
         </div>
 
-        {/* X-Axis mode */}
-        <div className="shrink-0 self-end">
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#cbd5e1" }}>
-            X-Axis
-          </label>
-          <div className="flex gap-0.5">
-            {(["laps", "hours", "both"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setXAxisMode(mode)}
-                className="px-2 py-1 text-xs rounded font-mono cursor-pointer transition-colors"
-                style={{
-                  background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
-                  color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
-                }}
-              >
-                {mode === "laps" ? "Laps" : mode === "hours" ? "Hours" : "Both"}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── Chart canvas ────────────────────────────────────────── */}
@@ -503,6 +482,31 @@ export function LapChart({
               style={{ display: "block", cursor: "crosshair" }}
             />
           </div>
+        </div>
+        {/* X-axis mode toggle — inline with chart axis */}
+        <div
+          className="absolute flex rounded-full overflow-hidden"
+          style={{
+            bottom: 4,
+            left: (dim?.ML ?? 50) - 2,
+            background: `${CHART_STYLE.card}cc`,
+            border: `1px solid ${CHART_STYLE.border}`,
+            zIndex: 2,
+          }}
+        >
+          {(["laps", "hours", "both"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setXAxisMode(mode)}
+              className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
+              style={{
+                background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
+                color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
+              }}
+            >
+              {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
+            </button>
+          ))}
         </div>
       </div>
 
