@@ -441,7 +441,7 @@ export function LapChart({
             </button>
           </div>
           {/* Car chips */}
-          <div className="flex flex-wrap gap-1 max-h-[60px] overflow-y-auto">
+          <div className="flex flex-wrap gap-1">
             {visibleCars.map((n) => {
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;
