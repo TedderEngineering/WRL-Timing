@@ -54,8 +54,14 @@ export function LapChart({
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
+  const [indicatorVisible, setIndicatorVisible] = useState(false);
+  const [scrollRatio, setScrollRatio] = useState(0);
+  const [thumbRatio, setThumbRatio] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
   const activeLapRef = useRef(activeLap);
   activeLapRef.current = activeLap;
+  const dragState = useRef({ dragging: false, startX: 0, startScroll: 0 });
+  const indicatorTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
@@ -105,6 +111,38 @@ export function LapChart({
     return () => window.removeEventListener("resize", onResize);
   }, [resize]);
 
+  // ── Scroll position tracking ──────────────────────────────────
+  const updateScrollIndicator = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    setThumbRatio(maxScroll > 0 ? el.clientWidth / el.scrollWidth : 1);
+    setScrollRatio(maxScroll > 0 ? el.scrollLeft / maxScroll : 0);
+  }, []);
+
+  const flashIndicator = useCallback(() => {
+    setIndicatorVisible(true);
+    clearTimeout(indicatorTimer.current);
+    indicatorTimer.current = setTimeout(() => setIndicatorVisible(false), 1500);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => { updateScrollIndicator(); flashIndicator(); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    updateScrollIndicator();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [dim, updateScrollIndicator, flashIndicator]);
+
+  // ── Drag-to-pan handlers ──────────────────────────────────────
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    dragState.current = { dragging: true, startX: e.clientX, startScroll: scrollRef.current?.scrollLeft || 0 };
+    setIsDragging(true);
+    e.preventDefault();
+  }, []);
+
   // ── Interaction: show info for a lap ────────────────────────────
   const showLapInfo = useCallback(
     (lapNum: number) => {
@@ -129,6 +167,31 @@ export function LapChart({
     [data, annotations, chartState, focusNum, dim]
   );
 
+  // ── Drag-to-pan window listeners ──────────────────────────────
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current.dragging || !scrollRef.current) return;
+      const dx = e.clientX - dragState.current.startX;
+      scrollRef.current.scrollLeft = dragState.current.startScroll - dx;
+    };
+    const onUp = (e: MouseEvent) => {
+      if (!dragState.current.dragging) return;
+      const dx = Math.abs(e.clientX - dragState.current.startX);
+      dragState.current.dragging = false;
+      setIsDragging(false);
+      // If barely moved, treat as a click → select lap
+      if (dx < 4 && scrollRef.current && dim) {
+        const r = scrollRef.current.getBoundingClientRect();
+        const cx = e.clientX - r.left + scrollRef.current.scrollLeft;
+        const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
+        showLapInfo(lap);
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [dim, data.maxLap, showLapInfo]);
+
   // ── Mouse/touch handlers ────────────────────────────────────────
   const getCanvasX = useCallback(
     (clientX: number): number => {
@@ -141,7 +204,7 @@ export function LapChart({
 
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dim) return;
+      if (!dim || dragState.current.dragging) return;
       const cx = getCanvasX(e.clientX);
       const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
       showLapInfo(lap);
@@ -149,9 +212,8 @@ export function LapChart({
     [dim, getCanvasX, data.maxLap, showLapInfo]
   );
 
-  const onMouseLeave = useCallback(() => {
-    // Keep the last active lap visible (don't clear)
-  }, []);
+  const onMouseEnter = useCallback(() => { flashIndicator(); }, [flashIndicator]);
+  const onMouseLeave = useCallback(() => {}, []);
 
   // Touch: panning + lap selection
   const touchState = useRef({ startX: 0, startScroll: 0, moved: false });
@@ -464,49 +526,74 @@ export function LapChart({
           height: isMobile ? "calc(100vh - 320px)" : "calc(100vh - 420px)",
           minHeight: 300,
         }}
+        onMouseEnter={onMouseEnter}
       >
         <div
           ref={scrollRef}
-          className="overflow-x-auto overflow-y-hidden h-full"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className="overflow-x-auto overflow-y-hidden h-full no-scrollbar"
+          style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
         >
           <div style={{ width: dim?.W, height: dim?.H }}>
             <canvas
               ref={canvasRef}
+              onMouseDown={onDragStart}
               onMouseMove={onMouseMove}
               onMouseLeave={onMouseLeave}
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
               onContextMenu={(e) => e.preventDefault()}
-              style={{ display: "block", cursor: "crosshair" }}
+              style={{ display: "block", cursor: isDragging ? "grabbing" : "grab" }}
             />
           </div>
         </div>
-        {/* X-axis mode toggle — inline with chart axis */}
-        <div
-          className="absolute flex rounded-full overflow-hidden"
-          style={{
-            bottom: 4,
-            left: (dim?.ML ?? 50) - 2,
-            background: `${CHART_STYLE.card}cc`,
-            border: `1px solid ${CHART_STYLE.border}`,
-            zIndex: 2,
-          }}
-        >
-          {(["laps", "hours", "both"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setXAxisMode(mode)}
-              className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
+        {/* X-axis mode toggle + position indicator */}
+        <div className="absolute left-0 right-0 flex items-end gap-2 px-1" style={{ bottom: 3, zIndex: 2 }}>
+          {/* Toggle pill */}
+          <div
+            className="flex rounded-full overflow-hidden shrink-0"
+            style={{
+              marginLeft: (dim?.ML ?? 50) - 6,
+              background: `${CHART_STYLE.card}cc`,
+              border: `1px solid ${CHART_STYLE.border}`,
+            }}
+          >
+            {(["laps", "hours", "both"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setXAxisMode(mode)}
+                className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
+                style={{
+                  background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
+                  color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
+                }}
+              >
+                {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
+              </button>
+            ))}
+          </div>
+          {/* Scroll position indicator */}
+          {thumbRatio < 1 && (
+            <div
+              className="flex-1 rounded-full overflow-hidden transition-opacity duration-500"
               style={{
-                background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
-                color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
+                height: 3,
+                background: `${CHART_STYLE.border}44`,
+                opacity: indicatorVisible ? 1 : 0,
+                marginBottom: 3,
+                marginRight: (dim?.MR ?? 20) - 4,
               }}
             >
-              {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
-            </button>
-          ))}
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${thumbRatio * 100}%`,
+                  marginLeft: `${scrollRatio * (1 - thumbRatio) * 100}%`,
+                  background: CHART_STYLE.muted,
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 

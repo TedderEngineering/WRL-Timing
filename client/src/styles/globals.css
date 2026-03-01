@@ -28,6 +28,11 @@
   }
 }
 
+/* Hide scrollbar for drag-to-pan chart */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 0.5s ease-out forwards;
