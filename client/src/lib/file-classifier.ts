@@ -443,11 +443,24 @@ function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<
     meta.name = `${day} ${dayHourMatch[1]}-Hour`;
   }
 
-  // Track: text between "World_Racing_League_" and the day/hour portion
-  // Handles both _-_ separator and __ (double underscore)
-  const trackMatch = fn.match(/World_Racing_League_(.+?)(?:_-_|__)/i);
+  // Track: everything between "World_Racing_League_" and the first day-of-week word
+  const trackMatch = fn.match(
+    /World_Racing_League_(.+?)_(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i
+  );
   if (trackMatch) {
-    meta.track = trackMatch[1].replace(/_/g, " ");
+    let track = trackMatch[1];
+    // Strip trailing year (_2026), _Championship, _Endurance
+    track = track.replace(/(_\d{4}|_Championship|_Endurance)+$/i, "");
+    // Strip trailing duplicate short venue word (e.g. _Barber when "Barber" already appears earlier)
+    const parts = track.split("_");
+    if (parts.length > 1) {
+      const last = parts[parts.length - 1];
+      if (parts.slice(0, -1).some((p) => p.toLowerCase() === last.toLowerCase())) {
+        parts.pop();
+        track = parts.join("_");
+      }
+    }
+    meta.track = track.replace(/_/g, " ").replace(/\s+/g, " ").trim();
   }
 
   return meta;
