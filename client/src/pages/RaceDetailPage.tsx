@@ -105,13 +105,15 @@ export function RaceDetailPage() {
           </div>
         </div>
       );
-    } else if (error?.code === "INSUFFICIENT_TIER") {
+    } else if (error?.code === "INSUFFICIENT_TIER" || error?.code === "SUBSCRIPTION_REQUIRED") {
       errorContent = (
         <div className={cardClass}>
           <svg className="h-12 w-12 text-indigo-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
           </svg>
-          <h2 className="text-xl font-semibold text-white">Go deeper with Pro</h2>
+          <h2 className="text-xl font-semibold text-white">
+            Go deeper with {user?.subscription?.plan === "PRO" ? "Team" : "Pro"}
+          </h2>
           <p className="text-gray-400 mt-2">
             Unlock this race and the entire library of race analytics. See position battles, pit strategy impact, and performance trends across full seasons.
           </p>
@@ -119,7 +121,7 @@ export function RaceDetailPage() {
             to="/settings/billing"
             className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-5 inline-block transition-colors"
           >
-            Upgrade to Pro
+            Upgrade to {user?.subscription?.plan === "PRO" ? "Team" : "Pro"}
           </Link>
           <div className="mt-3">
             <Link to="/races" className="text-sm text-gray-400 hover:text-gray-300 transition-colors">

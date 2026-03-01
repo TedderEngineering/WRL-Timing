@@ -182,6 +182,7 @@ export function RaceListPage() {
                             race={{ ...race, isFavorited: isFav }}
                             isAuthenticated={isAuthenticated}
                             onFavorite={handleFavorite}
+                            hasFullAccess={hasFullAccess}
                           />
                         );
                       })}
@@ -202,13 +203,13 @@ export function RaceListPage() {
                           Pro members get instant access to every race — past, present, and future. Go deeper with complete season analytics.
                         </p>
                         <p className="text-indigo-300 text-sm font-medium mt-3">
-                          {lockedRaces.length} more race{lockedRaces.length !== 1 ? "s" : ""} available with Pro
+                          {lockedRaces.length} more race{lockedRaces.length !== 1 ? "s" : ""} available with {userPlan === "PRO" ? "Team" : "Pro"}
                         </p>
                         <Link
                           to="/settings/billing"
                           className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-4 inline-block transition-colors"
                         >
-                          Upgrade to Pro
+                          Upgrade to {userPlan === "PRO" ? "Team" : "Pro"}
                         </Link>
                       </div>
 
@@ -221,6 +222,7 @@ export function RaceListPage() {
                             isAuthenticated={isAuthenticated}
                             onFavorite={handleFavorite}
                             locked
+                            hasFullAccess={hasFullAccess}
                           />
                         ))}
                       </div>
@@ -266,6 +268,7 @@ function RaceCard({
   isAuthenticated,
   onFavorite,
   locked,
+  hasFullAccess,
 }: {
   race: {
     id: string;
@@ -283,6 +286,7 @@ function RaceCard({
   isAuthenticated: boolean;
   onFavorite: (id: string, currentlyFavorited: boolean) => void;
   locked?: boolean;
+  hasFullAccess?: boolean;
 }) {
   const dateStr = new Date(race.date).toLocaleDateString("en-US", {
     month: "short",
@@ -318,7 +322,7 @@ function RaceCard({
             </span>
             <span>·</span>
             <span>{dateStr}</span>
-            {race.premium && !locked && (
+            {race.premium && !locked && !hasFullAccess && (
               <>
                 <span>·</span>
                 <span className="inline-flex items-center gap-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-1.5 py-0.5 rounded text-[10px] font-semibold">

@@ -278,7 +278,7 @@ export function DashboardPage() {
               to="/settings/billing"
               className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors whitespace-nowrap"
             >
-              Upgrade to Pro
+              Upgrade to {user?.subscription?.plan === "PRO" ? "Team" : "Pro"}
             </Link>
           </div>
         ) : (
