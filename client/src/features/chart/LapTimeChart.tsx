@@ -291,6 +291,11 @@ interface LapTimeInfo {
   carNum: number;
   carTeam: string;
   carClass: string;
+  compAvg: string | null;
+  compDelta: number | null;
+  compDeltaColor: string;
+  compLabel: string;
+  compN: number;
 }
 
 function buildLapTimeInfo(
@@ -298,6 +303,7 @@ function buildLapTimeInfo(
   rankings: Map<number, Map<number, number>>,
   focusNum: number,
   lapNum: number,
+  compSet: Set<number>,
 ): LapTimeInfo | null {
   const car = data.cars[String(focusNum)];
   if (!car) return null;
@@ -325,6 +331,36 @@ function buildLapTimeInfo(
 
   const isFcy = (data.fcy || []).some(([s, e]) => lapNum >= s && lapNum <= e);
 
+  // Pace comparison against comp set
+  let compAvg: string | null = null;
+  let compDelta: number | null = null;
+  let compDeltaColor = "#888";
+  let compLabel = "";
+  let compN = 0;
+
+  if (ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && ld.flag === "GREEN") {
+    let sum = 0;
+    let cnt = 0;
+    compSet.forEach((cn) => {
+      if (cn === focusNum) return;
+      const cl = data.cars[String(cn)]?.laps;
+      const cld = cl?.find((l) => l.l === lapNum);
+      if (cld && cld.ltSec > 1 && cld.ltSec < data.greenPaceCutoff && cld.flag === "GREEN") {
+        sum += cld.ltSec;
+        cnt++;
+      }
+    });
+    if (cnt > 0) {
+      const avg = sum / cnt;
+      compAvg = secToStr(avg);
+      compDelta = ld.ltSec - avg;
+      compDeltaColor = compDelta <= 0 ? "#4ade80" : compDelta < 0.5 ? "#fbbf24" : "#f87171";
+      const compNums = [...compSet].filter((n) => n !== focusNum);
+      compLabel = compNums.length <= 3 ? compNums.map((n) => "#" + n).join(", ") : `${compNums.length} cars`;
+      compN = cnt;
+    }
+  }
+
   return {
     lapNum,
     lapTime: ld.lt,
@@ -339,6 +375,11 @@ function buildLapTimeInfo(
     carNum: focusNum,
     carTeam: car.team,
     carClass: car.cls,
+    compAvg,
+    compDelta,
+    compDeltaColor,
+    compLabel,
+    compN,
   };
 }
 
@@ -421,7 +462,7 @@ export function LapTimeChart({
       if (!valid.length) return;
       lapNum = Math.max(valid[0], Math.min(valid[valid.length - 1], lapNum));
       setActiveLap(lapNum);
-      setInfo(buildLapTimeInfo(data, rankings, focusNum, lapNum));
+      setInfo(buildLapTimeInfo(data, rankings, focusNum, lapNum, compSet));
       if (dim && scrollRef.current) {
         const ax = dim.ML + ((lapNum - 1) / (data.maxLap - 1)) * dim.CW;
         const sl = scrollRef.current.scrollLeft;
@@ -430,7 +471,7 @@ export function LapTimeChart({
         else if (ax > sl + sw - 60) scrollRef.current.scrollLeft = ax - sw + 80;
       }
     },
-    [data, rankings, focusNum, dim, setActiveLap],
+    [data, rankings, focusNum, compSet, dim, setActiveLap],
   );
 
   const getCanvasX = useCallback(
@@ -864,6 +905,18 @@ function LapTimeInfoPanel({
               <span>
                 P1: <b className="text-white font-mono font-semibold">{info.fastestTime}</b>
               </span>
+            )}
+            {info.compAvg && (
+              <>
+                <span className="text-[10px]" style={{ color: CHART_STYLE.border }}>│</span>
+                <span>
+                  Avg: <b className="text-white font-mono font-semibold">{info.compAvg}</b>
+                  <span style={{ color: CHART_STYLE.dim }}> ({info.compN} car{info.compN !== 1 ? "s" : ""})</span>
+                </span>
+                <span className="font-semibold" style={{ color: info.compDeltaColor }}>
+                  Δ{info.compDelta! > 0 ? "+" : ""}{info.compDelta!.toFixed(2)}s
+                </span>
+              </>
             )}
           </div>
 
