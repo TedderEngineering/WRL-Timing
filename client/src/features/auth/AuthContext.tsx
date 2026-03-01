@@ -4,9 +4,10 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
-import { api } from "@/lib/api";
+import { api, ApiClientError } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,15 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Track refresh timer
   const [refreshTimer, setRefreshTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
+  // Deduplicate concurrent refresh calls
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+
   const scheduleRefresh = useCallback(
     (expiresInMs: number) => {
       if (refreshTimer) clearTimeout(refreshTimer);
       // Refresh 1 minute before expiry
       const refreshIn = Math.max(expiresInMs - 60_000, 5_000);
       const timer = setTimeout(() => {
-        refreshTokens().catch(() => {
-          setState({ user: null, isLoading: false, isAuthenticated: false });
-        });
+        // refreshTokens handles all errors internally — never rejects
+        refreshTokens();
       }, refreshIn);
       setRefreshTimer(timer);
     },
@@ -86,17 +89,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [scheduleRefresh]
   );
 
-  // Attempt silent refresh on mount
+  // Attempt silent refresh — deduplicates concurrent calls
   const refreshTokens = useCallback(async () => {
-    try {
-      const data = await api.post<{ accessToken: string; user: User }>(
-        "/auth/refresh"
-      );
-      handleAuthResponse(data);
-    } catch {
-      api.setAccessToken(null);
-      setState({ user: null, isLoading: false, isAuthenticated: false });
-    }
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    const promise = (async () => {
+      try {
+        const data = await api.post<{ accessToken: string; user: User }>(
+          "/auth/refresh"
+        );
+        handleAuthResponse(data);
+      } catch (err) {
+        // Only log out on a definitive auth rejection (401/403)
+        if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+          api.setAccessToken(null);
+          setState({ user: null, isLoading: false, isAuthenticated: false });
+        } else {
+          // Transient error (network, 500, etc.)
+          // If already authenticated, keep current session — token may still be valid.
+          // If initial load, we have no session to preserve — mark unauthenticated.
+          setState((prev) =>
+            prev.isAuthenticated
+              ? prev
+              : { user: null, isLoading: false, isAuthenticated: false }
+          );
+        }
+      } finally {
+        refreshInFlight.current = null;
+      }
+    })();
+
+    refreshInFlight.current = promise;
+    return promise;
   }, [handleAuthResponse]);
 
   useEffect(() => {

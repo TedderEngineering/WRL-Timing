@@ -1,4 +1,4 @@
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { AuthLayout } from "../features/auth/AuthLayout";
 import { useForm } from "../hooks/useForm";
@@ -7,11 +7,25 @@ import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
+
+  if (isLoading) {
+    return (
+      <AuthLayout title="Welcome back" subtitle="Log in to your account">
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={from} replace />;
+  }
 
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({

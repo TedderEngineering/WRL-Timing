@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { AuthLayout } from "../features/auth/AuthLayout";
 import { useForm } from "../hooks/useForm";
@@ -58,8 +58,22 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export function SignUpPage() {
-  const { register } = useAuth();
+  const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <AuthLayout title="Create your account" subtitle="Start analyzing race data for free">
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({
