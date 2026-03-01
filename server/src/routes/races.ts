@@ -97,11 +97,10 @@ racesRouter.get(
 
 racesRouter.get(
   "/:id/chart-data",
-  requireAuth,
+  optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const raceId = req.params.id as string;
-      const chartData = await raceSvc.getChartData(raceId);
 
       // Premium access gating
       const race = await prisma.race.findUnique({
@@ -109,9 +108,12 @@ racesRouter.get(
         select: { id: true, premium: true },
       });
       if (race?.premium) {
-        if (req.user!.role !== "ADMIN") {
+        if (!req.user) {
+          throw new AppError(403, "Login required for premium races.", "AUTH_REQUIRED");
+        }
+        if (req.user.role !== "ADMIN") {
           const sub = await prisma.subscription.findUnique({
-            where: { userId: req.user!.userId },
+            where: { userId: req.user.userId },
           });
           const isPaid = sub && (sub.plan === "PRO" || sub.plan === "TEAM");
           const isActive = isPaid && sub.status === "ACTIVE";
@@ -131,11 +133,15 @@ racesRouter.get(
         }
       }
 
-      // Record view
-      raceSvc.recordView(req.user!.userId, raceId).catch(() => {});
+      const chartData = await raceSvc.getChartData(raceId);
 
-      // Cache privately
-      res.set("Cache-Control", "private, max-age=300");
+      // Record view
+      if (req.user) {
+        raceSvc.recordView(req.user.userId, raceId).catch(() => {});
+      }
+
+      // Cache privately when authed, publicly for free races
+      res.set("Cache-Control", req.user ? "private, max-age=300" : "public, max-age=300");
       res.json(chartData);
     } catch (err) {
       next(err);

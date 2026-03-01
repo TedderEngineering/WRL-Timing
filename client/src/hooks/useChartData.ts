@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api, ApiClientError } from "../lib/api";
+import { useAuth } from "../features/auth/AuthContext";
 import type { ChartDataResponse, RaceChartData, AnnotationData } from "@shared/types";
 
 export interface ChartDataError {
@@ -17,6 +18,7 @@ interface UseChartDataResult {
 }
 
 export function useChartData(raceId: string | undefined): UseChartDataResult {
+  const { isLoading: authLoading } = useAuth();
   const [data, setData] = useState<RaceChartData | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationData | null>(null);
   const [raceMeta, setRaceMeta] = useState<ChartDataResponse["race"] | null>(null);
@@ -25,6 +27,9 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    // Wait for auth to resolve so the request carries the token
+    if (authLoading) return;
+
     if (!raceId) {
       setIsLoading(false);
       setError({ message: "No race ID provided" });
@@ -59,9 +64,9 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
       });
 
     return () => controller.abort();
-  }, [raceId]);
+  }, [raceId, authLoading]);
 
-  return { data, annotations, raceMeta, isLoading, error };
+  return { data, annotations, raceMeta, isLoading: authLoading || isLoading, error };
 }
 
 // ─── Race list fetching ──────────────────────────────────────────────────────

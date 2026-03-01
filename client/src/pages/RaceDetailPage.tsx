@@ -131,7 +131,7 @@ export function RaceDetailPage() {
           </div>
         </div>
       );
-    } else if (error?.status === 401) {
+    } else if (error?.code === "AUTH_REQUIRED" || (error?.status === 401 && !isAuthenticated)) {
       errorContent = (
         <div className={cardClass}>
           <svg className="h-12 w-12 text-gray-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
