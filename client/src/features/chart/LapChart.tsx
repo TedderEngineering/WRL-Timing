@@ -51,6 +51,8 @@ export function LapChart({
   // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
+  const activeLapRef = useRef(activeLap);
+  activeLapRef.current = activeLap;
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
@@ -190,25 +192,27 @@ export function LapChart({
     const laps = data.cars[String(focusNum)]?.laps || [];
     const valid = laps.map((l) => l.l);
     if (!valid.length) return;
-    if (activeLap === null) {
+    const cur = activeLapRef.current;
+    if (cur === null) {
       showLapInfo(valid[0]);
     } else {
-      const idx = valid.indexOf(activeLap);
+      const idx = valid.indexOf(cur);
       if (idx > 0) showLapInfo(valid[idx - 1]);
     }
-  }, [data, focusNum, activeLap, showLapInfo]);
+  }, [data, focusNum, showLapInfo]);
 
   const navNext = useCallback(() => {
     const laps = data.cars[String(focusNum)]?.laps || [];
     const valid = laps.map((l) => l.l);
     if (!valid.length) return;
-    if (activeLap === null) {
+    const cur = activeLapRef.current;
+    if (cur === null) {
       showLapInfo(valid[0]);
     } else {
-      const idx = valid.indexOf(activeLap);
+      const idx = valid.indexOf(cur);
       if (idx < valid.length - 1) showLapInfo(valid[idx + 1]);
     }
-  }, [data, focusNum, activeLap, showLapInfo]);
+  }, [data, focusNum, showLapInfo]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

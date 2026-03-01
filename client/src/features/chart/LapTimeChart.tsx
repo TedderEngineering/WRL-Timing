@@ -416,6 +416,8 @@ export function LapTimeChart({
 
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapTimeInfo | null>(null);
+  const activeLapRef = useRef(activeLap);
+  activeLapRef.current = activeLap;
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
@@ -525,16 +527,18 @@ export function LapTimeChart({
   const navPrev = useCallback(() => {
     const valid = (data.cars[String(focusNum)]?.laps || []).map((l) => l.l);
     if (!valid.length) return;
-    if (activeLap === null) showLapInfo(valid[0]);
-    else { const idx = valid.indexOf(activeLap); if (idx > 0) showLapInfo(valid[idx - 1]); }
-  }, [data, focusNum, activeLap, showLapInfo]);
+    const cur = activeLapRef.current;
+    if (cur === null) showLapInfo(valid[0]);
+    else { const idx = valid.indexOf(cur); if (idx > 0) showLapInfo(valid[idx - 1]); }
+  }, [data, focusNum, showLapInfo]);
 
   const navNext = useCallback(() => {
     const valid = (data.cars[String(focusNum)]?.laps || []).map((l) => l.l);
     if (!valid.length) return;
-    if (activeLap === null) showLapInfo(valid[0]);
-    else { const idx = valid.indexOf(activeLap); if (idx < valid.length - 1) showLapInfo(valid[idx + 1]); }
-  }, [data, focusNum, activeLap, showLapInfo]);
+    const cur = activeLapRef.current;
+    if (cur === null) showLapInfo(valid[0]);
+    else { const idx = valid.indexOf(cur); if (idx < valid.length - 1) showLapInfo(valid[idx + 1]); }
+  }, [data, focusNum, showLapInfo]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

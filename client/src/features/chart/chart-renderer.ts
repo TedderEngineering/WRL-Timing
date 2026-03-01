@@ -197,7 +197,7 @@ export function drawChart(
     ctx.fillRect(x(s - 0.4), dim.MT, x(e + 0.4) - x(s - 0.4), dim.CH);
   });
 
-  // ── 3. Pit stop vertical lines ────────────────────────────────
+  // ── 3. Pit stop vertical lines (labels deferred to section 6) ─
   (ann.pits || []).forEach((p) => {
     const px = x(p.l);
     ctx.save();
@@ -208,10 +208,6 @@ export function drawChart(
     ctx.moveTo(px, dim.MT);
     ctx.lineTo(px, dim.H - dim.MB);
     ctx.stroke();
-    ctx.font = "500 9px system-ui";
-    ctx.fillStyle = p.c;
-    ctx.textAlign = "left";
-    ctx.fillText(p.lb, px + 3, dim.MT + 10 + (p.yo || 0));
     ctx.restore();
   });
 
@@ -254,59 +250,141 @@ export function drawChart(
   });
   ctx.stroke();
 
-  // ── 6. Settle arrows ──────────────────────────────────────────
-  const settlesByBucket: Record<number, number> = {};
-  (ann.settles || []).forEach((sp) => {
-    let settlePos = sp.p;
-    if (classView) {
-      const ld = laps.find((l) => l.l === sp.l);
-      if (ld) settlePos = ld[pk];
-      else return;
+  // ── 6. Unified collision-free labels (pit + settle) ──────────
+  {
+    interface LabelEntry {
+      anchorX: number;
+      anchorY: number;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      kind: "pit" | "settle";
+      color: string;
+      pitLabel?: string;
+      settleLb?: string;
+      settleSu?: string;
     }
 
-    const bucket = Math.round(sp.l / 5);
-    if (!settlesByBucket[bucket]) settlesByBucket[bucket] = 0;
-    const yOff = settlesByBucket[bucket] * 28;
-    settlesByBucket[bucket]++;
+    const PAD = 2;
+    const labels: LabelEntry[] = [];
 
-    const cx = x(sp.l);
-    const cy = y(settlePos);
-    const aL = 36 + yOff;
+    // Collect pit labels
+    (ann.pits || []).forEach((p) => {
+      const px = x(p.l);
+      ctx.font = "500 9px system-ui";
+      const tw = ctx.measureText(p.lb).width;
+      const th = 11;
+      const lx = px + 3;
+      const ly = dim.MT + 10 + (p.yo || 0) - th;
+      labels.push({
+        anchorX: px, anchorY: ly + th,
+        x: lx - PAD, y: ly - PAD, w: tw + PAD * 2, h: th + PAD * 2,
+        kind: "pit", color: p.c, pitLabel: p.lb,
+      });
+    });
 
-    ctx.save();
-    // Arrow shaft
-    ctx.beginPath();
-    ctx.strokeStyle = sp.c;
-    ctx.lineWidth = 1.5;
-    ctx.moveTo(cx, cy - 6);
-    ctx.lineTo(cx, cy - aL);
-    ctx.stroke();
-    // Arrow head
-    ctx.beginPath();
-    ctx.fillStyle = sp.c;
-    ctx.moveTo(cx, cy - 4);
-    ctx.lineTo(cx - 3.5, cy - 11);
-    ctx.lineTo(cx + 3.5, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    // Dot
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = sp.c;
-    ctx.fill();
-    ctx.strokeStyle = CHART_STYLE.bg;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Labels
-    ctx.font = "700 10px system-ui";
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "center";
-    ctx.fillText(sp.lb, cx, cy - aL - 14);
-    ctx.font = "500 9px system-ui";
-    ctx.fillStyle = sp.c;
-    ctx.fillText(sp.su, cx, cy - aL - 3);
-    ctx.restore();
-  });
+    // Collect settle labels
+    (ann.settles || []).forEach((sp) => {
+      let settlePos = sp.p;
+      if (classView) {
+        const ld = laps.find((l) => l.l === sp.l);
+        if (ld) settlePos = ld[pk];
+        else return;
+      }
+      const cx = x(sp.l);
+      const cy = y(settlePos);
+      ctx.font = "700 10px system-ui";
+      const w1 = ctx.measureText(sp.lb).width;
+      ctx.font = "500 9px system-ui";
+      const w2 = ctx.measureText(sp.su).width;
+      const tw = Math.max(w1, w2);
+      const th = 24; // two lines: 12px each
+      const lx = cx - tw / 2;
+      const ly = cy - 36 - th; // base arrow length 36
+      labels.push({
+        anchorX: cx, anchorY: cy,
+        x: lx - PAD, y: ly - PAD, w: tw + PAD * 2, h: th + PAD * 2,
+        kind: "settle", color: sp.c, settleLb: sp.lb, settleSu: sp.su,
+      });
+    });
+
+    // Sort by X for spatial locality
+    labels.sort((a, b) => a.x - b.x);
+
+    // Collision resolver — push overlapping labels apart vertically
+    const overlaps = (a: LabelEntry, b: LabelEntry) =>
+      a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (let i = 0; i < labels.length; i++) {
+        for (let j = i + 1; j < labels.length; j++) {
+          if (!overlaps(labels[i], labels[j])) continue;
+          const overlapY = Math.min(labels[i].y + labels[i].h, labels[j].y + labels[j].h) -
+                           Math.max(labels[i].y, labels[j].y);
+          const nudge = overlapY / 2 + 2;
+          // Push apart: earlier label up, later label down
+          labels[i].y -= nudge;
+          labels[j].y += nudge;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+
+    // Clamp within chart bounds
+    for (const lb of labels) {
+      lb.y = Math.max(dim.MT - lb.h, Math.min(dim.H - dim.MB - 2, lb.y));
+      lb.x = Math.max(dim.ML, Math.min(dim.W - dim.MR - lb.w, lb.x));
+    }
+
+    // Render
+    for (const lb of labels) {
+      ctx.save();
+      if (lb.kind === "pit") {
+        ctx.font = "500 9px system-ui";
+        ctx.fillStyle = lb.color;
+        ctx.textAlign = "left";
+        ctx.fillText(lb.pitLabel!, lb.x + PAD, lb.y + PAD + 11);
+      } else {
+        // Dot
+        ctx.beginPath();
+        ctx.arc(lb.anchorX, lb.anchorY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = lb.color;
+        ctx.fill();
+        ctx.strokeStyle = CHART_STYLE.bg;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Arrow shaft (dynamic length to resolved label position)
+        const shaftTop = lb.y + lb.h + PAD + 3;
+        ctx.beginPath();
+        ctx.strokeStyle = lb.color;
+        ctx.lineWidth = 1.5;
+        ctx.moveTo(lb.anchorX, lb.anchorY - 6);
+        ctx.lineTo(lb.anchorX, shaftTop);
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.fillStyle = lb.color;
+        ctx.moveTo(lb.anchorX, lb.anchorY - 4);
+        ctx.lineTo(lb.anchorX - 3.5, lb.anchorY - 11);
+        ctx.lineTo(lb.anchorX + 3.5, lb.anchorY - 11);
+        ctx.closePath();
+        ctx.fill();
+        // Labels
+        const textCx = lb.x + PAD + lb.w / 2 - PAD;
+        ctx.textAlign = "center";
+        ctx.font = "700 10px system-ui";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(lb.settleLb!, textCx, lb.y + PAD + 10);
+        ctx.font = "500 9px system-ui";
+        ctx.fillStyle = lb.color;
+        ctx.fillText(lb.settleSu!, textCx, lb.y + PAD + 22);
+      }
+      ctx.restore();
+    }
+  }
 
   // ── 7. Pit dots ────────────────────────────────────────────────
   laps.forEach((d) => {
