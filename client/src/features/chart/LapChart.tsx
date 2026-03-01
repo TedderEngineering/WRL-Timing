@@ -349,9 +349,9 @@ export function LapChart({
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-1.5" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    <div className="flex flex-col gap-2" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* ── Header subtitle ──────────────────────────────────────── */}
-      <div className="hidden sm:flex items-baseline gap-3 text-xs font-mono px-1" style={{ color: CHART_STYLE.muted }}>
+      <div className="hidden sm:flex items-baseline gap-3 text-xs font-mono px-1 pt-0.5" style={{ color: CHART_STYLE.muted }}>
         <span>{classSummary}</span>
         <span>·</span>
         <span>{data.maxLap} Laps</span>
@@ -360,10 +360,10 @@ export function LapChart({
       </div>
 
       {/* ── Controls row ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2 items-start px-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-2 items-start px-1">
         {/* Class filter */}
         <div className="shrink-0" style={{ minWidth: 140 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
+          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: CHART_STYLE.muted }}>
             Class View
           </label>
           <select
@@ -385,7 +385,7 @@ export function LapChart({
 
         {/* Focus car */}
         <div className="shrink-0 flex-1" style={{ minWidth: 200 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
+          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: CHART_STYLE.muted }}>
             Focus Car
           </label>
           <select
@@ -409,7 +409,7 @@ export function LapChart({
 
         {/* Comparison area */}
         <div className="flex-[2] min-w-[280px]">
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
+          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: CHART_STYLE.muted }}>
             Compare Against (avg lap time)
           </label>
           {/* Preset buttons */}
@@ -469,8 +469,8 @@ export function LapChart({
         </div>
 
         {/* X-Axis mode */}
-        <div className="shrink-0">
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
+        <div className="shrink-0 self-end">
+          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: CHART_STYLE.muted }}>
             X-Axis
           </label>
           <div className="flex gap-0.5">
