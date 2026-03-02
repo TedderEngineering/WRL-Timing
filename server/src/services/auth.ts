@@ -26,7 +26,19 @@ export interface AuthResult {
     emailVerified: boolean;
     onboardingDone: boolean;
     createdAt: Date;
+    subscription: {
+      plan: string;
+      status: string;
+      currentPeriodEnd: string | null;
+      cancelAtPeriodEnd: boolean;
+    };
   };
+}
+
+function formatSubscription(sub: { plan: string; status: string; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean } | null) {
+  return sub
+    ? { plan: sub.plan, status: sub.status, currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null, cancelAtPeriodEnd: sub.cancelAtPeriodEnd }
+    : { plan: "FREE" as const, status: "ACTIVE" as const, currentPeriodEnd: null, cancelAtPeriodEnd: false };
 }
 
 // ─── Register ─────────────────────────────────────────────────────────────────
@@ -97,6 +109,7 @@ export async function register(
       emailVerified: user.emailVerified,
       onboardingDone: user.onboardingDone,
       createdAt: user.createdAt,
+      subscription: formatSubscription(null), // Just created — always FREE
     },
   };
 }
@@ -104,7 +117,7 @@ export async function register(
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 export async function login(email: string, password: string): Promise<AuthResult> {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email }, include: { subscription: true } });
   if (!user) {
     throw new AppError(401, "Invalid email or password", "INVALID_CREDENTIALS");
   }
@@ -138,6 +151,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       emailVerified: user.emailVerified,
       onboardingDone: user.onboardingDone,
       createdAt: user.createdAt,
+      subscription: formatSubscription(user.subscription),
     },
   };
 }
@@ -169,7 +183,7 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
   // Delete old token (rotation)
   await prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
-  const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+  const user = await prisma.user.findUnique({ where: { id: payload.userId }, include: { subscription: true } });
   if (!user || user.suspendedAt) {
     throw new AppError(401, "Account not found or suspended", "INVALID_ACCOUNT");
   }
@@ -188,6 +202,7 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
       emailVerified: user.emailVerified,
       onboardingDone: user.onboardingDone,
       createdAt: user.createdAt,
+      subscription: formatSubscription(user.subscription),
     },
   };
 }
@@ -355,14 +370,7 @@ export async function getCurrentUser(userId: string) {
     emailVerified: user.emailVerified,
     onboardingDone: user.onboardingDone,
     createdAt: user.createdAt,
-    subscription: user.subscription
-      ? {
-          plan: user.subscription.plan,
-          status: user.subscription.status,
-          currentPeriodEnd: user.subscription.currentPeriodEnd?.toISOString() ?? null,
-          cancelAtPeriodEnd: user.subscription.cancelAtPeriodEnd,
-        }
-      : { plan: "FREE" as const, status: "ACTIVE" as const, currentPeriodEnd: null, cancelAtPeriodEnd: false },
+    subscription: formatSubscription(user.subscription),
   };
 }
 
