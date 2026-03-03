@@ -47,6 +47,30 @@ export interface SubscriptionInfo {
   cancelAtPeriodEnd: boolean;
 }
 
+// ─── Event ────────────────────────────────────────────────────────────────────
+
+export interface EventSummary {
+  id: string;
+  name: string;
+  series: string;
+  track: string;
+  date: string;
+  season: string;
+  raceCount: number;
+}
+
+export interface EventRace {
+  id: string;
+  name: string;
+  date: string;
+  status: RaceStatus;
+  series: string;
+}
+
+export interface EventWithRaces extends EventSummary {
+  races: EventRace[];
+}
+
 // ─── Race ─────────────────────────────────────────────────────────────────────
 
 export type RaceStatus = "DRAFT" | "PUBLISHED";

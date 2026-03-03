@@ -1,4 +1,4 @@
-import type { ApiError } from "@shared/types";
+import type { ApiError, EventSummary, EventWithRaces } from "@shared/types";
 
 const BASE_URL = "/api";
 
@@ -147,3 +147,22 @@ export class ApiClientError extends Error {
 }
 
 export const api = new ApiClient();
+
+// ─── Event API ───────────────────────────────────────────────────────────────
+
+export function fetchEvents(params?: {
+  series?: string;
+  season?: string;
+}): Promise<EventSummary[]> {
+  const qs = new URLSearchParams();
+  if (params?.series) qs.set("series", params.series);
+  if (params?.season) qs.set("season", params.season);
+  const query = qs.toString();
+  return api
+    .get<{ events: EventSummary[] }>(`/events${query ? `?${query}` : ""}`)
+    .then((r) => r.events);
+}
+
+export function fetchEvent(eventId: string): Promise<EventWithRaces> {
+  return api.get<EventWithRaces>(`/events/${eventId}`);
+}
