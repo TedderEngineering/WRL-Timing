@@ -416,8 +416,10 @@ export function LapTimeChart({
 
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapTimeInfo | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const activeLapRef = useRef(activeLap);
   activeLapRef.current = activeLap;
+  const dragState = useRef({ dragging: false, startX: 0, startScroll: 0 });
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
@@ -485,9 +487,38 @@ export function LapTimeChart({
     [],
   );
 
+  // ── Drag-to-pan handlers ──────────────────────────────────────
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    dragState.current = { dragging: true, startX: e.clientX, startScroll: scrollRef.current?.scrollLeft || 0 };
+    setIsDragging(true);
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current.dragging || !scrollRef.current) return;
+      scrollRef.current.scrollLeft = dragState.current.startScroll - (e.clientX - dragState.current.startX);
+    };
+    const onUp = (e: MouseEvent) => {
+      if (!dragState.current.dragging) return;
+      const dx = Math.abs(e.clientX - dragState.current.startX);
+      dragState.current.dragging = false;
+      setIsDragging(false);
+      if (dx < 4 && scrollRef.current && dim) {
+        const r = scrollRef.current.getBoundingClientRect();
+        const cx = e.clientX - r.left + scrollRef.current.scrollLeft;
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim))));
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [dim, data.maxLap, showLapInfo]);
+
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dim) return;
+      if (!dim || dragState.current.dragging) return;
       const cx = getCanvasX(e.clientX);
       showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim))));
     },
@@ -686,13 +717,14 @@ export function LapTimeChart({
           <div style={{ width: dim?.W, height: dim?.H }}>
             <canvas
               ref={canvasRef}
+              onMouseDown={onDragStart}
               onMouseMove={onMouseMove}
               onMouseLeave={onMouseLeave}
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
               onContextMenu={(e) => e.preventDefault()}
-              style={{ display: "block", cursor: "crosshair" }}
+              style={{ display: "block", cursor: isDragging ? "grabbing" : "grab" }}
             />
           </div>
         </div>
