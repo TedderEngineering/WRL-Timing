@@ -404,18 +404,18 @@ export function LapChart({
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-2" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* ── Controls row ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-x-3 gap-y-2 items-start px-1">
+      <div className="flex flex-wrap gap-x-2 gap-y-1 items-end px-1">
         {/* Class filter */}
-        <div className="shrink-0" style={{ minWidth: 140 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#cbd5e1" }}>
-            Class View
+        <div className="shrink-0" style={{ minWidth: 130 }}>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: "#cbd5e1" }}>
+            Class
           </label>
           <select
             value={classView}
             onChange={(e) => handleClassChange(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md text-sm font-mono text-white border cursor-pointer appearance-none"
+            className="w-full px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
             style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
           >
             <option value="">All Classes ({data.totalCars})</option>
@@ -430,14 +430,14 @@ export function LapChart({
         </div>
 
         {/* Focus car */}
-        <div className="shrink-0 flex-1" style={{ minWidth: 200 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#cbd5e1" }}>
+        <div className="shrink-0 flex-1" style={{ minWidth: 180 }}>
+          <label className="block text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: "#cbd5e1" }}>
             Focus Car
           </label>
           <select
             value={focusNum}
             onChange={(e) => handleFocusChange(Number(e.target.value))}
-            className="w-full px-2.5 py-1.5 rounded-md text-sm font-mono text-white border cursor-pointer appearance-none"
+            className="w-full px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
             style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
           >
             {visibleCars.map((n) => {
@@ -455,11 +455,11 @@ export function LapChart({
 
         {/* Comparison area */}
         <div className="flex-[2] min-w-[280px]">
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "#cbd5e1" }}>
-            Compare Against (avg lap time)
-          </label>
-          {/* Preset buttons */}
-          <div className="flex flex-wrap gap-1 mb-1">
+          {/* Label + preset pills on one row */}
+          <div className="flex flex-wrap items-center gap-1 mb-1">
+            <span className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+              Compare
+            </span>
             {presets.map((p) => {
               const relevant = p.cars.filter((n) => n !== focusNum);
               const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
@@ -467,7 +467,7 @@ export function LapChart({
                 <button
                   key={p.label}
                   onClick={() => setPreset(p.cars)}
-                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+                  className="px-2 py-0 rounded-xl text-[10px] border transition-all cursor-pointer leading-tight"
                   style={{
                     background: isActive ? "#4472C4" : CHART_STYLE.card,
                     borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
@@ -480,14 +480,14 @@ export function LapChart({
             })}
             <button
               onClick={clearComp}
-              className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+              className="px-2 py-0 rounded-xl text-[10px] border transition-all cursor-pointer leading-tight"
               style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
             >
               Clear
             </button>
           </div>
           {/* Car chips */}
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap" style={{ gap: "3px" }}>
             {visibleCars.map((n) => {
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;
@@ -497,7 +497,7 @@ export function LapChart({
                   key={n}
                   onClick={() => !isFocus && toggleComp(n)}
                   disabled={isFocus}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
+                  className="px-1.5 py-0 rounded text-[10px] font-mono border transition-all cursor-pointer leading-tight"
                   style={{
                     borderColor: col || CHART_STYLE.border,
                     background: col ? `${col}33` : "transparent",
@@ -523,7 +523,7 @@ export function LapChart({
         style={{
           background: CHART_STYLE.card,
           borderColor: CHART_STYLE.border,
-          height: isMobile ? "calc(100vh - 320px)" : "calc(100vh - 420px)",
+          height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)",
           minHeight: 300,
         }}
         onMouseEnter={onMouseEnter}
@@ -597,30 +597,12 @@ export function LapChart({
         </div>
       </div>
 
-      {/* ── Navigation buttons ──────────────────────────────────── */}
-      <div className="hidden sm:flex gap-1.5">
-        <button
-          onClick={navPrev}
-          className="flex-1 py-2 rounded-md text-sm font-semibold border cursor-pointer transition-colors active:brightness-125"
-          style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}
-        >
-          ◀ Prev Lap
-        </button>
-        <button
-          onClick={navNext}
-          className="flex-1 py-2 rounded-md text-sm font-semibold border cursor-pointer transition-colors active:brightness-125"
-          style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}
-        >
-          Next Lap ▶
-        </button>
-      </div>
-
       {/* ── Info panel ───────────────────────────────────────────── */}
       <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} lapHours={lapHours} xAxisMode={xAxisMode} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
-        className="flex flex-wrap gap-3 px-3 py-2 rounded-md text-[11px] border"
+        className="flex flex-wrap gap-3 px-3 py-1 rounded-md text-[11px] border"
         style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
       >
         <span className="flex items-center gap-1">
@@ -647,7 +629,7 @@ export function LapChart({
 
       {/* ── Footnote ─────────────────────────────────────────────── */}
       <div
-        className="px-3 py-2 rounded-md text-[11px] leading-relaxed border"
+        className="px-3 py-1 rounded-md text-[11px] leading-relaxed border"
         style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.dim }}
       >
         Green-flag laps only for pace comparison (lap time &lt; {data.greenPaceCutoff}s). Comparison average excludes focus car.

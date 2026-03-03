@@ -195,35 +195,37 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-2 sm:py-3">
+    <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-1 sm:py-1.5">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
         <div>
-          <div className="flex items-center gap-3 mb-0">
+          <div className="flex items-center gap-2">
             <Link
               to="/races"
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
             >
               Races
             </Link>
-            <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-sm text-brand-600 dark:text-brand-400 font-medium">
+            <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+            <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
               {raceMeta.series} {raceMeta.season}
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
-            {raceMeta.name}
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-            {raceMeta.track} · {dateStr}
-          </p>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
+              {raceMeta.name}
+            </h1>
+            <span className="text-xs text-gray-500 dark:text-gray-500">
+              {raceMeta.track} · {dateStr}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
           {isAuthenticated && (
             <button
               onClick={handleFavorite}
-              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-700 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <svg
                 className={`h-4 w-4 ${
@@ -259,7 +261,7 @@ export function RaceDetailPage() {
         return (
           <>
             <div
-              className="flex gap-1 mb-2 border-b"
+              className="flex gap-1 mb-0.5 border-b"
               style={{ borderColor: CHART_STYLE.border }}
             >
               {tabs.map((tab) => {
@@ -275,7 +277,7 @@ export function RaceDetailPage() {
                       setLockedMsg(null);
                       setActiveTab(tab.id);
                     }}
-                    className="relative px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-2"
+                    className="relative px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-2"
                     style={{
                       color: isActive ? "#fff" : CHART_STYLE.muted,
                       borderBottom: isActive ? "2px solid #5c7cfa" : "2px solid transparent",
