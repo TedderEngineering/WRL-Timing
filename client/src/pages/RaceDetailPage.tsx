@@ -238,9 +238,9 @@ export function RaceDetailPage() {
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-1 sm:py-1.5">
-      {/* Header */}
-      <div className="mb-1">
-        <div className="flex items-center gap-2">
+      {/* Header — single row: breadcrumb / title / track+date */}
+      <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
+        <div className="flex items-center gap-2 shrink-0">
           <Link
             to="/races"
             className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -251,15 +251,14 @@ export function RaceDetailPage() {
           <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
             {raceMeta.series} {raceMeta.season}
           </span>
+          <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
         </div>
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
-            {raceMeta.name}
-          </h1>
-          <span className="text-xs text-gray-500 dark:text-gray-500">
-            {raceMeta.track} · {dateStr}
-          </span>
-        </div>
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
+          {raceMeta.name}
+        </h1>
+        <span className="text-xs text-gray-500 dark:text-gray-500">
+          {raceMeta.track} · {dateStr}
+        </span>
       </div>
 
       {/* Tab bar + dropdowns on one row */}
