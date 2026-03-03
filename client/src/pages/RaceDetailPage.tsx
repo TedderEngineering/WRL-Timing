@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
@@ -8,10 +8,14 @@ import { CHART_STYLE } from "../features/chart";
 import { getVisibleCars } from "../features/chart/chart-renderer";
 import { api } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
+import EventSidebar from "../components/EventSidebar";
+import EmptyChartState from "../components/EmptyChartState";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 export function RaceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { isAuthenticated, user } = useAuth();
   const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
@@ -109,9 +113,32 @@ export function RaceDetailPage() {
     }
   };
 
+  // ── Grid wrapper with sidebar ──────────────────────────────────
+  const withSidebar = (content: React.ReactNode) => (
+    <div
+      className="grid transition-[grid-template-columns] duration-200 ease-in-out"
+      style={{
+        gridTemplateColumns: sidebarCollapsed ? "56px 1fr" : "280px 1fr",
+      }}
+    >
+      <EventSidebar
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((p) => !p)}
+        onSelectRace={(raceId) => navigate(`/races/${raceId}`)}
+        selectedRaceId={id || null}
+      />
+      <div className="min-w-0 overflow-x-hidden">{content}</div>
+    </div>
+  );
+
+  // ── No race selected ─────────────────────────────────────────────
+  if (!id) {
+    return withSidebar(<EmptyChartState />);
+  }
+
   // ── Loading ─────────────────────────────────────────────────────
   if (isLoading) {
-    return (
+    return withSidebar(
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <div className="h-10 w-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-gray-500 dark:text-gray-400">Loading race data...</p>
@@ -210,7 +237,7 @@ export function RaceDetailPage() {
       );
     }
 
-    return (
+    return withSidebar(
       <div className="container-page py-20">
         {raceMeta && (
           <div className="mb-8">
@@ -236,7 +263,7 @@ export function RaceDetailPage() {
   });
 
   // ── Render ──────────────────────────────────────────────────────
-  return (
+  return withSidebar(
     <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-1 sm:py-1.5">
       {/* Header — single row: breadcrumb / title / track+date */}
       <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
@@ -444,4 +471,10 @@ export function RaceDetailPage() {
       )}
     </div>
   );
+}
+
+// ─── Standalone chart page (no sidebar) for /races route ─────────────────────
+
+export function RaceChartPage() {
+  return <RaceDetailPage />;
 }
