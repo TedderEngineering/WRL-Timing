@@ -436,7 +436,7 @@ export function LapTimeChart({
     if (!wrapperRef.current || !scrollRef.current) return;
     const containerW = scrollRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, data.maxLap, isMobile);
+    const newDim = computeDimensions(containerW, containerH, isMobile, undefined, Math.max(1200, data.maxLap * 5));
     setDim(newDim);
     return newDim;
   }, [data.maxLap, isMobile]);
@@ -508,7 +508,7 @@ export function LapTimeChart({
       if (dx < 4 && scrollRef.current && dim) {
         const r = scrollRef.current.getBoundingClientRect();
         const cx = e.clientX - r.left + scrollRef.current.scrollLeft;
-        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim))));
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, 1, data.maxLap, dim))));
       }
     };
     window.addEventListener("mousemove", onMove);
@@ -520,7 +520,7 @@ export function LapTimeChart({
     (e: React.MouseEvent) => {
       if (!dim || dragState.current.dragging) return;
       const cx = getCanvasX(e.clientX);
-      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim))));
+      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, 1, data.maxLap, dim))));
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],
   );
@@ -539,7 +539,7 @@ export function LapTimeChart({
       const tx = e.touches[0].clientX;
       scrollRef.current.scrollLeft = touchState.current.startScroll + (touchState.current.startX - tx);
       touchState.current.moved = true;
-      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(tx), data.maxLap, dim))));
+      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(tx), 1, data.maxLap, dim))));
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],
   );
@@ -548,7 +548,7 @@ export function LapTimeChart({
     (e: React.TouchEvent) => {
       if (!touchState.current.moved && dim) {
         const ct = e.changedTouches[0];
-        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(ct.clientX), data.maxLap, dim))));
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(ct.clientX), 1, data.maxLap, dim))));
       }
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],

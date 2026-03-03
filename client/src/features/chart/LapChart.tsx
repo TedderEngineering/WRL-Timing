@@ -48,27 +48,39 @@ export function LapChart({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
-  const [indicatorVisible, setIndicatorVisible] = useState(false);
-  const [scrollRatio, setScrollRatio] = useState(0);
-  const [thumbRatio, setThumbRatio] = useState(1);
-  const [isDragging, setIsDragging] = useState(false);
+
+  // ── Zoom state ─────────────────────────────────────────────────
+  const [lapStart, setLapStart] = useState(1);
+  const [lapEnd, setLapEnd] = useState(data.maxLap);
+  const [selectionRange, setSelectionRange] = useState<[number, number] | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const isZoomed = lapStart > 1 || lapEnd < data.maxLap;
+
   const activeLapRef = useRef(activeLap);
   activeLapRef.current = activeLap;
-  const dragState = useRef({ dragging: false, startX: 0, startScroll: 0 });
-  const indicatorTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lapStartRef = useRef(lapStart);
+  lapStartRef.current = lapStart;
+  const lapEndRef = useRef(lapEnd);
+  lapEndRef.current = lapEnd;
+
+  // Reset zoom when race data changes
+  useEffect(() => { setLapStart(1); setLapEnd(data.maxLap); }, [data.maxLap]);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
+  const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
+  const rangeSelectStart = useRef<number | null>(null);
+
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(
-    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid, xAxisMode }),
-    [focusNum, compSet, activeLap, classView, isPaid, xAxisMode]
+    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid, xAxisMode, lapStart, lapEnd, selectionRange }),
+    [focusNum, compSet, activeLap, classView, isPaid, xAxisMode, lapStart, lapEnd, selectionRange]
   );
 
   // ── Lap elapsed hours for time axis ────────────────────────────
@@ -76,27 +88,19 @@ export function LapChart({
 
   // ── Resize & draw ──────────────────────────────────────────────
   const resize = useCallback(() => {
-    if (!wrapperRef.current || !scrollRef.current) return;
-    const containerW = scrollRef.current.clientWidth;
+    if (!wrapperRef.current) return;
+    const containerW = wrapperRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, data.maxLap, isMobile, xAxisMode);
+    const newDim = computeDimensions(containerW, containerH, isMobile, xAxisMode);
     setDim(newDim);
     return newDim;
-  }, [data.maxLap, isMobile, xAxisMode]);
+  }, [isMobile, xAxisMode]);
 
   // Draw whenever state or dimensions change
   useEffect(() => {
     const canvas = canvasRef.current;
     const d = dim || resize();
     if (!canvas || !d) return;
-
-    // Update scroll container width for overflow
-    const inner = canvas.parentElement;
-    if (inner) {
-      inner.style.width = d.W + "px";
-      inner.style.height = d.H + "px";
-    }
-
     drawChart(canvas, data, annotations, chartState, d, watermarkEmail);
   }, [data, annotations, chartState, dim, resize, watermarkEmail]);
 
@@ -111,37 +115,15 @@ export function LapChart({
     return () => window.removeEventListener("resize", onResize);
   }, [resize]);
 
-  // ── Scroll position tracking ──────────────────────────────────
-  const updateScrollIndicator = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const maxScroll = el.scrollWidth - el.clientWidth;
-    setThumbRatio(maxScroll > 0 ? el.clientWidth / el.scrollWidth : 1);
-    setScrollRatio(maxScroll > 0 ? el.scrollLeft / maxScroll : 0);
-  }, []);
-
-  const flashIndicator = useCallback(() => {
-    setIndicatorVisible(true);
-    clearTimeout(indicatorTimer.current);
-    indicatorTimer.current = setTimeout(() => setIndicatorVisible(false), 1500);
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => { updateScrollIndicator(); flashIndicator(); };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    updateScrollIndicator();
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [dim, updateScrollIndicator, flashIndicator]);
-
-  // ── Drag-to-pan handlers ──────────────────────────────────────
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    dragState.current = { dragging: true, startX: e.clientX, startScroll: scrollRef.current?.scrollLeft || 0 };
-    setIsDragging(true);
-    e.preventDefault();
-  }, []);
+  // ── Coordinate helpers ──────────────────────────────────────────
+  const getCanvasX = useCallback(
+    (clientX: number): number => {
+      if (!wrapperRef.current) return 0;
+      const r = wrapperRef.current.getBoundingClientRect();
+      return clientX - r.left;
+    },
+    []
+  );
 
   // ── Interaction: show info for a lap ────────────────────────────
   const showLapInfo = useCallback(
@@ -154,75 +136,197 @@ export function LapChart({
 
       const infoData = buildLapInfo(data, annotations, chartState, lapNum);
       setInfo(infoData);
-
-      // Auto-scroll canvas to keep crosshair visible
-      if (dim && scrollRef.current) {
-        const ax = dim.ML + ((lapNum - 1) / (data.maxLap - 1)) * dim.CW;
-        const sl = scrollRef.current.scrollLeft;
-        const sw = scrollRef.current.clientWidth;
-        if (ax < sl + 60) scrollRef.current.scrollLeft = Math.max(0, ax - 80);
-        else if (ax > sl + sw - 60) scrollRef.current.scrollLeft = ax - sw + 80;
-      }
     },
-    [data, annotations, chartState, focusNum, dim]
+    [data, annotations, chartState, focusNum, setActiveLap]
   );
 
-  // ── Drag-to-pan window listeners ──────────────────────────────
+  // ── Auto-pan when active lap leaves visible range ──────────────
+  const autoPan = useCallback(
+    (lapNum: number) => {
+      const ls = lapStartRef.current;
+      const le = lapEndRef.current;
+      const range = le - ls;
+      const margin = range * 0.1;
+      if (lapNum < ls + margin) {
+        const newStart = Math.max(1, lapNum - margin);
+        setLapStart(newStart);
+        setLapEnd(newStart + range);
+      } else if (lapNum > le - margin) {
+        const newEnd = Math.min(data.maxLap, lapNum + margin);
+        setLapEnd(newEnd);
+        setLapStart(newEnd - range);
+      }
+    },
+    [data.maxLap]
+  );
+
+  // ── Wheel zoom handler (imperative for passive:false) ──────────
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const d = dim;
+      if (!d) return;
+      const cx = e.clientX - el.getBoundingClientRect().left;
+      const ls = lapStartRef.current;
+      const le = lapEndRef.current;
+
+      // Lap under cursor
+      const cursorLap = lapOfX(cx, ls, le, d);
+
+      // Zoom factor
+      const factor = e.deltaY > 0 ? 1.18 : 1 / 1.18;
+      const range = le - ls;
+      let newRange = range * factor;
+
+      // Clamp: min 5 laps visible, max full race
+      newRange = Math.max(5, Math.min(data.maxLap - 1, newRange));
+
+      // Preserve fraction under cursor
+      const frac = (cursorLap - ls) / range;
+      let newStart = cursorLap - frac * newRange;
+      let newEnd = newStart + newRange;
+
+      // Clamp to [1, maxLap]
+      if (newStart < 1) { newStart = 1; newEnd = 1 + newRange; }
+      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - newRange; }
+      newStart = Math.max(1, newStart);
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [dim, data.maxLap]);
+
+  // ── Data-space pan (mouse) ─────────────────────────────────────
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    // If in range-select mode (after dblclick), don't start pan
+    if (rangeSelectStart.current !== null) return;
+    panState.current = {
+      panning: true,
+      startX: e.clientX,
+      startLapStart: lapStartRef.current,
+      startLapEnd: lapEndRef.current,
+    };
+    setIsPanning(true);
+    e.preventDefault();
+  }, []);
+
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!dragState.current.dragging || !scrollRef.current) return;
-      const dx = e.clientX - dragState.current.startX;
-      scrollRef.current.scrollLeft = dragState.current.startScroll - dx;
+      // Range selection mode
+      if (rangeSelectStart.current !== null && dim && wrapperRef.current) {
+        const cx = e.clientX - wrapperRef.current.getBoundingClientRect().left;
+        const lap = lapOfX(cx, lapStartRef.current, lapEndRef.current, dim);
+        setSelectionRange([rangeSelectStart.current, lap]);
+        return;
+      }
+
+      if (!panState.current.panning || !dim) return;
+      const dx = e.clientX - panState.current.startX;
+      const { startLapStart, startLapEnd } = panState.current;
+      const range = startLapEnd - startLapStart;
+      const lapDelta = -(dx / dim.CW) * range;
+
+      let newStart = startLapStart + lapDelta;
+      let newEnd = startLapEnd + lapDelta;
+
+      // Clamp to [1, maxLap]
+      if (newStart < 1) { newStart = 1; newEnd = 1 + range; }
+      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - range; }
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
     };
+
     const onUp = (e: MouseEvent) => {
-      if (!dragState.current.dragging) return;
-      const dx = Math.abs(e.clientX - dragState.current.startX);
-      dragState.current.dragging = false;
-      setIsDragging(false);
-      // If barely moved, treat as a click → select lap
-      if (dx < 4 && scrollRef.current && dim) {
-        const r = scrollRef.current.getBoundingClientRect();
-        const cx = e.clientX - r.left + scrollRef.current.scrollLeft;
-        const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
-        showLapInfo(lap);
+      // Range selection finalize
+      if (rangeSelectStart.current !== null && dim && wrapperRef.current) {
+        const cx = e.clientX - wrapperRef.current.getBoundingClientRect().left;
+        const endLap = lapOfX(cx, lapStartRef.current, lapEndRef.current, dim);
+        const startLap = rangeSelectStart.current;
+        const lo = Math.min(startLap, endLap);
+        const hi = Math.max(startLap, endLap);
+
+        rangeSelectStart.current = null;
+        setSelectionRange(null);
+
+        if (hi - lo >= 3) {
+          setLapStart(Math.max(1, lo));
+          setLapEnd(Math.min(data.maxLap, hi));
+        }
+        return;
+      }
+
+      if (!panState.current.panning) return;
+      const dx = Math.abs(e.clientX - panState.current.startX);
+      panState.current.panning = false;
+      setIsPanning(false);
+
+      // If barely moved, treat as click → select lap
+      if (dx < 4 && wrapperRef.current && dim) {
+        const r = wrapperRef.current.getBoundingClientRect();
+        const cx = e.clientX - r.left;
+        const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
+        const clamped = Math.max(1, Math.min(data.maxLap, lap));
+        showLapInfo(clamped);
       }
     };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dim, data.maxLap, showLapInfo]);
 
-  // ── Mouse/touch handlers ────────────────────────────────────────
-  const getCanvasX = useCallback(
-    (clientX: number): number => {
-      if (!scrollRef.current) return 0;
-      const r = scrollRef.current.getBoundingClientRect();
-      return clientX - r.left + scrollRef.current.scrollLeft;
-    },
-    []
-  );
-
+  // ── Mouse move (hover) ─────────────────────────────────────────
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dim || dragState.current.dragging) return;
+      if (!dim || panState.current.panning || rangeSelectStart.current !== null) return;
       const cx = getCanvasX(e.clientX);
-      const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
-      showLapInfo(lap);
+      const lap = Math.round(lapOfX(cx, lapStart, lapEnd, dim));
+      const clamped = Math.max(1, Math.min(data.maxLap, lap));
+      showLapInfo(clamped);
     },
-    [dim, getCanvasX, data.maxLap, showLapInfo]
+    [dim, getCanvasX, lapStart, lapEnd, data.maxLap, showLapInfo]
   );
 
-  const onMouseEnter = useCallback(() => { flashIndicator(); }, [flashIndicator]);
-  const onMouseLeave = useCallback(() => {}, []);
+  // ── Double-click range zoom ────────────────────────────────────
+  const onDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!dim) return;
+      const cx = getCanvasX(e.clientX);
+      const lap = lapOfX(cx, lapStart, lapEnd, dim);
+      rangeSelectStart.current = lap;
+      setSelectionRange([lap, lap]);
+      e.preventDefault();
+    },
+    [dim, getCanvasX, lapStart, lapEnd]
+  );
 
-  // Touch: panning + lap selection
-  const touchState = useRef({ startX: 0, startScroll: 0, moved: false });
+  // ── Escape: cancel range selection ─────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && rangeSelectStart.current !== null) {
+        rangeSelectStart.current = null;
+        setSelectionRange(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ── Touch: panning + lap selection ─────────────────────────────
+  const touchState = useRef({ startX: 0, startLapStart: 1, startLapEnd: 1, moved: false });
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       touchState.current = {
         startX: e.touches[0].clientX,
-        startScroll: scrollRef.current?.scrollLeft || 0,
+        startLapStart: lapStartRef.current,
+        startLapEnd: lapEndRef.current,
         moved: false,
       };
     },
@@ -231,14 +335,27 @@ export function LapChart({
 
   const onTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (!e.touches.length || !scrollRef.current || !dim) return;
+      if (!e.touches.length || !dim) return;
       const tx = e.touches[0].clientX;
-      scrollRef.current.scrollLeft =
-        touchState.current.startScroll + (touchState.current.startX - tx);
+      const dx = tx - touchState.current.startX;
       touchState.current.moved = true;
+
+      const { startLapStart, startLapEnd } = touchState.current;
+      const range = startLapEnd - startLapStart;
+      const lapDelta = -(dx / dim.CW) * range;
+
+      let newStart = startLapStart + lapDelta;
+      let newEnd = startLapEnd + lapDelta;
+      if (newStart < 1) { newStart = 1; newEnd = 1 + range; }
+      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - range; }
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
+
+      // Also show lap info at touch position
       const cx = getCanvasX(tx);
-      const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
-      showLapInfo(lap);
+      const lap = Math.round(lapOfX(cx, newStart, newEnd, dim));
+      showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
     },
     [dim, getCanvasX, data.maxLap, showLapInfo]
   );
@@ -248,8 +365,8 @@ export function LapChart({
       if (!touchState.current.moved && dim) {
         const ct = e.changedTouches[0];
         const cx = getCanvasX(ct.clientX);
-        const lap = Math.max(1, Math.min(data.maxLap, lapOfX(cx, data.maxLap, dim)));
-        showLapInfo(lap);
+        const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
       }
     },
     [dim, getCanvasX, data.maxLap, showLapInfo]
@@ -265,9 +382,13 @@ export function LapChart({
       showLapInfo(valid[0]);
     } else {
       const idx = valid.indexOf(cur);
-      if (idx > 0) showLapInfo(valid[idx - 1]);
+      if (idx > 0) {
+        const newLap = valid[idx - 1];
+        showLapInfo(newLap);
+        autoPan(newLap);
+      }
     }
-  }, [data, focusNum, showLapInfo]);
+  }, [data, focusNum, showLapInfo, autoPan]);
 
   const navNext = useCallback(() => {
     const laps = data.cars[String(focusNum)]?.laps || [];
@@ -278,23 +399,34 @@ export function LapChart({
       showLapInfo(valid[0]);
     } else {
       const idx = valid.indexOf(cur);
-      if (idx < valid.length - 1) showLapInfo(valid[idx + 1]);
+      if (idx < valid.length - 1) {
+        const newLap = valid[idx + 1];
+        showLapInfo(newLap);
+        autoPan(newLap);
+      }
     }
-  }, [data, focusNum, showLapInfo]);
+  }, [data, focusNum, showLapInfo, autoPan]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         navPrev();
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         navNext();
+      } else if (e.key === "w" || e.key === "W") {
+        e.preventDefault();
+        setLapStart(1);
+        setLapEnd(data.maxLap);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [navPrev, navNext]);
+  }, [navPrev, navNext, data.maxLap]);
 
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
@@ -365,6 +497,15 @@ export function LapChart({
         .map(([cls, cars]) => ({ label: cls, cars })),
     ];
   }, [data, classView]);
+
+  // Cursor style
+  const cursorStyle = rangeSelectStart.current !== null
+    ? "crosshair"
+    : isPanning
+    ? "grabbing"
+    : isZoomed
+    ? "grab"
+    : "default";
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
@@ -444,28 +585,19 @@ export function LapChart({
           height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)",
           minHeight: 300,
         }}
-        onMouseEnter={onMouseEnter}
       >
-        <div
-          ref={scrollRef}
-          className="overflow-x-auto overflow-y-hidden h-full no-scrollbar"
-          style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
-        >
-          <div style={{ width: dim?.W, height: dim?.H }}>
-            <canvas
-              ref={canvasRef}
-              onMouseDown={onDragStart}
-              onMouseMove={onMouseMove}
-              onMouseLeave={onMouseLeave}
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-              onContextMenu={(e) => e.preventDefault()}
-              style={{ display: "block", cursor: isDragging ? "grabbing" : "grab" }}
-            />
-          </div>
-        </div>
-        {/* X-axis mode toggle + position indicator */}
+        <canvas
+          ref={canvasRef}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onDoubleClick={onDoubleClick}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ display: "block", cursor: cursorStyle }}
+        />
+        {/* X-axis mode toggle + zoom indicator */}
         <div className="absolute left-0 right-0 flex items-end gap-2 px-1" style={{ bottom: 3, zIndex: 2 }}>
           {/* Toggle pill */}
           <div
@@ -490,26 +622,13 @@ export function LapChart({
               </button>
             ))}
           </div>
-          {/* Scroll position indicator */}
-          {thumbRatio < 1 && (
+          {/* Zoom indicator */}
+          {isZoomed && (
             <div
-              className="flex-1 rounded-full overflow-hidden transition-opacity duration-500"
-              style={{
-                height: 3,
-                background: `${CHART_STYLE.border}44`,
-                opacity: indicatorVisible ? 1 : 0,
-                marginBottom: 3,
-                marginRight: (dim?.MR ?? 20) - 4,
-              }}
+              className="text-[10px] font-mono"
+              style={{ color: CHART_STYLE.muted, marginBottom: 1 }}
             >
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${thumbRatio * 100}%`,
-                  marginLeft: `${scrollRatio * (1 - thumbRatio) * 100}%`,
-                  background: CHART_STYLE.muted,
-                }}
-              />
+              L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
             </div>
           )}
         </div>

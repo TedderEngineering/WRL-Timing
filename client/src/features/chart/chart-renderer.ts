@@ -23,6 +23,9 @@ export interface ChartState {
   classView: string; // "" = all, or "GTU", "GTO" etc.
   showWatermark?: boolean;
   xAxisMode: "laps" | "hours" | "both";
+  lapStart: number;
+  lapEnd: number;
+  selectionRange?: [number, number] | null;
 }
 
 export interface ChartDimensions {
@@ -103,16 +106,20 @@ export function formatHour(h: number): string {
 
 // ─── Coordinate mapping ──────────────────────────────────────────────────────
 
-function xOf(lap: number, maxLap: number, dim: ChartDimensions): number {
-  return dim.ML + ((lap - 1) / (maxLap - 1)) * dim.CW;
+function xOf(lap: number, lapStart: number, lapEnd: number, dim: ChartDimensions): number {
+  const range = lapEnd - lapStart;
+  if (range <= 0) return dim.ML;
+  return dim.ML + ((lap - lapStart) / range) * dim.CW;
 }
 
 function yOf(pos: number, maxPos: number, dim: ChartDimensions): number {
   return dim.MT + ((pos - 1) / maxPos) * dim.CH;
 }
 
-export function lapOfX(x: number, maxLap: number, dim: ChartDimensions): number {
-  return Math.round(((x - dim.ML) / dim.CW) * (maxLap - 1) + 1);
+export function lapOfX(x: number, lapStart: number, lapEnd: number, dim: ChartDimensions): number {
+  const range = lapEnd - lapStart;
+  if (range <= 0) return lapStart;
+  return (x - dim.ML) / dim.CW * range + lapStart;
 }
 
 // ─── Visible cars / positions based on class filter ──────────────────────────
@@ -136,12 +143,11 @@ function posKey(classView: string): "cp" | "p" {
 export function computeDimensions(
   containerW: number,
   containerH: number,
-  maxLap: number,
   isMobile: boolean,
-  xAxisMode?: "laps" | "hours" | "both"
+  xAxisMode?: "laps" | "hours" | "both",
+  minWidth?: number
 ): ChartDimensions {
-  const minW = Math.max(1200, maxLap * 5);
-  const W = containerW < minW ? minW : Math.floor(containerW);
+  const W = Math.max(minWidth ?? 300, Math.floor(containerW));
   const H = Math.max(300, Math.floor(containerH));
 
   const ML = isMobile ? 40 : 50;
@@ -182,7 +188,7 @@ export function drawChart(
     ? { ...dim, MB: dim.MB + 14, CH: dim.CH - 14 }
     : dim;
 
-  const { focusNum, compSet, activeLap, classView } = state;
+  const { focusNum, compSet, activeLap, classView, lapStart, lapEnd } = state;
   const maxLap = data.maxLap;
   const maxPos = getMaxPos(data, classView);
   const pk = posKey(classView);
@@ -197,7 +203,8 @@ export function drawChart(
     settles: [],
   };
 
-  const x = (l: number) => xOf(l, maxLap, adjDim);
+  const visLaps = lapEnd - lapStart;
+  const x = (l: number) => xOf(l, lapStart, lapEnd, adjDim);
   const y = (p: number) => yOf(p, maxPos, adjDim);
 
   // ── 1. Grid ────────────────────────────────────────────────────
@@ -211,7 +218,9 @@ export function drawChart(
     ctx.lineTo(adjDim.W - adjDim.MR, py);
     ctx.stroke();
   }
-  for (let l = 1; l <= maxLap; l += 10) {
+  const gridStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+  const gridStart = Math.max(1, Math.ceil(lapStart / gridStep) * gridStep);
+  for (let l = gridStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += gridStep) {
     const lx = x(l);
     ctx.beginPath();
     ctx.moveTo(lx, adjDim.MT);
@@ -221,12 +230,14 @@ export function drawChart(
 
   // ── 2. FCY bands ───────────────────────────────────────────────
   (data.fcy || []).forEach(([s, e]) => {
+    if (e < lapStart || s > lapEnd) return;
     ctx.fillStyle = CHART_STYLE.fcyBand;
     ctx.fillRect(x(s - 0.4), adjDim.MT, x(e + 0.4) - x(s - 0.4), adjDim.CH);
   });
 
   // ── 3. Pit stop vertical lines ────────────────────────────────
   (ann.pits || []).forEach((p) => {
+    if (p.l < lapStart || p.l > lapEnd) return;
     const px = x(p.l);
     ctx.save();
     ctx.beginPath();
@@ -252,16 +263,20 @@ export function drawChart(
     ctx.beginPath();
     ctx.strokeStyle = hexA(col, 0.28);
     ctx.lineWidth = 1.2;
-    cl.forEach((d, i) => {
+    let started = false;
+    for (let i = 0; i < cl.length; i++) {
+      const d = cl[i];
+      if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
       const cx = x(d.l);
       const cy = y(d[pk]);
-      if (i === 0) {
+      if (!started) {
         ctx.moveTo(cx, cy);
+        started = true;
       } else {
         ctx.lineTo(cx, y(cl[i - 1][pk]));
         ctx.lineTo(cx, cy);
       }
-    });
+    }
     ctx.stroke();
   });
 
@@ -270,21 +285,26 @@ export function drawChart(
   ctx.beginPath();
   ctx.strokeStyle = clsColor;
   ctx.lineWidth = 2.5;
-  laps.forEach((d, i) => {
+  let focusStarted = false;
+  for (let i = 0; i < laps.length; i++) {
+    const d = laps[i];
+    if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
     const lx = x(d.l);
     const ly = y(d[pk]);
-    if (i === 0) {
+    if (!focusStarted) {
       ctx.moveTo(lx, ly);
+      focusStarted = true;
     } else {
       ctx.lineTo(lx, y(laps[i - 1][pk]));
       ctx.lineTo(lx, ly);
     }
-  });
+  }
   ctx.stroke();
 
   // ── 6. Settle arrows ──────────────────────────────────────────
   const settlesByBucket: Record<number, number> = {};
   (ann.settles || []).forEach((sp) => {
+    if (sp.l < lapStart || sp.l > lapEnd) return;
     let settlePos = sp.p;
     if (classView) {
       const ld = laps.find((l) => l.l === sp.l);
@@ -338,7 +358,7 @@ export function drawChart(
 
   // ── 7. Pit dots ────────────────────────────────────────────────
   laps.forEach((d) => {
-    if (d.pit) {
+    if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
       const px = x(d.l);
       const py = y(d[pk]);
       ctx.beginPath();
@@ -352,7 +372,7 @@ export function drawChart(
   });
 
   // ── 8. Crosshair + active dot ─────────────────────────────────
-  if (activeLap !== null) {
+  if (activeLap !== null && activeLap >= lapStart && activeLap <= lapEnd) {
     const d = laps.find((l) => l.l === activeLap);
     if (d) {
       const ax = x(d.l);
@@ -419,7 +439,9 @@ export function drawChart(
     ctx.font = "500 10px monospace";
     ctx.fillStyle = CHART_STYLE.muted;
     const lapY = xAxisMode === "both" ? adjDim.H - adjDim.MB + 14 : adjDim.H - adjDim.MB + 16;
-    for (let l = 1; l <= maxLap; l += 10) {
+    const labelStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+    const labelStart = Math.max(1, Math.ceil(lapStart / labelStep) * labelStep);
+    for (let l = labelStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += labelStep) {
       ctx.fillText(String(l), x(l), lapY);
     }
   }
@@ -466,7 +488,19 @@ export function drawChart(
   ctx.fillText(classView ? classView + " Position" : "Overall Position", 0, 0);
   ctx.restore();
 
-  // ── 10. Watermark overlay ───────────────────────────────────────
+  // ── 10. Selection rectangle ───────────────────────────────────
+  if (state.selectionRange) {
+    const [s, e] = state.selectionRange;
+    const sx = x(Math.min(s, e));
+    const ex = x(Math.max(s, e));
+    ctx.fillStyle = "rgba(68,114,196,0.18)";
+    ctx.fillRect(sx, adjDim.MT, ex - sx, adjDim.CH);
+    ctx.strokeStyle = "rgba(68,114,196,0.6)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx, adjDim.MT, ex - sx, adjDim.CH);
+  }
+
+  // ── 11. Watermark overlay ───────────────────────────────────────
   if (watermarkEmail && state.showWatermark !== false) {
     ctx.save();
     ctx.globalAlpha = 0.06;
