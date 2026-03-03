@@ -199,7 +199,7 @@ export function AdminRacesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <Link
-                            to={`/races/${race.id}`}
+                            to={`/chart?race=${race.id}`}
                             className="px-2 py-1 text-xs text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 rounded"
                           >
                             View

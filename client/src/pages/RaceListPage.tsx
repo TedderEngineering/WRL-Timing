@@ -315,7 +315,7 @@ function RaceCard({
         {/* Top color bar */}
         <div className="h-1.5 bg-gradient-to-r from-brand-500 to-cyan-500" />
 
-        <Link to={`/races/${race.id}`} className="block p-5">
+        <Link to={`/chart?race=${race.id}`} className="block p-5">
           {/* Meta row */}
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
             <span className="font-semibold text-brand-600 dark:text-brand-400">

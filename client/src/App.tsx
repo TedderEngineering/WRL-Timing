@@ -19,7 +19,7 @@ import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RaceListPage } from "./pages/RaceListPage";
-import { RaceDetailPage } from "./pages/RaceDetailPage";
+import { RaceDetailPage, RaceDetailRedirect } from "./pages/RaceDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 // Settings pages
@@ -75,7 +75,9 @@ export function App() {
 
         {/* Race routes (public — auth optional for favorites) */}
         <Route path="/races" element={<RaceListPage />} />
-        <Route path="/races/:id" element={<RaceDetailPage />} />
+        <Route path="/chart" element={<RaceDetailPage />} />
+        {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
+        <Route path="/races/:id" element={<RaceDetailRedirect />} />
 
         {/* Settings (protected, nested layout) */}
         <Route

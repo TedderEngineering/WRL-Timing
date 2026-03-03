@@ -567,7 +567,7 @@ function RaceGroupCard({
           )}
           {group.importStatus === "success" && group.importResult && (
             <Link
-              to={`/races/${group.importResult.raceId}`}
+              to={`/chart?race=${group.importResult.raceId}`}
               className="px-3 py-1 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700"
             >
               View Chart

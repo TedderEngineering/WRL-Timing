@@ -127,7 +127,7 @@ export function DashboardPage() {
         <div className="h-44 rounded-2xl bg-gray-100 dark:bg-gray-900 animate-pulse" />
       ) : featured ? (
         <Link
-          to={`/races/${featured.id}`}
+          to={`/chart?race=${featured.id}`}
           className="group relative block rounded-2xl overflow-hidden bg-gradient-to-r from-gray-100 via-gray-100 to-brand-50 dark:from-gray-900 dark:via-gray-900 dark:to-brand-950/50 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-700 transition-all"
         >
           {/* Decorative grid lines */}
@@ -325,7 +325,7 @@ function RaceCard({ race }: { race: RaceItem }) {
 
   return (
     <Link
-      to={`/races/${race.id}`}
+      to={`/chart?race=${race.id}`}
       className="group block rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600/50 p-4 transition-all"
     >
       <div className="flex items-center gap-2 mb-2">
@@ -373,7 +373,7 @@ function CompactRaceCard({ race }: { race: RaceItem }) {
 
   return (
     <Link
-      to={`/races/${race.id}`}
+      to={`/chart?race=${race.id}`}
       className="group shrink-0 w-56 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600/50 p-3 transition-all"
     >
       <div className="flex items-center gap-1.5 mb-1.5">

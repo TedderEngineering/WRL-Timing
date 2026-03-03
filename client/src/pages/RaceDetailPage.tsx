@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
@@ -12,10 +12,17 @@ import EventSidebar from "../components/EventSidebar";
 import EmptyChartState from "../components/EmptyChartState";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
-export function RaceDetailPage() {
+/** Redirect /races/:id → /chart?race=:id for bookmarked URLs */
+export function RaceDetailRedirect() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  return <Navigate to={`/chart?race=${id}`} replace />;
+}
+
+export function RaceDetailPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const id = searchParams.get("race") || undefined;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { isAuthenticated, user } = useAuth();
   const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
@@ -114,21 +121,48 @@ export function RaceDetailPage() {
   };
 
   // ── Grid wrapper with sidebar ──────────────────────────────────
+  const handleSelectRace = (raceId: string) => setSearchParams({ race: raceId });
+
   const withSidebar = (content: React.ReactNode) => (
-    <div
-      className="grid transition-[grid-template-columns] duration-200 ease-in-out"
-      style={{
-        gridTemplateColumns: sidebarCollapsed ? "56px 1fr" : "280px 1fr",
-      }}
-    >
+    <>
+      {/* Mobile hamburger (below md) */}
+      <button
+        onClick={() => setMobileDrawerOpen(true)}
+        className="fixed top-3 left-3 z-40 md:hidden p-2 rounded-lg bg-gray-900/90 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
+        aria-label="Open event sidebar"
+      >
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Desktop: CSS grid layout */}
+      <div
+        className="hidden md:grid transition-[grid-template-columns] duration-200 ease-in-out"
+        style={{
+          gridTemplateColumns: sidebarCollapsed ? "56px 1fr" : "280px 1fr",
+        }}
+      >
+        <EventSidebar
+          isCollapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((p) => !p)}
+          onSelectRace={handleSelectRace}
+          selectedRaceId={id || null}
+        />
+        <div className="min-w-0 overflow-x-hidden">{content}</div>
+      </div>
+
+      {/* Mobile: full-width content + drawer overlay */}
+      <div className="md:hidden min-w-0">{content}</div>
       <EventSidebar
-        isCollapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((p) => !p)}
-        onSelectRace={(raceId) => navigate(`/races/${raceId}`)}
+        isCollapsed={false}
+        onToggle={() => {}}
+        onSelectRace={handleSelectRace}
         selectedRaceId={id || null}
+        mobileOpen={mobileDrawerOpen}
+        onMobileClose={() => setMobileDrawerOpen(false)}
       />
-      <div className="min-w-0 overflow-x-hidden">{content}</div>
-    </div>
+    </>
   );
 
   // ── No race selected ─────────────────────────────────────────────
