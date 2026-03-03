@@ -581,10 +581,6 @@ export function LapTimeChart({
     [data, classView],
   );
 
-  const classSummary = useMemo(() =>
-    Object.entries(data.classCarCounts).sort(([a], [b]) => a.localeCompare(b)).map(([cls, count]) => `${cls}:${count}`).join(" · "),
-    [data],
-  );
 
   const presets = useMemo(() => {
     if (classView) {
@@ -608,16 +604,7 @@ export function LapTimeChart({
   // ─── RENDER ───────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-1.5" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* Header subtitle */}
-      <div className="hidden sm:flex items-baseline gap-3 text-xs font-mono px-1" style={{ color: CHART_STYLE.muted }}>
-        <span>{classSummary}</span>
-        <span>·</span>
-        <span>{data.maxLap} Laps</span>
-        <span>·</span>
-        <span>{data.totalCars} Entries</span>
-      </div>
-
+    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* Compare controls */}
       <div className="px-1">
         <div>
@@ -687,14 +674,14 @@ export function LapTimeChart({
         style={{
           background: CHART_STYLE.card,
           borderColor: CHART_STYLE.border,
-          height: isMobile ? "calc(100vh - 320px)" : "calc(100vh - 420px)",
+          height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)",
           minHeight: 300,
         }}
       >
         <div
           ref={scrollRef}
-          className="overflow-x-auto overflow-y-hidden h-full"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className="overflow-x-auto overflow-y-hidden h-full no-scrollbar"
+          style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
         >
           <div style={{ width: dim?.W, height: dim?.H }}>
             <canvas
@@ -711,30 +698,12 @@ export function LapTimeChart({
         </div>
       </div>
 
-      {/* Navigation buttons */}
-      <div className="hidden sm:flex gap-1.5">
-        <button
-          onClick={navPrev}
-          className="flex-1 py-2 rounded-md text-sm font-semibold border cursor-pointer transition-colors active:brightness-125"
-          style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}
-        >
-          ◀ Prev Lap
-        </button>
-        <button
-          onClick={navNext}
-          className="flex-1 py-2 rounded-md text-sm font-semibold border cursor-pointer transition-colors active:brightness-125"
-          style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}
-        >
-          Next Lap ▶
-        </button>
-      </div>
-
       {/* Info panel */}
       <LapTimeInfoPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
 
       {/* Legend */}
       <div
-        className="flex flex-wrap gap-3 px-3 py-2 rounded-md text-[11px] border"
+        className="flex flex-wrap gap-3 px-3 py-1 rounded-md text-[11px] border"
         style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
       >
         <span className="flex items-center gap-1">
@@ -753,7 +722,7 @@ export function LapTimeChart({
 
       {/* Footnote */}
       <div
-        className="px-3 py-2 rounded-md text-[11px] leading-relaxed border"
+        className="px-3 py-1 rounded-md text-[11px] leading-relaxed border"
         style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.dim }}
       >
         Rank 1 = fastest lap time. Pit laps and FCY laps excluded from ranking.
