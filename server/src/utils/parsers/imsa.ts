@@ -17,7 +17,8 @@
 
 import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import { generateAnnotations } from "./position-analysis.js";
+import { generateAnnotations, parseIMSAPitStopData, toPitStopTimeCards } from "./position-analysis.js";
+import type { PitStopTimeCard } from "./position-analysis.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
 
@@ -306,6 +307,25 @@ export const imsaParser: RaceDataParser = {
         }
       } catch (e: any) {
         warnings.push(`Could not parse Pit Stop JSON: ${e.message}. Continuing without it.`);
+      }
+    }
+
+    // ── Build pit time cards for v3 pipeline (optional) ──────────
+    let pitTimeCards: Map<number, PitStopTimeCard[]> | undefined;
+    if (pitStopJson) {
+      try {
+        const cleanPit = pitStopJson.replace(/^\uFEFF/, "");
+        const pitData = JSON.parse(cleanPit);
+        const parsedStops = parseIMSAPitStopData(pitData);
+        if (parsedStops.size > 0) {
+          pitTimeCards = new Map();
+          for (const [carNum, stops] of parsedStops) {
+            pitTimeCards.set(carNum, toPitStopTimeCards(stops));
+          }
+          warnings.push(`Pit time cards built for ${pitTimeCards.size} cars`);
+        }
+      } catch (e: any) {
+        warnings.push(`Could not build pit time cards: ${e.message}. Continuing without them.`);
       }
     }
 
@@ -1183,7 +1203,7 @@ export const imsaParser: RaceDataParser = {
 
     // Merge position-change analysis with IMSA-specific annotations
     // (driver changes, RC messages, penalties, pit labels)
-    const mergedAnnotations = generateAnnotations(raceData, annotations);
+    const mergedAnnotations = generateAnnotations(raceData, annotations, pitTimeCards);
 
     return {
       data: raceData,

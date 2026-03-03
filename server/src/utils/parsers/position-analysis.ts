@@ -54,7 +54,8 @@ interface SettleMarker {
  */
 export function generateAnnotations(
   data: RaceDataJson,
-  existing?: AnnotationJson
+  existing?: AnnotationJson,
+  pitTimeCards?: Map<number, PitStopTimeCard[]>
 ): AnnotationJson {
   const carsRecord = data.cars as Record<string, CarData>;
 
@@ -308,7 +309,7 @@ export function generateAnnotations(
 
   // ── V3 Pipeline: volatility, CUSUM settle, pit timing, strategy ──
   try {
-    v3Pipeline(data, carsRecord, carList, fcyLaps, pitAt, teamLookup, carClass, annotations);
+    v3Pipeline(data, carsRecord, carList, fcyLaps, pitAt, teamLookup, carClass, annotations, pitTimeCards);
   } catch (_e) {
     // V3 pipeline is non-critical — fall back to v2 annotations on error
   }
@@ -329,7 +330,8 @@ function v3Pipeline(
   pitAt: Map<number, Set<number>>,
   teamLookup: Map<number, string>,
   carClass: Map<number, string>,
-  annotations: AnnotationJson
+  annotations: AnnotationJson,
+  pitTimeCards?: Map<number, PitStopTimeCard[]>
 ): void {
   const totalLaps = data.maxLap;
   const classGroups = data.classGroups as Record<string, number[]>;
@@ -400,7 +402,10 @@ function v3Pipeline(
     const pitTimingsForCar: PitTiming[] = [];
     const strategyEvents: PitEventForStrategy[] = [];
 
-    for (const pe of pitEvents) {
+    const carTimeCards = pitTimeCards?.get(car.num);
+
+    for (let peIdx = 0; peIdx < pitEvents.length; peIdx++) {
+      const pe = pitEvents[peIdx];
       // Assign to pit cycle
       const cycle = assignPitToCycle(pe.inLap, cycles);
 
@@ -425,7 +430,8 @@ function v3Pipeline(
       const settlePosition = settleResult?.settlePosition ?? preBaseline;
 
       // 7. Pit timing
-      const timing = computePitTiming(car, pe, fcyLaps);
+      const pitStopData = carTimeCards?.[peIdx];
+      const timing = computePitTiming(car, pe, fcyLaps, pitStopData);
 
       if (timing) {
         pitTimingsForCar.push(timing);
@@ -470,6 +476,16 @@ function v3Pipeline(
             net
           )
         );
+      } else {
+        // Fallback: CUSUM returned null (re-pit or too few laps).
+        // Find first non-pit, non-FCY lap after the pit to show a settle.
+        for (const ld of car.laps) {
+          if (ld.l <= pe.outLap) continue;
+          if (ld.pit === 1 || fcyLaps.has(ld.l)) continue;
+          const net = preBaseline - ld.p;
+          v3Settles.push(makeSettle(ld.l, ld.p, preBaseline, net));
+          break;
+        }
       }
     }
 
@@ -974,7 +990,7 @@ export function cusumSettleDetection(
   if (fcyLaps.has(pitEvent.inLap)) {
     for (let L = pitEvent.outLap + 1; L <= lastLap; L++) {
       if (!fcyLaps.has(L)) {
-        searchStart = L + 1;
+        searchStart = L;
         break;
       }
     }

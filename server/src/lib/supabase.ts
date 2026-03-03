@@ -7,7 +7,9 @@ if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
 
 export const supabase =
   env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+    ? createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
     : null;
 
 export const STORAGE_BUCKET = "race-files";
@@ -29,13 +31,15 @@ export async function uploadRaceFiles(
   for (const [key, content] of Object.entries(files)) {
     if (!content) continue;
 
-    const ext = key.toLowerCase().includes("pdf") ? "pdf" : "csv";
+    const keyLower = key.toLowerCase();
+    const ext = keyLower.includes("pdf") ? "pdf" : keyLower.includes("json") ? "json" : "csv";
+    const contentType = ext === "pdf" ? "application/pdf" : ext === "json" ? "application/json" : "text/csv";
     const storagePath = `${raceId}/${key}.${ext}`;
 
     const { error } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(storagePath, Buffer.from(content, "utf-8"), {
-        contentType: ext === "pdf" ? "application/pdf" : "text/csv",
+        contentType,
         upsert: true,
       });
 
