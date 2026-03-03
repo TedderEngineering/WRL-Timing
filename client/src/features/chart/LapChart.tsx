@@ -162,13 +162,15 @@ export function LapChart({
 
   // ── Wheel zoom handler (imperative for passive:false) ──────────
   useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
+    const canvas = canvasRef.current;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      e.stopPropagation();
       const d = dim;
       if (!d) return;
-      const cx = e.clientX - el.getBoundingClientRect().left;
+      const cx = e.clientX - wrapper.getBoundingClientRect().left;
       const ls = lapStartRef.current;
       const le = lapEndRef.current;
 
@@ -196,8 +198,8 @@ export function LapChart({
       setLapStart(newStart);
       setLapEnd(newEnd);
     };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
   }, [dim, data.maxLap]);
 
   // ── Data-space pan (mouse) ─────────────────────────────────────
