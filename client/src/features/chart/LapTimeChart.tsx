@@ -652,7 +652,7 @@ export function LapTimeChart({
               Clear
             </button>
           </div>
-          <div className="flex flex-wrap" style={{ gap: "3px" }}>
+          <div className="flex flex-wrap gap-1">
             {visibleCars.map((n) => {
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;

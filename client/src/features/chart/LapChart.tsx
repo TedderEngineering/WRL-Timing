@@ -405,7 +405,7 @@ export function LapChart({
             </button>
           </div>
           {/* Car chips */}
-          <div className="flex flex-wrap" style={{ gap: "3px" }}>
+          <div className="flex flex-wrap gap-1">
             {visibleCars.map((n) => {
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;
@@ -415,7 +415,7 @@ export function LapChart({
                   key={n}
                   onClick={() => !isFocus && toggleComp(n)}
                   disabled={isFocus}
-                  className="px-1.5 py-0 rounded text-[10px] font-mono border transition-all cursor-pointer leading-tight"
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
                   style={{
                     borderColor: col || CHART_STYLE.border,
                     background: col ? `${col}33` : "transparent",
