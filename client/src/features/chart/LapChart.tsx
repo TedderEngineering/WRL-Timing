@@ -711,16 +711,16 @@ function PitTimingDisplay({ pitInfo }: { pitInfo: PitInfoData }) {
   const t = pitInfo.timing;
   if (!t) return null;
 
-  const stratLabel = pitInfo.strategyType && pitInfo.strategyType !== "scheduled"
-    ? ` (${pitInfo.strategyType})`
-    : "";
-
   return (
     <div className="rounded px-2.5 py-1.5 text-xs" style={{ background: "#1a1a35", color: "#ccc" }}>
-      {/* Header: pit label + strategy */}
+      {/* Header: pit label + driver */}
       <div className="flex items-baseline gap-2 mb-1">
         <span className="font-semibold text-white">{pitInfo.pitLabel}</span>
-        {stratLabel && <span style={{ color: "#fbbf24" }}>{stratLabel}</span>}
+        {pitInfo.outDriver && (
+          <span style={{ color: pitInfo.driverChanged ? "#60a5fa" : "#888" }}>
+            {pitInfo.driverChanged ? `→ ${pitInfo.outDriver}` : `[${pitInfo.outDriver}]`}
+          </span>
+        )}
       </div>
 
       {t.decompositionLevel === "full_segments" ? (
@@ -732,7 +732,7 @@ function PitTimingDisplay({ pitInfo }: { pitInfo: PitInfoData }) {
           <TimingRow label="Total Loss" value={t.totalPitLoss} spc={t.spcAnalysis?.totalLoss} comp={t.cycleComparison?.deltaTotalLoss} bold />
         </div>
       ) : (
-        /* Total only: In-Lap / Out-Lap / Green Avg / Pit Loss */
+        /* Total only: In-Lap / Out-Lap / Green Avg / Pit Road / Pit Loss */
         <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: "auto auto auto" }}>
           <span style={{ color: "#888" }}>In-Lap</span>
           <span className="font-mono text-white">{fmtSec(t.inLapTime)}</span>
@@ -740,6 +740,11 @@ function PitTimingDisplay({ pitInfo }: { pitInfo: PitInfoData }) {
           <span style={{ color: "#888" }}>Out-Lap</span>
           <span className="font-mono text-white">{fmtSec(t.outLapTime)}</span>
           <span />
+          {t.pitRoadTime != null && (<>
+            <span style={{ color: "#888" }}>Pit Road</span>
+            <span className="font-mono text-white">{fmtSec(t.pitRoadTime)}</span>
+            <span />
+          </>)}
           <span style={{ color: "#888" }}>Green Avg</span>
           <span className="font-mono text-white">{fmtSec(t.avgGreenLapTime)}</span>
           <span />

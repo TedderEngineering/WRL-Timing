@@ -150,7 +150,7 @@ export function generateAnnotations(
         if (!existingPits.some((ep) => ep.l === lapNum)) {
           pits.push({
             l: lapNum,
-            lb: `Pit ${pitCount}`,
+            lb: `Pit Stop ${pitCount}`,
             c: "#fbbf24",
             yo: 0,
             da: 0,
@@ -436,10 +436,18 @@ function v3Pipeline(
       if (timing) {
         pitTimingsForCar.push(timing);
 
-        // Attach timing to matching pit marker
+        // Attach timing and driver info to matching pit marker
         const pitsArr = ann.pits as PitMarker[];
         const marker = pitsArr.find((p) => p.l === pe.inLap);
-        if (marker) marker.pitTiming = timing;
+        if (marker) {
+          marker.pitTiming = timing;
+          // Enrich with driver info from pit stop time card
+          if (pitStopData?.outDriverSurname && !marker.outDriver) {
+            marker.outDriver = pitStopData.outDriverSurname;
+            marker.inDriver = pitStopData.inDriverSurname;
+            marker.driverChanged = pitStopData.driverChanged ?? false;
+          }
+        }
 
         // Build event for cycle comparison
         allPitEventsWithTiming.push({
@@ -1213,6 +1221,9 @@ export interface PitStopTimeCard {
   inTime: number;   // pit road entrance timestamp (seconds from race start or epoch)
   outTime: number;  // pit road exit timestamp
   pitTime: number;  // outTime - inTime (for validation)
+  inDriverSurname?: string;
+  outDriverSurname?: string;
+  driverChanged?: boolean;
 }
 
 /**
@@ -1339,7 +1350,6 @@ export function computePitTiming(
 
     timing.pitRoadTime = pitRoadTime;
     timing.isDriveThrough = pitRoadTime < 55.0;
-    timing.decompositionLevel = "full_segments";
 
     // pitInTime and pitOutTime require absolute S/F timestamps.
     // When session_elapsed is available on lap data, compute them:
@@ -1355,6 +1365,12 @@ export function computePitTiming(
         .sessionElapsed;
       timing.pitOutTime = outLapEnd - pitStopData.outTime;
     }
+
+    // Only claim full_segments when all three segments are available
+    timing.decompositionLevel =
+      timing.pitInTime != null && timing.pitOutTime != null
+        ? "full_segments"
+        : "total_only";
   }
 
   return timing;
@@ -2034,5 +2050,8 @@ export function toPitStopTimeCards(
     inTime: ps.inTime,
     outTime: ps.outTime,
     pitTime: ps.pitTime,
+    inDriverSurname: ps.inDriverSurname || undefined,
+    outDriverSurname: ps.outDriverSurname || undefined,
+    driverChanged: ps.driverChanged,
   }));
 }

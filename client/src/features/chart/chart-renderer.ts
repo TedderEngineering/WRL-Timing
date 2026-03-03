@@ -67,6 +67,9 @@ import type { PitMarker, PitTimingData } from "@shared/types";
 export interface PitInfoData {
   pitLabel: string;
   stintNumber?: number;
+  outDriver?: string;
+  inDriver?: string;
+  driverChanged?: boolean;
   strategyType?: string;
   strategyTarget?: string;
   timing: PitTimingData | null;
@@ -282,41 +285,6 @@ export function drawChart(
     ctx.textAlign = "left";
     const labelY = pitTop + 10 + (p.yo || 0);
     ctx.fillText(p.lb, px + 3, labelY);
-
-    // Strategy badge: UC / OC / CV next to pit label
-    if (p.strategyType && p.strategyType !== "scheduled") {
-      const badgeMap: Record<string, string> = {
-        undercut: "UC",
-        overcut: "OC",
-        cover: "CV",
-      };
-      const badgeText = badgeMap[p.strategyType] || "";
-      if (badgeText) {
-        const labelWidth = ctx.measureText(p.lb).width;
-        const badgeX = px + 3 + labelWidth + 4;
-        const badgeY = labelY;
-
-        ctx.font = "500 8px system-ui";
-        const tw = ctx.measureText(badgeText).width;
-        const bw = tw + 6;
-        const bh = 11;
-
-        // Determine success from pitTiming's strategy — default green for undercut/overcut presence
-        // We don't have success on PitMarker directly, so use color heuristic:
-        // green = pit color is default amber (normal), red = penalty color
-        // Actually, the badge color should reflect strategy success.
-        // Since we only have strategyType on the marker, default to amber.
-        // The info panel shows full detail on hover/click.
-        const badgeBg = p.c === "#f87171" ? "#f87171" : "#fbbf24";
-
-        ctx.fillStyle = badgeBg;
-        roundRect(ctx, badgeX, badgeY - bh + 2, bw, bh, 3);
-        ctx.fill();
-        ctx.fillStyle = "#000";
-        ctx.textAlign = "left";
-        ctx.fillText(badgeText, badgeX + 3, badgeY);
-      }
-    }
 
     // SPC indicator at mid-height of pit vertical line
     const spc = p.pitTiming?.spcAnalysis?.totalLoss;
@@ -739,6 +707,9 @@ export function buildLapInfo(
       pitInfo = {
         pitLabel: marker.lb,
         stintNumber: marker.stintNumber,
+        outDriver: marker.outDriver,
+        inDriver: marker.inDriver,
+        driverChanged: marker.driverChanged,
         strategyType: marker.strategyType,
         timing: marker.pitTiming ?? null,
       };
