@@ -68,6 +68,10 @@ export function LapChart({
   lapStartRef.current = lapStart;
   const lapEndRef = useRef(lapEnd);
   lapEndRef.current = lapEnd;
+  const dimRef = useRef(dim);
+  dimRef.current = dim;
+  const maxLapRef = useRef(data.maxLap);
+  maxLapRef.current = data.maxLap;
 
   // Reset zoom when race data changes
   useEffect(() => { setLapStart(1); setLapEnd(data.maxLap); }, [data.maxLap]);
@@ -162,17 +166,17 @@ export function LapChart({
 
   // ── Wheel zoom handler (imperative for passive:false) ──────────
   useEffect(() => {
-    const canvas = canvasRef.current;
     const wrapper = wrapperRef.current;
-    if (!canvas || !wrapper) return;
+    if (!wrapper) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const d = dim;
+      const d = dimRef.current;
       if (!d) return;
       const cx = e.clientX - wrapper.getBoundingClientRect().left;
       const ls = lapStartRef.current;
       const le = lapEndRef.current;
+      const ml = maxLapRef.current;
 
       // Lap under cursor
       const cursorLap = lapOfX(cx, ls, le, d);
@@ -183,7 +187,7 @@ export function LapChart({
       let newRange = range * factor;
 
       // Clamp: min 5 laps visible, max full race
-      newRange = Math.max(5, Math.min(data.maxLap - 1, newRange));
+      newRange = Math.max(5, Math.min(ml - 1, newRange));
 
       // Preserve fraction under cursor
       const frac = (cursorLap - ls) / range;
@@ -192,15 +196,16 @@ export function LapChart({
 
       // Clamp to [1, maxLap]
       if (newStart < 1) { newStart = 1; newEnd = 1 + newRange; }
-      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - newRange; }
+      if (newEnd > ml) { newEnd = ml; newStart = ml - newRange; }
       newStart = Math.max(1, newStart);
 
       setLapStart(newStart);
       setLapEnd(newEnd);
     };
-    canvas.addEventListener("wheel", onWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", onWheel);
-  }, [dim, data.maxLap]);
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data-space pan (mouse) ─────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent) => {
