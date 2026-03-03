@@ -404,8 +404,8 @@ interface LapTimeChartProps {
 
 export function LapTimeChart({
   data, annotations, watermarkEmail,
-  focusNum, setFocusNum, compSet, setCompSet,
-  classView, setClassView, activeLap, setActiveLap,
+  focusNum, compSet, setCompSet,
+  classView, activeLap, setActiveLap,
 }: LapTimeChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -549,36 +549,8 @@ export function LapTimeChart({
     return () => document.removeEventListener("keydown", onKey);
   }, [navPrev, navNext]);
 
-  // ── Controls state ────────────────────────────────────────────────────
-  const handleClassChange = useCallback(
-    (cls: string) => {
-      setClassView(cls);
-      if (cls) {
-        const focusCls = data.cars[String(focusNum)]?.cls;
-        let newFocus = focusNum;
-        if (focusCls !== cls) {
-          newFocus = (data.classGroups[cls] || [])[0] || focusNum;
-          setFocusNum(newFocus);
-        }
-        const newComp = new Set<number>();
-        (data.classGroups[cls] || []).forEach((n) => { if (n !== newFocus) newComp.add(n); });
-        setCompSet(newComp);
-      }
-      setActiveLap(null);
-      setInfo(null);
-    },
-    [data, focusNum, setClassView, setFocusNum, setCompSet, setActiveLap],
-  );
-
-  const handleFocusChange = useCallback(
-    (num: number) => {
-      setFocusNum(num);
-      setCompSet((prev) => { const next = new Set(prev); next.delete(num); return next; });
-      setActiveLap(null);
-      setInfo(null);
-    },
-    [setFocusNum, setCompSet, setActiveLap],
-  );
+  // Clear info panel when focus car or class filter changes externally
+  useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
   const toggleComp = useCallback(
     (num: number) => {
@@ -646,54 +618,14 @@ export function LapTimeChart({
         <span>{data.totalCars} Entries</span>
       </div>
 
-      {/* Controls row */}
-      <div className="flex flex-wrap gap-2 items-start px-1">
-        {/* Class filter */}
-        <div className="shrink-0" style={{ minWidth: 140 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
-            Class View
-          </label>
-          <select
-            value={classView}
-            onChange={(e) => handleClassChange(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md text-sm font-mono text-white border cursor-pointer appearance-none"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            <option value="">All Classes ({data.totalCars})</option>
-            {Object.entries(data.classGroups).sort().map(([cls, cars]) => (
-              <option key={cls} value={cls}>{cls} ({cars.length} cars)</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Focus car */}
-        <div className="shrink-0 flex-1" style={{ minWidth: 200 }}>
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
-            Focus Car
-          </label>
-          <select
-            value={focusNum}
-            onChange={(e) => handleFocusChange(Number(e.target.value))}
-            className="w-full px-2.5 py-1.5 rounded-md text-sm font-mono text-white border cursor-pointer appearance-none"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            {visibleCars.map((n) => {
-              const c = data.cars[String(n)];
-              const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
-              const tag = c.make || c.cls;
-              return (
-                <option key={n} value={n}>#{n} {c.team} ({tag}) — {posLabel}</option>
-              );
-            })}
-          </select>
-        </div>
-
-        {/* Comparison area */}
-        <div className="flex-[2] min-w-[280px]">
-          <label className="block text-[11px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: CHART_STYLE.muted }}>
-            Compare Against
-          </label>
-          <div className="flex flex-wrap gap-1 mb-1">
+      {/* Compare controls */}
+      <div className="px-1">
+        <div>
+          {/* Label + preset pills on one row */}
+          <div className="flex flex-wrap items-center gap-1 mb-1">
+            <span className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+              Compare
+            </span>
             {presets.map((p) => {
               const relevant = p.cars.filter((n) => n !== focusNum);
               const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
@@ -720,7 +652,7 @@ export function LapTimeChart({
               Clear
             </button>
           </div>
-          <div className="flex flex-wrap gap-1 max-h-[60px] overflow-y-auto">
+          <div className="flex flex-wrap" style={{ gap: "3px" }}>
             {visibleCars.map((n) => {
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;

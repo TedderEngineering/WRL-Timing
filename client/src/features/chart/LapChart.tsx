@@ -40,8 +40,8 @@ interface LapChartProps {
 
 export function LapChart({
   data, annotations, watermarkEmail,
-  focusNum, setFocusNum, compSet, setCompSet,
-  classView, setClassView, activeLap, setActiveLap,
+  focusNum, compSet, setCompSet,
+  classView, activeLap, setActiveLap,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -296,43 +296,8 @@ export function LapChart({
     return () => document.removeEventListener("keydown", onKey);
   }, [navPrev, navNext]);
 
-  // ── Class filter change ────────────────────────────────────────
-  const handleClassChange = useCallback(
-    (cls: string) => {
-      setClassView(cls);
-      if (cls) {
-        const focusCls = data.cars[String(focusNum)]?.cls;
-        let newFocus = focusNum;
-        if (focusCls !== cls) {
-          newFocus = (data.classGroups[cls] || [])[0] || focusNum;
-          setFocusNum(newFocus);
-        }
-        const newComp = new Set<number>();
-        (data.classGroups[cls] || []).forEach((n) => {
-          if (n !== newFocus) newComp.add(n);
-        });
-        setCompSet(newComp);
-      }
-      setActiveLap(null);
-      setInfo(null);
-    },
-    [data, focusNum]
-  );
-
-  // ── Focus car change ───────────────────────────────────────────
-  const handleFocusChange = useCallback(
-    (num: number) => {
-      setFocusNum(num);
-      setCompSet((prev) => {
-        const next = new Set(prev);
-        next.delete(num);
-        return next;
-      });
-      setActiveLap(null);
-      setInfo(null);
-    },
-    []
-  );
+  // Clear info panel when focus car or class filter changes externally
+  useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
   // ── Comparison toggles ──────────────────────────────────────────
   const toggleComp = useCallback(
@@ -405,56 +370,9 @@ export function LapChart({
 
   return (
     <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* ── Controls row ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-x-2 gap-y-1 items-end px-1">
-        {/* Class filter */}
-        <div className="shrink-0" style={{ minWidth: 130 }}>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: "#cbd5e1" }}>
-            Class
-          </label>
-          <select
-            value={classView}
-            onChange={(e) => handleClassChange(e.target.value)}
-            className="w-full px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            <option value="">All Classes ({data.totalCars})</option>
-            {Object.entries(data.classGroups)
-              .sort()
-              .map(([cls, cars]) => (
-                <option key={cls} value={cls}>
-                  {cls} ({cars.length} cars)
-                </option>
-              ))}
-          </select>
-        </div>
-
-        {/* Focus car */}
-        <div className="shrink-0 flex-1" style={{ minWidth: 180 }}>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: "#cbd5e1" }}>
-            Focus Car
-          </label>
-          <select
-            value={focusNum}
-            onChange={(e) => handleFocusChange(Number(e.target.value))}
-            className="w-full px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            {visibleCars.map((n) => {
-              const c = data.cars[String(n)];
-              const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
-              const tag = c.make || c.cls;
-              return (
-                <option key={n} value={n}>
-                  #{n} {c.team} ({tag}) — {posLabel}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        {/* Comparison area */}
-        <div className="flex-[2] min-w-[280px]">
+      {/* ── Compare controls ──────────────────────────────────────── */}
+      <div className="px-1">
+        <div>
           {/* Label + preset pills on one row */}
           <div className="flex flex-wrap items-center gap-1 mb-1">
             <span className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>

@@ -5,9 +5,10 @@ import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { CHART_STYLE } from "../features/chart";
+import { getVisibleCars } from "../features/chart/chart-renderer";
 import { api } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 export function RaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +48,47 @@ export function RaceDetailPage() {
     });
     setCompSet(allOthers);
   }, [data, id]);
+
+  // ── Derived data for dropdowns ──────────────────────────────
+  const visibleCars = useMemo(
+    () => (data ? getVisibleCars(data, classView).sort((a, b) => a - b) : []),
+    [data, classView]
+  );
+
+  const handleClassChange = useCallback(
+    (cls: string) => {
+      if (!data) return;
+      setClassView(cls);
+      if (cls) {
+        const focusCls = data.cars[String(focusNum)]?.cls;
+        let newFocus = focusNum;
+        if (focusCls !== cls) {
+          newFocus = (data.classGroups[cls] || [])[0] || focusNum;
+          setFocusNum(newFocus);
+        }
+        const newComp = new Set<number>();
+        (data.classGroups[cls] || []).forEach((n) => {
+          if (n !== newFocus) newComp.add(n);
+        });
+        setCompSet(newComp);
+      }
+      setActiveLap(null);
+    },
+    [data, focusNum]
+  );
+
+  const handleFocusChange = useCallback(
+    (num: number) => {
+      setFocusNum(num);
+      setCompSet((prev) => {
+        const next = new Set(prev);
+        next.delete(num);
+        return next;
+      });
+      setActiveLap(null);
+    },
+    []
+  );
 
   // Fetch favorite status from race detail endpoint
   useEffect(() => {
@@ -197,60 +239,33 @@ export function RaceDetailPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-1 sm:py-1.5">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
-        <div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/races"
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-            >
-              Races
-            </Link>
-            <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
-            <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
-              {raceMeta.series} {raceMeta.season}
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
-              {raceMeta.name}
-            </h1>
-            <span className="text-xs text-gray-500 dark:text-gray-500">
-              {raceMeta.track} · {dateStr}
-            </span>
-          </div>
-        </div>
-
+      <div className="mb-1">
         <div className="flex items-center gap-2">
-          {isAuthenticated && (
-            <button
-              onClick={handleFavorite}
-              className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-700 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <svg
-                className={`h-4 w-4 ${
-                  isFavorited ? "text-yellow-500 fill-yellow-500" : "text-gray-400"
-                }`}
-                fill={isFavorited ? "currentColor" : "none"}
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
-                />
-              </svg>
-              {isFavorited ? "Saved" : "Save"}
-            </button>
-          )}
+          <Link
+            to="/races"
+            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+          >
+            Races
+          </Link>
+          <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+          <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
+            {raceMeta.series} {raceMeta.season}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
+            {raceMeta.name}
+          </h1>
+          <span className="text-xs text-gray-500 dark:text-gray-500">
+            {raceMeta.track} · {dateStr}
+          </span>
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar + dropdowns on one row */}
       {(() => {
         const isTeam = hasTeamAccess(user);
+        const showDropdowns = activeTab !== "strategy";
 
         const tabs = [
           { id: "position" as const, label: "Position Trace", locked: false },
@@ -261,8 +276,8 @@ export function RaceDetailPage() {
         return (
           <>
             <div
-              className="flex gap-1 mb-0.5 border-b"
-              style={{ borderColor: CHART_STYLE.border }}
+              className="flex items-center gap-1 mb-0.5 border-b"
+              style={{ borderColor: CHART_STYLE.border, padding: "2px 0" }}
             >
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -277,7 +292,7 @@ export function RaceDetailPage() {
                       setLockedMsg(null);
                       setActiveTab(tab.id);
                     }}
-                    className="relative px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-2"
+                    className="relative px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 shrink-0"
                     style={{
                       color: isActive ? "#fff" : CHART_STYLE.muted,
                       borderBottom: isActive ? "2px solid #5c7cfa" : "2px solid transparent",
@@ -307,6 +322,81 @@ export function RaceDetailPage() {
                   </button>
                 );
               })}
+
+              {/* Dropdowns — shown for Position Trace and Lap Times, hidden for Strategy */}
+              {showDropdowns && (
+                <div className="flex items-center gap-3 ml-4 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: "#cbd5e1" }}>
+                      Class
+                    </label>
+                    <select
+                      value={classView}
+                      onChange={(e) => handleClassChange(e.target.value)}
+                      className="px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
+                      style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, minWidth: 130 }}
+                    >
+                      <option value="">All Classes ({data.totalCars})</option>
+                      {Object.entries(data.classGroups)
+                        .sort()
+                        .map(([cls, cars]) => (
+                          <option key={cls} value={cls}>
+                            {cls} ({cars.length})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: "#cbd5e1" }}>
+                      Focus
+                    </label>
+                    <select
+                      value={focusNum}
+                      onChange={(e) => handleFocusChange(Number(e.target.value))}
+                      className="px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
+                      style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, minWidth: 180 }}
+                    >
+                      {visibleCars.map((n) => {
+                        const c = data.cars[String(n)];
+                        const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
+                        const tag = c.make || c.cls;
+                        return (
+                          <option key={n} value={n}>
+                            #{n} {c.team} ({tag}) — {posLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Save button pushed right */}
+              <div className="ml-auto flex items-center">
+                {isAuthenticated && (
+                  <button
+                    onClick={handleFavorite}
+                    className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-700 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <svg
+                      className={`h-4 w-4 ${
+                        isFavorited ? "text-yellow-500 fill-yellow-500" : "text-gray-400"
+                      }`}
+                      fill={isFavorited ? "currentColor" : "none"}
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+                      />
+                    </svg>
+                    {isFavorited ? "Saved" : "Save"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {lockedMsg && (
