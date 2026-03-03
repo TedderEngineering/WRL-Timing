@@ -18,8 +18,10 @@ import {
 
 // ─── Coordinate helpers (duplicated for module independence) ─────────────────
 
-function xOf(lap: number, maxLap: number, dim: ChartDimensions): number {
-  return dim.ML + ((lap - 1) / (maxLap - 1)) * dim.CW;
+function xOf(lap: number, lapStart: number, lapEnd: number, dim: ChartDimensions): number {
+  const range = lapEnd - lapStart;
+  if (range <= 0) return dim.ML;
+  return dim.ML + ((lap - lapStart) / range) * dim.CW;
 }
 
 function yOf(rank: number, maxRank: number, dim: ChartDimensions): number {
@@ -62,14 +64,16 @@ function getCarSegments(
 function traceStepWithGaps(
   ctx: CanvasRenderingContext2D,
   pts: RankPt[],
-  maxLap: number,
+  lapStart: number,
+  lapEnd: number,
   maxRank: number,
   dim: ChartDimensions,
 ) {
   for (let i = 0; i < pts.length; i++) {
-    const px = xOf(pts[i].lap, maxLap, dim);
+    if (pts[i].lap < lapStart - 1 || pts[i].lap > lapEnd + 1) continue;
+    const px = xOf(pts[i].lap, lapStart, lapEnd, dim);
     const py = yOf(pts[i].rank, maxRank, dim);
-    if (i === 0 || pts[i].lap !== pts[i - 1].lap + 1) {
+    if (i === 0 || pts[i].lap !== pts[i - 1].lap + 1 || pts[i - 1].lap < lapStart - 1) {
       ctx.moveTo(px, py);
     } else {
       ctx.lineTo(px, yOf(pts[i - 1].rank, maxRank, dim));
@@ -91,6 +95,9 @@ function drawLapTimeChart(
   classView: string,
   dim: ChartDimensions,
   showWatermark: boolean,
+  lapStart: number,
+  lapEnd: number,
+  selectionRange: [number, number] | null,
   watermarkEmail?: string,
 ) {
   const dpr = window.devicePixelRatio || 1;
@@ -109,7 +116,8 @@ function drawLapTimeChart(
   const focusCar = data.cars[String(focusNum)];
   if (!focusCar) return;
 
-  const x = (l: number) => xOf(l, maxLap, dim);
+  const visLaps = lapEnd - lapStart;
+  const x = (l: number) => xOf(l, lapStart, lapEnd, dim);
   const y = (r: number) => yOf(r, maxRank, dim);
 
   // 1. Grid
@@ -122,7 +130,9 @@ function drawLapTimeChart(
     ctx.lineTo(dim.W - dim.MR, y(r));
     ctx.stroke();
   }
-  for (let l = 1; l <= maxLap; l += 10) {
+  const gridStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+  const gridStart = Math.max(1, Math.ceil(lapStart / gridStep) * gridStep);
+  for (let l = gridStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += gridStep) {
     ctx.beginPath();
     ctx.moveTo(x(l), dim.MT);
     ctx.lineTo(x(l), dim.H - dim.MB);
@@ -131,6 +141,7 @@ function drawLapTimeChart(
 
   // 2. FCY bands
   for (const [s, e] of data.fcy || []) {
+    if (e < lapStart || s > lapEnd) continue;
     ctx.fillStyle = CHART_STYLE.fcyBand;
     ctx.fillRect(x(s - 0.4), dim.MT, x(e + 0.4) - x(s - 0.4), dim.CH);
   }
@@ -138,6 +149,7 @@ function drawLapTimeChart(
   // 3. Pit vertical lines
   const ann = annotations[String(focusNum)] || { reasons: {}, pits: [], settles: [] };
   for (const p of ann.pits || []) {
+    if (p.l < lapStart || p.l > lapEnd) continue;
     ctx.save();
     ctx.strokeStyle = p.c;
     ctx.lineWidth = 1;
@@ -160,7 +172,7 @@ function drawLapTimeChart(
     ctx.beginPath();
     ctx.strokeStyle = hexA(getCompColor(compSet, focusNum, cn), 0.28);
     ctx.lineWidth = 1.2;
-    traceStepWithGaps(ctx, pts, maxLap, maxRank, dim);
+    traceStepWithGaps(ctx, pts, lapStart, lapEnd, maxRank, dim);
     ctx.stroke();
   });
 
@@ -170,12 +182,12 @@ function drawLapTimeChart(
   ctx.beginPath();
   ctx.strokeStyle = clsColor;
   ctx.lineWidth = 2.5;
-  traceStepWithGaps(ctx, focusPts, maxLap, maxRank, dim);
+  traceStepWithGaps(ctx, focusPts, lapStart, lapEnd, maxRank, dim);
   ctx.stroke();
 
   // 6. Pit dots along bottom edge
   for (const d of focusCar.laps) {
-    if (d.pit) {
+    if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
       ctx.beginPath();
       ctx.arc(x(d.l), dim.H - dim.MB, 3, 0, Math.PI * 2);
       ctx.fillStyle = "#fbbf24";
@@ -187,7 +199,7 @@ function drawLapTimeChart(
   }
 
   // 7. Crosshair + active dot
-  if (activeLap !== null) {
+  if (activeLap !== null && activeLap >= lapStart && activeLap <= lapEnd) {
     const ax = x(activeLap);
     ctx.beginPath();
     ctx.strokeStyle = CHART_STYLE.crosshair;
@@ -238,7 +250,9 @@ function drawLapTimeChart(
     ctx.fillText(String(r), dim.ML - 6, y(r) + 4);
   }
   ctx.textAlign = "center";
-  for (let l = 1; l <= maxLap; l += 10) {
+  const labelStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+  const labelStart = Math.max(1, Math.ceil(lapStart / labelStep) * labelStep);
+  for (let l = labelStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += labelStep) {
     ctx.fillText(String(l), x(l), dim.H - dim.MB + 16);
   }
   ctx.font = "500 12px system-ui";
@@ -250,7 +264,19 @@ function drawLapTimeChart(
   ctx.fillText(classView ? `${classView} Lap Time Rank` : "Lap Time Rank", 0, 0);
   ctx.restore();
 
-  // 9. Watermark
+  // 9. Selection rectangle
+  if (selectionRange) {
+    const [s, e] = selectionRange;
+    const sx = x(Math.min(s, e));
+    const ex = x(Math.max(s, e));
+    ctx.fillStyle = "rgba(68,114,196,0.18)";
+    ctx.fillRect(sx, dim.MT, ex - sx, dim.CH);
+    ctx.strokeStyle = "rgba(68,114,196,0.6)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx, dim.MT, ex - sx, dim.CH);
+  }
+
+  // 10. Watermark
   if (watermarkEmail && showWatermark) {
     ctx.save();
     ctx.globalAlpha = 0.06;
@@ -412,16 +438,36 @@ export function LapTimeChart({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapTimeInfo | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+
+  // ── Zoom state ─────────────────────────────────────────────────
+  const [lapStart, setLapStart] = useState(1);
+  const [lapEnd, setLapEnd] = useState(data.maxLap);
+  const [selectionRange, setSelectionRange] = useState<[number, number] | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const isZoomed = lapStart > 1 || lapEnd < data.maxLap;
+
   const activeLapRef = useRef(activeLap);
   activeLapRef.current = activeLap;
-  const dragState = useRef({ dragging: false, startX: 0, startScroll: 0 });
+  const lapStartRef = useRef(lapStart);
+  lapStartRef.current = lapStart;
+  const lapEndRef = useRef(lapEnd);
+  lapEndRef.current = lapEnd;
+  const dimRef = useRef(dim);
+  dimRef.current = dim;
+  const maxLapRef = useRef(data.maxLap);
+  maxLapRef.current = data.maxLap;
+
+  // Reset zoom when race data changes
+  useEffect(() => { setLapStart(1); setLapEnd(data.maxLap); }, [data.maxLap]);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+
+  const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
+  const rangeSelectStart = useRef<number | null>(null);
 
   // ── Compute rankings (recomputes when data or class filter changes) ──
   const rankings = useMemo(
@@ -433,23 +479,21 @@ export function LapTimeChart({
 
   // ── Resize ────────────────────────────────────────────────────────────
   const resize = useCallback(() => {
-    if (!wrapperRef.current || !scrollRef.current) return;
-    const containerW = scrollRef.current.clientWidth;
+    if (!wrapperRef.current) return;
+    const containerW = wrapperRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, isMobile, undefined, Math.max(1200, data.maxLap * 5));
+    const newDim = computeDimensions(containerW, containerH, isMobile);
     setDim(newDim);
     return newDim;
-  }, [data.maxLap, isMobile]);
+  }, [isMobile]);
 
   // ── Draw ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     const d = dim || resize();
     if (!canvas || !d) return;
-    const inner = canvas.parentElement;
-    if (inner) { inner.style.width = d.W + "px"; inner.style.height = d.H + "px"; }
-    drawLapTimeChart(canvas, data, annotations, rankings, focusNum, compSet, activeLap, classView, d, !isPaid, watermarkEmail);
-  }, [data, annotations, rankings, focusNum, compSet, activeLap, classView, dim, resize, isPaid, watermarkEmail]);
+    drawLapTimeChart(canvas, data, annotations, rankings, focusNum, compSet, activeLap, classView, d, !isPaid, lapStart, lapEnd, selectionRange, watermarkEmail);
+  }, [data, annotations, rankings, focusNum, compSet, activeLap, classView, dim, resize, isPaid, lapStart, lapEnd, selectionRange, watermarkEmail]);
 
   useEffect(() => {
     const onResize = () => { const d = resize(); if (d) setDim(d); };
@@ -457,6 +501,16 @@ export function LapTimeChart({
     onResize();
     return () => window.removeEventListener("resize", onResize);
   }, [resize]);
+
+  // ── Coordinate helpers ──────────────────────────────────────────
+  const getCanvasX = useCallback(
+    (clientX: number): number => {
+      if (!wrapperRef.current) return 0;
+      const r = wrapperRef.current.getBoundingClientRect();
+      return clientX - r.left;
+    },
+    [],
+  );
 
   // ── Interaction ───────────────────────────────────────────────────────
   const showLapInfo = useCallback(
@@ -467,79 +521,213 @@ export function LapTimeChart({
       lapNum = Math.max(valid[0], Math.min(valid[valid.length - 1], lapNum));
       setActiveLap(lapNum);
       setInfo(buildLapTimeInfo(data, rankings, focusNum, lapNum, compSet));
-      if (dim && scrollRef.current) {
-        const ax = dim.ML + ((lapNum - 1) / (data.maxLap - 1)) * dim.CW;
-        const sl = scrollRef.current.scrollLeft;
-        const sw = scrollRef.current.clientWidth;
-        if (ax < sl + 60) scrollRef.current.scrollLeft = Math.max(0, ax - 80);
-        else if (ax > sl + sw - 60) scrollRef.current.scrollLeft = ax - sw + 80;
+    },
+    [data, rankings, focusNum, compSet, setActiveLap],
+  );
+
+  // ── Auto-pan when active lap leaves visible range ──────────────
+  const autoPan = useCallback(
+    (lapNum: number) => {
+      const ls = lapStartRef.current;
+      const le = lapEndRef.current;
+      const range = le - ls;
+      const margin = range * 0.1;
+      if (lapNum < ls + margin) {
+        const newStart = Math.max(1, lapNum - margin);
+        setLapStart(newStart);
+        setLapEnd(newStart + range);
+      } else if (lapNum > le - margin) {
+        const newEnd = Math.min(data.maxLap, lapNum + margin);
+        setLapEnd(newEnd);
+        setLapStart(newEnd - range);
       }
     },
-    [data, rankings, focusNum, compSet, dim, setActiveLap],
+    [data.maxLap],
   );
 
-  const getCanvasX = useCallback(
-    (clientX: number): number => {
-      if (!scrollRef.current) return 0;
-      const r = scrollRef.current.getBoundingClientRect();
-      return clientX - r.left + scrollRef.current.scrollLeft;
-    },
-    [],
-  );
+  // ── Wheel zoom handler (imperative for passive:false) ──────────
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const d = dimRef.current;
+      if (!d) return;
+      const cx = e.clientX - wrapper.getBoundingClientRect().left;
+      const ls = lapStartRef.current;
+      const le = lapEndRef.current;
+      const ml = maxLapRef.current;
 
-  // ── Drag-to-pan handlers ──────────────────────────────────────
-  const onDragStart = useCallback((e: React.MouseEvent) => {
+      const cursorLap = lapOfX(cx, ls, le, d);
+      const factor = e.deltaY > 0 ? 1.18 : 1 / 1.18;
+      const range = le - ls;
+      let newRange = range * factor;
+      newRange = Math.max(5, Math.min(ml - 1, newRange));
+
+      const frac = (cursorLap - ls) / range;
+      let newStart = cursorLap - frac * newRange;
+      let newEnd = newStart + newRange;
+
+      if (newStart < 1) { newStart = 1; newEnd = 1 + newRange; }
+      if (newEnd > ml) { newEnd = ml; newStart = ml - newRange; }
+      newStart = Math.max(1, newStart);
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
+    };
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Data-space pan (mouse) ─────────────────────────────────────
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    dragState.current = { dragging: true, startX: e.clientX, startScroll: scrollRef.current?.scrollLeft || 0 };
-    setIsDragging(true);
+    if (rangeSelectStart.current !== null) return;
+    panState.current = {
+      panning: true,
+      startX: e.clientX,
+      startLapStart: lapStartRef.current,
+      startLapEnd: lapEndRef.current,
+    };
+    setIsPanning(true);
     e.preventDefault();
   }, []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!dragState.current.dragging || !scrollRef.current) return;
-      scrollRef.current.scrollLeft = dragState.current.startScroll - (e.clientX - dragState.current.startX);
+      // Range selection mode
+      if (rangeSelectStart.current !== null && dimRef.current && wrapperRef.current) {
+        const cx = e.clientX - wrapperRef.current.getBoundingClientRect().left;
+        const lap = lapOfX(cx, lapStartRef.current, lapEndRef.current, dimRef.current);
+        setSelectionRange([rangeSelectStart.current, lap]);
+        return;
+      }
+
+      if (!panState.current.panning || !dimRef.current) return;
+      const dx = e.clientX - panState.current.startX;
+      const { startLapStart, startLapEnd } = panState.current;
+      const range = startLapEnd - startLapStart;
+      const lapDelta = -(dx / dimRef.current.CW) * range;
+
+      let newStart = startLapStart + lapDelta;
+      let newEnd = startLapEnd + lapDelta;
+
+      if (newStart < 1) { newStart = 1; newEnd = 1 + range; }
+      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - range; }
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
     };
+
     const onUp = (e: MouseEvent) => {
-      if (!dragState.current.dragging) return;
-      const dx = Math.abs(e.clientX - dragState.current.startX);
-      dragState.current.dragging = false;
-      setIsDragging(false);
-      if (dx < 4 && scrollRef.current && dim) {
-        const r = scrollRef.current.getBoundingClientRect();
-        const cx = e.clientX - r.left + scrollRef.current.scrollLeft;
-        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, 1, data.maxLap, dim))));
+      // Range selection finalize
+      if (rangeSelectStart.current !== null && dimRef.current && wrapperRef.current) {
+        const cx = e.clientX - wrapperRef.current.getBoundingClientRect().left;
+        const endLap = lapOfX(cx, lapStartRef.current, lapEndRef.current, dimRef.current);
+        const startLap = rangeSelectStart.current;
+        const lo = Math.min(startLap, endLap);
+        const hi = Math.max(startLap, endLap);
+
+        rangeSelectStart.current = null;
+        setSelectionRange(null);
+
+        if (hi - lo >= 3) {
+          setLapStart(Math.max(1, lo));
+          setLapEnd(Math.min(data.maxLap, hi));
+        }
+        return;
+      }
+
+      if (!panState.current.panning) return;
+      const dx = Math.abs(e.clientX - panState.current.startX);
+      panState.current.panning = false;
+      setIsPanning(false);
+
+      if (dx < 4 && wrapperRef.current && dimRef.current) {
+        const r = wrapperRef.current.getBoundingClientRect();
+        const cx = e.clientX - r.left;
+        const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dimRef.current));
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
       }
     };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, [dim, data.maxLap, showLapInfo]);
+  }, [data.maxLap, showLapInfo]);
 
+  // ── Mouse move (hover) ─────────────────────────────────────────
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dim || dragState.current.dragging) return;
+      if (!dim || panState.current.panning || rangeSelectStart.current !== null) return;
       const cx = getCanvasX(e.clientX);
-      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(cx, 1, data.maxLap, dim))));
+      const lap = Math.round(lapOfX(cx, lapStart, lapEnd, dim));
+      showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
     },
-    [dim, getCanvasX, data.maxLap, showLapInfo],
+    [dim, getCanvasX, lapStart, lapEnd, data.maxLap, showLapInfo],
   );
 
-  const onMouseLeave = useCallback(() => {}, []);
+  // ── Double-click range zoom ────────────────────────────────────
+  const onDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!dim) return;
+      const cx = getCanvasX(e.clientX);
+      const lap = lapOfX(cx, lapStart, lapEnd, dim);
+      rangeSelectStart.current = lap;
+      setSelectionRange([lap, lap]);
+      e.preventDefault();
+    },
+    [dim, getCanvasX, lapStart, lapEnd],
+  );
 
-  const touchState = useRef({ startX: 0, startScroll: 0, moved: false });
+  // ── Escape: cancel range selection ─────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && rangeSelectStart.current !== null) {
+        rangeSelectStart.current = null;
+        setSelectionRange(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ── Touch: panning + lap selection ─────────────────────────────
+  const touchState = useRef({ startX: 0, startLapStart: 1, startLapEnd: 1, moved: false });
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchState.current = { startX: e.touches[0].clientX, startScroll: scrollRef.current?.scrollLeft || 0, moved: false };
+    touchState.current = {
+      startX: e.touches[0].clientX,
+      startLapStart: lapStartRef.current,
+      startLapEnd: lapEndRef.current,
+      moved: false,
+    };
   }, []);
 
   const onTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (!e.touches.length || !scrollRef.current || !dim) return;
+      if (!e.touches.length || !dim) return;
       const tx = e.touches[0].clientX;
-      scrollRef.current.scrollLeft = touchState.current.startScroll + (touchState.current.startX - tx);
+      const dx = tx - touchState.current.startX;
       touchState.current.moved = true;
-      showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(tx), 1, data.maxLap, dim))));
+
+      const { startLapStart, startLapEnd } = touchState.current;
+      const range = startLapEnd - startLapStart;
+      const lapDelta = -(dx / dim.CW) * range;
+
+      let newStart = startLapStart + lapDelta;
+      let newEnd = startLapEnd + lapDelta;
+      if (newStart < 1) { newStart = 1; newEnd = 1 + range; }
+      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - range; }
+
+      setLapStart(newStart);
+      setLapEnd(newEnd);
+
+      const cx = getCanvasX(tx);
+      const lap = Math.round(lapOfX(cx, newStart, newEnd, dim));
+      showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],
   );
@@ -548,7 +736,9 @@ export function LapTimeChart({
     (e: React.TouchEvent) => {
       if (!touchState.current.moved && dim) {
         const ct = e.changedTouches[0];
-        showLapInfo(Math.max(1, Math.min(data.maxLap, lapOfX(getCanvasX(ct.clientX), 1, data.maxLap, dim))));
+        const cx = getCanvasX(ct.clientX);
+        const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
+        showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
       }
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],
@@ -560,25 +750,47 @@ export function LapTimeChart({
     if (!valid.length) return;
     const cur = activeLapRef.current;
     if (cur === null) showLapInfo(valid[0]);
-    else { const idx = valid.indexOf(cur); if (idx > 0) showLapInfo(valid[idx - 1]); }
-  }, [data, focusNum, showLapInfo]);
+    else {
+      const idx = valid.indexOf(cur);
+      if (idx > 0) {
+        const newLap = valid[idx - 1];
+        showLapInfo(newLap);
+        autoPan(newLap);
+      }
+    }
+  }, [data, focusNum, showLapInfo, autoPan]);
 
   const navNext = useCallback(() => {
     const valid = (data.cars[String(focusNum)]?.laps || []).map((l) => l.l);
     if (!valid.length) return;
     const cur = activeLapRef.current;
     if (cur === null) showLapInfo(valid[0]);
-    else { const idx = valid.indexOf(cur); if (idx < valid.length - 1) showLapInfo(valid[idx + 1]); }
-  }, [data, focusNum, showLapInfo]);
+    else {
+      const idx = valid.indexOf(cur);
+      if (idx < valid.length - 1) {
+        const newLap = valid[idx + 1];
+        showLapInfo(newLap);
+        autoPan(newLap);
+      }
+    }
+  }, [data, focusNum, showLapInfo, autoPan]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if (e.key === "ArrowLeft") { e.preventDefault(); navPrev(); }
       else if (e.key === "ArrowRight") { e.preventDefault(); navNext(); }
+      else if (e.key === "w" || e.key === "W") {
+        e.preventDefault();
+        setLapStart(1);
+        setLapEnd(data.maxLap);
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [navPrev, navNext]);
+  }, [navPrev, navNext, data.maxLap]);
 
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
@@ -631,6 +843,15 @@ export function LapTimeChart({
       ...Object.entries(data.classGroups).sort().map(([cls, cars]) => ({ label: cls, cars })),
     ];
   }, [data, classView]);
+
+  // Cursor style
+  const cursorStyle = rangeSelectStart.current !== null
+    ? "crosshair"
+    : isPanning
+    ? "grabbing"
+    : isZoomed
+    ? "grab"
+    : "default";
 
   // ─── RENDER ───────────────────────────────────────────────────────────
 
@@ -709,25 +930,26 @@ export function LapTimeChart({
           minHeight: 300,
         }}
       >
-        <div
-          ref={scrollRef}
-          className="overflow-x-auto overflow-y-hidden h-full no-scrollbar"
-          style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
-        >
-          <div style={{ width: dim?.W, height: dim?.H }}>
-            <canvas
-              ref={canvasRef}
-              onMouseDown={onDragStart}
-              onMouseMove={onMouseMove}
-              onMouseLeave={onMouseLeave}
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-              onContextMenu={(e) => e.preventDefault()}
-              style={{ display: "block", cursor: isDragging ? "grabbing" : "grab" }}
-            />
+        <canvas
+          ref={canvasRef}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onDoubleClick={onDoubleClick}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ display: "block", cursor: cursorStyle }}
+        />
+        {/* Zoom indicator */}
+        {isZoomed && (
+          <div
+            className="absolute text-[10px] font-mono"
+            style={{ bottom: 5, left: (dim?.ML ?? 50) - 2, color: CHART_STYLE.muted, zIndex: 2 }}
+          >
+            L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
           </div>
-        </div>
+        )}
       </div>
 
       {/* Info panel */}
