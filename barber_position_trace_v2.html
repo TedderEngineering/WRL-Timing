@@ -241,6 +241,7 @@ function buildClassFilter(){
     sel.appendChild(opt);
   });
   sel.addEventListener('change', () => {
+    sel.blur();
     classView = sel.value;
     // If focus car not in this class, switch to first car in class
     if(classView){
@@ -274,6 +275,7 @@ function buildFocusSelect(){
     sel.appendChild(opt);
   });
   sel.addEventListener('change', () => {
+    sel.blur();
     focusNum = parseInt(sel.value);
     compSet.delete(focusNum);
     buildChips();

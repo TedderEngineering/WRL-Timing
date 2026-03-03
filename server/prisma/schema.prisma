@@ -37,28 +37,28 @@ enum RaceStatus {
 // ─── Users & Auth ─────────────────────────────────────────────────────────────
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  passwordHash    String    @map("password_hash")
-  displayName     String?   @map("display_name")
-  avatarUrl       String?   @map("avatar_url")
-  emailVerified   Boolean   @default(false) @map("email_verified")
-  role            UserRole  @default(USER)
-  suspendedAt     DateTime? @map("suspended_at")
-  lastLoginAt     DateTime? @map("last_login_at")
-  onboardingDone  Boolean   @default(false) @map("onboarding_done")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  displayName    String?   @map("display_name")
+  avatarUrl      String?   @map("avatar_url")
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  role           UserRole  @default(USER)
+  suspendedAt    DateTime? @map("suspended_at")
+  lastLoginAt    DateTime? @map("last_login_at")
+  onboardingDone Boolean   @default(false) @map("onboarding_done")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   refreshTokens       RefreshToken[]
-  passwordResetTokens  PasswordResetToken[]
-  emailVerifyTokens    EmailVerificationToken[]
-  subscription         Subscription?
-  preferences          UserPreferences?
-  favorites            UserFavorite[]
-  raceViews            UserRaceView[]
-  createdRaces         Race[]       @relation("RaceCreator")
-  auditLogs            AuditLog[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerifyTokens   EmailVerificationToken[]
+  subscription        Subscription?
+  preferences         UserPreferences?
+  favorites           UserFavorite[]
+  raceViews           UserRaceView[]
+  createdRaces        Race[]                   @relation("RaceCreator")
+  auditLogs           AuditLog[]
 
   @@map("users")
 }
@@ -108,44 +108,67 @@ model EmailVerificationToken {
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
 model Subscription {
-  id                    String             @id @default(cuid())
-  userId                String             @unique @map("user_id")
-  stripeCustomerId      String?            @unique @map("stripe_customer_id")
-  stripeSubscriptionId  String?            @unique @map("stripe_subscription_id")
-  plan                  SubscriptionPlan   @default(FREE)
-  status                SubscriptionStatus @default(ACTIVE)
-  currentPeriodStart    DateTime?          @map("current_period_start")
-  currentPeriodEnd      DateTime?          @map("current_period_end")
-  cancelAtPeriodEnd     Boolean            @default(false) @map("cancel_at_period_end")
-  createdAt             DateTime           @default(now()) @map("created_at")
-  updatedAt             DateTime           @updatedAt @map("updated_at")
+  id                   String             @id @default(cuid())
+  userId               String             @unique @map("user_id")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
 }
 
-// ─── Race Data ────────────────────────────────────────────────────────────────
+// ─── Events ──────────────────────────────────────────────────────────────────
 
-model Race {
+model Event {
   id        String     @id @default(cuid())
   name      String
-  date      DateTime
-  track     String
   series    String
-  season    Int
-  status    RaceStatus @default(DRAFT)
-  premium   Boolean    @default(false)
-  maxLap    Int?       @map("max_lap")
-  totalCars Int?       @map("total_cars")
-  createdBy String     @map("created_by")
-  sourceFiles    Json?   @map("source_files")     // Supabase Storage paths for raw uploaded files
-  chartData      Json?   @map("chart_data")       // full DATA object for chart rendering
-  annotationData Json?   @map("annotation_data")  // full ANN object for chart rendering
+  track     String
+  date      DateTime // event start date
+  season    String // e.g. "2025"
+  status    RaceStatus @default(PUBLISHED)
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  creator   User        @relation("RaceCreator", fields: [createdBy], references: [id])
+  races Race[]
+
+  @@index([series, track, date])
+  @@index([status])
+  @@index([date(sort: Desc)])
+  @@map("events")
+}
+
+// ─── Race Data ────────────────────────────────────────────────────────────────
+
+model Race {
+  id             String     @id @default(cuid())
+  name           String
+  date           DateTime
+  track          String
+  series         String
+  season         Int
+  status         RaceStatus @default(DRAFT)
+  premium        Boolean    @default(false)
+  maxLap         Int?       @map("max_lap")
+  totalCars      Int?       @map("total_cars")
+  createdBy      String     @map("created_by")
+  eventId        String?    @map("event_id")
+  sourceFiles    Json?      @map("source_files") // Supabase Storage paths for raw uploaded files
+  chartData      Json?      @map("chart_data") // full DATA object for chart rendering
+  annotationData Json?      @map("annotation_data") // full ANN object for chart rendering
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  creator   User           @relation("RaceCreator", fields: [createdBy], references: [id])
+  event     Event?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
   entries   RaceEntry[]
   laps      RaceLap[]
   favorites UserFavorite[]
@@ -154,20 +177,21 @@ model Race {
   @@index([status])
   @@index([series, season])
   @@index([date(sort: Desc)])
+  @@index([eventId])
   @@map("races")
 }
 
 model RaceEntry {
-  id              String  @id @default(cuid())
-  raceId          String  @map("race_id")
-  carNumber       String  @map("car_number")
-  teamName        String  @map("team_name")
-  driverNames     String  @map("driver_names") // comma-separated or JSON
-  carClass        String  @map("car_class")
-  carColor        String? @map("car_color") // hex color for chart rendering
-  finishPos       Int?    @map("finish_pos")
-  finishPosClass  Int?    @map("finish_pos_class")
-  lapsCompleted   Int?    @map("laps_completed")
+  id             String  @id @default(cuid())
+  raceId         String  @map("race_id")
+  carNumber      String  @map("car_number")
+  teamName       String  @map("team_name")
+  driverNames    String  @map("driver_names") // comma-separated or JSON
+  carClass       String  @map("car_class")
+  carColor       String? @map("car_color") // hex color for chart rendering
+  finishPos      Int?    @map("finish_pos")
+  finishPosClass Int?    @map("finish_pos_class")
+  lapsCompleted  Int?    @map("laps_completed")
 
   race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
 
@@ -177,23 +201,23 @@ model RaceEntry {
 }
 
 model RaceLap {
-  id               String   @id @default(cuid())
-  raceId           String   @map("race_id")
-  carNumber        String   @map("car_number")
-  lapNumber        Int      @map("lap_number")
-  position         Int                              // overall position
-  classPosition    Int?     @map("class_position")  // in-class position
-  lapTimeFormatted String?  @map("lap_time_formatted") // "M:SS.mmm"
-  lapTimeSec       Float?   @map("lap_time_sec")    // seconds as decimal
-  lapTimeMs        Int?     @map("lap_time_ms")
-  cumulativeTimeMs BigInt?  @map("cumulative_time_ms")
-  gapToLeaderMs    Int?     @map("gap_to_leader_ms")
-  intervalMs       Int?     @map("interval_ms")
-  flag             String?                           // "GF" or "FCY"
-  speed            Float?                            // mph
-  pitStop          Boolean  @default(false) @map("pit_stop")
-  inLap            Boolean  @default(false) @map("in_lap")
-  outLap           Boolean  @default(false) @map("out_lap")
+  id               String  @id @default(cuid())
+  raceId           String  @map("race_id")
+  carNumber        String  @map("car_number")
+  lapNumber        Int     @map("lap_number")
+  position         Int // overall position
+  classPosition    Int?    @map("class_position") // in-class position
+  lapTimeFormatted String? @map("lap_time_formatted") // "M:SS.mmm"
+  lapTimeSec       Float?  @map("lap_time_sec") // seconds as decimal
+  lapTimeMs        Int?    @map("lap_time_ms")
+  cumulativeTimeMs BigInt? @map("cumulative_time_ms")
+  gapToLeaderMs    Int?    @map("gap_to_leader_ms")
+  intervalMs       Int?    @map("interval_ms")
+  flag             String? // "GF" or "FCY"
+  speed            Float? // mph
+  pitStop          Boolean @default(false) @map("pit_stop")
+  inLap            Boolean @default(false) @map("in_lap")
+  outLap           Boolean @default(false) @map("out_lap")
 
   race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
 
@@ -245,7 +269,7 @@ model UserPreferences {
 model AuditLog {
   id          String   @id @default(cuid())
   adminUserId String   @map("admin_user_id")
-  action      String   // e.g., "DELETE_RACE", "SUSPEND_USER", "PROMOTE_ADMIN"
+  action      String // e.g., "DELETE_RACE", "SUSPEND_USER", "PROMOTE_ADMIN"
   targetType  String   @map("target_type") // e.g., "race", "user"
   targetId    String   @map("target_id")
   details     Json?

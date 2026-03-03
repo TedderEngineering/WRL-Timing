@@ -131,8 +131,19 @@ export function classifyFile(file: File, content: string): DetectedFile {
   if (file.name.toLowerCase().endsWith(".json")) {
     const peek = clean.slice(0, 4000);
 
-    // IMSA Lap Chart or Time Cards JSON: has "participants" array
+    // IMSA JSONs with "participants" array — use filename to distinguish:
+    //   23_Time Cards  → lapChartJson (has participants + per-lap timing)
+    //   12_Lap Chart   → skip (roster only, no laps)
+    //   03_Results / 05_Results by Class → skip (roster only)
+    //   Unknown name   → lapChartJson fallback (won't overwrite Time Cards)
     if (/"participants"\s*:\s*\[/.test(peek)) {
+      const fn = file.name.toLowerCase();
+
+      // Skip roster-only and results files
+      if (/lap[_\s]chart/i.test(fn) || /^0[35]_/.test(fn)) {
+        return result; // stays "unknown"
+      }
+
       result.type = "lapChartJson";
       result.format = "imsa";
       const meta = extractImsaMetadataFromPeek(peek);
@@ -329,6 +340,16 @@ function mergeIntoGroup(groups: Map<string, RaceGroup>, detected: DetectedFile) 
   }
 
   const group = groups.get(gKey)!;
+
+  // For lapChartJson, Time Cards files take priority — don't let a
+  // fallback (unknown-name) file overwrite a Time Cards file
+  if (detected.type === "lapChartJson" && group.files.has("lapChartJson")) {
+    const fn = detected.file.name.toLowerCase();
+    if (!/time[_\s]cards/i.test(fn)) {
+      return; // don't overwrite with a lower-priority file
+    }
+  }
+
   group.files.set(detected.type, detected);
 
   // Merge metadata (fill in missing fields)

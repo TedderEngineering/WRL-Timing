@@ -10,6 +10,7 @@ import { authRouter } from "./routes/auth.js";
 import { racesRouter } from "./routes/races.js";
 import { adminRouter } from "./routes/admin.js";
 import { billingRouter } from "./routes/billing.js";
+import { eventsRouter } from "./routes/events.js";
 
 export function createApp() {
   const app = express();
@@ -56,6 +57,7 @@ export function createApp() {
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/races", racesRouter);
+  app.use("/api/events", eventsRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/billing", billingRouter);
 
