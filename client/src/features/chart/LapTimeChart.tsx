@@ -623,7 +623,7 @@ export function LapTimeChart({
         <div>
           {/* Label + preset pills on one row */}
           <div className="flex flex-wrap items-center gap-1 mb-1">
-            <span className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+            <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
               Compare
             </span>
             {presets.map((p) => {

@@ -375,7 +375,7 @@ export function LapChart({
         <div>
           {/* Label + preset pills on one row */}
           <div className="flex flex-wrap items-center gap-1 mb-1">
-            <span className="text-[10px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+            <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
               Compare
             </span>
             {presets.map((p) => {
@@ -385,7 +385,7 @@ export function LapChart({
                 <button
                   key={p.label}
                   onClick={() => setPreset(p.cars)}
-                  className="px-2 py-0 rounded-xl text-[10px] border transition-all cursor-pointer leading-tight"
+                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
                   style={{
                     background: isActive ? "#4472C4" : CHART_STYLE.card,
                     borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
@@ -398,7 +398,7 @@ export function LapChart({
             })}
             <button
               onClick={clearComp}
-              className="px-2 py-0 rounded-xl text-[10px] border transition-all cursor-pointer leading-tight"
+              className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
               style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
             >
               Clear
