@@ -16,6 +16,7 @@ import {
   type ChartState,
   type ChartDimensions,
   type LapInfoData,
+  type PitInfoData,
 } from "./chart-renderer";
 import { CHART_STYLE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
@@ -683,6 +684,111 @@ export function LapChart({
   );
 }
 
+// ─── Pit Timing Display ──────────────────────────────────────────────────────
+
+function fmtSec(v: number | null | undefined): string {
+  if (v == null) return "—";
+  return v.toFixed(1) + "s";
+}
+
+function deltaColor(v: number | null | undefined): string {
+  if (v == null) return "#888";
+  if (v < -0.2) return "#4ade80"; // faster (green)
+  if (v > 0.2) return "#f87171"; // slower (red)
+  return "#888";
+}
+
+function spcIndicator(spc?: { classification: string; direction: string; zScore: number }): React.ReactNode {
+  if (!spc) return null;
+  if (spc.classification === "normal") return null;
+  if (spc.classification === "warning") return <span style={{ color: "#fbbf24" }} title={`z=${spc.zScore.toFixed(1)}`}> ⚠</span>;
+  // outlier
+  const color = spc.direction === "fast" ? "#4ade80" : "#f87171";
+  return <span style={{ color }} title={`z=${spc.zScore.toFixed(1)}`}> ●</span>;
+}
+
+function PitTimingDisplay({ pitInfo }: { pitInfo: PitInfoData }) {
+  const t = pitInfo.timing;
+  if (!t) return null;
+
+  const stratLabel = pitInfo.strategyType && pitInfo.strategyType !== "scheduled"
+    ? ` (${pitInfo.strategyType})`
+    : "";
+
+  return (
+    <div className="rounded px-2.5 py-1.5 text-xs" style={{ background: "#1a1a35", color: "#ccc" }}>
+      {/* Header: pit label + strategy */}
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className="font-semibold text-white">{pitInfo.pitLabel}</span>
+        {stratLabel && <span style={{ color: "#fbbf24" }}>{stratLabel}</span>}
+      </div>
+
+      {t.decompositionLevel === "full_segments" ? (
+        /* Full segments: Pit In / Pit Road / Pit Out / Total Loss */
+        <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: "auto auto auto" }}>
+          <TimingRow label="Pit In" value={t.pitInTime} spc={t.spcAnalysis?.pitIn} comp={t.cycleComparison?.deltaPitIn} />
+          <TimingRow label="Pit Road" value={t.pitRoadTime} spc={t.spcAnalysis?.pitRoad} comp={t.cycleComparison?.deltaPitRoad} />
+          <TimingRow label="Pit Out" value={t.pitOutTime} spc={t.spcAnalysis?.pitOut} comp={t.cycleComparison?.deltaPitOut} />
+          <TimingRow label="Total Loss" value={t.totalPitLoss} spc={t.spcAnalysis?.totalLoss} comp={t.cycleComparison?.deltaTotalLoss} bold />
+        </div>
+      ) : (
+        /* Total only: In-Lap / Out-Lap / Green Avg / Pit Loss */
+        <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: "auto auto auto" }}>
+          <span style={{ color: "#888" }}>In-Lap</span>
+          <span className="font-mono text-white">{fmtSec(t.inLapTime)}</span>
+          <span />
+          <span style={{ color: "#888" }}>Out-Lap</span>
+          <span className="font-mono text-white">{fmtSec(t.outLapTime)}</span>
+          <span />
+          <span style={{ color: "#888" }}>Green Avg</span>
+          <span className="font-mono text-white">{fmtSec(t.avgGreenLapTime)}</span>
+          <span />
+          <span className="font-semibold" style={{ color: "#888" }}>Pit Loss</span>
+          <span className="font-mono font-semibold text-white">{fmtSec(t.totalPitLoss)}</span>
+          <span>{spcIndicator(t.spcAnalysis?.totalLoss)}</span>
+        </div>
+      )}
+
+      {/* Cycle summary */}
+      {t.cycleComparison && t.cycleComparison.compCarCount > 0 && (
+        <div className="mt-1 text-[10px]" style={{ color: "#888" }}>
+          vs {t.cycleComparison.compCarCount} car{t.cycleComparison.compCarCount > 1 ? "s" : ""} in cycle:{" "}
+          <span className="font-mono font-semibold" style={{ color: deltaColor(t.cycleComparison.deltaTotalLoss) }}>
+            {t.cycleComparison.deltaTotalLoss > 0 ? "+" : ""}{t.cycleComparison.deltaTotalLoss.toFixed(1)}s
+          </span>
+          {t.isDriveThrough && <span style={{ color: "#fbbf24" }}> (drive-through)</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimingRow({ label, value, spc, comp, bold }: {
+  label: string;
+  value: number | null;
+  spc?: { classification: string; direction: string; zScore: number };
+  comp?: number | null;
+  bold?: boolean;
+}) {
+  const cls = bold ? "font-semibold" : "";
+  return (
+    <>
+      <span className={cls} style={{ color: "#888" }}>{label}</span>
+      <span className={`font-mono text-white ${cls}`}>
+        {fmtSec(value)}
+        {spcIndicator(spc)}
+      </span>
+      {comp != null ? (
+        <span className="font-mono" style={{ color: deltaColor(comp) }}>
+          {comp > 0 ? "+" : ""}{comp.toFixed(1)}s
+        </span>
+      ) : (
+        <span />
+      )}
+    </>
+  );
+}
+
 // ─── Info Panel sub-component ────────────────────────────────────────────────
 
 function InfoPanel({
@@ -771,7 +877,8 @@ function InfoPanel({
                 {info.reason}
               </div>
             )}
-            {info.paceInfo && (
+            {info.pitInfo?.timing && <PitTimingDisplay pitInfo={info.pitInfo} />}
+            {info.paceInfo && !info.pitInfo?.timing && (
               <div className="flex items-baseline gap-3 text-xs flex-wrap" style={{ color: "#aaa" }}>
                 <span>
                   #{focusNum}: <b className="text-white font-mono font-semibold">{info.paceInfo.focusTime}</b>

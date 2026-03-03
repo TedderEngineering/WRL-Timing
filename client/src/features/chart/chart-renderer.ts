@@ -59,6 +59,17 @@ export interface LapInfoData {
     compN: number;
   } | null;
   speed: number | null;
+  pitInfo: PitInfoData | null;
+}
+
+import type { PitMarker, PitTimingData } from "@shared/types";
+
+export interface PitInfoData {
+  pitLabel: string;
+  stintNumber?: number;
+  strategyType?: string;
+  strategyTarget?: string;
+  timing: PitTimingData | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -68,6 +79,23 @@ function hexA(hex: string, a: number): string {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${a})`;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function secToStr(s: number | null): string {
@@ -236,21 +264,84 @@ export function drawChart(
   });
 
   // ── 3. Pit stop vertical lines ────────────────────────────────
-  (ann.pits || []).forEach((p) => {
+  (ann.pits || []).forEach((p: PitMarker) => {
     if (p.l < lapStart || p.l > lapEnd) return;
     const px = x(p.l);
+    const pitTop = adjDim.MT;
+    const pitBot = adjDim.H - adjDim.MB;
     ctx.save();
     ctx.beginPath();
     ctx.setLineDash([]);
     ctx.strokeStyle = p.c;
     ctx.lineWidth = 1;
-    ctx.moveTo(px, adjDim.MT);
-    ctx.lineTo(px, adjDim.H - adjDim.MB);
+    ctx.moveTo(px, pitTop);
+    ctx.lineTo(px, pitBot);
     ctx.stroke();
     ctx.font = "500 9px system-ui";
     ctx.fillStyle = p.c;
     ctx.textAlign = "left";
-    ctx.fillText(p.lb, px + 3, adjDim.MT + 10 + (p.yo || 0));
+    const labelY = pitTop + 10 + (p.yo || 0);
+    ctx.fillText(p.lb, px + 3, labelY);
+
+    // Strategy badge: UC / OC / CV next to pit label
+    if (p.strategyType && p.strategyType !== "scheduled") {
+      const badgeMap: Record<string, string> = {
+        undercut: "UC",
+        overcut: "OC",
+        cover: "CV",
+      };
+      const badgeText = badgeMap[p.strategyType] || "";
+      if (badgeText) {
+        const labelWidth = ctx.measureText(p.lb).width;
+        const badgeX = px + 3 + labelWidth + 4;
+        const badgeY = labelY;
+
+        ctx.font = "500 8px system-ui";
+        const tw = ctx.measureText(badgeText).width;
+        const bw = tw + 6;
+        const bh = 11;
+
+        // Determine success from pitTiming's strategy — default green for undercut/overcut presence
+        // We don't have success on PitMarker directly, so use color heuristic:
+        // green = pit color is default amber (normal), red = penalty color
+        // Actually, the badge color should reflect strategy success.
+        // Since we only have strategyType on the marker, default to amber.
+        // The info panel shows full detail on hover/click.
+        const badgeBg = p.c === "#f87171" ? "#f87171" : "#fbbf24";
+
+        ctx.fillStyle = badgeBg;
+        roundRect(ctx, badgeX, badgeY - bh + 2, bw, bh, 3);
+        ctx.fill();
+        ctx.fillStyle = "#000";
+        ctx.textAlign = "left";
+        ctx.fillText(badgeText, badgeX + 3, badgeY);
+      }
+    }
+
+    // SPC indicator at mid-height of pit vertical line
+    const spc = p.pitTiming?.spcAnalysis?.totalLoss;
+    if (spc && spc.classification !== "normal") {
+      const midY = (pitTop + pitBot) / 2;
+
+      if (spc.classification === "warning") {
+        // Yellow triangle
+        ctx.beginPath();
+        ctx.fillStyle = "#fbbf24";
+        ctx.moveTo(px, midY - 5);
+        ctx.lineTo(px - 4.5, midY + 4);
+        ctx.lineTo(px + 4.5, midY + 4);
+        ctx.closePath();
+        ctx.fill();
+      } else if (spc.classification === "outlier") {
+        // Circle: red for slow, green for fast
+        const color = spc.direction === "fast" ? "#4ade80" : "#f87171";
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.arc(px, midY, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     ctx.restore();
   });
 
@@ -301,25 +392,61 @@ export function drawChart(
   }
   ctx.stroke();
 
-  // ── 6. Settle arrows ──────────────────────────────────────────
-  const settlesByBucket: Record<number, number> = {};
-  (ann.settles || []).forEach((sp) => {
-    if (sp.l < lapStart || sp.l > lapEnd) return;
+  // ── 6. Settle arrows (pixel collision detection) ──────────────
+  const SETTLE_BOX_W = 100;
+  const SETTLE_BOX_H = 30;
+  const SETTLE_Y_STEP = 32;
+  const BASE_ARROW_LEN = 36;
+
+  // Pre-compute settle positions and sort by x
+  const settleItems: Array<{
+    sp: typeof ann.settles extends (infer T)[] ? T : never;
+    cx: number;
+    cy: number;
+    settlePos: number;
+  }> = [];
+  for (const sp of (ann.settles || [])) {
+    if (sp.l < lapStart || sp.l > lapEnd) continue;
     let settlePos = sp.p;
     if (classView) {
       const ld = laps.find((l) => l.l === sp.l);
       if (ld) settlePos = ld[pk];
-      else return;
+      else continue;
     }
+    settleItems.push({ sp, cx: x(sp.l), cy: y(settlePos), settlePos });
+  }
+  settleItems.sort((a, b) => a.cx - b.cx);
 
-    const bucket = Math.round(sp.l / 5);
-    if (!settlesByBucket[bucket]) settlesByBucket[bucket] = 0;
-    const yOff = settlesByBucket[bucket] * 28;
-    settlesByBucket[bucket]++;
+  // Place labels using pixel collision detection
+  interface PlacedBox { x: number; y: number; w: number; h: number }
+  const placed: PlacedBox[] = [];
 
-    const cx = x(sp.l);
-    const cy = y(settlePos);
-    const aL = 36 + yOff;
+  function boxOverlaps(bx: number, by: number): boolean {
+    for (const p of placed) {
+      if (bx < p.x + p.w && bx + SETTLE_BOX_W > p.x &&
+          by < p.y + p.h && by + SETTLE_BOX_H > p.y) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  for (const { sp, cx, cy } of settleItems) {
+    // Try stacking upward until no collision
+    let yOff = 0;
+    const bx = cx - SETTLE_BOX_W / 2;
+    while (boxOverlaps(bx, cy - BASE_ARROW_LEN - yOff - SETTLE_BOX_H)) {
+      yOff += SETTLE_Y_STEP;
+      if (yOff > 200) break; // safety limit
+    }
+    placed.push({
+      x: bx,
+      y: cy - BASE_ARROW_LEN - yOff - SETTLE_BOX_H,
+      w: SETTLE_BOX_W,
+      h: SETTLE_BOX_H,
+    });
+
+    const aL = BASE_ARROW_LEN + yOff;
 
     ctx.save();
     // Arrow shaft
@@ -354,7 +481,7 @@ export function drawChart(
     ctx.fillStyle = sp.c;
     ctx.fillText(sp.su, cx, cy - aL - 3);
     ctx.restore();
-  });
+  }
 
   // ── 7. Pit dots ────────────────────────────────────────────────
   laps.forEach((d) => {
@@ -603,6 +730,21 @@ export function buildLapInfo(
     }
   }
 
+  // Pit info: find pit marker for this lap or adjacent out-lap
+  let pitInfo: PitInfoData | null = null;
+  if (d.pit === 1 || ann.pits.some((p: PitMarker) => p.l === lapNum || p.l === lapNum - 1)) {
+    const marker = ann.pits.find((p: PitMarker) => p.l === lapNum) ||
+                   ann.pits.find((p: PitMarker) => p.l === lapNum - 1);
+    if (marker) {
+      pitInfo = {
+        pitLabel: marker.lb,
+        stintNumber: marker.stintNumber,
+        strategyType: marker.strategyType,
+        timing: marker.pitTiming ?? null,
+      };
+    }
+  }
+
   return {
     lap: d,
     carNum: focusNum,
@@ -616,5 +758,6 @@ export function buildLapInfo(
     reason,
     paceInfo,
     speed: d.spd ?? null,
+    pitInfo,
   };
 }

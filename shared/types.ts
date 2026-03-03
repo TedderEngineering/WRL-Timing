@@ -118,12 +118,58 @@ export interface RaceChartData {
   makeGroups?: Record<string, number[]>;
 }
 
+export interface PitTimingData {
+  pitInTime: number | null;
+  pitRoadTime: number | null;
+  pitOutTime: number | null;
+  isDriveThrough: boolean;
+  totalPitLoss: number;
+  inLapTime: number;
+  outLapTime: number;
+  avgGreenLapTime: number;
+  decompositionLevel: "total_only" | "full_segments";
+  spcAnalysis?: {
+    totalLoss: SPCClassificationData;
+    pitIn?: SPCClassificationData;
+    pitRoad?: SPCClassificationData;
+    pitOut?: SPCClassificationData;
+  };
+  cycleComparison?: {
+    cycleId: number;
+    compAvgPitInTime: number | null;
+    compAvgPitRoadTime: number | null;
+    compAvgPitOutTime: number | null;
+    compAvgTotalPitLoss: number;
+    deltaPitIn: number | null;
+    deltaPitRoad: number | null;
+    deltaPitOut: number | null;
+    deltaTotalLoss: number;
+    compCarCount: number;
+  };
+}
+
+export interface SPCClassificationData {
+  value: number;
+  teamMean: number;
+  teamStdDev: number;
+  zScore: number;
+  classification: "normal" | "warning" | "outlier";
+  direction: "fast" | "slow";
+  confidence: "provisional" | "established";
+}
+
 export interface PitMarker {
   l: number;
   lb: string;
   c: string;
   yo: number;
   da: number;
+  outDriver?: string;
+  inDriver?: string;
+  driverChanged?: boolean;
+  stintNumber?: number;
+  pitTiming?: PitTimingData;
+  strategyType?: "undercut" | "overcut" | "cover" | "scheduled";
 }
 
 export interface SettleMarker {
