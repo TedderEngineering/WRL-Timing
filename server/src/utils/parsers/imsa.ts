@@ -834,6 +834,7 @@ export const imsaParser: RaceDataParser = {
           flag = fcyLapSet.has(rl.lapNum) ? "FCY" : "GREEN";
         }
 
+        const hrSec = rl.hour ? parseTimeOfDay(rl.hour) : 0;
         return {
           l: rl.lapNum,
           p,
@@ -843,6 +844,7 @@ export const imsaParser: RaceDataParser = {
           flag,
           pit: (rl.pit ? 1 : 0) as 0 | 1,
           spd: rl.speedMph,
+          ...(hrSec > 0 ? { hr: hrSec } : {}),
         };
       });
 

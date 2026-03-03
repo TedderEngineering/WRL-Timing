@@ -1321,49 +1321,29 @@ export function computePitTiming(
   if (pitStopData) {
     const pitRoadTime = pitStopData.outTime - pitStopData.inTime;
 
-    // Find S/F timestamp for in-lap start (previous lap's timestamp)
-    // We approximate: inLapStartTimestamp = inTime - pitInTime
-    // pitInTime = inTime - inLapStartTimestamp
-    // inLapStartTimestamp = S/F crossing that started the in-lap
-    // We can derive it: inLapStartTimestamp ≈ inTime - (some fraction of inLapTime)
-    // Actually, we know inLapTime = S/F-to-S/F for the in-lap, and
-    // the next S/F is the in-lap's completion timestamp.
-    // inLapEndTimestamp = inLapStartTimestamp + inLapTime
-    // pitInTime = pitStopData.inTime - inLapStartTimestamp
-    //
-    // For IMSA, if we have outLap end timestamp:
-    // outLapEndTimestamp = outLapStartTimestamp + outLapTime
-    // pitOutTime = outLapEndTimestamp - pitStopData.outTime
-    //
-    // Since we don't have absolute timestamps on lap records, use the
-    // relationship: inLapTime = pitInTime + pitRoadTime + (partial overlap)
-    // Simplified: pitInTime = inLapTime - pitRoadTime (approximate when
-    // in-lap S/F to in-lap S/F includes pit road traverse)
-    //
-    // Best approach with available data:
-    // pitInTime = pitStopData.inTime - (the S/F timestamp starting the in-lap)
-    // Without absolute lap timestamps, we estimate:
-    // The in-lap time covers S/F → S/F. The car enters pit road during
-    // this lap at pitStopData.inTime. So pitInTime portion is from
-    // S/F to pit entry. We can estimate if we know session_elapsed on laps.
-    // For now, set segments from Time Card when we have full timestamps.
-
     timing.pitRoadTime = pitRoadTime;
     timing.isDriveThrough = pitRoadTime < 55.0;
 
-    // pitInTime and pitOutTime require absolute S/F timestamps.
-    // When session_elapsed is available on lap data, compute them:
+    // Compute pitInTime and pitOutTime using S/F crossing clock times (hr field).
+    // hr = seconds from midnight when the car crossed S/F completing that lap.
+    // pitStopData.inTime/outTime are also seconds from midnight (clock times).
+    // pitInTime = pit entry clock time - S/F crossing clock time at start of in-lap
+    // pitOutTime = S/F crossing clock time at end of out-lap - pit exit clock time
     const prevLap = laps.find((ld) => ld.l === pitEvent.inLap - 1);
-    if (prevLap && "sessionElapsed" in prevLap) {
-      const inLapStart = (prevLap as LapData & { sessionElapsed: number })
-        .sessionElapsed;
-      timing.pitInTime = pitStopData.inTime - inLapStart;
+    if (prevLap && prevLap.hr != null && prevLap.hr > 0) {
+      let pitIn = pitStopData.inTime - prevLap.hr;
+      if (pitIn < 0) pitIn += 86400; // midnight crossing
+      if (pitIn > 0 && pitIn < inLapRecord.ltSec * 1.5) {
+        timing.pitInTime = pitIn;
+      }
     }
 
-    if (outLapRecord && "sessionElapsed" in outLapRecord) {
-      const outLapEnd = (outLapRecord as LapData & { sessionElapsed: number })
-        .sessionElapsed;
-      timing.pitOutTime = outLapEnd - pitStopData.outTime;
+    if (outLapRecord && outLapRecord.hr != null && outLapRecord.hr > 0) {
+      let pitOut = outLapRecord.hr - pitStopData.outTime;
+      if (pitOut < 0) pitOut += 86400; // midnight crossing
+      if (pitOut > 0 && pitOut < outLapRecord.ltSec * 1.5) {
+        timing.pitOutTime = pitOut;
+      }
     }
 
     // Only claim full_segments when all three segments are available

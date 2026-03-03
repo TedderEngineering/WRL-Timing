@@ -94,6 +94,7 @@ export interface LapData {
   flag: string;    // "GF" | "FCY"
   pit: number;     // 0 | 1
   spd?: number;    // speed mph
+  hr?: number;     // S/F crossing clock time (seconds from midnight)
 }
 
 export interface CarData {

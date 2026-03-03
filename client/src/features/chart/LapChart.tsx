@@ -290,16 +290,8 @@ export function LapChart({
   }, [dim, data.maxLap, showLapInfo]);
 
   // ── Mouse move (hover) ─────────────────────────────────────────
-  const onMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!dim || panState.current.panning || rangeSelectStart.current !== null) return;
-      const cx = getCanvasX(e.clientX);
-      const lap = Math.round(lapOfX(cx, lapStart, lapEnd, dim));
-      const clamped = Math.max(1, Math.min(data.maxLap, lap));
-      showLapInfo(clamped);
-    },
-    [dim, getCanvasX, lapStart, lapEnd, data.maxLap, showLapInfo]
-  );
+  // Hover does not select a lap — click only (handled by mouseup in onMouseDown)
+  const onMouseMove = useCallback((_e: React.MouseEvent) => {}, []);
 
   // ── Double-click range zoom ────────────────────────────────────
   const onDoubleClick = useCallback(
@@ -688,7 +680,10 @@ export function LapChart({
 
 function fmtSec(v: number | null | undefined): string {
   if (v == null) return "—";
-  return v.toFixed(1) + "s";
+  const mins = Math.floor(v / 60);
+  const secs = v - mins * 60;
+  if (mins > 0) return `${mins}:${secs < 10 ? "0" : ""}${secs.toFixed(2)}`;
+  return secs.toFixed(2);
 }
 
 function deltaColor(v: number | null | undefined): string {
