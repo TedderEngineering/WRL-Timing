@@ -153,7 +153,7 @@ export function RaceDetailPage() {
           onToggle={() => setSidebarCollapsed((p) => !p)}
           onSelectRace={handleSelectRace}
           selectedRaceId={id || null}
-          initialEventId={initialEventId}
+          selectedEventId={initialEventId}
         />
         <div className="min-w-0 overflow-x-hidden">{content}</div>
       </div>
@@ -165,7 +165,7 @@ export function RaceDetailPage() {
         onToggle={() => {}}
         onSelectRace={handleSelectRace}
         selectedRaceId={id || null}
-        initialEventId={initialEventId}
+        selectedEventId={initialEventId}
         mobileOpen={mobileDrawerOpen}
         onMobileClose={() => setMobileDrawerOpen(false)}
       />
