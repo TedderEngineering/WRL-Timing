@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { EventSummary, EventRace, SearchMatchedOn } from "@shared/types";
 import { fetchEvent } from "../lib/api";
-import { getSeriesColor } from "../lib/series-colors";
 import { cn } from "../lib/utils";
 
 interface EventCardProps {
@@ -14,20 +13,6 @@ interface EventCardProps {
   defaultExpanded?: boolean;
 }
 
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start);
-  const e = new Date(end);
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-
-  if (s.toDateString() === e.toDateString()) {
-    return s.toLocaleDateString("en-US", { ...opts, year: "numeric" });
-  }
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })}\u2013${e.getDate()}, ${s.getFullYear()}`;
-  }
-  return `${s.toLocaleDateString("en-US", opts)}\u2013${e.toLocaleDateString("en-US", opts)}, ${s.getFullYear()}`;
-}
-
 export function EventCard({
   event,
   searchRaces,
@@ -35,9 +20,12 @@ export function EventCard({
   defaultExpanded,
 }: EventCardProps) {
   const navigate = useNavigate();
-  const { bg } = getSeriesColor(event.series);
-  const seriesLabel = getSeriesColor(event.series).label;
-  const dateRange = formatDateRange(event.startDate, event.endDate);
+
+  const dateStr = new Date(event.startDate).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
   // Auto-expand when search matched a race-level field
   const autoExpand =
@@ -56,7 +44,6 @@ export function EventCard({
     if (singleRace) return;
 
     if (!expanded && !races) {
-      // Fetch races on first expand
       setLoadingRaces(true);
       fetchEvent(event.id)
         .then((detail) => setRaces(detail.races))
@@ -77,36 +64,43 @@ export function EventCard({
 
   return (
     <div
-      className="rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors overflow-hidden cursor-pointer"
+      className="group relative rounded-xl overflow-hidden transition-all border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600 hover:shadow-lg cursor-pointer"
       onClick={handleCardClick}
     >
+      {/* Top color bar */}
+      <div className="h-1.5 bg-gradient-to-r from-brand-500 to-cyan-500" />
+
       <div className="p-5">
-        {/* Top row: series badge + date */}
-        <div className="flex items-center justify-between mb-3">
-          <span
-            className="inline-flex items-center px-2 py-0.5 text-[11px] font-bold rounded-full leading-none"
-            style={{ backgroundColor: bg, color: "#fff" }}
-          >
-            {seriesLabel}
+        {/* Meta row */}
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+          <span className="font-semibold text-brand-600 dark:text-brand-400">
+            {event.series}
           </span>
-          <span className="text-xs text-gray-500">{dateRange}</span>
+          <span>&middot;</span>
+          <span>{dateStr}</span>
         </div>
 
-        {/* Track name — main headline */}
-        <h3 className="text-lg font-bold text-white leading-tight truncate">
-          {event.track}
+        {/* Event name */}
+        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors leading-tight">
+          {event.name}
         </h3>
 
-        {/* Bottom row: race count + expand toggle */}
-        <div className="flex items-center justify-end mt-3">
-          {!singleRace ? (
+        {/* Track */}
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          {event.track}
+        </p>
+
+        {/* Stats row */}
+        <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">
+          <span>
+            {event.raceCount} race{event.raceCount !== 1 ? "s" : ""}
+          </span>
+          {!singleRace && (
             <button
               onClick={handleToggleExpand}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              className="flex items-center gap-1 hover:text-gray-300 transition-colors"
             >
-              <span>
-                {event.raceCount} race{event.raceCount !== 1 ? "s" : ""}
-              </span>
+              <span>Details</span>
               <svg
                 className={cn(
                   "h-3 w-3 transition-transform duration-150",
@@ -124,18 +118,16 @@ export function EventCard({
                 />
               </svg>
             </button>
-          ) : (
-            <span className="text-xs text-gray-500">1 race</span>
           )}
         </div>
       </div>
 
       {/* Expanded race list */}
       {expanded && !singleRace && (
-        <div className="border-t border-gray-800">
+        <div className="border-t border-gray-200 dark:border-gray-800">
           {loadingRaces ? (
             <div className="px-5 py-3 flex items-center gap-2">
-              <div className="h-3 w-3 border-2 border-gray-600 border-t-gray-300 rounded-full animate-spin" />
+              <div className="h-3 w-3 border-2 border-gray-400 dark:border-gray-600 border-t-gray-200 dark:border-t-gray-300 rounded-full animate-spin" />
               <span className="text-xs text-gray-500">Loading...</span>
             </div>
           ) : races ? (
@@ -143,12 +135,12 @@ export function EventCard({
               <button
                 key={race.id}
                 onClick={(e) => handleRaceClick(e, race.id)}
-                className="w-full text-left px-5 py-2.5 hover:bg-gray-800/60 transition-colors border-b border-gray-800/50 last:border-b-0"
+                className="w-full text-left px-5 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors border-b border-gray-100 dark:border-gray-800/50 last:border-b-0"
               >
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
                   {race.subSeries || event.series}
                   {race.roundNumber != null && (
-                    <span className="text-gray-500">
+                    <span className="text-gray-400 dark:text-gray-500">
                       {" "}
                       &middot; Round {race.roundNumber}
                     </span>
@@ -156,7 +148,7 @@ export function EventCard({
                 </span>
                 {race.name &&
                   race.name !== (race.subSeries || event.series) && (
-                    <span className="block text-xs text-gray-600 mt-0.5">
+                    <span className="block text-xs text-gray-400 dark:text-gray-600 mt-0.5">
                       {race.name}
                     </span>
                   )}
