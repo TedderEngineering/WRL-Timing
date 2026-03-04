@@ -21,6 +21,7 @@ export function RaceDetailRedirect() {
 export function RaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get("race") || undefined;
+  const initialEventId = searchParams.get("event") || undefined;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { isAuthenticated, user } = useAuth();
@@ -121,7 +122,11 @@ export function RaceDetailPage() {
   };
 
   // ── Grid wrapper with sidebar ──────────────────────────────────
-  const handleSelectRace = (raceId: string) => setSearchParams({ race: raceId });
+  const handleSelectRace = (raceId: string) => {
+    const next: Record<string, string> = { race: raceId };
+    if (initialEventId) next.event = initialEventId;
+    setSearchParams(next);
+  };
 
   const withSidebar = (content: React.ReactNode) => (
     <>
@@ -148,6 +153,7 @@ export function RaceDetailPage() {
           onToggle={() => setSidebarCollapsed((p) => !p)}
           onSelectRace={handleSelectRace}
           selectedRaceId={id || null}
+          initialEventId={initialEventId}
         />
         <div className="min-w-0 overflow-x-hidden">{content}</div>
       </div>
@@ -159,6 +165,7 @@ export function RaceDetailPage() {
         onToggle={() => {}}
         onSelectRace={handleSelectRace}
         selectedRaceId={id || null}
+        initialEventId={initialEventId}
         mobileOpen={mobileDrawerOpen}
         onMobileClose={() => setMobileDrawerOpen(false)}
       />

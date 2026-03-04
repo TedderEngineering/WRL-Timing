@@ -30,20 +30,28 @@ eventsRouter.get(
           date: true,
           season: true,
           _count: { select: { races: true } },
+          races: { select: { date: true }, orderBy: { date: "asc" } },
         },
         orderBy: { date: "desc" },
       });
 
       res.json({
-        events: events.map((e) => ({
-          id: e.id,
-          name: e.name,
-          series: e.series,
-          track: e.track,
-          date: e.date,
-          season: e.season,
-          raceCount: e._count.races,
-        })),
+        events: events.map((e) => {
+          const raceDates = e.races.map((r) => r.date);
+          const startDate = raceDates[0] ?? e.date;
+          const endDate = raceDates[raceDates.length - 1] ?? e.date;
+          return {
+            id: e.id,
+            name: e.name,
+            series: e.series,
+            track: e.track,
+            date: e.date,
+            season: e.season,
+            raceCount: e._count.races,
+            startDate,
+            endDate,
+          };
+        }),
       });
     } catch (err) {
       next(err);
@@ -72,6 +80,8 @@ eventsRouter.get(
               date: true,
               status: true,
               series: true,
+              subSeries: true,
+              roundNumber: true,
             },
             orderBy: { date: "asc" },
           },

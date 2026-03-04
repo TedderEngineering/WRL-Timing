@@ -2,31 +2,28 @@ import { useState, useEffect, useCallback } from "react";
 import type { EventSummary, EventWithRaces } from "@shared/types";
 import { fetchEvents, fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
+import { getSeriesColor } from "../lib/series-colors";
 
 interface EventSidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
   onSelectRace: (raceId: string) => void;
   selectedRaceId: string | null;
+  /** Auto-expand this event on mount (from URL ?event= param) */
+  initialEventId?: string;
   /** Mobile drawer mode */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
 function SeriesBadge({ series }: { series: string }) {
-  const s = series.toUpperCase();
-  const isImsa = s.includes("IMSA");
-  const isWrl = s.includes("WRL");
+  const { bg, label } = getSeriesColor(series);
   return (
     <span
-      className={cn(
-        "inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full leading-none shrink-0",
-        isImsa && "bg-blue-600/20 text-blue-400",
-        isWrl && "bg-green-600/20 text-green-400",
-        !isImsa && !isWrl && "bg-gray-600/20 text-gray-400"
-      )}
+      className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full leading-none shrink-0"
+      style={{ backgroundColor: `${bg}33`, color: bg }}
     >
-      {isImsa ? "IMSA" : isWrl ? "WRL" : s.slice(0, 4)}
+      {label}
     </span>
   );
 }
@@ -49,13 +46,14 @@ export default function EventSidebar({
   onToggle,
   onSelectRace,
   selectedRaceId,
+  initialEventId,
   mobileOpen,
   onMobileClose,
 }: EventSidebarProps) {
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialEventId ?? null);
 
   // Event detail cache: eventId → full event with races
   const [eventCache, setEventCache] = useState<Record<string, EventWithRaces>>({});
@@ -75,6 +73,19 @@ export default function EventSidebar({
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-expand initialEventId when events finish loading
+  useEffect(() => {
+    if (!initialEventId || loading || eventCache[initialEventId]) return;
+    setExpandedId(initialEventId);
+    setLoadingEventId(initialEventId);
+    fetchEvent(initialEventId)
+      .then((detail) => {
+        setEventCache((prev) => ({ ...prev, [initialEventId]: detail }));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingEventId(null));
+  }, [initialEventId, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleEvent = useCallback(
     async (eventId: string) => {
@@ -335,9 +346,7 @@ function CollapsedIcons({
   return (
     <div className="flex flex-col items-center gap-1 py-3 overflow-y-auto">
       {events.map((ev) => {
-        const s = ev.series.toUpperCase();
-        const isImsa = s.includes("IMSA");
-        const isWrl = s.includes("WRL");
+        const { bg, label } = getSeriesColor(ev.series);
 
         // Check if this event contains the selected race
         const detail = eventCache[ev.id];
@@ -345,18 +354,12 @@ function CollapsedIcons({
           !!selectedRaceId &&
           !!detail?.races.some((r) => r.id === selectedRaceId);
 
-        const label = isImsa ? "IMSA" : isWrl ? "WRL" : ev.name.charAt(0).toUpperCase();
-
         return (
           <div key={ev.id} className="relative group">
             <button
               onClick={() => onClickEvent(ev.id)}
-              className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors shrink-0",
-                isImsa && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30",
-                isWrl && "bg-green-600/20 text-green-400 hover:bg-green-600/30",
-                !isImsa && !isWrl && "bg-gray-700/40 text-gray-400 hover:bg-gray-700/60"
-              )}
+              className="w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors shrink-0 hover:brightness-125"
+              style={{ backgroundColor: `${bg}33`, color: bg }}
             >
               {label}
             </button>

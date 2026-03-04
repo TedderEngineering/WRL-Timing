@@ -1,9 +1,11 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { useRaceList, useFilterOptions } from "../hooks/useChartData";
-import { api } from "../lib/api";
+import { api, fetchEvents } from "../lib/api";
 import { hasFullAccess as checkFullAccess } from "../lib/utils";
+import { EventCard } from "../components/EventCard";
+import type { EventSummary } from "@shared/types";
 
 
 export function RaceListPage() {
@@ -18,6 +20,20 @@ export function RaceListPage() {
 
   // Track optimistic favorite toggles: raceId → toggled state
   const [favOverrides, setFavOverrides] = useState<Record<string, boolean>>({});
+
+  // Event-based view
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEventsLoading(true);
+    setEventsError(null);
+    fetchEvents({ series: series || undefined, season: season ? String(season) : undefined })
+      .then(setEvents)
+      .catch(() => setEventsError("Failed to load events"))
+      .finally(() => setEventsLoading(false));
+  }, [series, season]);
 
   const filters = useFilterOptions();
   const params = useMemo(
@@ -129,132 +145,138 @@ export function RaceListPage() {
         )}
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex justify-center py-20">
-          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="text-center py-20 text-red-500">{error}</div>
-      )}
-
-      {/* Race grid */}
-      {result && !isLoading && (
+      {/* ── Event cards (default view, no search) ── */}
+      {!search && (
         <>
-          {result.races.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-lg text-gray-500 dark:text-gray-400">
-                No races found.
-              </p>
-              {search && (
-                <button
-                  onClick={() => {
-                    setSearch("");
-                    setSearchInput("");
-                  }}
-                  className="mt-2 text-brand-600 hover:underline text-sm"
-                >
-                  Clear search
-                </button>
-              )}
+          {eventsLoading && (
+            <div className="flex justify-center py-20">
+              <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : (
-            (() => {
-              const accessibleRaces = hasFullAccess
-                ? result.races
-                : result.races.filter((r) => (r as any).accessibleToFree);
-              const lockedRaces = hasFullAccess
-                ? []
-                : result.races.filter((r) => !(r as any).accessibleToFree);
-
-              return (
-                <>
-                  {/* Accessible races */}
-                  {accessibleRaces.length > 0 && (
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {accessibleRaces.map((race) => {
-                        const isFav = favOverrides[race.id] ?? race.isFavorited;
-                        return (
-                          <RaceCard
-                            key={race.id}
-                            race={{ ...race, isFavorited: isFav }}
-                            isAuthenticated={isAuthenticated}
-                            onFavorite={handleFavorite}
-                            hasFullAccess={hasFullAccess}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Upgrade banner */}
-                  {lockedRaces.length > 0 && (
-                    <>
-                      <div className="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-xl p-6 my-6 text-center">
-                        <svg className="h-8 w-8 text-indigo-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-                        </svg>
-                        <h3 className="text-xl font-semibold text-white">
-                          Unlock the full race library
-                        </h3>
-                        <p className="text-gray-300 text-sm mt-2 max-w-md mx-auto">
-                          Pro members get instant access to every race — past, present, and future. Go deeper with complete season analytics.
-                        </p>
-                        <p className="text-indigo-300 text-sm font-medium mt-3">
-                          {lockedRaces.length} more race{lockedRaces.length !== 1 ? "s" : ""} available with {userPlan === "PRO" ? "Team" : "Pro"}
-                        </p>
-                        <Link
-                          to="/settings/billing"
-                          className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-4 inline-block transition-colors"
-                        >
-                          Upgrade to {userPlan === "PRO" ? "Team" : "Pro"}
-                        </Link>
-                      </div>
-
-                      {/* Locked races */}
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {lockedRaces.map((race) => (
-                          <RaceCard
-                            key={race.id}
-                            race={{ ...race, isFavorited: false }}
-                            isAuthenticated={isAuthenticated}
-                            onFavorite={handleFavorite}
-                            locked
-                            hasFullAccess={hasFullAccess}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </>
-              );
-            })()
           )}
-
-          {/* Pagination */}
-          {result.totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-8">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-700"
-              >
-                ← Previous
-              </button>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Page {page} of {result.totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(result.totalPages, p + 1))}
-                disabled={page === result.totalPages}
-                className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-700"
-              >
-                Next →
-              </button>
+          {eventsError && (
+            <div className="text-center py-20 text-red-500">{eventsError}</div>
+          )}
+          {!eventsLoading && !eventsError && events.length === 0 && (
+            <div className="text-center py-20">
+              <p className="text-lg text-gray-500 dark:text-gray-400">No events found.</p>
             </div>
+          )}
+          {!eventsLoading && events.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {events.map((ev) => (
+                <EventCard key={ev.id} event={ev} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Race card search results (when searching) ── */}
+      {search && (
+        <>
+          {isLoading && (
+            <div className="flex justify-center py-20">
+              <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {error && (
+            <div className="text-center py-20 text-red-500">{error}</div>
+          )}
+          {result && !isLoading && (
+            <>
+              {result.races.length === 0 ? (
+                <div className="text-center py-20">
+                  <p className="text-lg text-gray-500 dark:text-gray-400">No races found.</p>
+                  <button
+                    onClick={() => { setSearch(""); setSearchInput(""); }}
+                    className="mt-2 text-brand-600 hover:underline text-sm"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              ) : (
+                (() => {
+                  const accessibleRaces = hasFullAccess
+                    ? result.races
+                    : result.races.filter((r) => (r as any).accessibleToFree);
+                  const lockedRaces = hasFullAccess
+                    ? []
+                    : result.races.filter((r) => !(r as any).accessibleToFree);
+                  return (
+                    <>
+                      {accessibleRaces.length > 0 && (
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {accessibleRaces.map((race) => {
+                            const isFav = favOverrides[race.id] ?? race.isFavorited;
+                            return (
+                              <RaceCard
+                                key={race.id}
+                                race={{ ...race, isFavorited: isFav }}
+                                isAuthenticated={isAuthenticated}
+                                onFavorite={handleFavorite}
+                                hasFullAccess={hasFullAccess}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                      {lockedRaces.length > 0 && (
+                        <>
+                          <div className="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-xl p-6 my-6 text-center">
+                            <h3 className="text-xl font-semibold text-white">Unlock the full race library</h3>
+                            <p className="text-gray-300 text-sm mt-2 max-w-md mx-auto">
+                              Pro members get instant access to every race.
+                            </p>
+                            <p className="text-indigo-300 text-sm font-medium mt-3">
+                              {lockedRaces.length} more race{lockedRaces.length !== 1 ? "s" : ""} available with {userPlan === "PRO" ? "Team" : "Pro"}
+                            </p>
+                            <Link
+                              to="/settings/billing"
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium mt-4 inline-block transition-colors"
+                            >
+                              Upgrade to {userPlan === "PRO" ? "Team" : "Pro"}
+                            </Link>
+                          </div>
+                          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {lockedRaces.map((race) => (
+                              <RaceCard
+                                key={race.id}
+                                race={{ ...race, isFavorited: false }}
+                                isAuthenticated={isAuthenticated}
+                                onFavorite={handleFavorite}
+                                locked
+                                hasFullAccess={hasFullAccess}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()
+              )}
+              {result.totalPages > 1 && (
+                <div className="flex justify-center items-center gap-4 mt-8">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-700"
+                  >
+                    ← Previous
+                  </button>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Page {page} of {result.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(result.totalPages, p + 1))}
+                    disabled={page === result.totalPages}
+                    className="px-4 py-2 text-sm border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-300 dark:border-gray-700"
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

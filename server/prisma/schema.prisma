@@ -161,6 +161,8 @@ model Race {
   totalCars      Int?       @map("total_cars")
   createdBy      String     @map("created_by")
   eventId        String?    @map("event_id")
+  subSeries      String?    @map("sub_series") // e.g. "WeatherTech", "Pilot Challenge"
+  roundNumber    Int?       @map("round_number") // per sub_series per season
   sourceFiles    Json?      @map("source_files") // Supabase Storage paths for raw uploaded files
   chartData      Json?      @map("chart_data") // full DATA object for chart rendering
   annotationData Json?      @map("annotation_data") // full ANN object for chart rendering

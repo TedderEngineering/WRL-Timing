@@ -57,6 +57,8 @@ export interface EventSummary {
   date: string;
   season: string;
   raceCount: number;
+  startDate: string;
+  endDate: string;
 }
 
 export interface EventRace {
@@ -65,6 +67,8 @@ export interface EventRace {
   date: string;
   status: RaceStatus;
   series: string;
+  subSeries: string | null;
+  roundNumber: number | null;
 }
 
 export interface EventWithRaces extends EventSummary {
@@ -86,6 +90,8 @@ export interface RaceSummary {
   premium: boolean;
   maxLap: number | null;
   totalCars: number | null;
+  subSeries: string | null;
+  roundNumber: number | null;
   entryCount?: number;
   favoriteCount?: number;
   isFavorited?: boolean;
