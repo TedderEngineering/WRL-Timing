@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { EventWithRaces } from "@shared/types";
 import { fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
-import { SeriesBadge } from "./SeriesBadge";
+import { getSeriesColor } from "../lib/series-colors";
 
 interface EventSidebarProps {
   isCollapsed: boolean;
@@ -14,6 +14,18 @@ interface EventSidebarProps {
   /** Mobile drawer mode */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+}
+
+function SeriesBadge({ series }: { series: string }) {
+  const { bg, label } = getSeriesColor(series);
+  return (
+    <span
+      className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full leading-none shrink-0"
+      style={{ backgroundColor: `${bg}33`, color: bg }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function LoadingSkeleton() {

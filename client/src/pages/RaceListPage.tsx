@@ -106,11 +106,11 @@ export function RaceListPage() {
             <button
               key={s}
               onClick={() => toggleSeries(s)}
-              className="px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border transition-all duration-150 cursor-pointer"
+              className="px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150 cursor-pointer"
               style={{
                 borderColor: active ? col : "#4B5563",
                 background: active ? `${col}33` : "transparent",
-                color: active ? col : "#9CA3AF",
+                color: active ? "#fff" : "#9CA3AF",
               }}
               onMouseEnter={(e) => {
                 if (!active) e.currentTarget.style.borderColor = "#9CA3AF";
