@@ -4,13 +4,13 @@ import { EventCard } from "../components/EventCard";
 import { SearchBar } from "../components/SearchBar";
 import { useEventSearch } from "../hooks/useEventSearch";
 import { useFilterOptions } from "../hooks/useChartData";
-import { getSeriesColor, SERIES_COLORS } from "../lib/series-colors";
+import { SERIES_COLORS } from "../lib/series-colors";
 import type { EventSummary } from "@shared/types";
 import { cn } from "../lib/utils";
 
 export function RaceListPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [seriesFilter, setSeriesFilter] = useState("");
+  const [seriesFilters, setSeriesFilters] = useState<Set<string>>(new Set());
   const [seasonFilter, setSeasonFilter] = useState("");
 
   // Default event list (cached — not refetched on search clear)
@@ -20,29 +20,57 @@ export function RaceListPage() {
 
   const filters = useFilterOptions();
 
-  // Fetch default events on mount and when series/season change
+  // Derive a single series string for the API (or undefined if multi/none)
+  const seriesParam = seriesFilters.size === 1 ? [...seriesFilters][0] : undefined;
+
+  // Fetch default events on mount and when filters change
   useEffect(() => {
     setEventsLoading(true);
     setEventsError(null);
     fetchEvents({
-      series: seriesFilter || undefined,
+      series: seriesParam,
       season: seasonFilter || undefined,
     })
-      .then(setEvents)
+      .then((data) => {
+        // Client-side multi-series filter when more than one selected
+        if (seriesFilters.size > 1) {
+          setEvents(data.filter((ev) => seriesFilters.has(ev.series.toUpperCase())));
+        } else {
+          setEvents(data);
+        }
+      })
       .catch(() => setEventsError("Failed to load events"))
       .finally(() => setEventsLoading(false));
-  }, [seriesFilter, seasonFilter]);
+  }, [seriesParam, seriesFilters.size, seasonFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live search (debounced, abortable)
   const { results: searchResults, isSearching } = useEventSearch(searchQuery, {
-    series: seriesFilter || undefined,
+    series: seriesParam,
     season: seasonFilter || undefined,
   });
 
   const isSearchMode = searchResults !== null;
 
+  // Filter search results client-side for multi-series
+  const filteredSearchResults =
+    searchResults && seriesFilters.size > 1
+      ? searchResults.filter((sr) => seriesFilters.has(sr.series.toUpperCase()))
+      : searchResults;
+
   // Series filter pills
   const seriesList = Object.keys(SERIES_COLORS);
+
+  const toggleSeries = (s: string) => {
+    setSeriesFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) {
+        next.delete(s);
+      } else {
+        next.add(s);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="container-page py-8 lg:py-12">
@@ -65,19 +93,17 @@ export function RaceListPage() {
       {/* Filter row: series pills + season dropdown */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {seriesList.map((s) => {
-          const { bg } = getSeriesColor(s);
-          const active = seriesFilter.toUpperCase() === s;
+          const active = seriesFilters.has(s);
           return (
             <button
               key={s}
-              onClick={() => setSeriesFilter(active ? "" : s)}
+              onClick={() => toggleSeries(s)}
               className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-bold transition-colors",
+                "px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150",
                 active
-                  ? "text-white"
-                  : "text-gray-400 bg-gray-800 hover:bg-gray-700",
+                  ? "bg-brand-600 border-brand-600 text-white"
+                  : "bg-transparent border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200",
               )}
-              style={active ? { backgroundColor: bg, color: "#fff" } : undefined}
             >
               {s}
             </button>
@@ -104,7 +130,7 @@ export function RaceListPage() {
         <>
           {isSearching ? (
             <SkeletonGrid />
-          ) : searchResults.length === 0 ? (
+          ) : !filteredSearchResults || filteredSearchResults.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-lg text-gray-500 dark:text-gray-400">
                 No events match &ldquo;{searchQuery}&rdquo;
@@ -119,10 +145,10 @@ export function RaceListPage() {
           ) : (
             <>
               <p className="text-sm text-gray-500 mb-4">
-                Found {searchResults.length} event{searchResults.length !== 1 ? "s" : ""} matching &ldquo;{searchQuery}&rdquo;
+                Found {filteredSearchResults.length} event{filteredSearchResults.length !== 1 ? "s" : ""} matching &ldquo;{searchQuery}&rdquo;
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {searchResults.map((sr) => (
+                {filteredSearchResults.map((sr) => (
                   <EventCard
                     key={sr.id}
                     event={sr}
