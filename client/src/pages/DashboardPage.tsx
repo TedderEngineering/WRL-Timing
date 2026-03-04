@@ -4,6 +4,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { Alert } from "../components/Alert";
 import { api } from "../lib/api";
 import { hasFullAccess } from "../lib/utils";
+import { SeriesBadge } from "../components/SeriesBadge";
 
 interface RaceItem {
   id: string;
@@ -22,16 +23,6 @@ interface RaceItem {
   createdAt?: string;
 }
 
-// Series → accent color mapping
-const SERIES_COLORS: Record<string, string> = {
-  WRL: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  IMSA: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  SRO: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-};
-
-function seriesClasses(series: string) {
-  return SERIES_COLORS[series] || "bg-brand-500/15 text-brand-400 border-brand-500/30";
-}
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -138,9 +129,7 @@ export function DashboardPage() {
           <div className="relative p-6 lg:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${seriesClasses(featured.series)}`}>
-                  {featured.series}
-                </span>
+                <SeriesBadge series={featured.series} />
                 <span className="text-xs text-gray-400 dark:text-gray-500">
                   {new Date(featured.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
@@ -329,9 +318,7 @@ function RaceCard({ race }: { race: RaceItem }) {
       className="group block rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600/50 p-4 transition-all"
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${seriesClasses(race.series)}`}>
-          {race.series}
-        </span>
+        <SeriesBadge series={race.series} />
         <span className="text-xs text-gray-400 dark:text-gray-500">{dateStr}</span>
       </div>
       <h3 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors leading-tight text-sm">
@@ -377,9 +364,7 @@ function CompactRaceCard({ race }: { race: RaceItem }) {
       className="group shrink-0 w-56 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600/50 p-3 transition-all"
     >
       <div className="flex items-center gap-1.5 mb-1.5">
-        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${seriesClasses(race.series)}`}>
-          {race.series}
-        </span>
+        <SeriesBadge series={race.series} />
         <span className="text-[11px] text-gray-400 dark:text-gray-500">{dateStr}</span>
       </div>
       <h3 className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors text-sm leading-tight truncate">

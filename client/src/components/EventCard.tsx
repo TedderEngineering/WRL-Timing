@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { EventSummary, EventRace, SearchMatchedOn } from "@shared/types";
 import { fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
+import { SeriesBadge } from "./SeriesBadge";
 
 interface EventCardProps {
   event: EventSummary;
@@ -78,10 +79,7 @@ export function EventCard({
       <div className="p-5">
         {/* Meta row */}
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
-          <span className="font-semibold text-brand-600 dark:text-brand-400">
-            {event.series}
-          </span>
-          <span>&middot;</span>
+          <SeriesBadge series={event.series} />
           <span>{dateStr}</span>
         </div>
 
