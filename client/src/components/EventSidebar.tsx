@@ -91,151 +91,118 @@ export default function EventSidebar({
     ? formatDateRange(eventData.startDate, eventData.endDate)
     : "";
 
-  // ── Shared content rendered in both desktop aside and mobile drawer ──
+  // ── Expanded sidebar content ──
   const sidebarContent = (
     <>
-      {loading ? (
-        <LoadingSkeleton />
-      ) : error ? (
-        <div className="p-3 text-sm">
-          <p className="text-red-400 mb-2">{error}</p>
-        </div>
-      ) : !eventData ? (
-        // No event selected — show subtle placeholder
-        <div className="flex-1 flex items-center justify-center p-4">
-          <p className="text-xs text-gray-600 text-center">
-            Select an event to see its races
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Event header */}
-          <div className="px-3 pt-3 pb-2 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-100 leading-snug">
-              {eventData.track}
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-              <SeriesBadge series={eventData.series} />
-              <span className="text-[11px] text-gray-500">{dateRange}</span>
-            </div>
-          </div>
-
-          {/* Flat race list */}
-          <div className="py-1">
-            {eventData.races.map((race) => {
-              const isActive = selectedRaceId === race.id;
-              const d = new Date(race.date);
-              const dateStr = d.toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              });
-              return (
-                <button
-                  key={race.id}
-                  onClick={() => handleSelectRace(race.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 h-9 text-left transition-colors",
-                    isActive
-                      ? "bg-gray-800/50 border-l-2 border-blue-500"
-                      : "hover:bg-gray-800/40 border-l-2 border-transparent",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "text-sm truncate flex-1",
-                      isActive ? "text-gray-100" : "text-gray-400",
-                    )}
-                  >
-                    {race.name}
-                  </span>
-                  <span className="text-[10px] text-gray-600 shrink-0">
-                    {dateStr}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </>
-  );
-
-  // ── Collapsed mode: show only selected event's series icon ──
-  const collapsedContent = eventData ? (
-    <div className="flex flex-col items-center gap-1 py-3">
-      <div className="relative group">
+      {/* Collapse button at top */}
+      <div className="flex items-center justify-end px-2 py-2 border-b border-gray-800">
         <button
           onClick={onToggle}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors shrink-0 hover:brightness-125"
-          style={{
-            backgroundColor: `${getSeriesColor(eventData.series).bg}33`,
-            color: getSeriesColor(eventData.series).bg,
-          }}
+          className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors"
+          aria-label="Collapse sidebar"
         >
-          {getSeriesColor(eventData.series).label}
-        </button>
-        {/* Race count dots */}
-        <div className="flex items-center justify-center gap-0.5 mt-1">
-          {eventData.races.map((r) => (
-            <span
-              key={r.id}
-              className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                selectedRaceId === r.id ? "bg-blue-500" : "bg-gray-600",
-              )}
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
             />
-          ))}
-        </div>
-        {/* Tooltip */}
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
-          {eventData.track}
-          <span className="text-gray-500 ml-1">
-            ({eventData.races.length})
-          </span>
-        </div>
+          </svg>
+        </button>
       </div>
-    </div>
-  ) : null;
+
+      <div className="flex-1 overflow-y-auto custom-scroll">
+        {loading ? (
+          <LoadingSkeleton />
+        ) : error ? (
+          <div className="p-3 text-sm">
+            <p className="text-red-400 mb-2">{error}</p>
+          </div>
+        ) : !eventData ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <p className="text-xs text-gray-600 text-center">
+              Select an event to see its races
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Event header */}
+            <div className="px-3 pt-3 pb-2 border-b border-gray-800">
+              <h2 className="text-sm font-semibold text-gray-100 leading-snug">
+                {eventData.track}
+              </h2>
+              <div className="flex items-center gap-2 mt-1">
+                <SeriesBadge series={eventData.series} />
+                <span className="text-[11px] text-gray-500">{dateRange}</span>
+              </div>
+            </div>
+
+            {/* Flat race list */}
+            <div className="py-1">
+              {eventData.races.map((race) => {
+                const isActive = selectedRaceId === race.id;
+                const d = new Date(race.date);
+                const dateStr = d.toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                });
+                return (
+                  <button
+                    key={race.id}
+                    onClick={() => handleSelectRace(race.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 h-9 text-left transition-colors",
+                      isActive
+                        ? "bg-gray-800/50 border-l-2 border-blue-500"
+                        : "hover:bg-gray-800/40 border-l-2 border-transparent",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-sm truncate flex-1",
+                        isActive ? "text-gray-100" : "text-gray-400",
+                      )}
+                    >
+                      {race.name}
+                    </span>
+                    <span className="text-[10px] text-gray-600 shrink-0">
+                      {dateStr}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
 
   return (
     <>
       {/* ── Desktop sidebar (md and above) ── */}
-      <aside
-        className={cn(
-          "hidden md:flex h-[calc(100vh-4rem)] bg-gray-900 border-r border-gray-800 flex-col transition-[width] duration-200 ease-in-out overflow-hidden",
-          isCollapsed ? "w-14" : "w-[280px]",
-        )}
-      >
-        {/* Toggle button */}
-        <div className="flex items-center justify-end px-2 py-2 border-b border-gray-800">
-          <button
-            onClick={onToggle}
-            className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <svg
-              className={cn(
-                "h-5 w-5 transition-transform duration-200",
-                isCollapsed && "rotate-180",
-              )}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
+      {isCollapsed ? (
+        /* Thin grab handle — 16px wide strip */
+        <div
+          className="hidden md:flex h-[calc(100vh-4rem)] items-center justify-center cursor-pointer transition-[width] duration-200 ease-in-out w-4 shrink-0"
+          onClick={onToggle}
+          role="button"
+          aria-label="Expand sidebar"
+        >
+          <div className="w-[3px] h-10 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
         </div>
-
-        <div className="flex-1 overflow-y-auto custom-scroll">
-          {isCollapsed ? collapsedContent : sidebarContent}
-        </div>
-      </aside>
+      ) : (
+        /* Expanded sidebar — 280px */
+        <aside className="hidden md:flex h-[calc(100vh-4rem)] bg-gray-900 border-r border-gray-800 flex-col transition-[width] duration-200 ease-in-out w-[280px] overflow-hidden">
+          {sidebarContent}
+        </aside>
+      )}
 
       {/* ── Mobile drawer (below md) ── */}
       {mobileOpen && (
@@ -267,7 +234,67 @@ export default function EventSidebar({
                 </svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto custom-scroll">{sidebarContent}</div>
+            <div className="flex-1 overflow-y-auto custom-scroll">
+              {loading ? (
+                <LoadingSkeleton />
+              ) : error ? (
+                <div className="p-3 text-sm">
+                  <p className="text-red-400 mb-2">{error}</p>
+                </div>
+              ) : !eventData ? (
+                <div className="flex-1 flex items-center justify-center p-4">
+                  <p className="text-xs text-gray-600 text-center">
+                    Select an event to see its races
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="px-3 pt-3 pb-2 border-b border-gray-800">
+                    <h2 className="text-sm font-semibold text-gray-100 leading-snug">
+                      {eventData.track}
+                    </h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <SeriesBadge series={eventData.series} />
+                      <span className="text-[11px] text-gray-500">{dateRange}</span>
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    {eventData.races.map((race) => {
+                      const isActive = selectedRaceId === race.id;
+                      const d = new Date(race.date);
+                      const dateStr = d.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      });
+                      return (
+                        <button
+                          key={race.id}
+                          onClick={() => handleSelectRace(race.id)}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 h-9 text-left transition-colors",
+                            isActive
+                              ? "bg-gray-800/50 border-l-2 border-blue-500"
+                              : "hover:bg-gray-800/40 border-l-2 border-transparent",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "text-sm truncate flex-1",
+                              isActive ? "text-gray-100" : "text-gray-400",
+                            )}
+                          >
+                            {race.name}
+                          </span>
+                          <span className="text-[10px] text-gray-600 shrink-0">
+                            {dateStr}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </aside>
         </div>
       )}
@@ -285,7 +312,6 @@ function formatDateRange(start: string, end: string): string {
   if (s.toDateString() === e.toDateString()) {
     return s.toLocaleDateString("en-US", { ...opts, year: "numeric" });
   }
-  // Same month
   if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
     return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${e.getDate()}, ${s.getFullYear()}`;
   }

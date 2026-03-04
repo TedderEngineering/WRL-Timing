@@ -6,11 +6,11 @@ import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { CHART_STYLE } from "../features/chart";
 import { getVisibleCars } from "../features/chart/chart-renderer";
-import { api } from "../lib/api";
+import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
 import EventSidebar from "../components/EventSidebar";
-import EmptyChartState from "../components/EmptyChartState";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+// EmptyChartState no longer needed — auto-loads first event on mount
 
 /** Redirect /races/:id → /chart?race=:id for bookmarked URLs */
 export function RaceDetailRedirect() {
@@ -22,13 +22,37 @@ export function RaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get("race") || undefined;
   const initialEventId = searchParams.get("event") || undefined;
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const autoLoadAttempted = useRef(false);
   const { isAuthenticated, user } = useAuth();
   const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
   const [isFavorited, setIsFavorited] = useState(false);
   const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy">("position");
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
+
+  // ── Auto-load most recent event + first race when no URL params ──
+  useEffect(() => {
+    if (autoLoadAttempted.current || id || initialEventId) return;
+    autoLoadAttempted.current = true;
+
+    fetchEvents()
+      .then((events) => {
+        if (events.length === 0) return;
+        const firstEvent = events[0];
+        return fetchEvent(firstEvent.id).then((detail) => {
+          if (detail.races.length > 0) {
+            setSearchParams(
+              { event: firstEvent.id, race: detail.races[0].id },
+              { replace: true },
+            );
+          } else {
+            setSearchParams({ event: firstEvent.id }, { replace: true });
+          }
+        });
+      })
+      .catch(() => {}); // fail silently — user sees empty state
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Shared chart state (lifted from LapChart for cross-tab access) ──
   const [focusNum, setFocusNum] = useState(0);
@@ -145,7 +169,7 @@ export function RaceDetailPage() {
       <div
         className="hidden md:grid transition-[grid-template-columns] duration-200 ease-in-out"
         style={{
-          gridTemplateColumns: sidebarCollapsed ? "56px 1fr" : "280px 1fr",
+          gridTemplateColumns: sidebarCollapsed ? "16px 1fr" : "280px 1fr",
         }}
       >
         <EventSidebar
@@ -172,9 +196,14 @@ export function RaceDetailPage() {
     </>
   );
 
-  // ── No race selected ─────────────────────────────────────────────
+  // ── No race selected (auto-load in progress or no events) ────────
   if (!id) {
-    return withSidebar(<EmptyChartState />);
+    return withSidebar(
+      <div className="flex flex-col items-center justify-center py-32 gap-4">
+        <div className="h-10 w-10 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    );
   }
 
   // ── Loading ─────────────────────────────────────────────────────
