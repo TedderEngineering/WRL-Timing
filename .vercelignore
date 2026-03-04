@@ -1,0 +1,6 @@
+server/
+docker-compose.yml
+docker-compose.override.yml
+*.md
+!README.md
+resources/

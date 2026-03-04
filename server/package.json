@@ -19,6 +19,8 @@
     "seed:events": "tsx prisma/seed-events.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "dev:setup": "docker compose up -d && sleep 3 && npx prisma migrate dev && npx prisma db seed",
+    "dev:db:reset": "npx prisma migrate reset --force",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -41,6 +43,9 @@
     "stripe": "^17.7.0",
     "uuid": "^11.0.5",
     "zod": "^3.24.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

@@ -1,38 +1,23 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: wrl-postgres
+  db:
+    image: postgres:15-alpine
+    container_name: racetrace-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
-      POSTGRES_USER: wrl
-      POSTGRES_PASSWORD: wrl_dev_password
-      POSTGRES_DB: wrl_lap_chart
+      POSTGRES_USER: racetrace_dev
+      POSTGRES_PASSWORD: devpassword123
+      POSTGRES_DB: racetrace_dev
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - racetrace_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wrl -d wrl_lap_chart"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: wrl-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "pg_isready -U racetrace_dev -d racetrace_dev"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  pgdata:
-  redisdata:
+  racetrace_pgdata:

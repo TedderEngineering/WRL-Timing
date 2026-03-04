@@ -94,3 +94,35 @@ wrl-lap-chart/
 | `npm run dev` | Start Vite dev server |
 | `npm run build` | Production build |
 | `npm test` | Run tests |
+
+## Local Development (Quick Start)
+
+### Prerequisites
+- Docker Desktop (for local Postgres)
+- Node.js 20+
+- npm
+
+### First-Time Setup
+1. Copy `.env.example` to `.env.local` and fill in your dev values
+2. `cd server && npm run dev:setup`
+3. Open a second terminal: `cd server && npm run dev`
+4. Open a third terminal: `cd client && npm run dev`
+5. Frontend: http://localhost:5173, Backend: http://localhost:3001
+
+### Resetting Local Database
+```bash
+cd server && npm run dev:db:reset
+```
+
+### Stripe Testing
+Use Stripe test mode keys (`sk_test_` / `pk_test_`) in `.env.local`.
+Test cards: `4242424242424242` (success), `4000000000000002` (decline)
+
+### Environment Overview
+
+| Concern   | Production          | Local Dev                    |
+|-----------|---------------------|------------------------------|
+| Frontend  | Vercel              | localhost:5173               |
+| Backend   | Railway             | localhost:3001               |
+| Database  | Supabase Postgres   | Docker Postgres (port 5433)  |
+| Stripe    | Live keys           | Test keys (sk_test_/pk_test_)|
