@@ -54,6 +54,33 @@ export function RaceDetailPage() {
       .catch(() => {}); // fail silently — user sees empty state
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-select first race when navigating with ?event but no ?race ──
+  const eventAutoSelectAttempted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialEventId || id) return;
+    if (eventAutoSelectAttempted.current === initialEventId) return;
+    eventAutoSelectAttempted.current = initialEventId;
+
+    fetchEvent(initialEventId)
+      .then((detail) => {
+        if (detail.races.length > 0) {
+          setSearchParams(
+            { event: initialEventId, race: detail.races[0].id },
+            { replace: true },
+          );
+        }
+      })
+      .catch(() => {});
+  }, [initialEventId, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Dispatch resize after sidebar transition so charts redraw ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 220); // 200ms CSS transition + 20ms buffer
+    return () => clearTimeout(timer);
+  }, [sidebarCollapsed]);
+
   // ── Shared chart state (lifted from LapChart for cross-tab access) ──
   const [focusNum, setFocusNum] = useState(0);
   const [compSet, setCompSet] = useState<Set<number>>(new Set());

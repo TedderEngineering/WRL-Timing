@@ -54,7 +54,12 @@ export function EventCard({
   };
 
   const handleCardClick = () => {
-    navigate(`/chart?event=${event.id}`);
+    // For single-race events with races already loaded, include race ID to skip loading
+    if (singleRace && races && races.length > 0) {
+      navigate(`/chart?event=${event.id}&race=${races[0].id}`);
+    } else {
+      navigate(`/chart?event=${event.id}`);
+    }
   };
 
   const handleRaceClick = (e: React.MouseEvent, raceId: string) => {
