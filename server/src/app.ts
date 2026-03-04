@@ -11,6 +11,7 @@ import { racesRouter } from "./routes/races.js";
 import { adminRouter } from "./routes/admin.js";
 import { billingRouter } from "./routes/billing.js";
 import { eventsRouter } from "./routes/events.js";
+import { searchRouter } from "./routes/search.js";
 
 export function createApp() {
   const app = express();
@@ -58,6 +59,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/races", racesRouter);
   app.use("/api/events", eventsRouter);
+  app.use("/api/search", searchRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/billing", billingRouter);
 

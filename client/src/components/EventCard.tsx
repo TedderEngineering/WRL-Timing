@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { EventSummary, EventWithRaces, EventRace } from "@shared/types";
+import type { EventSummary, EventWithRaces, EventRace, SearchMatchedOn } from "@shared/types";
 import { fetchEvent } from "../lib/api";
 import { getSeriesColor } from "../lib/series-colors";
 
@@ -38,13 +38,24 @@ function raceRowLabel(race: EventRace, parentSeries: string): { primary: string;
   return { primary, secondary };
 }
 
-export function EventCard({ event }: { event: EventSummary }) {
+interface EventCardProps {
+  event: EventSummary;
+  /** Pre-loaded races + matchedOn from search results */
+  searchRaces?: EventRace[];
+  matchedOn?: SearchMatchedOn;
+}
+
+export function EventCard({ event, searchRaces, matchedOn }: EventCardProps) {
   const { bg, text, label } = getSeriesColor(event.series);
   const dateStr = formatDateRange(event.startDate, event.endDate);
   const multiRace = event.raceCount > 1;
 
-  const [expanded, setExpanded] = useState(false);
-  const [detail, setDetail] = useState<EventWithRaces | null>(null);
+  // Auto-expand when search matched on a race-level field
+  const autoExpand = !!searchRaces && (matchedOn === "race" || matchedOn === "sub_series");
+  const [expanded, setExpanded] = useState(autoExpand);
+  const [detail, setDetail] = useState<EventWithRaces | null>(
+    searchRaces ? { ...event, races: searchRaces } : null,
+  );
   const [loading, setLoading] = useState(false);
 
   const handleExpand = async (e: React.MouseEvent) => {

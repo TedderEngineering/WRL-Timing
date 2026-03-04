@@ -1,4 +1,4 @@
-import type { ApiError, EventSummary, EventWithRaces } from "@shared/types";
+import type { ApiError, EventSummary, EventWithRaces, SearchResult } from "@shared/types";
 
 const BASE_URL = "/api";
 
@@ -165,4 +165,25 @@ export function fetchEvents(params?: {
 
 export function fetchEvent(eventId: string): Promise<EventWithRaces> {
   return api.get<EventWithRaces>(`/events/${eventId}`);
+}
+
+// ─── Search API ─────────────────────────────────────────────────────────────
+
+export async function searchEvents(
+  params: { q?: string; series?: string; season?: string },
+  signal?: AbortSignal,
+): Promise<SearchResult[]> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.series) qs.set("series", params.series);
+  if (params.season) qs.set("season", params.season);
+  const query = qs.toString();
+  try {
+    const res = await fetch(`${BASE_URL}/search${query ? `?${query}` : ""}`, { signal });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.events ?? [];
+  } catch {
+    return [];
+  }
 }

@@ -75,6 +75,12 @@ export interface EventWithRaces extends EventSummary {
   races: EventRace[];
 }
 
+export type SearchMatchedOn = "track" | "series" | "race" | "sub_series" | "name";
+
+export interface SearchResult extends EventWithRaces {
+  matchedOn: SearchMatchedOn;
+}
+
 // ─── Race ─────────────────────────────────────────────────────────────────────
 
 export type RaceStatus = "DRAFT" | "PUBLISHED";
