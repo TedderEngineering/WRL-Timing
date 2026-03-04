@@ -342,7 +342,7 @@ export function RaceDetailPage() {
             to="/races"
             className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
           >
-            Races
+            Events
           </Link>
           <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
           <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">

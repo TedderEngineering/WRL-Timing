@@ -132,7 +132,7 @@ function MobileMenu() {
         <div className="absolute top-16 left-0 right-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-lg z-50">
           <nav className="container-page py-4 flex flex-col gap-2">
             <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
-              Races
+              Events
             </Link>
 
             {!isAuthenticated && (
@@ -202,7 +202,7 @@ export function Layout() {
                 to="/races"
                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
               >
-                Races
+                Events
               </Link>
               {!isAuthenticated && (
                 <Link

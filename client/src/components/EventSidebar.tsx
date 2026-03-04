@@ -213,7 +213,7 @@ export default function EventSidebar({
           <aside className="absolute inset-y-0 left-0 w-[85vw] max-w-[320px] bg-gray-900 border-r border-gray-800 flex flex-col animate-slide-in-left">
             {/* Header with close button */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
-              <span className="text-sm font-semibold text-gray-200">Races</span>
+              <span className="text-sm font-semibold text-gray-200">Events</span>
               <button
                 onClick={onMobileClose}
                 className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors"

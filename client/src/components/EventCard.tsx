@@ -80,15 +80,26 @@ export function EventCard({
           <span>{dateStr}</span>
         </div>
 
-        {/* Event name */}
-        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors leading-tight">
-          {event.name}
-        </h3>
-
-        {/* Track */}
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          {event.track}
-        </p>
+        {/* Title — use track name; show event.name only when it differs meaningfully */}
+        {(() => {
+          // Strip year from event.name to compare with track
+          const nameNoYear = event.name.replace(/\s*\d{4}$/, "").trim();
+          const showEventName = nameNoYear.toLowerCase() !== event.track.toLowerCase()
+            && !event.track.toLowerCase().includes(nameNoYear.toLowerCase())
+            && !nameNoYear.toLowerCase().includes(event.track.toLowerCase());
+          return (
+            <>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors leading-tight">
+                {showEventName ? event.name.replace(/\s*\d{4}$/, "") : event.track}
+              </h3>
+              {showEventName && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {event.track}
+                </p>
+              )}
+            </>
+          );
+        })()}
 
         {/* Stats row */}
         <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">

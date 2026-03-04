@@ -6,11 +6,13 @@ import { useEventSearch } from "../hooks/useEventSearch";
 import { useFilterOptions } from "../hooks/useChartData";
 import { SERIES_COLORS } from "../lib/series-colors";
 import type { EventSummary } from "@shared/types";
-import { cn } from "../lib/utils";
+
 
 export function RaceListPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [seriesFilters, setSeriesFilters] = useState<Set<string>>(new Set());
+  const [seriesFilters, setSeriesFilters] = useState<Set<string>>(
+    () => new Set(Object.keys(SERIES_COLORS)),
+  );
   const [seasonFilter, setSeasonFilter] = useState("");
 
   // Default event list (cached — not refetched on search clear)
@@ -20,7 +22,10 @@ export function RaceListPage() {
 
   const filters = useFilterOptions();
 
-  // Derive a single series string for the API (or undefined if multi/none)
+  const allSeries = Object.keys(SERIES_COLORS);
+  const allSelected = seriesFilters.size === allSeries.length;
+
+  // Derive a single series string for the API (or undefined if multi/all)
   const seriesParam = seriesFilters.size === 1 ? [...seriesFilters][0] : undefined;
 
   // Fetch default events on mount and when filters change
@@ -28,13 +33,15 @@ export function RaceListPage() {
     setEventsLoading(true);
     setEventsError(null);
     fetchEvents({
-      series: seriesParam,
+      series: allSelected ? undefined : seriesParam,
       season: seasonFilter || undefined,
     })
       .then((data) => {
-        // Client-side multi-series filter when more than one selected
-        if (seriesFilters.size > 1) {
+        // Client-side multi-series filter when not all selected and more than one
+        if (!allSelected && seriesFilters.size > 1) {
           setEvents(data.filter((ev) => seriesFilters.has(ev.series.toUpperCase())));
+        } else if (!allSelected && seriesFilters.size === 0) {
+          setEvents([]);
         } else {
           setEvents(data);
         }
@@ -53,12 +60,12 @@ export function RaceListPage() {
 
   // Filter search results client-side for multi-series
   const filteredSearchResults =
-    searchResults && seriesFilters.size > 1
+    searchResults && !allSelected && seriesFilters.size > 0
       ? searchResults.filter((sr) => seriesFilters.has(sr.series.toUpperCase()))
       : searchResults;
 
   // Series filter pills
-  const seriesList = Object.keys(SERIES_COLORS);
+  const seriesList = allSeries;
 
   const toggleSeries = (s: string) => {
     setSeriesFilters((prev) => {
@@ -94,16 +101,23 @@ export function RaceListPage() {
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {seriesList.map((s) => {
           const active = seriesFilters.has(s);
+          const col = SERIES_COLORS[s]?.bg ?? "#4B5563";
           return (
             <button
               key={s}
               onClick={() => toggleSeries(s)}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150",
-                active
-                  ? "bg-brand-600 border-brand-600 text-white"
-                  : "bg-transparent border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200",
-              )}
+              className="px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150 cursor-pointer"
+              style={{
+                borderColor: active ? col : "#4B5563",
+                background: active ? `${col}33` : "transparent",
+                color: active ? "#fff" : "#9CA3AF",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.borderColor = "#9CA3AF";
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.borderColor = "#4B5563";
+              }}
             >
               {s}
             </button>

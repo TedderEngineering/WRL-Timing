@@ -260,7 +260,7 @@ export function DashboardPage() {
             to="/races"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-500 transition-colors"
           >
-            Browse Races
+            Browse Events
           </Link>
         </div>
       )}
