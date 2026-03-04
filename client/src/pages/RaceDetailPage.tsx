@@ -165,13 +165,8 @@ export function RaceDetailPage() {
         </svg>
       </button>
 
-      {/* Desktop: CSS grid layout */}
-      <div
-        className="hidden md:grid transition-[grid-template-columns] duration-200 ease-in-out"
-        style={{
-          gridTemplateColumns: sidebarCollapsed ? "16px 1fr" : "280px 1fr",
-        }}
-      >
+      {/* Desktop: flex-row layout — sidebar left, chart right */}
+      <div className="hidden md:flex h-[calc(100vh-4rem)] overflow-hidden">
         <EventSidebar
           isCollapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((p) => !p)}
@@ -179,7 +174,7 @@ export function RaceDetailPage() {
           selectedRaceId={id || null}
           selectedEventId={initialEventId}
         />
-        <div className="min-w-0 overflow-x-hidden">{content}</div>
+        <main className="flex-1 min-w-0 overflow-y-auto">{content}</main>
       </div>
 
       {/* Mobile: full-width content + drawer overlay */}
@@ -240,7 +235,7 @@ export function RaceDetailPage() {
           </Link>
           <div className="mt-3">
             <Link to="/races" className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
-              Browse available races
+              Browse available events
             </Link>
           </div>
         </div>
@@ -265,7 +260,7 @@ export function RaceDetailPage() {
           </Link>
           <div className="mt-3">
             <Link to="/races" className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
-              Browse free races
+              Browse free events
             </Link>
           </div>
         </div>
@@ -301,7 +296,7 @@ export function RaceDetailPage() {
             to="/races"
             className="text-brand-600 dark:text-brand-400 hover:underline font-medium"
           >
-            Back to races
+            Back to events
           </Link>
         </div>
       );

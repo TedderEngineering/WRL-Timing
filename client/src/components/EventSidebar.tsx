@@ -88,7 +88,13 @@ export default function EventSidebar({
   );
 
   const dateRange = eventData
-    ? formatDateRange(eventData.startDate, eventData.endDate)
+    ? (() => {
+        // Compute from races — the single-event API may not include startDate/endDate
+        const raceDates = eventData.races.map((r) => r.date).sort();
+        const start = raceDates[0] ?? eventData.date;
+        const end = raceDates[raceDates.length - 1] ?? eventData.date;
+        return formatDateRange(start, end);
+      })()
     : "";
 
   // ── Expanded sidebar content ──
