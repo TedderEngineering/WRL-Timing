@@ -780,15 +780,13 @@ export function calcCarBaseline(
 /** Constants for cluster walk */
 const SLOW_MULTIPLIER = 1.10;
 const MAX_LAP_CAP = 900;
-const MAX_CLUSTER_LAPS = 4;  // pit lap + up to 3 slow green laps
 
 /**
  * Calculate net pit stop time by walking a cluster of slow laps forward
  * from the pit-flagged lap.
  *
  * Includes the pit-flagged lap (capped at MAX_LAP_CAP), then walks forward
- * including any slow laps (>baseline × SLOW_MULTIPLIER). FCY laps are
- * skipped entirely (slow for everyone, not pit-related). Stops on:
+ * including any slow laps (>baseline × SLOW_MULTIPLIER). Stops on:
  *   - Next pit-flagged lap (pit=1)
  *   - Null/zero lap time
  *   - Lap time > MAX_LAP_CAP
@@ -800,7 +798,6 @@ export function calcPitStopNetTime(
   pitLapIndex: number,
   carLaps: LapData[],
   baseline: number,
-  fcyLaps?: Set<number>,
 ): { netTime: number; clusterLength: number } {
   if (baseline <= 0 || pitLapIndex < 0 || pitLapIndex >= carLaps.length) {
     return { netTime: 0, clusterLength: 0 };
@@ -819,16 +816,11 @@ export function calcPitStopNetTime(
   // Walk forward from the lap after the pit-flagged lap
   const threshold = baseline * SLOW_MULTIPLIER;
   for (let i = pitLapIndex + 1; i < carLaps.length; i++) {
-    if (clusterLength >= MAX_CLUSTER_LAPS) break; // cap cluster size
     const lap = carLaps[i];
     // Stop conditions
     if (lap.pit === 1) break;                   // next pit
     if (!lap.ltSec || lap.ltSec <= 0) break;    // null/zero time
     if (lap.ltSec > MAX_LAP_CAP) break;         // absurdly long
-
-    // Skip FCY laps — they're slow for everyone, not pit-related
-    if (fcyLaps && fcyLaps.has(lap.l)) continue;
-
     if (lap.ltSec <= threshold) break;           // back to race pace
 
     clusterTotal += lap.ltSec;
@@ -1418,7 +1410,7 @@ export function computePitTiming(
   let clusterLapCount: number | undefined;
 
   if (baseline > 0 && pitLapIndex >= 0) {
-    const cluster = calcPitStopNetTime(pitLapIndex, laps, baseline, fcyLaps);
+    const cluster = calcPitStopNetTime(pitLapIndex, laps, baseline);
     totalPitLoss = cluster.netTime;
     clusterLapCount = cluster.clusterLength;
   } else {
