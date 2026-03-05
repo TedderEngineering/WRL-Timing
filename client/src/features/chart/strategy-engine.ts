@@ -242,7 +242,7 @@ export function computeInsights(
 
 export function computeStrategyMetrics(
   data: RaceChartData,
-  _annotations: AnnotationData,
+  annotations: AnnotationData,
 ): StrategyMetrics[] {
   const fcyLaps = buildFcySet(data);
   const raw: StrategyMetrics[] = [];
@@ -341,8 +341,18 @@ export function computeStrategyMetrics(
     const pitLaps = laps.filter((d) => d.pit === 1);
     let totalPitTime = 0;
     let yellowPitCount = 0;
+
+    // Look up annotation pit markers for this car to get server-computed totalPitLoss
+    const carAnnotation = annotations[numStr];
+    const pitMarkers = carAnnotation?.pits ?? [];
+
     for (const d of pitLaps) {
-      if (avgGreenPace > 0 && d.ltSec > 1) {
+      // Try to find the matching annotation pit marker by lap number
+      const marker = pitMarkers.find((pm) => pm.l === d.l);
+      if (marker?.pitTiming?.totalPitLoss != null && marker.pitTiming.totalPitLoss > 0) {
+        totalPitTime += marker.pitTiming.totalPitLoss;
+      } else if (avgGreenPace > 0 && d.ltSec > 1) {
+        // Fallback to simple excess formula
         totalPitTime += Math.max(0, d.ltSec - avgGreenPace);
       }
       if (fcyLaps.has(d.l)) yellowPitCount++;
