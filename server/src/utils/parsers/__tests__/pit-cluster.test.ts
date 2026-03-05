@@ -207,6 +207,44 @@ describe("calcPitStopNetTime", () => {
     expect(result.clusterLength).toBe(0);
   });
 
+  it("skips FCY laps in cluster walk", () => {
+    // baseline 120s, threshold = 132s
+    // Pit on lap 3, then FCY laps 4-6 (slow for everyone), then normal lap 7
+    const laps = makeLaps([
+      { l: 1, ltSec: 120 },
+      { l: 2, ltSec: 120 },
+      { l: 3, ltSec: 300, pit: 1 }, // pit-flagged
+      { l: 4, ltSec: 200 },         // FCY — should be skipped
+      { l: 5, ltSec: 210 },         // FCY — should be skipped
+      { l: 6, ltSec: 195 },         // FCY — should be skipped
+      { l: 7, ltSec: 118 },         // back to pace (green)
+    ]);
+    const fcyLaps = new Set([4, 5, 6]);
+    const result = calcPitStopNetTime(2, laps, 120, fcyLaps);
+    // Only pit lap in cluster (FCY laps skipped, lap 7 is at pace)
+    expect(result.clusterLength).toBe(1);
+    expect(result.netTime).toBeCloseTo(180, 1); // 300 - 120
+  });
+
+  it("skips FCY laps but captures slow green laps after FCY", () => {
+    // Pit on lap 3, FCY on laps 4-5, then slow out-lap 6, then normal lap 7
+    const laps = makeLaps([
+      { l: 1, ltSec: 120 },
+      { l: 2, ltSec: 120 },
+      { l: 3, ltSec: 300, pit: 1 }, // pit-flagged
+      { l: 4, ltSec: 200 },         // FCY
+      { l: 5, ltSec: 190 },         // FCY
+      { l: 6, ltSec: 150 },         // slow green out-lap (>132)
+      { l: 7, ltSec: 118 },         // back to pace
+    ]);
+    const fcyLaps = new Set([4, 5]);
+    const result = calcPitStopNetTime(2, laps, 120, fcyLaps);
+    // cluster = pit (300) + slow green lap 6 (150) = 450
+    // net = 450 - 120*2 = 210
+    expect(result.clusterLength).toBe(2);
+    expect(result.netTime).toBeCloseTo(210, 1);
+  });
+
   it("COTA car #70 scenario: baseline ~144.5s, cluster of 3 laps → ~204s net", () => {
     // Simulated COTA scenario: baseline 144.5s, threshold = 144.5*1.10 = 158.95
     // Pit lap ~270s, out-lap ~175s, rejoin lap ~160s, then 143s back to pace
