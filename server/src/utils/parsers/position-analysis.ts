@@ -730,107 +730,6 @@ function stddev(arr: number[]): number {
   return Math.sqrt(sumSq / (arr.length - 1));
 }
 
-function median(arr: number[]): number {
-  if (arr.length === 0) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-// ─── Cluster-based pit timing helpers ────────────────────────────────────────
-
-/**
- * Compute a robust baseline lap time for a car across the whole race.
- *
- * Excludes pit laps, FCY laps, laps <60s or >900s.
- * Computes the median, then trims to ±15% of median before taking the mean.
- * If <5 laps qualify after trimming, returns the raw median instead.
- * Returns 0 if no qualifying laps at all.
- */
-export function calcCarBaseline(
-  laps: LapData[],
-  fcyLaps: Set<number>,
-): number {
-  // Filter out non-representative laps
-  const qualifying: number[] = [];
-  for (const ld of laps) {
-    if (ld.pit !== 0) continue;           // pit laps
-    if (fcyLaps.has(ld.l)) continue;      // FCY laps
-    if (ld.ltSec < 60) continue;          // too short (incomplete / invalid)
-    if (ld.ltSec > 900) continue;         // too long (red flag, timer glitch)
-    qualifying.push(ld.ltSec);
-  }
-
-  if (qualifying.length === 0) return 0;
-
-  const med = median(qualifying);
-  if (med === 0) return 0;
-
-  // Trim to ±15% of median
-  const lo = med * 0.85;
-  const hi = med * 1.15;
-  const trimmed = qualifying.filter((t) => t >= lo && t <= hi);
-
-  if (trimmed.length < 5) return med;
-  return mean(trimmed);
-}
-
-/** Constants for cluster walk */
-const SLOW_MULTIPLIER = 1.10;
-const MAX_LAP_CAP = 900;
-
-/**
- * Calculate net pit stop time by walking a cluster of slow laps forward
- * from the pit-flagged lap.
- *
- * Includes the pit-flagged lap (capped at MAX_LAP_CAP), then walks forward
- * including any slow laps (>baseline × SLOW_MULTIPLIER). Stops on:
- *   - Next pit-flagged lap (pit=1)
- *   - Null/zero lap time
- *   - Lap time > MAX_LAP_CAP
- *   - Lap back at race pace (<=baseline × SLOW_MULTIPLIER)
- *
- * netTime = max(0, clusterTotal - baseline × clusterLength)
- */
-export function calcPitStopNetTime(
-  pitLapIndex: number,
-  carLaps: LapData[],
-  baseline: number,
-): { netTime: number; clusterLength: number } {
-  if (baseline <= 0 || pitLapIndex < 0 || pitLapIndex >= carLaps.length) {
-    return { netTime: 0, clusterLength: 0 };
-  }
-
-  let clusterTotal = 0;
-  let clusterLength = 0;
-
-  // Include the pit-flagged lap itself (capped)
-  const pitLap = carLaps[pitLapIndex];
-  const pitTime = Math.min(pitLap.ltSec, MAX_LAP_CAP);
-  if (pitTime <= 0) return { netTime: 0, clusterLength: 0 };
-  clusterTotal += pitTime;
-  clusterLength = 1;
-
-  // Walk forward from the lap after the pit-flagged lap
-  const threshold = baseline * SLOW_MULTIPLIER;
-  for (let i = pitLapIndex + 1; i < carLaps.length; i++) {
-    const lap = carLaps[i];
-    // Stop conditions
-    if (lap.pit === 1) break;                   // next pit
-    if (!lap.ltSec || lap.ltSec <= 0) break;    // null/zero time
-    if (lap.ltSec > MAX_LAP_CAP) break;         // absurdly long
-    if (lap.ltSec <= threshold) break;           // back to race pace
-
-    clusterTotal += lap.ltSec;
-    clusterLength++;
-  }
-
-  const netTime = Math.max(0, clusterTotal - baseline * clusterLength);
-  return { netTime, clusterLength };
-}
-
 /**
  * Compute per-lap field volatility for a single class.
  *
@@ -1307,9 +1206,6 @@ export interface PitTiming {
   outLapTime: number;
   avgGreenLapTime: number;
 
-  // Number of laps in the slow cluster used to compute totalPitLoss
-  clusterLapCount?: number;
-
   // What level of decomposition is available
   decompositionLevel: "total_only" | "full_segments";
 
@@ -1401,26 +1297,12 @@ export function computePitTiming(
 
   const avgGreenLapTime = computeAvgGreenLapTime(laps, pitEvent.inLap, fcyLaps);
 
-  // ── Cluster-based pit loss (replaces old 2-lap formula) ──────────
-  // Find the index of the pit-flagged lap in the laps array
-  const pitLapIndex = laps.findIndex((ld) => ld.l === pitEvent.inLap);
-  const baseline = calcCarBaseline(laps, fcyLaps);
-
-  let totalPitLoss: number;
-  let clusterLapCount: number | undefined;
-
-  if (baseline > 0 && pitLapIndex >= 0) {
-    const cluster = calcPitStopNetTime(pitLapIndex, laps, baseline);
-    totalPitLoss = cluster.netTime;
-    clusterLapCount = cluster.clusterLength;
-  } else {
-    // Fallback to old formula when baseline can't be computed
-    totalPitLoss =
-      (avgGreenLapTime > 0 ? inLapTime - avgGreenLapTime : 0) +
-      (outLapTime > 0 && avgGreenLapTime > 0
-        ? Math.max(0, outLapTime - avgGreenLapTime)
-        : 0);
-  }
+  // Total pit loss = (in-lap - avg) + max(0, out-lap - avg)
+  const totalPitLoss =
+    (avgGreenLapTime > 0 ? inLapTime - avgGreenLapTime : 0) +
+    (outLapTime > 0 && avgGreenLapTime > 0
+      ? Math.max(0, outLapTime - avgGreenLapTime)
+      : 0);
 
   // Base result: total_only decomposition
   const timing: PitTiming = {
@@ -1429,7 +1311,6 @@ export function computePitTiming(
     pitOutTime: null,
     isDriveThrough: false,
     totalPitLoss,
-    clusterLapCount,
     inLapTime,
     outLapTime,
     avgGreenLapTime,

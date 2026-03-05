@@ -45,7 +45,6 @@ interface Column {
   type: "num" | "str";
   defaultDir: "asc" | "desc";
   width?: string;
-  title?: string;
 }
 
 const COLUMNS: Column[] = [
@@ -56,8 +55,8 @@ const COLUMNS: Column[] = [
   { key: "stintCount", label: "Stops", getValue: (m) => m.stintCount - 1, fmt: (m) => String(m.stintCount - 1), type: "num", defaultDir: "asc", width: "52px" },
   { key: "avgGreenPace", label: "Avg Pace", getValue: (m) => m.avgGreenPace || 99999, fmt: (m) => fmtPace(m.avgGreenPace), type: "num", defaultDir: "asc", width: "80px" },
   { key: "bestLap", label: "Best Lap", getValue: (m) => m.bestLap || 99999, fmt: (m) => fmtPace(m.bestLap), type: "num", defaultDir: "asc", width: "80px" },
-  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => fmtTime(m.totalPitTime), type: "num", defaultDir: "asc", width: "80px", title: "Total time lost to pit stops vs. green-flag pace. Includes pit road transit + service time." },
-  { key: "pitPct", label: "Pit %", getValue: (m) => m.pitPct, fmt: (m) => m.pitPct.toFixed(1) + "%", type: "num", defaultDir: "asc", width: "56px", title: "Pit time as % of total race time elapsed." },
+  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => fmtTime(m.totalPitTime), type: "num", defaultDir: "asc", width: "80px" },
+  { key: "pitPct", label: "Pit %", getValue: (m) => m.pitPct, fmt: (m) => m.pitPct.toFixed(1) + "%", type: "num", defaultDir: "asc", width: "56px" },
   { key: "yellowPitPct", label: "Yellow Pits", getValue: (m) => m.yellowPitPct, fmt: (m) => m.yellowPitPct.toFixed(0) + "%", type: "num", defaultDir: "desc", width: "76px" },
   { key: "avgStintLen", label: "Avg Stint", getValue: (m) => m.avgStintLen, fmt: (m) => m.avgStintLen.toFixed(1) + "L", type: "num", defaultDir: "desc", width: "68px" },
   { key: "maxStintLen", label: "Max Stint", getValue: (m) => m.maxStintLen, fmt: (m) => m.maxStintLen + "L", type: "num", defaultDir: "desc", width: "68px" },
@@ -287,7 +286,6 @@ export function StrategyTab({
                 return (
                   <th
                     key={col.key}
-                    title={col.title}
                     onClick={() => handleSort(col.key)}
                     style={{
                       background: S.bg2,

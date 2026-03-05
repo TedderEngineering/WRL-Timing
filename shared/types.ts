@@ -164,7 +164,6 @@ export interface PitTimingData {
   inLapTime: number;
   outLapTime: number;
   avgGreenLapTime: number;
-  clusterLapCount?: number;
   decompositionLevel: "total_only" | "full_segments";
   spcAnalysis?: {
     totalLoss: SPCClassificationData;
