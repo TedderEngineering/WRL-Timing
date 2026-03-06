@@ -7,6 +7,7 @@ import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
 import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
+import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 
 export const adminRouter = Router();
 
@@ -697,6 +698,49 @@ adminRouter.post(
         entriesCreated: result.entriesCreated,
         lapsCreated: result.lapsCreated,
         warnings,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/races/:id/pit-analysis — Run pit stop analysis ─────────
+
+adminRouter.post(
+  "/races/:id/pit-analysis",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const raceId = req.params.id as string;
+
+      // Verify race exists
+      const race = await prisma.race.findUnique({
+        where: { id: raceId },
+        select: { id: true, name: true, track: true },
+      });
+      if (!race) throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
+
+      const result = await analyzeRacePitStops(raceId);
+
+      await prisma.auditLog.create({
+        data: {
+          adminUserId: req.user!.userId,
+          action: "RUN_PIT_ANALYSIS",
+          targetType: "race",
+          targetId: raceId,
+          details: {
+            name: race.name,
+            track: race.track,
+            processed: result.processed,
+            skipped: result.skipped,
+            validationPassed: result.validationPassed,
+          },
+        },
+      });
+
+      res.json({
+        message: "Pit stop analysis complete",
+        ...result,
       });
     } catch (err) {
       next(err);

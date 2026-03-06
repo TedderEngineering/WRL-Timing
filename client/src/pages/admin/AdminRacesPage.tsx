@@ -39,6 +39,7 @@ export function AdminRacesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminRace | null>(null);
   const [editRace, setEditRace] = useState<AdminRace | null>(null);
+  const [pitResult, setPitResult] = useState<{ raceId: string; message: string; processed: number; skipped: number; validationPassed: boolean; errors: string[] } | null>(null);
 
   const fetchRaces = useCallback(async () => {
     setLoading(true);
@@ -108,6 +109,21 @@ export function AdminRacesPage() {
     }
   };
 
+  const runPitAnalysis = async (race: AdminRace) => {
+    setActionLoading(race.id);
+    setPitResult(null);
+    try {
+      const res = await api.post<{ message: string; processed: number; skipped: number; validationPassed: boolean; errors: string[] }>(
+        `/admin/races/${race.id}/pit-analysis`
+      );
+      setPitResult({ raceId: race.id, ...res });
+    } catch (err: any) {
+      setPitResult({ raceId: race.id, message: err.message || "Failed", processed: 0, skipped: 0, validationPassed: false, errors: [err.message] });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl">
       <div className="flex items-center justify-between mb-6">
@@ -147,6 +163,25 @@ export function AdminRacesPage() {
           <option value="DRAFT">Draft</option>
         </select>
       </div>
+
+      {/* Pit analysis result banner */}
+      {pitResult && (
+        <div
+          className={`mb-4 p-3 rounded-lg border text-sm flex items-center justify-between ${
+            pitResult.validationPassed
+              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300"
+              : pitResult.processed > 0
+                ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300"
+                : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
+          }`}
+        >
+          <span>
+            {pitResult.message} — {pitResult.processed} stops processed, {pitResult.skipped} skipped
+            {!pitResult.validationPassed && pitResult.errors.length > 0 && ` · ${pitResult.errors[0]}`}
+          </span>
+          <button onClick={() => setPitResult(null)} className="ml-3 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
@@ -209,6 +244,14 @@ export function AdminRacesPage() {
                             className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
                           >
                             Edit
+                          </button>
+                          <button
+                            onClick={() => runPitAnalysis(race)}
+                            disabled={actionLoading === race.id}
+                            className="px-2 py-1 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/20 rounded"
+                            title="Run pit stop analysis"
+                          >
+                            {actionLoading === race.id ? "…" : "Pit Analysis"}
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(race)}
