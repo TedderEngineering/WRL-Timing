@@ -658,14 +658,23 @@ function RaceGroupCard({
             </label>
             <div className="space-y-1">
               {fileEntries.map(([type, df]) => (
-                <div key={type} className="flex items-center gap-2 text-sm">
-                  <span className="text-green-500">&#10003;</span>
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {FILE_TYPE_LABELS[type]}
-                  </span>
-                  <span className="font-mono text-xs text-gray-400 truncate">
-                    ({df.file.name})
-                  </span>
+                <div key={type}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className={df.warning ? "text-amber-500" : "text-green-500"}>
+                      {df.warning ? "\u26A0" : "\u2713"}
+                    </span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {FILE_TYPE_LABELS[type]}
+                    </span>
+                    <span className="font-mono text-xs text-gray-400 truncate">
+                      ({df.file.name})
+                    </span>
+                  </div>
+                  {df.warning && (
+                    <div className="ml-6 text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                      {df.warning}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
