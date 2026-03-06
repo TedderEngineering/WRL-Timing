@@ -590,7 +590,7 @@ export function drawChart(
         const cl = data.cars[String(cn)]?.laps;
         const cd = cl?.find((l) => l.l === activeLap);
         if (!cd) return;
-        const cx2 = x(cd.l);
+        const cx2 = xForCar(String(cn), cd.l);
         const cy2 = y(cd[pk]);
         const col = getCompColor(compSet, focusNum, cn);
         ctx.beginPath();
