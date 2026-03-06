@@ -19,6 +19,7 @@ import { DataPanel } from "./DataPanel";
 import { PitCyclePanel } from "./PitCyclePanel";
 import { GapEvolutionPanel } from "./GapEvolutionPanel";
 import { HeadToHeadPanel } from "./HeadToHeadPanel";
+import { PassEventPanel } from "./PassEventPanel";
 import { CHART_STYLE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -56,6 +57,7 @@ export function LapChart({
   const [info, setInfo] = useState<LapInfoData | null>(null);
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
   const [sidePanel, setSidePanel] = useState<string | null>(null);
+  const h2hDefaultCarRef = useRef<number | undefined>(undefined);
 
   // ── Zoom state ─────────────────────────────────────────────────
   const [lapStart, setLapStart] = useState(1);
@@ -434,7 +436,10 @@ export function LapChart({
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
   // Close side panel when active lap changes
-  useEffect(() => { setSidePanel(null); }, [activeLap]);
+  useEffect(() => {
+    setSidePanel(null);
+    h2hDefaultCarRef.current = undefined;
+  }, [activeLap]);
 
   // ── Comparison toggles ──────────────────────────────────────────
   const toggleComp = useCallback(
@@ -654,7 +659,7 @@ export function LapChart({
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: CHART_STYLE.border }}>
                 <span className="text-sm font-semibold text-white">
-                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel === "gap" ? "Gap Evolution" : sidePanel === "h2h" ? "Head-to-Head" : sidePanel}
+                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel === "gap" ? "Gap Evolution" : sidePanel === "h2h" ? "Head-to-Head" : sidePanel === "event" ? "Position Change" : sidePanel}
                 </span>
                 <button
                   onClick={() => setSidePanel(null)}
@@ -685,6 +690,25 @@ export function LapChart({
                   data={data}
                   focusNum={focusNum}
                   activeLap={activeLap}
+                  defaultCompareNum={h2hDefaultCarRef.current}
+                />
+              )}
+              {sidePanel === "event" && info && (
+                <PassEventPanel
+                  reason={info.reason || ""}
+                  posDelta={info.posDelta}
+                  focusNum={focusNum}
+                  onOpenH2H={(carNum) => {
+                    h2hDefaultCarRef.current = carNum;
+                    setSidePanel("h2h");
+                  }}
+                  onAddToCompare={(carNum) => {
+                    setCompSet((prev) => {
+                      const next = new Set(prev);
+                      next.add(carNum);
+                      return next;
+                    });
+                  }}
                 />
               )}
             </div>
@@ -693,7 +717,10 @@ export function LapChart({
       </div>
 
       {/* ── Data panel ───────────────────────────────────────────── */}
-      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} setSidePanel={setSidePanel} />
+      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
+        h2hDefaultCarRef.current = undefined;
+        setSidePanel(panel);
+      }} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div

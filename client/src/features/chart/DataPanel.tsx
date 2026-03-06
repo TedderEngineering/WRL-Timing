@@ -170,7 +170,10 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
       <Divider />
 
       {/* Zone 5 — Reason / position change events */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden">
+      <div
+        className={`flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden${info.reason ? " cursor-pointer hover:bg-white/[0.03] transition-colors" : ""}`}
+        onClick={info.reason ? () => setSidePanel("event") : undefined}
+      >
         {info.reason ? (
           <>
             <ZoneLabel>Event</ZoneLabel>
