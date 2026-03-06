@@ -171,10 +171,15 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
 
       {/* Zone 5 — Reason / position change events */}
       <div
-        className={`flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden${info.reason && !isPit ? " cursor-pointer hover:bg-white/[0.03] transition-colors" : ""}`}
-        onClick={info.reason && !isPit ? () => setSidePanel("event") : undefined}
+        className={`flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden${info.reason ? " cursor-pointer hover:bg-white/[0.03] transition-colors" : ""}`}
+        onClick={info.reason ? () => setSidePanel("event") : undefined}
       >
-        {isPit ? (
+        {isPit && info.reason ? (
+          <>
+            <ZoneLabel>Event</ZoneLabel>
+            <EventPreview reason={info.reason} posDelta={info.posDelta} posDeltaColor={posDeltaColor} />
+          </>
+        ) : isPit ? (
           <div className="text-xs italic" style={{ color: "rgba(255,255,255,0.25)" }}>
             Pit lap
           </div>

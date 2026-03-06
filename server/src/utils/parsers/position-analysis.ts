@@ -207,7 +207,17 @@ export function generateAnnotations(
       if (reason) {
         const existingR = existingReasons[String(lapNum)];
         if (existingR) {
-          reasons[String(lapNum)] = reason + "; " + existingR;
+          // Merge and deduplicate parts to prevent repeats on re-annotation
+          const allParts = (reason + "; " + existingR).split(/;\s*/);
+          const seen = new Set<string>();
+          const deduped: string[] = [];
+          for (const p of allParts) {
+            const t = p.trim();
+            if (!t || seen.has(t)) continue;
+            seen.add(t);
+            deduped.push(t);
+          }
+          reasons[String(lapNum)] = deduped.join("; ");
         } else {
           reasons[String(lapNum)] = reason;
         }

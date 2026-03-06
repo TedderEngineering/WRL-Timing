@@ -176,22 +176,38 @@ export function PassEventPanel({ reason, posDelta, focusNum, isPit, onOpenH2H, o
           );
         })}
 
-        {/* Pit cycle events */}
-        {pitCycleEvents.map((ev, i) => {
+        {/* Pit cycle summary — single structured row combining cycle delta + info */}
+        {(pitCycleEvents.length > 0 || pitInfoEvents.length > 0) && (() => {
           const style = REASON_STYLES.pitCycle;
-          const isLoss = ev.delta < 0;
-          const cycleColor = isLoss ? "#f87171" : ev.delta > 0 ? "#4ade80" : "rgba(255,255,255,0.5)";
+          const cycleDelta = pitCycleEvents.length > 0 ? pitCycleEvents[0].delta : 0;
+          const isLoss = cycleDelta < 0;
+          const cycleColor = isLoss ? "#f87171" : cycleDelta > 0 ? "#4ade80" : "rgba(255,255,255,0.5)";
+
+          // Build description parts: "Lost N" + "X class cars also pitted"
+          const descParts: string[] = [];
+          if (cycleDelta !== 0) {
+            descParts.push(`${isLoss ? "Lost" : "Gained"} ${Math.abs(cycleDelta)}`);
+          }
+          for (const ev of pitInfoEvents) {
+            descParts.push(ev.text.replace(/also pitting$/, "also pitted"));
+          }
+
           return (
             <div
-              key={`pitcycle-${i}`}
               className="flex items-center gap-2 px-4 py-2.5 border-b"
               style={{ borderColor: "rgba(255,255,255,0.05)" }}
             >
               <span className="text-xs font-bold shrink-0 w-16" style={{ color: cycleColor }}>
-                {isLoss ? "▼ Lost" : ev.delta > 0 ? "▲ Gained" : "—"}
+                {isLoss ? "▼ Lost" : cycleDelta > 0 ? "▲ Gained" : "—"}
               </span>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
-                {Math.abs(ev.delta)} position{Math.abs(ev.delta) !== 1 ? "s" : ""}
+              <span
+                className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                style={{ background: "rgba(251,191,36,0.12)", color: "#fcd34d" }}
+              >
+                Pit cycle
+              </span>
+              <span className="text-xs truncate min-w-0" style={{ color: "rgba(255,255,255,0.6)" }}>
+                {descParts.join(" · ")}
               </span>
               <span
                 className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
@@ -201,20 +217,7 @@ export function PassEventPanel({ reason, posDelta, focusNum, isPit, onOpenH2H, o
               </span>
             </div>
           );
-        })}
-
-        {/* Pit info (also pitting, etc.) */}
-        {pitInfoEvents.map((ev, i) => (
-          <div
-            key={`pitinfo-${i}`}
-            className="flex items-center gap-2 px-4 py-2 border-b"
-            style={{ borderColor: "rgba(255,255,255,0.05)" }}
-          >
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-              {ev.text}
-            </span>
-          </div>
-        ))}
+        })()}
 
         {/* Pit-only fallback */}
         {isPitOnly && (
