@@ -150,7 +150,7 @@ export function generateAnnotations(
         if (!existingPits.some((ep) => ep.l === lapNum)) {
           pits.push({
             l: lapNum,
-            lb: `Pit Stop ${pitCount}`,
+            lb: `Pit ${pitCount}`,
             c: "#fbbf24",
             yo: 0,
             da: 0,
@@ -446,6 +446,10 @@ function v3Pipeline(
             marker.outDriver = pitStopData.outDriverSurname;
             marker.inDriver = pitStopData.inDriverSurname;
             marker.driverChanged = pitStopData.driverChanged ?? false;
+            // Update label with out-driver last name
+            const pitIdx = pitsArr.filter((p) => p.l <= marker.l).length;
+            const lastName = pitStopData.outDriverSurname.trim().split(/\s+/).pop()!.toUpperCase();
+            marker.lb = `Pit ${pitIdx} · ${lastName}`;
           }
         }
 
@@ -1898,11 +1902,13 @@ export function enrichPitMarkersWithDrivers(
     marker.inDriver = inDriver;
     marker.driverChanged = driverChanged;
 
-    // Update label
+    // Update label with out-driver last name
     if (outDriver) {
-      marker.lb = `S${stintNumber} ${outDriver}`;
+      const parts = outDriver.trim().split(/\s+/);
+      const lastName = parts[parts.length - 1].toUpperCase();
+      marker.lb = `Pit ${stintNumber - 1} · ${lastName}`;
     }
-    // Otherwise keep existing "Pit N" label
+    // Otherwise keep existing "Pit Stop N" label
   }
 }
 
