@@ -16,6 +16,7 @@ import {
   type LapInfoData,
 } from "./chart-renderer";
 import { DataPanel } from "./DataPanel";
+import { PitCyclePanel } from "./PitCyclePanel";
 import { CHART_STYLE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -650,7 +651,9 @@ export function LapChart({
             <div className="w-[480px] h-full flex flex-col">
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: CHART_STYLE.border }}>
-                <span className="text-sm font-semibold text-white capitalize">{sidePanel}</span>
+                <span className="text-sm font-semibold text-white">
+                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel}
+                </span>
                 <button
                   onClick={() => setSidePanel(null)}
                   className="text-xs cursor-pointer hover:text-white transition-colors"
@@ -659,12 +662,15 @@ export function LapChart({
                   ✕
                 </button>
               </div>
-              {/* Panel content placeholder */}
-              <div className="flex-1 flex items-center justify-center px-4">
-                <span className="text-sm" style={{ color: CHART_STYLE.dim }}>
-                  {sidePanel} panel content
-                </span>
-              </div>
+              {/* Panel content */}
+              {sidePanel === "pit" && activeLap !== null && (
+                <PitCyclePanel
+                  data={data}
+                  annotations={annotations}
+                  focusNum={focusNum}
+                  activeLap={activeLap}
+                />
+              )}
             </div>
           )}
         </div>
