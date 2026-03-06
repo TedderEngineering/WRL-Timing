@@ -6,7 +6,11 @@ interface GapEvolutionPanelProps {
   data: RaceChartData;
   focusNum: number;
   activeLap: number;
+  compSet?: Set<number>;
 }
+
+// Special sentinel for "Field Average" mode
+const FIELD_AVG = -1;
 
 function buildCumulativeTime(laps: { l: number; ltSec: number }[]): Map<number, number> {
   const map = new Map<number, number>();
@@ -26,25 +30,88 @@ function secToDisplay(sec: number): string {
   return m > 0 ? `${sign}${m}:${s.toFixed(2).padStart(5, "0")}` : `${sign}${s.toFixed(2)}`;
 }
 
-export function GapEvolutionPanel({ data, focusNum, activeLap }: GapEvolutionPanelProps) {
-  const [compareNum, setCompareNum] = useState<number | null>(null);
-  const [showPicker, setShowPicker] = useState(true);
+export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvolutionPanelProps) {
+  // Default to Field Average if compSet available, else null (picker)
+  const [compareNum, setCompareNum] = useState<number | null>(compSet ? FIELD_AVG : null);
+  const [showPicker, setShowPicker] = useState(compSet ? false : true);
 
   const handleSelect = (num: number) => {
     setCompareNum(num);
     setShowPicker(false);
   };
 
+  const handleSelectFieldAvg = () => {
+    setCompareNum(FIELD_AVG);
+    setShowPicker(false);
+  };
+
+  const isFieldAvg = compareNum === FIELD_AVG;
+
+  // Compute the scope label for field average
+  const fieldScope = useMemo(() => {
+    if (!compSet || compSet.size === 0) {
+      const allNums = Object.keys(data.cars).map(Number);
+      return { label: "All Classes", count: allNums.filter((n) => n !== focusNum).length };
+    }
+    const compNums = [...compSet].filter((n) => n !== focusNum);
+    if (compNums.length <= 3) {
+      return { label: compNums.map((n) => "#" + n).join(", "), count: compNums.length };
+    }
+    return { label: `${compNums.length} cars`, count: compNums.length };
+  }, [data, compSet, focusNum]);
+
+  // Build field average cumulative time (avg lap time per lap, accumulated)
+  const fieldAvgCum = useMemo(() => {
+    if (!isFieldAvg) return null;
+
+    const targetNums = compSet && compSet.size > 0
+      ? [...compSet].filter((n) => n !== focusNum)
+      : Object.keys(data.cars).map(Number).filter((n) => n !== focusNum);
+
+    if (targetNums.length === 0) return null;
+
+    const maxLap = data.maxLap;
+    const map = new Map<number, number>();
+    let cum = 0;
+
+    for (let lap = 1; lap <= maxLap; lap++) {
+      let sum = 0;
+      let cnt = 0;
+      for (const cn of targetNums) {
+        const carLaps = data.cars[String(cn)]?.laps;
+        const ld = carLaps?.find((l) => l.l === lap);
+        if (ld && ld.ltSec > 1) {
+          sum += ld.ltSec;
+          cnt++;
+        }
+      }
+      if (cnt > 0) {
+        cum += sum / cnt;
+        map.set(lap, cum);
+      }
+    }
+
+    return map;
+  }, [data, compSet, focusNum, isFieldAvg]);
+
   // Compute gaps over the last 10 laps
   const gapData = useMemo(() => {
     if (compareNum === null) return null;
 
     const focusCar = data.cars[String(focusNum)];
-    const compareCar = data.cars[String(compareNum)];
-    if (!focusCar || !compareCar) return null;
+    if (!focusCar) return null;
 
     const focusCum = buildCumulativeTime(focusCar.laps);
-    const compareCum = buildCumulativeTime(compareCar.laps);
+
+    let compareCum: Map<number, number> | null = null;
+    if (isFieldAvg) {
+      compareCum = fieldAvgCum;
+    } else {
+      const compareCar = data.cars[String(compareNum)];
+      if (!compareCar) return null;
+      compareCum = buildCumulativeTime(compareCar.laps);
+    }
+    if (!compareCum) return null;
 
     const startLap = Math.max(1, activeLap - 9);
     const gaps: { lap: number; gap: number; delta: number | null }[] = [];
@@ -81,7 +148,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap }: GapEvolutionPan
     }
 
     return { gaps, currentGap, minGap, maxGap, trend };
-  }, [data, focusNum, compareNum, activeLap]);
+  }, [data, focusNum, compareNum, activeLap, isFieldAvg, fieldAvgCum]);
 
   if (showPicker || compareNum === null) {
     return (
@@ -89,17 +156,36 @@ export function GapEvolutionPanel({ data, focusNum, activeLap }: GapEvolutionPan
         <div className="px-4 py-2 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
           Select a car to compare gaps with #{focusNum}
         </div>
+        {/* Field Average option at top */}
+        <button
+          onClick={handleSelectFieldAvg}
+          className="flex items-center gap-3 px-4 py-2.5 border-b cursor-pointer transition-colors hover:bg-white/[0.04]"
+          style={{ borderColor: "rgba(255,255,255,0.06)" }}
+        >
+          <span
+            className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
+            style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc" }}
+          >
+            Ø
+          </span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-semibold text-white">Field Avg</span>
+            <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+              {fieldScope.label} · {fieldScope.count} cars
+            </span>
+          </div>
+        </button>
         <CarPicker
           data={data}
           focusNum={focusNum}
-          selectedNum={compareNum}
+          selectedNum={compareNum !== FIELD_AVG ? compareNum : null}
           onSelect={handleSelect}
         />
       </div>
     );
   }
 
-  const compareCar = data.cars[String(compareNum)];
+  const compareCar = !isFieldAvg ? data.cars[String(compareNum)] : null;
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
@@ -111,10 +197,27 @@ export function GapEvolutionPanel({ data, focusNum, activeLap }: GapEvolutionPan
           className="flex items-center gap-1.5 px-2 py-1 rounded-md cursor-pointer transition-colors hover:bg-white/[0.06]"
           style={{ border: "1px solid rgba(255,255,255,0.12)" }}
         >
-          <span className="font-mono font-bold text-xs text-white">#{compareNum}</span>
-          <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.45)", maxWidth: 160 }}>
-            {compareCar?.team}
-          </span>
+          {isFieldAvg ? (
+            <>
+              <span
+                className="font-mono text-[11px] font-bold px-1 py-0.5 rounded shrink-0"
+                style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc" }}
+              >
+                Ø
+              </span>
+              <span className="text-xs font-semibold text-white">Field Avg</span>
+              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                · {fieldScope.count} cars
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono font-bold text-xs text-white">#{compareNum}</span>
+              <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.45)", maxWidth: 160 }}>
+                {compareCar?.team}
+              </span>
+            </>
+          )}
           <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>▼</span>
         </button>
       </div>

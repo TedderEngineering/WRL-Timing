@@ -686,6 +686,7 @@ export function LapChart({
                   data={data}
                   focusNum={focusNum}
                   activeLap={activeLap}
+                  compSet={compSet}
                 />
               )}
               {sidePanel === "h2h" && activeLap !== null && (

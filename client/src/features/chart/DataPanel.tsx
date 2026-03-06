@@ -124,15 +124,18 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
         </div>
       )}
 
-      {/* Zone 3 — P.Best + Fld Avg (racing laps only) */}
+      {/* Zone 3+4 — VS Field + Delta (racing laps only, clickable → Gap Evolution) */}
       {!isPit && info.paceInfo && (
         <>
           <Divider />
-          <div className="hidden lg:flex flex-col justify-center px-4 shrink-0" style={{ width: 200 }}>
-            <ZoneLabel>vs Field</ZoneLabel>
-            <div className="flex gap-4 items-end">
-              {info.paceInfo.compAvg && (
-                <>
+          <div
+            className="hidden lg:flex items-center gap-4 px-4 shrink-0 cursor-pointer hover:bg-white/[0.03] transition-colors"
+            onClick={() => setSidePanel("gap")}
+          >
+            {info.paceInfo.compAvg && (
+              <div className="flex flex-col justify-center">
+                <ZoneLabel>vs Field</ZoneLabel>
+                <div className="flex gap-4 items-end">
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>Fld Avg</div>
                     <div className="text-base font-bold tabular-nums" style={{ color: "rgba(255,255,255,0.55)" }}>
@@ -142,27 +145,22 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
                   <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
                     {info.paceInfo.compLabel} · {info.paceInfo.compN} cars
                   </div>
-                </>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Zone 4 — Delta (racing laps only) */}
-      {!isPit && info.paceInfo?.delta !== null && info.paceInfo?.delta !== undefined && (
-        <>
-          <Divider className="hidden lg:block" />
-          <div className="hidden lg:flex flex-col justify-center px-4 shrink-0" style={{ width: 130 }}>
-            <ZoneLabel>Delta</ZoneLabel>
-            <div className="text-xl font-extrabold tabular-nums leading-none mb-0.5" style={{
-              color: info.paceInfo.deltaColor,
-            }}>
-              {info.paceInfo.delta > 0 ? "+" : ""}{info.paceInfo.delta.toFixed(2)}s
-            </div>
-            <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
-              vs {info.paceInfo.compN} cars
-            </div>
+                </div>
+              </div>
+            )}
+            {info.paceInfo.delta !== null && info.paceInfo.delta !== undefined && (
+              <div className="flex flex-col justify-center">
+                <ZoneLabel>Delta</ZoneLabel>
+                <div className="text-xl font-extrabold tabular-nums leading-none mb-0.5" style={{
+                  color: info.paceInfo.deltaColor,
+                }}>
+                  {info.paceInfo.delta > 0 ? "+" : ""}{info.paceInfo.delta.toFixed(2)}s
+                </div>
+                <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  vs {info.paceInfo.compN} cars
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
