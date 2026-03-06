@@ -1,7 +1,7 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type FileType =
-  | "lapChartJson"
+  | "timeCardsJson"
   | "flagsJson"
   | "pitStopJson"
   | "timeCardsCsv"
@@ -63,14 +63,14 @@ export interface ValidationStats {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
-  imsa: ["lapChartJson"],
+  imsa: ["timeCardsJson"],
   speedhive: ["summaryCsv", "lapsCsv"],
   "wrl-website": ["summaryCsv", "lapsCsv"],
 };
 
 /** Maps internal FileType to the server-side slot key */
 export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
-  lapChartJson: "lapChartJson",
+  timeCardsJson: "timeCardsJson",
   flagsJson: "flagsJson",
   pitStopJson: "pitStopJson",
   timeCardsCsv: "timeCardsCsv",
@@ -81,7 +81,7 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
 };
 
 export const FILE_TYPE_LABELS: Record<FileType, string> = {
-  lapChartJson: "Lap Chart JSON",
+  timeCardsJson: "Time Cards JSON",
   flagsJson: "Flags & RC Messages JSON",
   pitStopJson: "Pit Stops JSON",
   timeCardsCsv: "Time Cards CSV",
@@ -132,10 +132,10 @@ export function classifyFile(file: File, content: string): DetectedFile {
     const peek = clean.slice(0, 4000);
 
     // IMSA JSONs with "participants" array — use filename to distinguish:
-    //   23_Time Cards  → lapChartJson (has participants + per-lap timing)
+    //   23_Time Cards  → timeCardsJson (has participants + per-lap timing)
     //   12_Lap Chart   → skip (roster only, no laps)
     //   03_Results / 05_Results by Class → skip (roster only)
-    //   Unknown name   → lapChartJson fallback (won't overwrite Time Cards)
+    //   Unknown name   → timeCardsJson fallback (won't overwrite Time Cards)
     if (/"participants"\s*:\s*\[/.test(peek)) {
       const fn = file.name.toLowerCase();
 
@@ -144,7 +144,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
         return result; // stays "unknown"
       }
 
-      result.type = "lapChartJson";
+      result.type = "timeCardsJson";
       result.format = "imsa";
       const meta = extractImsaMetadataFromPeek(peek);
       result.metadata = meta;
@@ -341,9 +341,9 @@ function mergeIntoGroup(groups: Map<string, RaceGroup>, detected: DetectedFile) 
 
   const group = groups.get(gKey)!;
 
-  // For lapChartJson, Time Cards files take priority — don't let a
+  // For timeCardsJson, Time Cards files take priority — don't let a
   // fallback (unknown-name) file overwrite a Time Cards file
-  if (detected.type === "lapChartJson" && group.files.has("lapChartJson")) {
+  if (detected.type === "timeCardsJson" && group.files.has("timeCardsJson")) {
     const fn = detected.file.name.toLowerCase();
     if (!/time[_\s]cards/i.test(fn)) {
       return; // don't overwrite with a lower-priority file

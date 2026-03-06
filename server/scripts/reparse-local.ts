@@ -64,7 +64,7 @@ async function main() {
       // Read local files
       const files: Record<string, string> = {};
       try {
-        files.lapChartJson = readFileSync(entry.files.timeCardsJson, "utf-8");
+        files.timeCardsJson = readFileSync(entry.files.timeCardsJson, "utf-8");
         console.log(`  Loaded: ${entry.files.timeCardsJson}`);
       } catch (e: any) {
         console.error(`  ERROR reading lap chart: ${e.message}`);
