@@ -1,9 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import { requireAuth, optionalAuth, requireSubscription } from "../middleware/auth.js";
 import { raceListQuerySchema } from "../utils/race-validators.js";
 import { prisma } from "../models/prisma.js";
 import * as raceSvc from "../services/races.js";
 import { AppError } from "../middleware/error-handler.js";
+import { normalizeTrackName } from "../services/pitStopAnalysis.service.js";
 
 export const racesRouter = Router();
 
@@ -157,6 +158,135 @@ racesRouter.get(
     try {
       const entries = await raceSvc.getRaceEntries(req.params.id as string);
       res.json({ entries });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/races/:id/pit-analysis — Pit stop analysis (Team tier) ────────
+
+racesRouter.get(
+  "/:id/pit-analysis",
+  requireAuth,
+  requireSubscription("TEAM"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const raceId = req.params.id as string;
+
+      const race = await prisma.race.findUnique({
+        where: { id: raceId },
+        select: { id: true, track: true, series: true, status: true },
+      });
+      if (!race || (race.status === "DRAFT" && req.user?.role !== "ADMIN")) {
+        throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
+      }
+
+      // Fetch all pit stop analysis rows for this race
+      const stops = await prisma.pitStopAnalysis.findMany({
+        where: { raceId },
+        orderBy: [{ carNumber: "asc" }, { stopNumber: "asc" }],
+      });
+
+      if (stops.length === 0) {
+        res.json({
+          raceId,
+          track: race.track,
+          trackConfig: null,
+          cars: {},
+          summary: { totalStops: 0, totalCars: 0, avgServiceTime_s: 0, avgTimeLost_s: 0 },
+        });
+        return;
+      }
+
+      // Fetch car metadata from race entries
+      const entries = await prisma.raceEntry.findMany({
+        where: { raceId },
+        select: { carNumber: true, teamName: true, carClass: true, carColor: true, finishPos: true },
+      });
+      const entryMap = new Map(entries.map((e) => [e.carNumber, e]));
+
+      // Fetch track config for reference
+      const slug = normalizeTrackName(race.track);
+      const trackConfig = await prisma.trackPitConfig.findFirst({
+        where: { trackName: slug, series: "WRL" },
+        orderBy: { eventYear: "desc" },
+        select: { transitTime_s: true, transitOverhead_s: true, trackName: true },
+      });
+
+      // Group by car
+      const cars: Record<string, {
+        carNumber: string;
+        teamName: string;
+        carClass: string;
+        carColor: string | null;
+        finishPos: number | null;
+        stops: Array<{
+          stopNumber: number;
+          pitLap: number;
+          condition: string;
+          localRef_s: number;
+          vsGlobal_s: number;
+          refSource: string;
+          twoLapActual_s: number;
+          twoLapRef_s: number;
+          serviceTime_s: number;
+          pitRoadTime_s: number;
+          timeLost_s: number;
+          delta_s: number;
+          isCautionContaminated: boolean;
+        }>;
+      }> = {};
+
+      let totalService = 0;
+      let totalLost = 0;
+
+      for (const s of stops) {
+        if (!cars[s.carNumber]) {
+          const entry = entryMap.get(s.carNumber);
+          cars[s.carNumber] = {
+            carNumber: s.carNumber,
+            teamName: entry?.teamName ?? `Car #${s.carNumber}`,
+            carClass: entry?.carClass ?? "",
+            carColor: entry?.carColor ?? null,
+            finishPos: entry?.finishPos ?? null,
+            stops: [],
+          };
+        }
+        cars[s.carNumber].stops.push({
+          stopNumber: s.stopNumber,
+          pitLap: s.pitLap,
+          condition: s.condition,
+          localRef_s: s.localRef_s,
+          vsGlobal_s: s.vsGlobal_s,
+          refSource: s.refSource,
+          twoLapActual_s: s.twoLapActual_s,
+          twoLapRef_s: s.twoLapRef_s,
+          serviceTime_s: s.serviceTime_s,
+          pitRoadTime_s: s.pitRoadTime_s,
+          timeLost_s: s.timeLost_s,
+          delta_s: s.delta_s,
+          isCautionContaminated: s.isCautionContaminated,
+        });
+        totalService += s.serviceTime_s;
+        totalLost += s.timeLost_s;
+      }
+
+      res.set("Cache-Control", "private, max-age=300");
+      res.json({
+        raceId,
+        track: race.track,
+        trackConfig: trackConfig
+          ? { trackName: trackConfig.trackName, transitTime_s: trackConfig.transitTime_s, transitOverhead_s: trackConfig.transitOverhead_s }
+          : null,
+        cars,
+        summary: {
+          totalStops: stops.length,
+          totalCars: Object.keys(cars).length,
+          avgServiceTime_s: Math.round((totalService / stops.length) * 100) / 100,
+          avgTimeLost_s: Math.round((totalLost / stops.length) * 100) / 100,
+        },
+      });
     } catch (err) {
       next(err);
     }
