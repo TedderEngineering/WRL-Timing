@@ -112,6 +112,40 @@ export function computeLapElapsedHours(data: RaceChartData): Map<number, number>
   return map;
 }
 
+/** Per-car cumulative race time (in hours) for Hrs/Both x-axis modes. */
+function computeAllCarCumulativeHours(data: RaceChartData): Map<string, Map<number, number>> {
+  const result = new Map<string, Map<number, number>>();
+  for (const [carNum, car] of Object.entries(data.cars)) {
+    const carMap = new Map<number, number>();
+    let runningSum = 0;
+    for (const lap of car.laps) {
+      runningSum += lap.ltSec;
+      carMap.set(lap.l, runningSum / 3600);
+    }
+    result.set(carNum, carMap);
+  }
+  return result;
+}
+
+/** Maps a cumulative-hours value back to the equivalent "virtual lap" on the leader's timeline.
+ *  This lets us reuse the existing lap-based x-axis range (lapStart/lapEnd) for time-based plotting. */
+function hoursToVirtualLap(hours: number, leaderHours: Map<number, number>): number {
+  let prevLap = 1, prevH = 0;
+  for (const [lap, h] of leaderHours) {
+    if (h >= hours) {
+      // Linear interpolate between previous and current
+      const range = h - prevH;
+      if (range <= 0) return lap;
+      const frac = (hours - prevH) / range;
+      return prevLap + frac * (lap - prevLap);
+    }
+    prevLap = lap;
+    prevH = h;
+  }
+  // Past the leader's last lap — extrapolate
+  return prevLap;
+}
+
 export function formatHour(h: number): string {
   const hours = Math.floor(h);
   const minutes = Math.round((h % 1) * 60);
@@ -203,6 +237,7 @@ export function drawChart(
     : dim;
 
   const { focusNum, compSet, activeLap, classView, lapStart, lapEnd } = state;
+  const focusNumStr = String(focusNum);
   const maxLap = data.maxLap;
   const maxPos = getMaxPos(data, classView);
   const pk = posKey(classView);
@@ -220,6 +255,30 @@ export function drawChart(
   const visLaps = lapEnd - lapStart;
   const x = (l: number) => xOf(l, lapStart, lapEnd, adjDim);
   const y = (p: number) => yOf(p, maxPos, adjDim);
+
+  // Hrs/Both mode: per-car cumulative hours for time-based x mapping
+  const xAxisMode = state.xAxisMode ?? "laps";
+  const useTimeX = xAxisMode === "hours" || xAxisMode === "both";
+  const allCarHours = useTimeX ? computeAllCarCumulativeHours(data) : null;
+  const leaderHours = useTimeX ? computeLapElapsedHours(data) : null;
+  const focusCarHours = useTimeX ? allCarHours!.get(String(focusNum)) : null;
+
+  /** Get x-pixel for a car's lap, using time-based mapping in Hrs/Both modes. */
+  const xForCar = (carNum: string, lapNum: number): number => {
+    if (!useTimeX) return x(lapNum);
+    const carH = allCarHours!.get(carNum);
+    const h = carH?.get(lapNum);
+    if (h == null) return x(lapNum); // fallback
+    if (xAxisMode === "both") {
+      // Both: focus car uses lap numbers, others use time mapped to focus car's lap scale
+      if (carNum === String(focusNum)) return x(lapNum);
+      // Map this car's cumulative time to a virtual lap on focus car's timeline
+      if (focusCarHours) return x(hoursToVirtualLap(h, focusCarHours));
+      return x(lapNum);
+    }
+    // Hrs: map cumulative time to virtual lap on leader's timeline
+    return x(hoursToVirtualLap(h, leaderHours!));
+  };
 
   // ── 1. Grid ────────────────────────────────────────────────────
   ctx.strokeStyle = CHART_STYLE.gridLine;
@@ -252,7 +311,7 @@ export function drawChart(
   // ── 3. Pit stop vertical lines ────────────────────────────────
   (ann.pits || []).forEach((p: PitMarker) => {
     if (p.l < lapStart || p.l > lapEnd) return;
-    const px = x(p.l);
+    const px = xForCar(focusNumStr, p.l);
     const pitTop = adjDim.MT;
     const pitBot = adjDim.H - adjDim.MB;
     ctx.save();
@@ -299,7 +358,8 @@ export function drawChart(
   // ── 4. Comparison car traces ───────────────────────────────────
   compSet.forEach((cn) => {
     if (cn === focusNum) return;
-    const cl = data.cars[String(cn)]?.laps;
+    const cnStr = String(cn);
+    const cl = data.cars[cnStr]?.laps;
     if (!cl || !cl.length) return;
     const col = getCompColor(compSet, focusNum, cn);
     ctx.beginPath();
@@ -309,14 +369,14 @@ export function drawChart(
     for (let i = 0; i < cl.length; i++) {
       const d = cl[i];
       if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
-      const cx = x(d.l);
+      const cx2 = xForCar(cnStr, d.l);
       const cy = y(d[pk]);
       if (!started) {
-        ctx.moveTo(cx, cy);
+        ctx.moveTo(cx2, cy);
         started = true;
       } else {
-        ctx.lineTo(cx, y(cl[i - 1][pk]));
-        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx2, y(cl[i - 1][pk]));
+        ctx.lineTo(cx2, cy);
       }
     }
     ctx.stroke();
@@ -331,7 +391,7 @@ export function drawChart(
   for (let i = 0; i < laps.length; i++) {
     const d = laps[i];
     if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
-    const lx = x(d.l);
+    const lx = xForCar(focusNumStr, d.l);
     const ly = y(d[pk]);
     if (!focusStarted) {
       ctx.moveTo(lx, ly);
@@ -364,7 +424,7 @@ export function drawChart(
       if (ld) settlePos = ld[pk];
       else continue;
     }
-    settleItems.push({ sp, cx: x(sp.l), cy: y(settlePos), settlePos });
+    settleItems.push({ sp, cx: xForCar(focusNumStr, sp.l), cy: y(settlePos), settlePos });
   }
   settleItems.sort((a, b) => a.cx - b.cx);
 
@@ -437,7 +497,7 @@ export function drawChart(
   // ── 7. Pit dots ────────────────────────────────────────────────
   laps.forEach((d) => {
     if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
-      const px = x(d.l);
+      const px = xForCar(focusNumStr, d.l);
       const py = y(d[pk]);
       ctx.beginPath();
       ctx.arc(px, py, 4, 0, Math.PI * 2);
@@ -453,7 +513,7 @@ export function drawChart(
   if (activeLap !== null && activeLap >= lapStart && activeLap <= lapEnd) {
     const d = laps.find((l) => l.l === activeLap);
     if (d) {
-      const ax = x(d.l);
+      const ax = xForCar(focusNumStr, d.l);
       const ay = y(d[pk]);
 
       // Crosshair
@@ -510,7 +570,6 @@ export function drawChart(
   }
   // Bottom axis: lap numbers, hour markers, or both
   const lapHours = computeLapElapsedHours(data);
-  const xAxisMode = state.xAxisMode ?? "laps";
 
   ctx.textAlign = "center";
   if (xAxisMode === "laps" || xAxisMode === "both") {
