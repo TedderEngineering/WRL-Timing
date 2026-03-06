@@ -43,6 +43,9 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
 
     setIsLoading(true);
     setError(null);
+    setData(null);
+    setAnnotations(null);
+    setRaceMeta(null);
 
     api
       .get<ChartDataResponse>(`/races/${raceId}/chart-data`)
