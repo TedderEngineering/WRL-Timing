@@ -193,7 +193,7 @@ export function Layout() {
                 <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-8 dark:hidden" />
                 <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 hidden dark:block" />
               </a>
-              <Link to="/" className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</Link>
+              <Link to={isAuthenticated ? "/dashboard" : "/"} className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</Link>
             </div>
 
             {/* Desktop nav links */}
