@@ -30,6 +30,7 @@ export function DashboardPage() {
   const [recentlyViewed, setRecentlyViewed] = useState<RaceItem[]>([]);
   const [favorites, setFavorites] = useState<RaceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -74,28 +75,23 @@ export function DashboardPage() {
     }
   }, []);
 
-  // Featured race = most recent
-  const featured = latestRaces[0] || null;
-  // Races they haven't viewed yet
+  // Featured = most recently viewed, or newest race
+  const featured = recentlyViewed[0] || latestRaces[0] || null;
+  // Jump Back In list = next 5 recently viewed after featured
+  const jumpBackIn = recentlyViewed.slice(1, 6);
+  // New to Analyze = latest races not in viewed set
   const viewedIds = new Set(recentlyViewed.map((r) => r.id));
   const newToAnalyze = latestRaces.filter((r) => !viewedIds.has(r.id)).slice(0, 6);
 
   const greeting = getGreeting();
+  const totalRaces = latestRaces.length > 0 ? 24 : 0; // placeholder count
+  const lockedCount = isFree ? Math.max(0, totalRaces - 3) : 0;
 
   return (
-    <div className="container-page py-6 lg:py-8 space-y-10">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-50">
-          {greeting}{user?.displayName ? `, ${user.displayName}` : ""}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm">
-          {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-        </p>
-      </div>
-
+    <div className="container-page py-6 lg:py-8">
+      {/* Email verification alert */}
       {user && !user.emailVerified && (
-        <Alert variant="warning">
+        <Alert variant="warning" className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>Your email hasn't been verified yet. Check your inbox for a verification link.</span>
             <button
@@ -106,212 +102,308 @@ export function DashboardPage() {
               {resendStatus === "sending" && "Sending..."}
               {resendStatus === "sent" && "Verification email sent!"}
               {resendStatus === "rate-limited" && "Please wait before requesting another email"}
-              {resendStatus === "error" && "Failed to send — try again"}
+              {resendStatus === "error" && "Failed to send -- try again"}
               {resendStatus === "idle" && "Resend verification email"}
             </button>
           </div>
         </Alert>
       )}
 
-      {/* Featured Race — big hero card */}
-      {loading ? (
-        <div className="h-44 rounded-2xl bg-gray-100 dark:bg-gray-900 animate-pulse" />
-      ) : featured ? (
-        <Link
-          to={`/chart?race=${featured.id}`}
-          className="group relative block rounded-2xl overflow-hidden bg-gradient-to-r from-gray-100 via-gray-100 to-brand-50 dark:from-gray-900 dark:via-gray-900 dark:to-brand-950/50 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-700 transition-all"
-        >
-          {/* Decorative grid lines */}
-          <div className="absolute inset-0 opacity-[0.03]" style={{
-            backgroundImage: "linear-gradient(rgba(128,128,128,.4) 1px, transparent 1px), linear-gradient(90deg, rgba(128,128,128,.4) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }} />
-          <div className="relative p-6 lg:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <SeriesBadge series={featured.series} />
-                <span className="text-xs text-gray-400 dark:text-gray-500">
-                  {new Date(featured.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-brand-500/20 text-brand-600 dark:text-brand-400 border border-brand-500/30">
-                  Latest
-                </span>
-              </div>
-              <h2 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-50 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                {featured.name}
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">{featured.track}</p>
-              <div className="flex gap-4 mt-3 text-sm text-gray-400 dark:text-gray-500">
-                {featured.totalCars && (
-                  <span className="flex items-center gap-1">
-                    <CarIcon />
-                    {featured.totalCars} cars
-                  </span>
-                )}
-                {featured.maxLap && (
-                  <span className="flex items-center gap-1">
-                    <LapIcon />
-                    {featured.maxLap} laps
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="lg:text-right shrink-0">
-              <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold group-hover:bg-brand-500 transition-colors">
-                View Chart
-                <svg className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </span>
-              {isFree && (
-                <p className="text-xs text-indigo-300/70 mt-2">1 of 3 free races this week</p>
-              )}
-            </div>
-          </div>
-        </Link>
-      ) : null}
-
-      {/* Recently Viewed — horizontal scroll */}
-      {recentlyViewed.length > 0 && (
-        <section>
-          <SectionHeader title="Recently Viewed" />
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
-            {recentlyViewed.map((race) => (
-              <CompactRaceCard key={race.id} race={race} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Favorites */}
-      {isFree ? (
-        <Link
-          to="/settings/billing"
-          className="block bg-gray-800/50 border border-gray-700/50 rounded-xl p-5 text-center hover:border-indigo-500/30 transition-colors"
-        >
-          <svg className="h-6 w-6 text-gray-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
-          </svg>
-          <p className="text-gray-400 text-sm">Save your favorite races for quick access</p>
-          <p className="text-indigo-400 text-xs font-medium mt-1">Available on Pro</p>
-        </Link>
-      ) : favorites.length > 0 ? (
-        <section>
-          <SectionHeader title="Your Favorites" linkTo="/races" linkText="View all" />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {favorites.map((race) => (
-              <RaceCard key={race.id} race={race} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* New to Analyze / Latest */}
-      {!loading && (
-        <section>
-          <SectionHeader
-            title={recentlyViewed.length > 0 ? "New to Analyze" : "Latest Races"}
-            linkTo="/races"
-            linkText="Browse all"
-          />
-          {newToAnalyze.length > 0 ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(isFree ? newToAnalyze.slice(0, 3) : newToAnalyze).map((race) => (
-                <RaceCard key={race.id} race={race} />
-              ))}
-              {isFree && newToAnalyze.length > 3 && <UpsellCard count={newToAnalyze.length - 3} />}
-            </div>
-          ) : latestRaces.length > 0 ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {latestRaces.slice(0, isFree ? 3 : 6).map((race) => (
-                <RaceCard key={race.id} race={race} />
-              ))}
-              {isFree && latestRaces.length > 3 && <UpsellCard count={latestRaces.length - 3} />}
-            </div>
-          ) : (
-            <EmptyState message="No races available yet. Check back soon!" />
-          )}
-        </section>
-      )}
-
-      {/* Empty state for brand new users */}
-      {!loading && latestRaces.length === 0 && recentlyViewed.length === 0 && (
-        <div className="text-center py-16">
-          <div className="text-5xl mb-4">🏁</div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Welcome to RaceTrace
-          </h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            Interactive position trace charts for endurance racing.
-            Race data will appear here as it becomes available.
+      {/* Header row: greeting left, stats right */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
+            {greeting}{user?.displayName ? `, ${user.displayName}` : ""}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1.5 text-sm">
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
           </p>
-          <Link
-            to="/races"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-500 transition-colors"
-          >
-            Browse Events
-          </Link>
+        </div>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-[13px] text-gray-500 dark:text-gray-400">
+            {isFree ? (
+              <>
+                <span className="font-semibold text-gray-900 dark:text-white">3</span>
+                <span className="text-gray-400 dark:text-white/35"> / {totalRaces}</span> races available
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-gray-900 dark:text-white">{totalRaces}</span> races available
+              </>
+            )}
+          </div>
+          {!isFree && (
+            <div className="px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-xs font-bold text-green-400 tracking-wider">
+              PRO
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Free tier upsell banner */}
+      {isFree && !bannerDismissed && (
+        <div className="rounded-xl p-3.5 px-4 mb-6 bg-gradient-to-r from-amber-600/10 to-amber-700/5 border border-amber-600/25 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xl shrink-0">🏆</span>
+            <p className="text-sm">
+              <span className="font-semibold text-amber-300">{lockedCount} races waiting for you.</span>
+              <span className="text-gray-300 ml-1.5">Unlock every race, full filtering, and unlimited favorites with Pro.</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Link
+              to="/settings/billing"
+              className="px-4 py-1.5 rounded-lg bg-amber-600 text-white text-[13px] font-semibold hover:bg-amber-500 transition-colors"
+            >
+              Unlock Pro →
+            </Link>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="text-white/30 hover:text-white/60 text-xl leading-none px-1 transition-colors"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Quick Stats Footer / Upgrade CTA */}
-      {!loading && latestRaces.length > 0 && (
-        isFree ? (
-          <div className="bg-gradient-to-r from-gray-800 to-gray-800/80 border border-gray-700 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-semibold text-white">Ready to go deeper?</h3>
-              <p className="text-gray-400 text-sm mt-1 max-w-lg">
-                Pro members unlock every race, unlimited favorites, and advanced filtering — everything you need to analyze full seasons.
-              </p>
+      {loading ? (
+        <div className="space-y-6">
+          <div className="h-44 rounded-2xl bg-gray-100 dark:bg-gray-900 animate-pulse" />
+          <div className="h-32 rounded-xl bg-gray-100 dark:bg-gray-900 animate-pulse" />
+        </div>
+      ) : (
+        <>
+          {/* Two-column main area */}
+          <div className="flex gap-6 mb-8">
+            {/* LEFT column — Jump Back In (320px fixed) */}
+            <div className="w-80 shrink-0 hidden lg:block">
+              <SectionLabel>Jump Back In</SectionLabel>
+
+              {/* Featured card */}
+              {featured && (
+                <Link
+                  to={`/chart?race=${featured.id}`}
+                  className="group block rounded-xl p-5 mb-2 bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800/80 dark:to-gray-900/60 border border-gray-200 dark:border-indigo-500/25 hover:border-brand-400 dark:hover:border-indigo-500/50 transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <SeriesBadge series={featured.series} />
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {formatDate(featured.date)}
+                    </span>
+                    <span className="ml-auto text-[11px] font-semibold bg-brand-500/15 text-brand-400 border border-brand-500/25 rounded-full px-2 py-0.5">
+                      Last viewed
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors mb-1">
+                    {featured.name}
+                  </h3>
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400 mb-4">{featured.track}</p>
+                  <div className="flex gap-4 text-xs text-gray-400 dark:text-gray-500 mb-4">
+                    {featured.totalCars && <span>{featured.totalCars} cars</span>}
+                    {featured.maxLap && <span>{featured.maxLap} laps</span>}
+                  </div>
+                  <div className="w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold text-center group-hover:bg-brand-500 transition-colors">
+                    View Chart →
+                  </div>
+                </Link>
+              )}
+
+              {/* Compact recent list */}
+              <div className="flex flex-col gap-0.5">
+                {jumpBackIn.map((race) => (
+                  <Link
+                    key={race.id}
+                    to={`/chart?race=${race.id}`}
+                    className="group flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg border border-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03] hover:border-gray-200 dark:hover:border-white/[0.08] transition-all"
+                  >
+                    <SeriesBadge series={race.series} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-gray-800 dark:text-gray-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                        {race.name}
+                      </p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{race.track}</p>
+                    </div>
+                    <span className="text-gray-300 dark:text-white/20 text-sm">›</span>
+                  </Link>
+                ))}
+
+                {/* Free tier: blurred ghost rows */}
+                {isFree && (
+                  <>
+                    {[
+                      { name: "Saturday 8 Hour", track: "Road America", series: "WRL" },
+                      { name: "Sunday 7-Hour", track: "Barber Motorsports Park", series: "WRL" },
+                    ].map((r, i) => (
+                      <div
+                        key={`ghost-${i}`}
+                        className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg select-none pointer-events-none"
+                        style={{ filter: "blur(2.25px)", opacity: 0.35 }}
+                      >
+                        <SeriesBadge series={r.series} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium text-gray-200 truncate">{r.name}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{r.track}</p>
+                        </div>
+                        <span className="text-white/20 text-sm">›</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
             </div>
-            <Link
-              to="/settings/billing"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium transition-colors whitespace-nowrap"
-            >
-              Upgrade to {user?.subscription?.plan === "PRO" ? "Team" : "Pro"}
-            </Link>
+
+            {/* RIGHT column — New to Analyze (flex-1) */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2.5">
+                  <SectionLabel className="mb-0">
+                    {recentlyViewed.length > 0 ? "New to Analyze" : "Latest Races"}
+                  </SectionLabel>
+                  {isFree && lockedCount > 0 && (
+                    <span className="text-[11px] font-semibold text-amber-400 bg-amber-600/15 border border-amber-600/25 rounded-full px-2 py-0.5">
+                      {lockedCount} locked
+                    </span>
+                  )}
+                </div>
+                <Link to="/races" className="text-[13px] text-brand-500 dark:text-brand-400 hover:text-brand-400 dark:hover:text-brand-300 transition-colors">
+                  Browse all →
+                </Link>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2.5">
+                {(isFree ? newToAnalyze.slice(0, 3) : newToAnalyze).map((race) => (
+                  <RaceCard key={race.id} race={race} />
+                ))}
+                {/* Free tier: locked cards */}
+                {isFree && newToAnalyze.slice(3).map((race) => (
+                  <LockedRaceCard key={race.id} race={race} />
+                ))}
+              </div>
+              {newToAnalyze.length === 0 && latestRaces.length > 0 && (
+                <div className="grid sm:grid-cols-2 gap-2.5">
+                  {latestRaces.slice(0, isFree ? 3 : 6).map((race) => (
+                    <RaceCard key={race.id} race={race} />
+                  ))}
+                </div>
+              )}
+              {latestRaces.length === 0 && (
+                <EmptyState message="No races available yet. Check back soon!" />
+              )}
+
+              {/* Mobile: show featured card inline since left column is hidden */}
+              {featured && (
+                <div className="lg:hidden mt-6">
+                  <SectionLabel>Jump Back In</SectionLabel>
+                  <Link
+                    to={`/chart?race=${featured.id}`}
+                    className="group block rounded-xl p-5 bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800/80 dark:to-gray-900/60 border border-gray-200 dark:border-indigo-500/25 hover:border-brand-400 dark:hover:border-indigo-500/50 transition-all"
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <SeriesBadge series={featured.series} />
+                      <span className="text-xs text-gray-400 dark:text-gray-500">{formatDate(featured.date)}</span>
+                      <span className="ml-auto text-[11px] font-semibold bg-brand-500/15 text-brand-400 border border-brand-500/25 rounded-full px-2 py-0.5">
+                        Last viewed
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-1">{featured.name}</h3>
+                    <p className="text-sm text-gray-500 mb-3">{featured.track}</p>
+                    <div className="w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold text-center group-hover:bg-brand-500 transition-colors">
+                      View Chart →
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-3">
-            <MiniStat label="Races Analyzed" value={String(recentlyViewed.length)} />
-            <MiniStat label="Favorites" value={String(favorites.length)} />
-            <MiniStat
-              label="Plan"
-              value={capitalize(user?.subscription?.plan || "Free")}
-            />
+
+          {/* FULL-WIDTH — Favorites */}
+          <div>
+            <div className="h-px bg-gray-200 dark:bg-white/[0.07] mb-6" />
+            <div className="flex items-center gap-2.5 mb-3.5">
+              <SectionLabel className="mb-0">Favorites</SectionLabel>
+              {isFree ? (
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/[0.06] border border-gray-200 dark:border-white/10 rounded-full px-2 py-0.5">
+                  Pro feature
+                </span>
+              ) : favorites.length > 0 ? (
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/[0.08] border border-gray-200 dark:border-white/[0.12] rounded-full px-2 py-0.5">
+                  {favorites.length}
+                </span>
+              ) : null}
+            </div>
+
+            {isFree ? (
+              // Free tier: blurred ghost favorites
+              <div
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 select-none pointer-events-none"
+                style={{ filter: "blur(2.7px)", opacity: 0.2 }}
+              >
+                {[
+                  { series: "WRL", name: "Saturday 8-Hour", track: "Barber Motorsports Park", cars: 42, laps: 270 },
+                  { series: "IMSA", name: "Petit Le Mans", track: "Road Atlanta", cars: 60, laps: 394 },
+                  { series: "WRL", name: "Saturday 8-Hour", track: "Circuit of the Americas COTA", cars: 70, laps: 171 },
+                  { series: "SRO", name: "GT World Challenge", track: "Sebring", cars: 40, laps: 168 },
+                  { series: "WRL", name: "Sunday 7 Hour", track: "Watkins Glen", cars: 36, laps: 200 },
+                ].map((r, i) => (
+                  <div key={i} className="rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <SeriesBadge series={r.series} />
+                    </div>
+                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-0.5">{r.name}</p>
+                    <p className="text-xs text-gray-500 mb-2.5">{r.track}</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-600">{r.cars} cars · {r.laps} laps</p>
+                  </div>
+                ))}
+              </div>
+            ) : favorites.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                {favorites.map((race) => (
+                  <RaceCard key={race.id} race={race} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-gray-400 dark:text-gray-500 text-sm">
+                No favorites yet -- browse races and star the ones you want here
+              </div>
+            )}
           </div>
-        )
+
+          {/* Empty state for brand new users */}
+          {latestRaces.length === 0 && recentlyViewed.length === 0 && (
+            <div className="text-center py-16">
+              <div className="text-5xl mb-4">🏁</div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                Welcome to RaceTrace
+              </h2>
+              <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
+                Interactive position trace charts for endurance racing.
+                Race data will appear here as it becomes available.
+              </p>
+              <Link
+                to="/races"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-500 transition-colors"
+              >
+                Browse Events
+              </Link>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ---- Sub-components ----
 
-function SectionHeader({ title, linkTo, linkText }: {
-  title: string;
-  linkTo?: string;
-  linkText?: string;
-}) {
+function SectionLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h2>
-      {linkTo && (
-        <Link to={linkTo} className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 transition-colors">
-          {linkText || "View all"} →
-        </Link>
-      )}
-    </div>
+    <h2 className={`text-[11px] font-bold text-gray-400 dark:text-white/30 tracking-[0.12em] uppercase mb-3.5 ${className}`}>
+      {children}
+    </h2>
   );
 }
 
 function RaceCard({ race }: { race: RaceItem }) {
-  const dateStr = new Date(race.date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
   return (
     <Link
       to={`/chart?race=${race.id}`}
@@ -319,67 +411,42 @@ function RaceCard({ race }: { race: RaceItem }) {
     >
       <div className="flex items-center gap-2 mb-2">
         <SeriesBadge series={race.series} />
-        <span className="text-xs text-gray-400 dark:text-gray-500">{dateStr}</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">{formatDate(race.date)}</span>
       </div>
       <h3 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors leading-tight text-sm">
         {race.name}
       </h3>
       <p className="text-xs text-gray-500 mt-0.5">{race.track}</p>
+      <div className="flex items-center justify-between mt-2.5">
+        <div className="flex gap-3 text-[11px] text-gray-400 dark:text-gray-600">
+          {race.totalCars && <span>{race.totalCars} cars</span>}
+          {race.maxLap && <span>{race.maxLap} laps</span>}
+          {race.isFavorited && <span className="text-amber-500">★</span>}
+        </div>
+        <span className="text-xs text-brand-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+          View →
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function LockedRaceCard({ race }: { race: RaceItem }) {
+  return (
+    <div
+      className="rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 p-4 select-none pointer-events-none"
+      style={{ filter: "blur(2.25px) grayscale(0.4)", opacity: 0.45 }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <SeriesBadge series={race.series} />
+        <span className="text-xs text-gray-400 dark:text-gray-500">{formatDate(race.date)}</span>
+      </div>
+      <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight">{race.name}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{race.track}</p>
       <div className="flex gap-3 mt-2.5 text-[11px] text-gray-400 dark:text-gray-600">
         {race.totalCars && <span>{race.totalCars} cars</span>}
         {race.maxLap && <span>{race.maxLap} laps</span>}
-        {race.isFavorited && <span className="text-amber-500">★</span>}
       </div>
-    </Link>
-  );
-}
-
-function UpsellCard({ count }: { count: number }) {
-  return (
-    <Link
-      to="/settings/billing"
-      className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-500/20 border-dashed rounded-xl flex flex-col items-center justify-center p-6 text-center hover:border-indigo-500/40 transition-colors"
-    >
-      <svg className="h-8 w-8 text-indigo-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-      </svg>
-      <span className="text-white font-semibold">{count}+ more races</span>
-      <span className="text-gray-400 text-sm mt-1">available with Pro</span>
-      <span className="text-indigo-400 hover:text-indigo-300 text-sm font-medium mt-3 inline-block">
-        See plans →
-      </span>
-    </Link>
-  );
-}
-
-function CompactRaceCard({ race }: { race: RaceItem }) {
-  const dateStr = new Date(race.date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-  return (
-    <Link
-      to={`/chart?race=${race.id}`}
-      className="group shrink-0 w-56 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600/50 p-3 transition-all"
-    >
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <SeriesBadge series={race.series} size="sm" />
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">{dateStr}</span>
-      </div>
-      <h3 className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors text-sm leading-tight truncate">
-        {race.name}
-      </h3>
-      <p className="text-[11px] text-gray-500 truncate mt-0.5">{race.track}</p>
-    </Link>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800/50 px-4 py-3 text-center">
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <p className="text-lg font-bold text-gray-800 dark:text-gray-200">{value}</p>
     </div>
   );
 }
@@ -392,20 +459,12 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function CarIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-    </svg>
-  );
-}
-
-function LapIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-    </svg>
-  );
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function getGreeting(): string {
@@ -413,8 +472,4 @@ function getGreeting(): string {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
