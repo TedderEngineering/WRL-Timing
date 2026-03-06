@@ -17,6 +17,8 @@ import {
 } from "./chart-renderer";
 import { DataPanel } from "./DataPanel";
 import { PitCyclePanel } from "./PitCyclePanel";
+import { GapEvolutionPanel } from "./GapEvolutionPanel";
+import { HeadToHeadPanel } from "./HeadToHeadPanel";
 import { CHART_STYLE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -652,7 +654,7 @@ export function LapChart({
               {/* Panel header */}
               <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: CHART_STYLE.border }}>
                 <span className="text-sm font-semibold text-white">
-                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel}
+                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel === "gap" ? "Gap Evolution" : sidePanel === "h2h" ? "Head-to-Head" : sidePanel}
                 </span>
                 <button
                   onClick={() => setSidePanel(null)}
@@ -667,6 +669,20 @@ export function LapChart({
                 <PitCyclePanel
                   data={data}
                   annotations={annotations}
+                  focusNum={focusNum}
+                  activeLap={activeLap}
+                />
+              )}
+              {sidePanel === "gap" && activeLap !== null && (
+                <GapEvolutionPanel
+                  data={data}
+                  focusNum={focusNum}
+                  activeLap={activeLap}
+                />
+              )}
+              {sidePanel === "h2h" && activeLap !== null && (
+                <HeadToHeadPanel
+                  data={data}
                   focusNum={focusNum}
                   activeLap={activeLap}
                 />

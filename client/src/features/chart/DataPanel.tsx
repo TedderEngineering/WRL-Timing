@@ -191,8 +191,12 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
 
       <Divider />
 
-      {/* Zone 6 — Car metadata (replaces gaps until API supports it) */}
-      <div className="hidden sm:flex flex-col justify-center px-4 shrink-0 text-right" style={{ width: 180 }}>
+      {/* Zone 6 — Car metadata / gap drill-down */}
+      <div
+        className="hidden sm:flex flex-col justify-center px-4 shrink-0 text-right cursor-pointer hover:bg-white/[0.03] transition-colors"
+        style={{ width: 180 }}
+        onClick={() => setSidePanel("gap")}
+      >
         <ZoneLabel>Car Info</ZoneLabel>
         <div className="text-[13px] font-semibold text-white">#{focusNum}</div>
         <div className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
@@ -201,6 +205,22 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
         <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
           Finish P{info.finishPos}
         </div>
+      </div>
+
+      {/* Zone 7 — Head-to-Head button */}
+      <Divider className="hidden sm:block" />
+      <div className="hidden sm:flex items-center justify-center shrink-0" style={{ width: 100 }}>
+        <button
+          onClick={() => setSidePanel("h2h")}
+          className="px-3 py-1.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors hover:bg-white/[0.08]"
+          style={{
+            background: "rgba(99,102,241,0.1)",
+            border: "1px solid rgba(99,102,241,0.3)",
+            color: "#a5b4fc",
+          }}
+        >
+          H2H
+        </button>
       </div>
 
       {/* Mobile nav next */}
