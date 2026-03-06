@@ -2,6 +2,7 @@ interface PassEventPanelProps {
   reason: string;
   posDelta: number;
   focusNum: number;
+  isPit?: boolean;
   onOpenH2H: (carNum: number) => void;
   onAddToCompare: (carNum: number) => void;
 }
@@ -118,13 +119,16 @@ function parseReason(reason: string, posDelta: number): ParsedEvent[] {
   return events;
 }
 
-export function PassEventPanel({ reason, posDelta, focusNum, onOpenH2H, onAddToCompare }: PassEventPanelProps) {
+export function PassEventPanel({ reason, posDelta, focusNum, isPit, onOpenH2H, onAddToCompare }: PassEventPanelProps) {
   const isGain = posDelta > 0;
   const allEvents = parseReason(reason, posDelta);
   const carEvents = allEvents.filter((e): e is CarEvent => e.kind === "car" && e.carNum !== focusNum);
   const pitCycleEvents = allEvents.filter((e): e is PitCycleEvent => e.kind === "pitCycle");
   const pitInfoEvents = allEvents.filter((e): e is PitInfoEvent => e.kind === "pitInfo");
   const dirColor = isGain ? "#4ade80" : posDelta < 0 ? "#f87171" : "rgba(255,255,255,0.5)";
+
+  // Pure pit lap with no meaningful events — show clean indicator
+  const isPitOnly = isPit && carEvents.length === 0 && pitCycleEvents.length === 0 && pitInfoEvents.length === 0;
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
@@ -212,8 +216,17 @@ export function PassEventPanel({ reason, posDelta, focusNum, onOpenH2H, onAddToC
           </div>
         ))}
 
-        {/* No events fallback */}
-        {carEvents.length === 0 && pitCycleEvents.length === 0 && pitInfoEvents.length === 0 && (
+        {/* Pit-only fallback */}
+        {isPitOnly && (
+          <div className="px-4 py-6">
+            <div className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+              Pit lap — see pit details above
+            </div>
+          </div>
+        )}
+
+        {/* No events fallback (non-pit) */}
+        {!isPitOnly && carEvents.length === 0 && pitCycleEvents.length === 0 && pitInfoEvents.length === 0 && (
           <div className="px-4 py-3">
             <div
               className="text-sm rounded px-3 py-2"

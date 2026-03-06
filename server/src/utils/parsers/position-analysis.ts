@@ -160,6 +160,10 @@ export function generateAnnotations(
 
       if (posDelta === 0 && !isPit) continue;
 
+      // Skip subsequent pit laps in a consecutive sequence — only
+      // build a reason for the first pit=1 lap (the actual in-lap).
+      if (isPit && i > 1 && laps[i - 1].pit === 1) continue;
+
       // ── Find crossover cars ─────────────────────────────────
       const gained: Crossover[] = [];
       const lost: Crossover[] = [];
