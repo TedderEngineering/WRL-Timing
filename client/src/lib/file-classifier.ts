@@ -19,6 +19,7 @@ export interface DetectedFile {
   format: FormatId | null;
   groupKey: string | null;
   metadata: Partial<RaceGroupMetadata>;
+  warning?: string;
 }
 
 export interface RaceGroupMetadata {
@@ -129,6 +130,16 @@ export function classifyFile(file: File, content: string): DetectedFile {
 
   // JSON detection — use string peek instead of full JSON.parse (avoids parsing multi-MB files)
   if (file.name.toLowerCase().endsWith(".json")) {
+    // 0-byte JSON: accept into timeCardsJson slot with a warning so CSV fallback can work
+    if (file.size === 0 || clean.trim().length === 0) {
+      result.type = "timeCardsJson";
+      result.format = "imsa";
+      result.groupKey = `imsa_empty_${file.name}`;
+      result.warning =
+        "File is empty — import will use Time Cards CSV as fallback. Drop 23_Time_Cards_Race.csv to enable import.";
+      return result;
+    }
+
     const peek = clean.slice(0, 4000);
 
     // IMSA JSONs with "participants" array — use filename to distinguish:
@@ -367,6 +378,11 @@ function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequir
     if (!group.files.has(slot)) {
       missingRequired.push(FILE_TYPE_LABELS[slot]);
     }
+  }
+  // Empty timeCardsJson (has warning) requires timeCardsCsv as fallback
+  const tcJson = group.files.get("timeCardsJson" as FileType);
+  if (tcJson?.warning && !group.files.has("timeCardsCsv" as FileType)) {
+    missingRequired.push(FILE_TYPE_LABELS["timeCardsCsv" as FileType]);
   }
   return { complete: missingRequired.length === 0, missingRequired };
 }
