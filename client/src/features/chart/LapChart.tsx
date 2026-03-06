@@ -435,10 +435,13 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
-  // Close side panel when active lap changes
+  // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
-    setSidePanel(null);
-    h2hDefaultCarRef.current = undefined;
+    setSidePanel((prev) => {
+      if (prev === "gap" || prev === "h2h") return prev;
+      h2hDefaultCarRef.current = undefined;
+      return null;
+    });
   }, [activeLap]);
 
   // ── Comparison toggles ──────────────────────────────────────────
