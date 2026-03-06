@@ -5,6 +5,12 @@ import { fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
 import { SeriesBadge } from "./SeriesBadge";
 
+const SERIES_BORDER: Record<string, string> = {
+  WRL: "linear-gradient(to right, #CC0000, #111111)",
+  IMSA: "#0057B8",
+  SRO: "#C41E3A",
+};
+
 interface EventCardProps {
   event: EventSummary;
   /** Pre-loaded races (e.g. from search results) */
@@ -73,8 +79,13 @@ export function EventCard({
       className="group relative rounded-xl overflow-hidden transition-all border border-gray-200 dark:border-gray-800 hover:border-brand-400 dark:hover:border-brand-600 hover:shadow-lg cursor-pointer"
       onClick={handleCardClick}
     >
-      {/* Top color bar */}
-      <div className="h-1.5 bg-gradient-to-r from-brand-500 to-cyan-500" />
+      {/* Series color top border */}
+      <div
+        className="h-[3px]"
+        style={{
+          background: SERIES_BORDER[event.series.toUpperCase()] || "#4B5563",
+        }}
+      />
 
       <div className="p-5">
         {/* Meta row */}

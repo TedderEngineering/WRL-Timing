@@ -1,29 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { fetchEvents } from "../lib/api";
 import { EventCard } from "../components/EventCard";
 import { SearchBar } from "../components/SearchBar";
 import { useEventSearch } from "../hooks/useEventSearch";
 import { useFilterOptions } from "../hooks/useChartData";
-import { SERIES_COLORS } from "../lib/series-colors";
+import { SeriesBadge } from "../components/SeriesBadge";
 import type { EventSummary } from "@shared/types";
 
+const ALL_SERIES = ["IMSA", "SRO", "WRL"];
+
+type SortKey = "date-desc" | "date-asc" | "track-az";
 
 export function RaceListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [seriesFilters, setSeriesFilters] = useState<Set<string>>(
-    () => new Set(Object.keys(SERIES_COLORS)),
+    () => new Set(ALL_SERIES),
   );
   const [seasonFilter, setSeasonFilter] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("date-desc");
 
-  // Default event list (cached — not refetched on search clear)
+  // Default event list (cached -- not refetched on search clear)
   const [events, setEvents] = useState<EventSummary[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
   const filters = useFilterOptions();
 
-  const allSeries = Object.keys(SERIES_COLORS);
-  const allSelected = seriesFilters.size === allSeries.length;
+  const allSelected = seriesFilters.size === ALL_SERIES.length;
 
   // Derive a single series string for the API (or undefined if multi/all)
   const seriesParam = seriesFilters.size === 1 ? [...seriesFilters][0] : undefined;
@@ -50,6 +53,24 @@ export function RaceListPage() {
       .finally(() => setEventsLoading(false));
   }, [seriesParam, seriesFilters.size, seasonFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Client-side sort
+  const sortedEvents = useMemo(() => {
+    const sorted = [...events];
+    switch (sortBy) {
+      case "date-asc":
+        sorted.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+        break;
+      case "track-az":
+        sorted.sort((a, b) => a.track.localeCompare(b.track));
+        break;
+      case "date-desc":
+      default:
+        sorted.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+        break;
+    }
+    return sorted;
+  }, [events, sortBy]);
+
   // Live search (debounced, abortable)
   const { results: searchResults, isSearching } = useEventSearch(searchQuery, {
     series: seriesParam,
@@ -64,9 +85,6 @@ export function RaceListPage() {
       ? searchResults.filter((sr) => seriesFilters.has(sr.series.toUpperCase()))
       : searchResults;
 
-  // Series filter pills
-  const seriesList = allSeries;
-
   const toggleSeries = (s: string) => {
     setSeriesFilters((prev) => {
       const next = new Set(prev);
@@ -79,14 +97,39 @@ export function RaceListPage() {
     });
   };
 
+  const hasActiveFilters = !allSelected || seasonFilter !== "" || searchQuery !== "";
+
+  const clearFilters = () => {
+    setSeriesFilters(new Set(ALL_SERIES));
+    setSeasonFilter("");
+    setSearchQuery("");
+  };
+
   return (
     <div className="container-page py-8 lg:py-12">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-50">Events</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Browse race events and charts.
-        </p>
+      {/* Header + summary stats */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">Events</h1>
+          <p className="mt-1 text-gray-500 dark:text-gray-400 text-sm">
+            Browse race events and charts.
+          </p>
+        </div>
+        {!eventsLoading && events.length > 0 && (
+          <div className="flex gap-3">
+            {[
+              { label: "Total events", value: events.length },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="text-right px-3.5 py-2 rounded-lg bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08]"
+              >
+                <div className="text-lg font-bold text-gray-900 dark:text-white">{s.value}</div>
+                <div className="text-[11px] text-gray-400 dark:text-white/35 mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Search bar */}
@@ -97,49 +140,71 @@ export function RaceListPage() {
         className="mb-4"
       />
 
-      {/* Filter row: series pills + season dropdown */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {seriesList.map((s) => {
-          const active = seriesFilters.has(s);
-          const col = SERIES_COLORS[s]?.bg ?? "#4B5563";
-          return (
-            <button
-              key={s}
-              onClick={() => toggleSeries(s)}
-              className="px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150 cursor-pointer"
-              style={{
-                borderColor: active ? col : "#4B5563",
-                background: active ? `${col}33` : "transparent",
-                color: active ? "#fff" : "#9CA3AF",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.borderColor = "#9CA3AF";
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.borderColor = "#4B5563";
-              }}
-            >
-              {s}
-            </button>
-          );
-        })}
+      {/* Filter + sort bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        {/* Series filter chips */}
+        <div className="flex gap-2 flex-wrap">
+          {ALL_SERIES.map((s) => {
+            const active = seriesFilters.has(s);
+            return (
+              <button
+                key={s}
+                onClick={() => toggleSeries(s)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-150 cursor-pointer"
+                style={{
+                  borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                  background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                }}
+              >
+                <SeriesBadge series={s} size="sm" />
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Season dropdown */}
-        {filters && filters.seasons.length > 0 && (
+        {/* Sort + season controls */}
+        <div className="flex gap-2 items-center">
           <select
-            value={seasonFilter}
-            onChange={(e) => setSeasonFilter(e.target.value)}
-            className="ml-auto px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-sm text-gray-300"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
           >
-            <option value="">All Seasons</option>
-            {filters.seasons.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+            <option value="date-desc">Date: Newest first</option>
+            <option value="date-asc">Date: Oldest first</option>
+            <option value="track-az">Track: A-Z</option>
           </select>
-        )}
+
+          {filters && filters.seasons.length > 0 && (
+            <select
+              value={seasonFilter}
+              onChange={(e) => setSeasonFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+            >
+              <option value="">All Seasons</option>
+              {filters.seasons.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
-      {/* ── Search results mode ── */}
+      {/* Active filters summary */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 mb-4 text-sm text-gray-500 dark:text-gray-400">
+          <span>
+            Showing {isSearchMode ? (filteredSearchResults?.length ?? 0) : sortedEvents.length} of {events.length} events
+          </span>
+          <button
+            onClick={clearFilters}
+            className="text-brand-500 dark:text-brand-400 hover:text-brand-400 dark:hover:text-brand-300 transition-colors"
+          >
+            Clear filters ×
+          </button>
+        </div>
+      )}
+
+      {/* Search results mode */}
       {isSearchMode && (
         <>
           {isSearching ? (
@@ -157,40 +222,35 @@ export function RaceListPage() {
               </button>
             </div>
           ) : (
-            <>
-              <p className="text-sm text-gray-500 mb-4">
-                Found {filteredSearchResults.length} event{filteredSearchResults.length !== 1 ? "s" : ""} matching &ldquo;{searchQuery}&rdquo;
-              </p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredSearchResults.map((sr) => (
-                  <EventCard
-                    key={sr.id}
-                    event={sr}
-                    searchRaces={sr.races}
-                    matchedOn={sr.matchedOn}
-                  />
-                ))}
-              </div>
-            </>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredSearchResults.map((sr) => (
+                <EventCard
+                  key={sr.id}
+                  event={sr}
+                  searchRaces={sr.races}
+                  matchedOn={sr.matchedOn}
+                />
+              ))}
+            </div>
           )}
         </>
       )}
 
-      {/* ── Default event grid ── */}
+      {/* Default event grid */}
       {!isSearchMode && (
         <>
           {eventsLoading && <SkeletonGrid />}
           {eventsError && (
             <div className="text-center py-20 text-red-500">{eventsError}</div>
           )}
-          {!eventsLoading && !eventsError && events.length === 0 && (
+          {!eventsLoading && !eventsError && sortedEvents.length === 0 && (
             <div className="text-center py-20">
               <p className="text-lg text-gray-500 dark:text-gray-400">No events found.</p>
             </div>
           )}
-          {!eventsLoading && events.length > 0 && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {events.map((ev) => (
+          {!eventsLoading && sortedEvents.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sortedEvents.map((ev) => (
                 <EventCard key={ev.id} event={ev} />
               ))}
             </div>
@@ -201,11 +261,11 @@ export function RaceListPage() {
   );
 }
 
-// ─── Skeleton grid ──────────────────────────────────────────────────────────
+// ---- Skeleton grid ----
 
 function SkeletonGrid() {
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <div key={i} className="rounded-xl bg-gray-900 border border-gray-800 p-5 space-y-3">
           <div className="flex justify-between">
