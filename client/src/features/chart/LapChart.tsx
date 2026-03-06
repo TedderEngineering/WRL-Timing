@@ -8,16 +8,14 @@ import {
   drawChart,
   buildLapInfo,
   computeDimensions,
-  computeLapElapsedHours,
-  formatHour,
   lapOfX,
   getVisibleCars,
   getCompColor,
   type ChartState,
   type ChartDimensions,
   type LapInfoData,
-  type PitInfoData,
 } from "./chart-renderer";
+import { DataPanel } from "./DataPanel";
 import { CHART_STYLE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
 
@@ -89,7 +87,7 @@ export function LapChart({
   );
 
   // ── Lap elapsed hours for time axis ────────────────────────────
-  const lapHours = useMemo(() => computeLapElapsedHours(data), [data]);
+  // Note: computeLapElapsedHours is called inside drawChart directly
 
   // ── Resize & draw ──────────────────────────────────────────────
   const resize = useCallback(() => {
@@ -634,8 +632,8 @@ export function LapChart({
         </div>
       </div>
 
-      {/* ── Info panel ───────────────────────────────────────────── */}
-      <InfoPanel info={info} activeLap={activeLap} focusNum={focusNum} navPrev={navPrev} navNext={navNext} lapHours={lapHours} xAxisMode={xAxisMode} />
+      {/* ── Data panel ───────────────────────────────────────────── */}
+      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
@@ -676,246 +674,4 @@ export function LapChart({
   );
 }
 
-// ─── Pit Timing Display ──────────────────────────────────────────────────────
-
-function fmtSec(v: number | null | undefined): string {
-  if (v == null) return "—";
-  const mins = Math.floor(v / 60);
-  const secs = v - mins * 60;
-  if (mins > 0) return `${mins}:${secs < 10 ? "0" : ""}${secs.toFixed(2)}`;
-  return secs.toFixed(2);
-}
-
-function deltaColor(v: number | null | undefined): string {
-  if (v == null) return "#888";
-  if (v < -0.2) return "#4ade80"; // faster (green)
-  if (v > 0.2) return "#f87171"; // slower (red)
-  return "#888";
-}
-
-function spcIndicator(spc?: { classification: string; direction: string; zScore: number }): React.ReactNode {
-  if (!spc) return null;
-  if (spc.classification === "normal") return null;
-  if (spc.classification === "warning") return <span style={{ color: "#fbbf24" }} title={`z=${spc.zScore.toFixed(1)}`}> ⚠</span>;
-  // outlier
-  const color = spc.direction === "fast" ? "#4ade80" : "#f87171";
-  return <span style={{ color }} title={`z=${spc.zScore.toFixed(1)}`}> ●</span>;
-}
-
-function PitTimingDisplay({ pitInfo }: { pitInfo: PitInfoData }) {
-  const t = pitInfo.timing;
-  if (!t) return null;
-
-  return (
-    <div className="rounded px-2.5 py-1.5 text-xs" style={{ background: "#1a1a35", color: "#ccc" }}>
-      {/* Header: pit label + driver */}
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="font-semibold text-white">{pitInfo.pitLabel}</span>
-        {pitInfo.outDriver && (
-          <span style={{ color: pitInfo.driverChanged ? "#60a5fa" : "#888" }}>
-            {pitInfo.driverChanged ? `→ ${pitInfo.outDriver}` : `[${pitInfo.outDriver}]`}
-          </span>
-        )}
-      </div>
-
-      {t.decompositionLevel === "full_segments" ? (
-        /* Full segments: Pit In / Pit Road / Pit Out / Total Loss */
-        <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: "auto auto auto" }}>
-          <TimingRow label="Pit In" value={t.pitInTime} spc={t.spcAnalysis?.pitIn} comp={t.cycleComparison?.deltaPitIn} />
-          <TimingRow label="Pit Road" value={t.pitRoadTime} spc={t.spcAnalysis?.pitRoad} comp={t.cycleComparison?.deltaPitRoad} />
-          <TimingRow label="Pit Out" value={t.pitOutTime} spc={t.spcAnalysis?.pitOut} comp={t.cycleComparison?.deltaPitOut} />
-          <TimingRow label="Total Loss" value={t.totalPitLoss} spc={t.spcAnalysis?.totalLoss} comp={t.cycleComparison?.deltaTotalLoss} bold />
-        </div>
-      ) : (
-        /* Total only: In-Lap / Out-Lap / Green Avg / Pit Road / Pit Loss */
-        <div className="grid gap-x-3 gap-y-0.5" style={{ gridTemplateColumns: "auto auto auto" }}>
-          <span style={{ color: "#888" }}>In-Lap</span>
-          <span className="font-mono text-white">{fmtSec(t.inLapTime)}</span>
-          <span />
-          <span style={{ color: "#888" }}>Out-Lap</span>
-          <span className="font-mono text-white">{fmtSec(t.outLapTime)}</span>
-          <span />
-          {t.pitRoadTime != null && (<>
-            <span style={{ color: "#888" }}>Pit Road</span>
-            <span className="font-mono text-white">{fmtSec(t.pitRoadTime)}</span>
-            <span />
-          </>)}
-          <span style={{ color: "#888" }}>Green Avg</span>
-          <span className="font-mono text-white">{fmtSec(t.avgGreenLapTime)}</span>
-          <span />
-          <span className="font-semibold" style={{ color: "#888" }}>Pit Loss</span>
-          <span className="font-mono font-semibold text-white">{fmtSec(t.totalPitLoss)}</span>
-          <span>{spcIndicator(t.spcAnalysis?.totalLoss)}</span>
-        </div>
-      )}
-
-      {/* Cycle summary */}
-      {t.cycleComparison && t.cycleComparison.compCarCount > 0 && (
-        <div className="mt-1 text-[10px]" style={{ color: "#888" }}>
-          vs {t.cycleComparison.compCarCount} car{t.cycleComparison.compCarCount > 1 ? "s" : ""} in cycle:{" "}
-          <span className="font-mono font-semibold" style={{ color: deltaColor(t.cycleComparison.deltaTotalLoss) }}>
-            {t.cycleComparison.deltaTotalLoss > 0 ? "+" : ""}{t.cycleComparison.deltaTotalLoss.toFixed(1)}s
-          </span>
-          {t.isDriveThrough && <span style={{ color: "#fbbf24" }}> (drive-through)</span>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TimingRow({ label, value, spc, comp, bold }: {
-  label: string;
-  value: number | null;
-  spc?: { classification: string; direction: string; zScore: number };
-  comp?: number | null;
-  bold?: boolean;
-}) {
-  const cls = bold ? "font-semibold" : "";
-  return (
-    <>
-      <span className={cls} style={{ color: "#888" }}>{label}</span>
-      <span className={`font-mono text-white ${cls}`}>
-        {fmtSec(value)}
-        {spcIndicator(spc)}
-      </span>
-      {comp != null ? (
-        <span className="font-mono" style={{ color: deltaColor(comp) }}>
-          {comp > 0 ? "+" : ""}{comp.toFixed(1)}s
-        </span>
-      ) : (
-        <span />
-      )}
-    </>
-  );
-}
-
-// ─── Info Panel sub-component ────────────────────────────────────────────────
-
-function InfoPanel({
-  info,
-  activeLap: _activeLap,
-  focusNum,
-  navPrev,
-  navNext,
-  lapHours,
-  xAxisMode,
-}: {
-  info: LapInfoData | null;
-  activeLap: number | null;
-  focusNum: number;
-  navPrev: () => void;
-  navNext: () => void;
-  lapHours: Map<number, number>;
-  xAxisMode: "laps" | "hours" | "both";
-}) {
-  if (!info) {
-    return (
-      <div
-        className="flex items-center sm:block rounded-md border overflow-hidden"
-        style={{
-          background: CHART_STYLE.card,
-          borderColor: CHART_STYLE.border,
-          height: isMobileCheck() ? 80 : 68,
-          opacity: 0.4,
-        }}
-      >
-        {/* Mobile nav buttons */}
-        <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full border-r text-sm" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>
-          ◀
-        </button>
-        <div className="flex-1 text-center text-sm py-4" style={{ color: CHART_STYLE.dim }}>
-          Tap a lap or use ◀ ▶ to step
-        </div>
-        <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full border-l text-sm" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>
-          ▶
-        </button>
-      </div>
-    );
-  }
-
-  const dc = info.posDelta > 0 ? "#4ade80" : info.posDelta < 0 ? "#f87171" : "#666";
-  const dt = info.posDelta > 0 ? `▲${info.posDelta}` : info.posDelta < 0 ? `▼${Math.abs(info.posDelta)}` : "—";
-
-  return (
-    <div
-      className="flex items-stretch sm:block rounded-md border overflow-hidden"
-      style={{
-        background: CHART_STYLE.card,
-        borderColor: CHART_STYLE.border,
-        minHeight: isMobileCheck() ? 80 : 68,
-      }}
-    >
-      {/* Mobile prev */}
-      <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-r cursor-pointer active:bg-[#1f1f3a]" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>
-        ◀
-      </button>
-
-      <div className="flex-1 min-w-0 px-3 py-2 overflow-hidden">
-        <div className="flex flex-wrap items-baseline gap-2 sm:gap-4">
-          {/* Left: lap/pos info */}
-          <div className="flex items-baseline gap-2.5 shrink-0 flex-wrap">
-            <span className="font-bold text-[15px] font-mono text-white">
-              L{info.lap.l} {info.posLabel}
-              {xAxisMode !== "laps" && lapHours.has(info.lap.l) && (
-                <span className="text-xs font-normal" style={{ color: CHART_STYLE.muted }}> · {formatHour(lapHours.get(info.lap.l)!)}</span>
-              )}
-            </span>
-            <span className="text-xs" style={{ color: CHART_STYLE.muted }}>
-              {info.flagLabel}{info.isPit ? " — PIT" : ""}
-            </span>
-            <span className="font-bold text-[13px] shrink-0" style={{ color: dc }}>{dt}</span>
-          </div>
-
-          {/* Mid: reason + pace */}
-          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-            {info.reason && (
-              <div
-                className="rounded px-2.5 py-1 text-xs truncate"
-                style={{ background: "#1a1a35", borderLeft: `3px solid ${dc}`, color: "#ccc" }}
-                title={info.reason}
-              >
-                {info.reason}
-              </div>
-            )}
-            {info.pitInfo?.timing && <PitTimingDisplay pitInfo={info.pitInfo} />}
-            {info.paceInfo && !info.pitInfo?.timing && (
-              <div className="flex items-baseline gap-3 text-xs flex-wrap" style={{ color: "#aaa" }}>
-                <span>
-                  #{focusNum}: <b className="text-white font-mono font-semibold">{info.paceInfo.focusTime}</b>
-                </span>
-                {info.paceInfo.compAvg && (
-                  <>
-                    <span>
-                      Comp: <b className="text-white font-mono font-semibold">{info.paceInfo.compAvg}</b>
-                    </span>
-                    <span className="font-semibold" style={{ color: info.paceInfo.deltaColor }}>
-                      Δ{info.paceInfo.delta! > 0 ? "+" : ""}
-                      {info.paceInfo.delta!.toFixed(2)}s vs {info.paceInfo.compLabel} (n={info.paceInfo.compN})
-                    </span>
-                  </>
-                )}
-                {!info.paceInfo.compAvg && info.speed && (
-                  <span>{info.speed.toFixed(1)} mph</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right: car metadata */}
-          <div className="shrink-0 text-right text-[11px]" style={{ color: CHART_STYLE.dim }}>
-            #{focusNum} {info.carTeam} · {info.carClass} · Finish P{info.finishPos}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile next */}
-      <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-l cursor-pointer active:bg-[#1f1f3a]" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>
-        ▶
-      </button>
-    </div>
-  );
-}
-
-function isMobileCheck() {
-  return typeof window !== "undefined" && window.innerWidth <= 640;
-}
+// InfoPanel replaced by DataPanel component

@@ -1,0 +1,237 @@
+import type { LapInfoData } from "./chart-renderer";
+
+interface DataPanelProps {
+  info: LapInfoData | null;
+  focusNum: number;
+  navPrev: () => void;
+  navNext: () => void;
+}
+
+const FLAG_COLORS: Record<string, string> = {
+  "GREEN": "#22c55e",
+  "GF": "#22c55e",
+  "FCY": "#f59e0b",
+  "RED": "#ef4444",
+};
+
+function secToDisplay(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec - m * 60;
+  return m > 0 ? `${m}:${s.toFixed(2).padStart(5, "0")}` : s.toFixed(2);
+}
+
+export function DataPanel({ info, focusNum, navPrev, navNext }: DataPanelProps) {
+  if (!info) {
+    return (
+      <div
+        className="flex items-center overflow-hidden"
+        style={{ height: 88, background: "#0c0e16", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+      >
+        {/* Mobile nav */}
+        <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+          ◀
+        </button>
+        <div className="flex-1 text-center text-sm" style={{ color: "rgba(255,255,255,0.2)" }}>
+          Tap a lap or use ◀ ▶ to step
+        </div>
+        <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+          ▶
+        </button>
+      </div>
+    );
+  }
+
+  const flagColor = FLAG_COLORS[info.lap.flag] || FLAG_COLORS["GREEN"] || "#22c55e";
+  const flagLabel = info.lap.flag === "FCY" ? "FCY" : "Grn";
+  const isPit = info.isPit;
+  const timing = info.pitInfo?.timing;
+  const posDeltaColor = info.posDelta > 0 ? "#4ade80" : info.posDelta < 0 ? "#f87171" : "rgba(255,255,255,0.3)";
+  const posDeltaText = info.posDelta > 0 ? `▲${info.posDelta}` : info.posDelta < 0 ? `▼${Math.abs(info.posDelta)}` : "";
+
+  return (
+    <div
+      className="flex items-stretch overflow-hidden"
+      style={{ height: 88, background: "#0c0e16", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+    >
+      {/* Mobile nav prev */}
+      <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-r border-white/[0.07] cursor-pointer active:bg-white/5" style={{ color: "rgba(255,255,255,0.4)" }}>
+        ◀
+      </button>
+
+      {/* Zone 1 — Identity (140px) */}
+      <div className="hidden sm:flex flex-col justify-center px-4 shrink-0" style={{ width: 140 }}>
+        <div className="flex items-baseline gap-2 mb-1.5">
+          <span className="text-2xl font-extrabold tracking-tight leading-none text-white">L{info.lap.l}</span>
+          <span className="text-lg font-bold leading-none" style={{ color: "rgba(255,255,255,0.45)" }}>P{info.lap.p}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-[7px] h-[7px] rounded-full shrink-0" style={{ background: flagColor }} />
+          <span className="text-xs font-semibold" style={{ color: flagColor }}>{flagLabel}</span>
+          {isPit && info.pitInfo && (
+            <span className="text-[10px] font-bold rounded px-1.5 py-px" style={{
+              background: "rgba(251,191,36,0.12)",
+              border: "1px solid rgba(251,191,36,0.3)",
+              color: "#fcd34d",
+            }}>
+              PIT
+            </span>
+          )}
+          {posDeltaText && (
+            <span className="text-[11px] font-bold ml-auto" style={{ color: posDeltaColor }}>{posDeltaText}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile: compact identity */}
+      <div className="sm:hidden flex flex-col justify-center px-3 shrink-0">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-lg font-extrabold text-white">L{info.lap.l}</span>
+          <span className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.45)" }}>P{info.lap.p}</span>
+          {posDeltaText && <span className="text-[11px] font-bold" style={{ color: posDeltaColor }}>{posDeltaText}</span>}
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: flagColor }} />
+          <span className="text-[10px] font-semibold" style={{ color: flagColor }}>{flagLabel}</span>
+          {isPit && <span className="text-[9px] font-bold text-amber-300">PIT</span>}
+        </div>
+      </div>
+
+      <Divider />
+
+      {/* Zone 2 — Pit details OR Lap time */}
+      {isPit && timing ? (
+        <div className="flex flex-col justify-center px-4 shrink-0" style={{ width: "auto", minWidth: 120, maxWidth: 420 }}>
+          <ZoneLabel>{info.pitInfo?.pitLabel || "Pit Stop"}</ZoneLabel>
+          <div className="flex gap-3 sm:gap-5">
+            <PitField label="In-Lap" value={secToDisplay(timing.inLapTime)} />
+            {timing.pitRoadTime !== null && <PitField label="Pit Road" value={secToDisplay(timing.pitRoadTime)} />}
+            <PitField label="Out-Lap" value={secToDisplay(timing.outLapTime)} />
+            <PitField label="Grn Avg" value={secToDisplay(timing.avgGreenLapTime)} />
+            <PitField label="Pit Loss" value={secToDisplay(timing.totalPitLoss)} warn />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col justify-center px-4 shrink-0" style={{ width: 140 }}>
+          <ZoneLabel>Lap Time</ZoneLabel>
+          <div className="text-xl sm:text-[22px] font-bold tabular-nums leading-none text-white">
+            {info.paceInfo?.focusTime || info.lap.lt}
+          </div>
+        </div>
+      )}
+
+      {/* Zone 3 — P.Best + Fld Avg (racing laps only) */}
+      {!isPit && info.paceInfo && (
+        <>
+          <Divider />
+          <div className="hidden lg:flex flex-col justify-center px-4 shrink-0" style={{ width: 200 }}>
+            <ZoneLabel>vs Field</ZoneLabel>
+            <div className="flex gap-4 items-end">
+              {info.paceInfo.compAvg && (
+                <>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>Fld Avg</div>
+                    <div className="text-base font-bold tabular-nums" style={{ color: "rgba(255,255,255,0.55)" }}>
+                      {info.paceInfo.compAvg}
+                    </div>
+                  </div>
+                  <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+                    {info.paceInfo.compLabel} · {info.paceInfo.compN} cars
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Zone 4 — Delta (racing laps only) */}
+      {!isPit && info.paceInfo?.delta !== null && info.paceInfo?.delta !== undefined && (
+        <>
+          <Divider className="hidden lg:block" />
+          <div className="hidden lg:flex flex-col justify-center px-4 shrink-0" style={{ width: 130 }}>
+            <ZoneLabel>Delta</ZoneLabel>
+            <div className="text-xl font-extrabold tabular-nums leading-none mb-0.5" style={{
+              color: info.paceInfo.deltaColor,
+            }}>
+              {info.paceInfo.delta > 0 ? "+" : ""}{info.paceInfo.delta.toFixed(2)}s
+            </div>
+            <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+              vs {info.paceInfo.compN} cars
+            </div>
+          </div>
+        </>
+      )}
+
+      <Divider />
+
+      {/* Zone 5 — Reason / position change events */}
+      <div className="flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden">
+        {info.reason ? (
+          <>
+            <ZoneLabel>Event</ZoneLabel>
+            <div
+              className="text-xs truncate rounded px-2 py-1"
+              style={{ background: "rgba(255,255,255,0.04)", borderLeft: `3px solid ${posDeltaColor}`, color: "rgba(255,255,255,0.65)" }}
+              title={info.reason}
+            >
+              {info.reason}
+            </div>
+          </>
+        ) : (
+          <div className="text-xs italic" style={{ color: "rgba(255,255,255,0.18)" }}>
+            No position changes this lap
+          </div>
+        )}
+      </div>
+
+      <Divider />
+
+      {/* Zone 6 — Car metadata (replaces gaps until API supports it) */}
+      <div className="hidden sm:flex flex-col justify-center px-4 shrink-0 text-right" style={{ width: 180 }}>
+        <ZoneLabel>Car Info</ZoneLabel>
+        <div className="text-[13px] font-semibold text-white">#{focusNum}</div>
+        <div className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+          {info.carTeam} · {info.carClass}
+        </div>
+        <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+          Finish P{info.finishPos}
+        </div>
+      </div>
+
+      {/* Mobile nav next */}
+      <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-l border-white/[0.07] cursor-pointer active:bg-white/5" style={{ color: "rgba(255,255,255,0.4)" }}>
+        ▶
+      </button>
+    </div>
+  );
+}
+
+// ---- Helpers ----
+
+function Divider({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`shrink-0 self-stretch ${className}`}
+      style={{ width: 1, background: "rgba(255,255,255,0.07)", margin: "10px 0" }}
+    />
+  );
+}
+
+function ZoneLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] uppercase tracking-[0.09em] mb-1" style={{ color: "rgba(255,255,255,0.3)" }}>
+      {children}
+    </div>
+  );
+}
+
+function PitField({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{label}</div>
+      <div className="text-sm sm:text-[17px] font-bold tabular-nums" style={{ color: warn ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
