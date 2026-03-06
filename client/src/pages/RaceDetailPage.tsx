@@ -120,28 +120,6 @@ export function RaceDetailPage() {
     [data, classView]
   );
 
-  const handleClassChange = useCallback(
-    (cls: string) => {
-      if (!data) return;
-      setClassView(cls);
-      if (cls) {
-        const focusCls = data.cars[String(focusNum)]?.cls;
-        let newFocus = focusNum;
-        if (focusCls !== cls) {
-          newFocus = (data.classGroups[cls] || [])[0] || focusNum;
-          setFocusNum(newFocus);
-        }
-        const newComp = new Set<number>();
-        (data.classGroups[cls] || []).forEach((n) => {
-          if (n !== newFocus) newComp.add(n);
-        });
-        setCompSet(newComp);
-      }
-      setActiveLap(null);
-    },
-    [data, focusNum]
-  );
-
   const handleFocusChange = useCallback(
     (num: number) => {
       setFocusNum(num);
@@ -443,29 +421,9 @@ export function RaceDetailPage() {
                 );
               })}
 
-              {/* Dropdowns — shown for Position Trace and Lap Times, hidden for Strategy */}
+              {/* Focus dropdown — shown for Position Trace and Lap Times, hidden for Strategy */}
               {showDropdowns && (
                 <div className="flex items-center gap-3 ml-4 shrink-0">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: "#cbd5e1" }}>
-                      Class
-                    </label>
-                    <select
-                      value={classView}
-                      onChange={(e) => handleClassChange(e.target.value)}
-                      className="px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
-                      style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, minWidth: 130 }}
-                    >
-                      <option value="">All Classes ({data.totalCars})</option>
-                      {Object.entries(data.classGroups)
-                        .sort()
-                        .map(([cls, cars]) => (
-                          <option key={cls} value={cls}>
-                            {cls} ({cars.length})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
                   <div className="flex items-center gap-1.5">
                     <label className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: "#cbd5e1" }}>
                       Focus

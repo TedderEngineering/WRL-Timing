@@ -98,13 +98,14 @@ interface StrategyTabProps {
 
 export function StrategyTab({
   data, annotations,
-  classView, setClassView,
   setFocusNum,
   onSwitchToTrace,
 }: StrategyTabProps) {
   const [sortKey, setSortKey] = useState<SortKey>("classPos");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedCar, setSelectedCar] = useState<number | null>(null);
+  // Local class filter — does not affect Position Trace or Lap Times
+  const [localClassView, setLocalClassView] = useState("");
 
   // Compute all data
   const allMetrics = useMemo(() => computeStrategyMetrics(data, annotations), [data, annotations]);
@@ -114,7 +115,7 @@ export function StrategyTab({
 
   // Determine active class
   const classes = Object.keys(data.classGroups).sort();
-  const activeClass = classView; // "" means all classes
+  const activeClass = localClassView; // "" means all classes
 
   // Filter by class
   const classMetrics = useMemo(
@@ -185,7 +186,7 @@ export function StrategyTab({
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <button
           onClick={() => {
-            setClassView("");
+            setLocalClassView("");
             setSelectedCar(null);
             setSortKey("classPos");
             setSortDir("asc");
@@ -211,7 +212,7 @@ export function StrategyTab({
             <button
               key={cls}
               onClick={() => {
-                setClassView(cls);
+                setLocalClassView(cls);
                 setSelectedCar(null);
                 setSortKey("classPos");
                 setSortDir("asc");

@@ -491,7 +491,7 @@ export function LapChart({
       return result;
     }
     return [
-      { label: "All Cars", cars: Object.keys(data.cars).map(Number) },
+      { label: "All Classes", cars: Object.keys(data.cars).map(Number) },
       ...Object.entries(data.classGroups)
         .sort()
         .map(([cls, cars]) => ({ label: cls, cars })),
