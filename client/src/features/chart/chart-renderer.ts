@@ -179,10 +179,6 @@ function xOf(lap: number, lapStart: number, lapEnd: number, dim: ChartDimensions
   return dim.ML + ((lap - lapStart) / range) * dim.CW;
 }
 
-function yOf(pos: number, maxPos: number, dim: ChartDimensions): number {
-  return dim.MT + ((pos - 1) / maxPos) * dim.CH;
-}
-
 export function lapOfX(x: number, lapStart: number, lapEnd: number, dim: ChartDimensions): number {
   const range = lapEnd - lapStart;
   if (range <= 0) return lapStart;
@@ -271,9 +267,35 @@ export function drawChart(
     settles: [],
   };
 
+  // ── Y-axis auto-zoom based on selected cars ────────────────────
+  const allCarNums = Object.keys(data.cars).map(Number);
+  const selectedCars = new Set([focusNum, ...compSet]);
+  const isAllSelected = selectedCars.size >= allCarNums.length;
+
+  let yMin = 1;
+  let yMax = maxPos;
+  if (!isAllSelected && selectedCars.size > 0) {
+    let pMin = Infinity;
+    let pMax = -Infinity;
+    selectedCars.forEach((cn) => {
+      const cl = data.cars[String(cn)]?.laps;
+      if (!cl) return;
+      for (const d of cl) {
+        const pos = d[pk];
+        if (pos < pMin) pMin = pos;
+        if (pos > pMax) pMax = pos;
+      }
+    });
+    if (pMin !== Infinity) {
+      yMin = Math.max(1, pMin - 1);
+      yMax = Math.min(maxPos, pMax + 1);
+    }
+  }
+  const yRange = yMax - yMin || 1;
+
   const visLaps = lapEnd - lapStart;
   const x = (l: number) => xOf(l, lapStart, lapEnd, adjDim);
-  const y = (p: number) => yOf(p, maxPos, adjDim);
+  const y = (p: number) => adjDim.MT + ((p - yMin) / yRange) * adjDim.CH;
 
   // Hrs/Both mode: per-car cumulative hours for time-based x mapping
   const xAxisMode = state.xAxisMode ?? "laps";
@@ -302,8 +324,10 @@ export function drawChart(
   // ── 1. Grid ────────────────────────────────────────────────────
   ctx.strokeStyle = CHART_STYLE.gridLine;
   ctx.lineWidth = 0.5;
-  const posStep = maxPos <= 20 ? 1 : maxPos <= 40 ? 2 : 5;
-  for (let p = 1; p <= maxPos; p += posStep) {
+  const posCount = yMax - yMin;
+  const posStep = posCount <= 20 ? 1 : posCount <= 40 ? 2 : 5;
+  const gridYStart = Math.ceil(yMin / posStep) * posStep;
+  for (let p = Math.max(gridYStart, yMin); p <= yMax; p += posStep) {
     const py = y(p);
     ctx.beginPath();
     ctx.moveTo(adjDim.ML, py);
@@ -584,7 +608,7 @@ export function drawChart(
   ctx.font = "500 10px monospace";
   ctx.fillStyle = CHART_STYLE.muted;
   ctx.textAlign = "right";
-  for (let p = 1; p <= maxPos; p += posStep) {
+  for (let p = Math.max(gridYStart, yMin); p <= yMax; p += posStep) {
     ctx.fillText("P" + p, adjDim.ML - 6, y(p) + 4);
   }
   // Bottom axis: lap numbers, hour markers, or both
