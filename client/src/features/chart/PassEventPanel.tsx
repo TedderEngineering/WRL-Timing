@@ -6,61 +6,112 @@ interface PassEventPanelProps {
   onAddToCompare: (carNum: number) => void;
 }
 
-interface ParsedEvent {
+interface CarEvent {
+  kind: "car";
   carNum: number;
   teamName: string;
   reason: "on pace" | "pitted" | "yellow" | "unknown";
   direction: "gained" | "lost" | "neutral";
 }
 
+interface PitCycleEvent {
+  kind: "pitCycle";
+  delta: number; // positive = gained, negative = lost
+}
+
+interface PitInfoEvent {
+  kind: "pitInfo";
+  text: string; // e.g. "also pitting: #33, #52"
+}
+
+type ParsedEvent = CarEvent | PitCycleEvent | PitInfoEvent;
+
 const REASON_STYLES: Record<string, { bg: string; border: string; color: string; label: string }> = {
   "on pace": { bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)", color: "#93c5fd", label: "on pace" },
   pitted: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fcd34d", label: "pitted" },
   yellow: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fcd34d", label: "on yellow" },
+  pitCycle: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fcd34d", label: "pit cycle" },
   unknown: { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)", label: "—" },
 };
 
-function parseEvents(reason: string, posDelta: number): ParsedEvent[] {
-  const direction: ParsedEvent["direction"] = posDelta > 0 ? "gained" : posDelta < 0 ? "lost" : "neutral";
+function parseReason(reason: string, posDelta: number): ParsedEvent[] {
+  const direction: CarEvent["direction"] = posDelta > 0 ? "gained" : posDelta < 0 ? "lost" : "neutral";
 
-  // Strip leading "Gained — passed " or "Lost — " prefix
-  let body = reason;
-  const gainMatch = reason.match(/^Gained\s*—\s*passed\s*/i);
-  const lossMatch = reason.match(/^Lost\s*—\s*/i);
-  if (gainMatch) body = reason.slice(gainMatch[0].length);
-  else if (lossMatch) body = reason.slice(lossMatch[0].length);
-
-  // Split on "; "
-  const parts = body.split(/;\s*/);
+  // Split the full string on "; " first, then deduplicate
+  const rawParts = reason.split(/;\s*/);
   const seen = new Set<string>();
+  const dedupParts: string[] = [];
+  for (const p of rawParts) {
+    const t = p.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    dedupParts.push(t);
+  }
+
+  // Rejoin and parse as a single deduped string
+  const deduped = dedupParts.join("; ");
+
+  // Check if this is a pit stop reason
+  const isPitStop = deduped.startsWith("Pit stop");
+
   const events: ParsedEvent[] = [];
 
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
+  if (isPitStop) {
+    // Strip "Pit stop — " or "Pit stop" prefix
+    const body = deduped.replace(/^Pit stop\s*—?\s*/, "");
+    if (!body) return events;
 
-    // Deduplicate
-    if (seen.has(trimmed)) continue;
-    seen.add(trimmed);
+    // Parse individual parts
+    for (const part of body.split(/;\s*/)) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
 
-    // Parse: "#NUM TeamName reason"
-    const m = trimmed.match(/^#(\d+)\s*(.*?)?\s+(on pace|pitted|\(yellow\))$/i);
-    if (m) {
-      const carNum = parseInt(m[1], 10);
-      const teamName = (m[2] || "").trim();
-      let reasonType: ParsedEvent["reason"] = "unknown";
-      const r = m[3].toLowerCase();
-      if (r === "on pace") reasonType = "on pace";
-      else if (r === "pitted") reasonType = "pitted";
-      else if (r === "(yellow)") reasonType = "yellow";
-      events.push({ carNum, teamName, reason: reasonType, direction });
-    } else {
-      // Try to at least extract a car number
-      const numMatch = trimmed.match(/^#(\d+)/);
-      if (numMatch) {
-        events.push({ carNum: parseInt(numMatch[1], 10), teamName: trimmed.replace(/^#\d+\s*/, ""), reason: "unknown", direction });
+      // "Gained N in pit cycle" or "Lost N in pit cycle"
+      const cycleMatch = trimmed.match(/^(Gained|Lost)\s+(\d+)\s+in pit cycle$/i);
+      if (cycleMatch) {
+        const n = parseInt(cycleMatch[2], 10);
+        events.push({ kind: "pitCycle", delta: cycleMatch[1].toLowerCase() === "gained" ? n : -n });
+        continue;
       }
-      // Skip lines without car numbers (e.g. "Gained 3 positions")
+
+      // "also pitting: #33, #52" or "N class cars also pitting"
+      if (trimmed.startsWith("also pitting") || trimmed.includes("cars also pitting")) {
+        events.push({ kind: "pitInfo", text: trimmed });
+        continue;
+      }
+
+      // Fallback: treat as info text
+      events.push({ kind: "pitInfo", text: trimmed });
+    }
+  } else {
+    // Racing lap — strip prefix
+    let body = deduped;
+    const gainMatch = deduped.match(/^Gained\s*—\s*passed\s*/i);
+    const lossMatch = deduped.match(/^Lost\s*—\s*/i);
+    if (gainMatch) body = deduped.slice(gainMatch[0].length);
+    else if (lossMatch) body = deduped.slice(lossMatch[0].length);
+
+    for (const part of body.split(/;\s*/)) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+
+      // Parse: "#NUM TeamName reason"
+      const m = trimmed.match(/^#(\d+)\s*(.*?)?\s+(on pace|pitted|\(yellow\))$/i);
+      if (m) {
+        const carNum = parseInt(m[1], 10);
+        const teamName = (m[2] || "").trim();
+        let reasonType: CarEvent["reason"] = "unknown";
+        const r = m[3].toLowerCase();
+        if (r === "on pace") reasonType = "on pace";
+        else if (r === "pitted") reasonType = "pitted";
+        else if (r === "(yellow)") reasonType = "yellow";
+        events.push({ kind: "car", carNum, teamName, reason: reasonType, direction });
+      } else {
+        const numMatch = trimmed.match(/^#(\d+)/);
+        if (numMatch) {
+          events.push({ kind: "car", carNum: parseInt(numMatch[1], 10), teamName: trimmed.replace(/^#\d+\s*/, ""), reason: "unknown", direction });
+        }
+      }
     }
   }
 
@@ -69,7 +120,10 @@ function parseEvents(reason: string, posDelta: number): ParsedEvent[] {
 
 export function PassEventPanel({ reason, posDelta, focusNum, onOpenH2H, onAddToCompare }: PassEventPanelProps) {
   const isGain = posDelta > 0;
-  const events = parseEvents(reason, posDelta).filter((e) => e.carNum !== focusNum);
+  const allEvents = parseReason(reason, posDelta);
+  const carEvents = allEvents.filter((e): e is CarEvent => e.kind === "car" && e.carNum !== focusNum);
+  const pitCycleEvents = allEvents.filter((e): e is PitCycleEvent => e.kind === "pitCycle");
+  const pitInfoEvents = allEvents.filter((e): e is PitInfoEvent => e.kind === "pitInfo");
   const dirColor = isGain ? "#4ade80" : posDelta < 0 ? "#f87171" : "rgba(255,255,255,0.5)";
 
   return (
@@ -86,50 +140,99 @@ export function PassEventPanel({ reason, posDelta, focusNum, onOpenH2H, onAddToC
         </div>
       </div>
 
-      {/* Structured event rows */}
-      {events.length > 0 ? (
-        <div className="flex-1 overflow-y-auto">
-          {events.map((ev) => {
-            const style = REASON_STYLES[ev.reason];
-            return (
-              <div
-                key={`${ev.carNum}-${ev.reason}`}
-                className="flex items-center gap-2 px-4 py-2.5 border-b"
-                style={{ borderColor: "rgba(255,255,255,0.05)" }}
+      <div className="flex-1 overflow-y-auto">
+        {/* On-track car events */}
+        {carEvents.map((ev) => {
+          const style = REASON_STYLES[ev.reason];
+          return (
+            <div
+              key={`${ev.carNum}-${ev.reason}`}
+              className="flex items-center gap-2 px-4 py-2.5 border-b"
+              style={{ borderColor: "rgba(255,255,255,0.05)" }}
+            >
+              <span className="text-xs font-bold shrink-0 w-16" style={{ color: dirColor }}>
+                {ev.direction === "gained" ? "▲ Gained" : ev.direction === "lost" ? "▼ Lost" : "—"}
+              </span>
+              <span
+                className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}
               >
-                {/* Direction */}
-                <span className="text-xs font-bold shrink-0 w-16" style={{ color: dirColor }}>
-                  {ev.direction === "gained" ? "▲ Gained" : ev.direction === "lost" ? "▼ Lost" : "—"}
-                </span>
+                #{ev.carNum}
+              </span>
+              <span className="text-xs truncate min-w-0" style={{ color: "rgba(255,255,255,0.6)" }}>
+                {ev.teamName || `Car #${ev.carNum}`}
+              </span>
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
+                style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.color }}
+              >
+                {style.label}
+              </span>
+            </div>
+          );
+        })}
 
-                {/* Car badge */}
-                <span
-                  className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "#fff" }}
-                >
-                  #{ev.carNum}
-                </span>
+        {/* Pit cycle events */}
+        {pitCycleEvents.map((ev, i) => {
+          const style = REASON_STYLES.pitCycle;
+          const isLoss = ev.delta < 0;
+          const cycleColor = isLoss ? "#f87171" : ev.delta > 0 ? "#4ade80" : "rgba(255,255,255,0.5)";
+          return (
+            <div
+              key={`pitcycle-${i}`}
+              className="flex items-center gap-2 px-4 py-2.5 border-b"
+              style={{ borderColor: "rgba(255,255,255,0.05)" }}
+            >
+              <span className="text-xs font-bold shrink-0 w-16" style={{ color: cycleColor }}>
+                {isLoss ? "▼ Lost" : ev.delta > 0 ? "▲ Gained" : "—"}
+              </span>
+              <span className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                {Math.abs(ev.delta)} position{Math.abs(ev.delta) !== 1 ? "s" : ""}
+              </span>
+              <span
+                className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
+                style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.color }}
+              >
+                {style.label}
+              </span>
+            </div>
+          );
+        })}
 
-                {/* Team name */}
-                <span className="text-xs truncate min-w-0" style={{ color: "rgba(255,255,255,0.6)" }}>
-                  {ev.teamName || `Car #${ev.carNum}`}
-                </span>
+        {/* Pit info (also pitting, etc.) */}
+        {pitInfoEvents.map((ev, i) => (
+          <div
+            key={`pitinfo-${i}`}
+            className="flex items-center gap-2 px-4 py-2 border-b"
+            style={{ borderColor: "rgba(255,255,255,0.05)" }}
+          >
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+              {ev.text}
+            </span>
+          </div>
+        ))}
 
-                {/* Reason pill */}
-                <span
-                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
-                  style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.color }}
-                >
-                  {style.label}
-                </span>
-              </div>
-            );
-          })}
+        {/* No events fallback */}
+        {carEvents.length === 0 && pitCycleEvents.length === 0 && pitInfoEvents.length === 0 && (
+          <div className="px-4 py-3">
+            <div
+              className="text-sm rounded px-3 py-2"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                borderLeft: `3px solid ${dirColor}`,
+                color: "rgba(255,255,255,0.7)",
+              }}
+            >
+              {reason}
+            </div>
+          </div>
+        )}
 
-          {/* Action buttons per car */}
+        {/* Action buttons for car events */}
+        {carEvents.length > 0 && (
           <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
             <div className="flex flex-col gap-1.5">
-              {events.map((ev) => (
+              {carEvents.map((ev) => (
                 <div key={`actions-${ev.carNum}`} className="flex items-center gap-2">
                   <span className="font-mono font-bold text-[11px] text-white">#{ev.carNum}</span>
                   <div className="flex gap-1.5 ml-auto">
@@ -160,21 +263,8 @@ export function PassEventPanel({ reason, posDelta, focusNum, onOpenH2H, onAddToC
               ))}
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="px-4 py-3">
-          <div
-            className="text-sm rounded px-3 py-2"
-            style={{
-              background: "rgba(255,255,255,0.04)",
-              borderLeft: `3px solid ${dirColor}`,
-              color: "rgba(255,255,255,0.7)",
-            }}
-          >
-            {reason}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Footer note */}
       <div className="px-4 py-3 mt-auto">
