@@ -177,13 +177,7 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
         {info.reason ? (
           <>
             <ZoneLabel>Event</ZoneLabel>
-            <div
-              className="text-xs truncate rounded px-2 py-1"
-              style={{ background: "rgba(255,255,255,0.04)", borderLeft: `3px solid ${posDeltaColor}`, color: "rgba(255,255,255,0.65)" }}
-              title={info.reason}
-            >
-              {info.reason}
-            </div>
+            <EventPreview reason={info.reason} posDelta={info.posDelta} posDeltaColor={posDeltaColor} />
           </>
         ) : (
           <div className="text-xs italic" style={{ color: "rgba(255,255,255,0.18)" }}>
@@ -260,6 +254,77 @@ function PitField({ label, value, warn }: { label: string; value: string; warn?:
       <div className="text-sm sm:text-[17px] font-bold tabular-nums" style={{ color: warn ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function EventPreview({ reason, posDelta, posDeltaColor }: { reason: string; posDelta: number; posDeltaColor: string }) {
+  const isPitStop = reason.startsWith("Pit stop");
+
+  if (isPitStop) {
+    // Extract pit cycle delta and info parts
+    const body = reason.replace(/^Pit stop\s*—?\s*/, "");
+    const parts = body.split(/;\s*/).filter(Boolean);
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const p of parts) {
+      const t = p.trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      deduped.push(t);
+    }
+
+    const cycleMatch = deduped.find((p) => /^(Gained|Lost)\s+\d+\s+in pit cycle$/i.test(p));
+    const infoParts = deduped.filter((p) => p !== cycleMatch);
+
+    return (
+      <div className="flex items-center gap-2 truncate">
+        <span className="text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0" style={{
+          background: "rgba(251,191,36,0.12)",
+          border: "1px solid rgba(251,191,36,0.3)",
+          color: "#fcd34d",
+        }}>
+          PIT
+        </span>
+        {cycleMatch && (
+          <span className="text-xs font-semibold shrink-0" style={{ color: posDeltaColor }}>
+            {cycleMatch.replace(/ in pit cycle$/i, "")}
+          </span>
+        )}
+        {infoParts.length > 0 && (
+          <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+            {infoParts.join(" · ")}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Racing lap — count cars involved
+  const rawParts = reason.split(/;\s*/);
+  const seen = new Set<string>();
+  const carNums: string[] = [];
+  for (const p of rawParts) {
+    const t = p.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    const m = t.match(/^#(\d+)/);
+    if (m) carNums.push(m[1]);
+  }
+
+  const isGain = posDelta > 0;
+  const verb = isGain ? "Passed" : "Passed by";
+
+  return (
+    <div className="flex items-center gap-2 truncate">
+      <span className="text-xs font-semibold shrink-0" style={{ color: posDeltaColor }}>
+        {verb} {carNums.length} car{carNums.length !== 1 ? "s" : ""}
+      </span>
+      {carNums.length > 0 && carNums.length <= 4 && (
+        <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+          {carNums.map((n) => `#${n}`).join(", ")}
+        </span>
+      )}
     </div>
   );
 }
