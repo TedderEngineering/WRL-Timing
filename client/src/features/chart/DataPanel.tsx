@@ -5,6 +5,7 @@ interface DataPanelProps {
   focusNum: number;
   navPrev: () => void;
   navNext: () => void;
+  setSidePanel: (panel: string | null) => void;
 }
 
 const FLAG_COLORS: Record<string, string> = {
@@ -20,7 +21,7 @@ function secToDisplay(sec: number): string {
   return m > 0 ? `${m}:${s.toFixed(2).padStart(5, "0")}` : s.toFixed(2);
 }
 
-export function DataPanel({ info, focusNum, navPrev, navNext }: DataPanelProps) {
+export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: DataPanelProps) {
   if (!info) {
     return (
       <div
@@ -100,7 +101,11 @@ export function DataPanel({ info, focusNum, navPrev, navNext }: DataPanelProps) 
 
       {/* Zone 2 — Pit details OR Lap time */}
       {isPit && timing ? (
-        <div className="flex flex-col justify-center px-4 shrink-0" style={{ width: "auto", minWidth: 120, maxWidth: 420 }}>
+        <div
+          className="flex flex-col justify-center px-4 shrink-0 cursor-pointer hover:bg-white/[0.03] transition-colors"
+          style={{ width: "auto", minWidth: 120, maxWidth: 420 }}
+          onClick={() => setSidePanel("pit")}
+        >
           <ZoneLabel>{info.pitInfo?.pitLabel || "Pit Stop"}</ZoneLabel>
           <div className="flex gap-3 sm:gap-5">
             <PitField label="In-Lap" value={secToDisplay(timing.inLapTime)} />

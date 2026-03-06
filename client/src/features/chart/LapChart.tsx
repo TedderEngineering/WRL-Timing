@@ -52,6 +52,7 @@ export function LapChart({
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
+  const [sidePanel, setSidePanel] = useState<string | null>(null);
 
   // ── Zoom state ─────────────────────────────────────────────────
   const [lapStart, setLapStart] = useState(1);
@@ -429,6 +430,9 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
+  // Close side panel when active lap changes
+  useEffect(() => { setSidePanel(null); }, [activeLap]);
+
   // ── Comparison toggles ──────────────────────────────────────────
   const toggleComp = useCallback(
     (num: number) => {
@@ -573,67 +577,101 @@ export function LapChart({
 
       </div>
 
-      {/* ── Chart canvas ────────────────────────────────────────── */}
-      <div
-        ref={wrapperRef}
-        className="rounded-lg border relative overflow-hidden"
-        style={{
-          background: CHART_STYLE.card,
-          borderColor: CHART_STYLE.border,
-          height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)",
-          minHeight: 300,
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onDoubleClick={onDoubleClick}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ display: "block", cursor: cursorStyle }}
-        />
-        {/* X-axis mode toggle + zoom indicator */}
-        <div className="absolute left-0 right-0 flex items-end gap-2 px-1" style={{ bottom: 3, zIndex: 2 }}>
-          {/* Toggle pill */}
-          <div
-            className="flex rounded-full overflow-hidden shrink-0"
-            style={{
-              marginLeft: (dim?.ML ?? 50) - 6,
-              background: `${CHART_STYLE.card}cc`,
-              border: `1px solid ${CHART_STYLE.border}`,
-            }}
-          >
-            {(["laps", "hours", "both"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setXAxisMode(mode)}
-                className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
-                style={{
-                  background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
-                  color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
-                }}
-              >
-                {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
-              </button>
-            ))}
-          </div>
-          {/* Zoom indicator */}
-          {isZoomed && (
+      {/* ── Chart + side panel row ─────────────────────────────── */}
+      <div className="flex" style={{ height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)", minHeight: 300 }}>
+        {/* Chart canvas */}
+        <div
+          ref={wrapperRef}
+          className="rounded-lg border relative overflow-hidden flex-1 min-w-0"
+          style={{
+            background: CHART_STYLE.card,
+            borderColor: CHART_STYLE.border,
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onDoubleClick={onDoubleClick}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ display: "block", cursor: cursorStyle }}
+          />
+          {/* X-axis mode toggle + zoom indicator */}
+          <div className="absolute left-0 right-0 flex items-end gap-2 px-1" style={{ bottom: 3, zIndex: 2 }}>
+            {/* Toggle pill */}
             <div
-              className="text-[10px] font-mono"
-              style={{ color: CHART_STYLE.muted, marginBottom: 1 }}
+              className="flex rounded-full overflow-hidden shrink-0"
+              style={{
+                marginLeft: (dim?.ML ?? 50) - 6,
+                background: `${CHART_STYLE.card}cc`,
+                border: `1px solid ${CHART_STYLE.border}`,
+              }}
             >
-              L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
+              {(["laps", "hours", "both"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setXAxisMode(mode)}
+                  className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
+                  style={{
+                    background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
+                    color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
+                  }}
+                >
+                  {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
+                </button>
+              ))}
+            </div>
+            {/* Zoom indicator */}
+            {isZoomed && (
+              <div
+                className="text-[10px] font-mono"
+                style={{ color: CHART_STYLE.muted, marginBottom: 1 }}
+              >
+                L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Side panel */}
+        <div
+          className="shrink-0 overflow-hidden border-l rounded-r-lg"
+          style={{
+            width: sidePanel ? 480 : 0,
+            borderColor: sidePanel ? CHART_STYLE.border : "transparent",
+            background: CHART_STYLE.card,
+            transition: "width 0.18s ease-out",
+          }}
+        >
+          {sidePanel && (
+            <div className="w-[480px] h-full flex flex-col">
+              {/* Panel header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: CHART_STYLE.border }}>
+                <span className="text-sm font-semibold text-white capitalize">{sidePanel}</span>
+                <button
+                  onClick={() => setSidePanel(null)}
+                  className="text-xs cursor-pointer hover:text-white transition-colors"
+                  style={{ color: CHART_STYLE.muted }}
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Panel content placeholder */}
+              <div className="flex-1 flex items-center justify-center px-4">
+                <span className="text-sm" style={{ color: CHART_STYLE.dim }}>
+                  {sidePanel} panel content
+                </span>
+              </div>
             </div>
           )}
         </div>
       </div>
 
       {/* ── Data panel ───────────────────────────────────────────── */}
-      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
+      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} setSidePanel={setSidePanel} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
