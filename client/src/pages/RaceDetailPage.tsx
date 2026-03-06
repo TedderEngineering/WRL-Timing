@@ -21,19 +21,21 @@ export function RaceDetailRedirect() {
 export function RaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get("race") || undefined;
-  const initialEventId = searchParams.get("event") || undefined;
+  const urlEventId = searchParams.get("event") || undefined;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const autoLoadAttempted = useRef(false);
   const { isAuthenticated, user } = useAuth();
   const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
+  // Derive event ID from URL param or from the loaded race metadata
+  const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
   const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy">("position");
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
 
   // ── Auto-load most recent event + first race when no URL params ──
   useEffect(() => {
-    if (autoLoadAttempted.current || id || initialEventId) return;
+    if (autoLoadAttempted.current || id || urlEventId) return;
     autoLoadAttempted.current = true;
 
     fetchEvents()
@@ -57,21 +59,21 @@ export function RaceDetailPage() {
   // ── Auto-select first race when navigating with ?event but no ?race ──
   const eventAutoSelectAttempted = useRef<string | null>(null);
   useEffect(() => {
-    if (!initialEventId || id) return;
-    if (eventAutoSelectAttempted.current === initialEventId) return;
-    eventAutoSelectAttempted.current = initialEventId;
+    if (!urlEventId || id) return;
+    if (eventAutoSelectAttempted.current === urlEventId) return;
+    eventAutoSelectAttempted.current = urlEventId;
 
-    fetchEvent(initialEventId)
+    fetchEvent(urlEventId)
       .then((detail) => {
         if (detail.races.length > 0) {
           setSearchParams(
-            { event: initialEventId, race: detail.races[0].id },
+            { event: urlEventId, race: detail.races[0].id },
             { replace: true },
           );
         }
       })
       .catch(() => {});
-  }, [initialEventId, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlEventId, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Dispatch resize after sidebar transition so charts redraw ──
   useEffect(() => {
@@ -175,7 +177,7 @@ export function RaceDetailPage() {
   // ── Grid wrapper with sidebar ──────────────────────────────────
   const handleSelectRace = (raceId: string) => {
     const next: Record<string, string> = { race: raceId };
-    if (initialEventId) next.event = initialEventId;
+    if (effectiveEventId) next.event = effectiveEventId;
     setSearchParams(next);
   };
 
@@ -199,7 +201,7 @@ export function RaceDetailPage() {
           onToggle={() => setSidebarCollapsed((p) => !p)}
           onSelectRace={handleSelectRace}
           selectedRaceId={id || null}
-          selectedEventId={initialEventId}
+          selectedEventId={effectiveEventId}
         />
         <main className="flex-1 min-w-0 overflow-y-auto">{content}</main>
       </div>
@@ -211,7 +213,7 @@ export function RaceDetailPage() {
         onToggle={() => {}}
         onSelectRace={handleSelectRace}
         selectedRaceId={id || null}
-        selectedEventId={initialEventId}
+        selectedEventId={effectiveEventId}
         mobileOpen={mobileDrawerOpen}
         onMobileClose={() => setMobileDrawerOpen(false)}
       />

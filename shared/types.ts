@@ -234,6 +234,7 @@ export interface ChartDataResponse {
     track: string;
     series: string;
     season: number;
+    eventId?: string;
   };
   data: RaceChartData;
   annotations: AnnotationData;

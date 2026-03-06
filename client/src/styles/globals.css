@@ -82,6 +82,15 @@
   }
 }
 
+@keyframes handleNudge {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(10px); }
+  55% { transform: translateX(4px); }
+  75% { transform: translateX(8px); }
+  90% { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
 @media print {
   canvas {
     display: none !important;

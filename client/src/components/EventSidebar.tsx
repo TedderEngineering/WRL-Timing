@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { EventWithRaces } from "@shared/types";
 import { fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
@@ -39,6 +39,18 @@ export default function EventSidebar({
   mobileOpen,
   onMobileClose,
 }: EventSidebarProps) {
+  const [shouldNudge, setShouldNudge] = useState(true);
+  const hasInteracted = useRef(false);
+
+  // Stop nudge animation after first manual interaction
+  useEffect(() => {
+    if (hasInteracted.current) return;
+    if (!isCollapsed) {
+      hasInteracted.current = true;
+      setShouldNudge(false);
+    }
+  }, [isCollapsed]);
+
   const [eventData, setEventData] = useState<EventWithRaces | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,29 +101,6 @@ export default function EventSidebar({
   // ── Expanded sidebar content ──
   const sidebarContent = (
     <>
-      {/* Collapse button at top */}
-      <div className="flex items-center justify-end px-2 py-2 border-b border-gray-800">
-        <button
-          onClick={onToggle}
-          className="p-1.5 rounded hover:bg-gray-800 text-gray-400 hover:text-gray-200 transition-colors"
-          aria-label="Collapse sidebar"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        </button>
-      </div>
-
       <div className="flex-1 overflow-y-auto custom-scroll">
         {loading ? (
           <LoadingSkeleton />
@@ -182,22 +171,32 @@ export default function EventSidebar({
   return (
     <>
       {/* ── Desktop sidebar (md and above) ── */}
-      {isCollapsed ? (
-        /* Thin grab handle — 16px wide strip */
-        <div
-          className="hidden md:flex h-[calc(100vh-4rem)] items-center justify-center cursor-pointer transition-[width] duration-200 ease-in-out w-4 shrink-0"
-          onClick={onToggle}
-          role="button"
-          aria-label="Expand sidebar"
+      <div className="hidden md:flex h-[calc(100vh-4rem)] shrink-0">
+        {/* Expanded panel */}
+        <aside
+          className="bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden transition-[width] duration-200 ease-in-out"
+          style={{ width: isCollapsed ? 0 : 280 }}
         >
-          <div className="w-[3px] h-10 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
-        </div>
-      ) : (
-        /* Expanded sidebar — 280px */
-        <aside className="hidden md:flex h-[calc(100vh-4rem)] bg-gray-900 border-r border-gray-800 flex-col transition-[width] duration-200 ease-in-out w-[280px] overflow-hidden">
           {sidebarContent}
         </aside>
-      )}
+
+        {/* Center grip handle — always visible, toggles both directions */}
+        <div
+          className="flex items-center justify-center cursor-pointer w-4 shrink-0 group"
+          onClick={onToggle}
+          role="button"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={shouldNudge && isCollapsed ? {
+            animation: "handleNudge 0.7s ease-in-out 0.6s 1 both",
+          } : undefined}
+        >
+          <div className="flex flex-col gap-[3px]">
+            <div className="w-[3px] h-[3px] rounded-full bg-white/25 group-hover:bg-white/60 transition-colors" />
+            <div className="w-[3px] h-[3px] rounded-full bg-white/25 group-hover:bg-white/60 transition-colors" />
+            <div className="w-[3px] h-[3px] rounded-full bg-white/25 group-hover:bg-white/60 transition-colors" />
+          </div>
+        </div>
+      </div>
 
       {/* ── Mobile drawer (below md) ── */}
       {mobileOpen && (
