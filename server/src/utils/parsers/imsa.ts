@@ -167,10 +167,10 @@ export const imsaParser: RaceDataParser = {
     "Import from IMSA JSON timing exports. Requires Time Cards JSON; optionally accepts Flags Analysis as JSON (with RC messages) or PDF (flag periods only). If no flags file, caution periods are detected from lap times.",
   fileSlots: [
     {
-      key: "lapChartJson",
-      label: "Lap Chart JSON",
+      key: "timeCardsJson",
+      label: "Time Cards JSON",
       description:
-        "IMSA Lap Chart export (e.g. 12_Lap_Chart_Race.json) — positions per lap, participants, session metadata.",
+        "IMSA Time Cards export (23_Time_Cards_Race.json)",
       required: true,
       accept: ".json",
     },
@@ -201,9 +201,9 @@ export const imsaParser: RaceDataParser = {
   ],
 
   async parse(files) {
-    const { lapChartJson, flagsJson, pitStopJson, timeCardsCsv } = files;
-    const mainJson = lapChartJson;
-    if (!mainJson && !timeCardsCsv) throw new Error("Missing Lap Chart JSON or Time Cards CSV file");
+    const { timeCardsJson, flagsJson, pitStopJson, timeCardsCsv } = files;
+    const mainJson = timeCardsJson;
+    if (!mainJson && !timeCardsCsv) throw new Error("Missing Time Cards JSON (23_Time_Cards_Race.json) or Time Cards CSV file");
     const flagsInput = flagsJson || null;
 
     const warnings: string[] = [];
@@ -215,12 +215,12 @@ export const imsaParser: RaceDataParser = {
       try {
         timeCards = JSON.parse(mainJson.replace(/^\uFEFF/, ""));
       } catch (e: any) {
-        warnings.push(`Could not parse Lap Chart JSON: ${e.message}. Will use CSV data if available.`);
+        warnings.push(`Could not parse Time Cards JSON (23_Time_Cards_Race.json): ${e.message}. Will use CSV data if available.`);
       }
     }
 
     if (!timeCards?.participants?.length && !timeCardsCsv) {
-      throw new Error("Lap Chart JSON has no participants and no Time Cards CSV provided");
+      throw new Error("Time Cards JSON (23_Time_Cards_Race.json) has no participants and no Time Cards CSV provided");
     }
 
     // ── Process flags data (JSON, PDF, or absent) ─────────────────────
