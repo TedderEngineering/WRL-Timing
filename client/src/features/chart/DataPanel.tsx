@@ -1,4 +1,4 @@
-import type { LapInfoData } from "./chart-renderer";
+import { formatLapTime, type LapInfoData } from "./chart-renderer";
 
 interface DataPanelProps {
   info: LapInfoData | null;
@@ -119,7 +119,7 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
         <div className="flex flex-col justify-center px-4 shrink-0" style={{ width: 140 }}>
           <ZoneLabel>Lap Time</ZoneLabel>
           <div className="text-xl sm:text-[22px] font-bold tabular-nums leading-none text-white">
-            {info.paceInfo?.focusTime || info.lap.lt}
+            {info.paceInfo?.focusTime || formatLapTime(info.lap.lt)}
           </div>
         </div>
       )}

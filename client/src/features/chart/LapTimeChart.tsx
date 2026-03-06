@@ -8,6 +8,7 @@ import {
   getCompColor,
   getMaxPos,
   type ChartDimensions,
+  formatLapTime,
 } from "./chart-renderer";
 import { CHART_STYLE, CLASS_COLORS } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
@@ -389,7 +390,7 @@ function buildLapTimeInfo(
 
   return {
     lapNum,
-    lapTime: ld.lt,
+    lapTime: formatLapTime(ld.lt),
     lapTimeSec: ld.ltSec,
     rank,
     totalRanked,

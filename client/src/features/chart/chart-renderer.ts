@@ -91,6 +91,25 @@ function secToStr(s: number | null): string {
   return m + ":" + sec.toFixed(3).padStart(6, "0");
 }
 
+/** Normalize a lap time string to M:SS.mmm — drops hours, removes leading zero on minutes */
+export function formatLapTime(lt: string): string {
+  // Already in good format like "1:36.853"
+  const parts = lt.split(":");
+  if (parts.length === 3) {
+    // "HH:MM:SS.mmm" → drop hours, strip leading zero on minutes
+    const min = parseInt(parts[1], 10);
+    const sec = parseFloat(parts[2]);
+    return min + ":" + sec.toFixed(3).padStart(6, "0");
+  }
+  if (parts.length === 2) {
+    // "M:SS.mmm" or "MM:SS.mmm" — strip leading zero on minutes, normalize seconds
+    const min = parseInt(parts[0], 10);
+    const sec = parseFloat(parts[1]);
+    return min + ":" + sec.toFixed(3).padStart(6, "0");
+  }
+  return lt;
+}
+
 export function getCompColor(compSet: Set<number>, focusNum: number, carNum: number): string {
   const sorted = [...compSet].filter((n) => n !== focusNum).sort((a, b) => a - b);
   const idx = sorted.indexOf(carNum);
@@ -721,7 +740,7 @@ export function buildLapInfo(
           : `${compNums.length} cars`;
 
       paceInfo = {
-        focusTime: d.lt,
+        focusTime: formatLapTime(d.lt),
         compAvg: secToStr(avg),
         delta,
         deltaColor,
@@ -730,7 +749,7 @@ export function buildLapInfo(
       };
     } else {
       paceInfo = {
-        focusTime: d.lt,
+        focusTime: formatLapTime(d.lt),
         compAvg: null,
         delta: null,
         deltaColor: "#888",
