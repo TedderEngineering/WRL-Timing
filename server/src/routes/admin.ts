@@ -44,9 +44,9 @@ adminRouter.post(
         throw new AppError(400, `Unknown format: "${format}"`, "UNKNOWN_FORMAT");
       }
 
-      // Check required files are present
+      // Check required files are present (empty strings allowed — parser handles gracefully)
       for (const slot of parser.fileSlots) {
-        if (slot.required && (!files[slot.key] || typeof files[slot.key] !== "string")) {
+        if (slot.required && (!(slot.key in files) || typeof files[slot.key] !== "string")) {
           throw new AppError(
             400,
             `Missing required file: "${slot.label}" (key: ${slot.key})`,
@@ -138,9 +138,9 @@ adminRouter.post(
         if (!parser) {
           errors.push(`Unknown format: "${format}"`);
         } else {
-          // Check required files
+          // Check required files (empty strings allowed — parser handles gracefully)
           for (const slot of parser.fileSlots) {
-            if (slot.required && (!files?.[slot.key] || typeof files[slot.key] !== "string")) {
+            if (slot.required && (!files || !(slot.key in files) || typeof files[slot.key] !== "string")) {
               errors.push(`Missing required file: "${slot.label}"`);
             }
           }
@@ -227,8 +227,9 @@ adminRouter.post(
             if (!parser) {
               errors.push(`Unknown format: "${format}"`);
             } else {
+              // Empty strings allowed — parser handles gracefully
               for (const slot of parser.fileSlots) {
-                if (slot.required && (!files?.[slot.key] || typeof files[slot.key] !== "string")) {
+                if (slot.required && (!files || !(slot.key in files) || typeof files[slot.key] !== "string")) {
                   errors.push(`Missing required file: "${slot.label}"`);
                 }
               }

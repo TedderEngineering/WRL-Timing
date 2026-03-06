@@ -374,14 +374,17 @@ function mergeIntoGroup(groups: Map<string, RaceGroup>, detected: DetectedFile) 
 function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequired: string[] } {
   const required = REQUIRED_SLOTS[group.format] || [];
   const missingRequired: string[] = [];
+  const hasCsv = group.files.has("timeCardsCsv" as FileType);
   for (const slot of required) {
     if (!group.files.has(slot)) {
+      // timeCardsJson is satisfied when timeCardsCsv is present instead
+      if (slot === "timeCardsJson" && hasCsv) continue;
       missingRequired.push(FILE_TYPE_LABELS[slot]);
     }
   }
   // Empty timeCardsJson (has warning) requires timeCardsCsv as fallback
   const tcJson = group.files.get("timeCardsJson" as FileType);
-  if (tcJson?.warning && !group.files.has("timeCardsCsv" as FileType)) {
+  if (tcJson?.warning && !hasCsv) {
     missingRequired.push(FILE_TYPE_LABELS["timeCardsCsv" as FileType]);
   }
   return { complete: missingRequired.length === 0, missingRequired };
