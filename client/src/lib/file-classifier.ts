@@ -134,7 +134,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
     if (file.size === 0 || clean.trim().length === 0) {
       result.type = "timeCardsJson";
       result.format = "imsa";
-      result.groupKey = `imsa_empty_${file.name}`;
+      result.groupKey = "__imsa_csv_pending__";
       result.warning =
         "File is empty — import will use Time Cards CSV as fallback. Drop 23_Time_Cards_Race.csv to enable import.";
       return result;
