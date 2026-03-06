@@ -171,10 +171,11 @@ model Race {
 
   creator   User           @relation("RaceCreator", fields: [createdBy], references: [id])
   event     Event?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  entries   RaceEntry[]
-  laps      RaceLap[]
-  favorites UserFavorite[]
-  views     UserRaceView[]
+  entries          RaceEntry[]
+  laps             RaceLap[]
+  favorites        UserFavorite[]
+  views            UserRaceView[]
+  pitStopAnalysis  PitStopAnalysis[]
 
   @@index([status])
   @@index([series, season])
@@ -282,4 +283,50 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([adminUserId])
   @@map("audit_log")
+}
+
+// ─── Pit Stop Analysis ──────────────────────────────────────────────────────
+
+model TrackPitConfig {
+  id                String   @id @default(cuid())
+  trackName         String   @map("track_name")
+  series            String
+  eventYear         Int?     @map("event_year")
+  speedLimitMps     Float    @map("speed_limit_mps")
+  driveThrough_s    Float?   @map("drive_through_s")
+  pitRoadLength_m   Float    @map("pit_road_length_m")
+  transitTime_s     Float    @map("transit_time_s")
+  transitOverhead_s Float    @map("transit_overhead_s")
+  source            String
+  isOfficial        Boolean  @default(false) @map("is_official")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([trackName, series, eventYear])
+  @@map("track_pit_configs")
+}
+
+model PitStopAnalysis {
+  id                    String   @id @default(cuid())
+  raceId                String   @map("race_id")
+  carNumber             String   @map("car_number")
+  stopNumber            Int      @map("stop_number")
+  pitLap                Int      @map("pit_lap")
+  condition             String
+  localRef_s            Float    @map("local_ref_s")
+  vsGlobal_s            Float    @map("vs_global_s")
+  refSource             String   @map("ref_source")
+  twoLapActual_s        Float    @map("two_lap_actual_s")
+  twoLapRef_s           Float    @map("two_lap_ref_s")
+  serviceTime_s         Float    @map("service_time_s")
+  pitRoadTime_s         Float    @map("pit_road_time_s")
+  timeLost_s            Float    @map("time_lost_s")
+  delta_s               Float    @map("delta_s")
+  isCautionContaminated Boolean  @default(false) @map("is_caution_contaminated")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@unique([raceId, carNumber, stopNumber])
+  @@index([raceId])
+  @@map("pit_stop_analysis")
 }

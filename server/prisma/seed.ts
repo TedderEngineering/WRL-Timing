@@ -44,7 +44,90 @@ async function main() {
   });
   console.log(`✓ Demo user: ${user.email} (${user.id})`);
 
-  // ── 2. Load Race Data ────────────────────────────────────────────
+  // ── 2. Seed Track Pit Configs ───────────────────────────────────
+  const trackConfigs = [
+    {
+      trackName: "barber",
+      series: "WRL",
+      eventYear: null,
+      speedLimitMps: 15.6464,
+      driveThrough_s: 39.0,
+      pitRoadLength_m: 541.67,
+      transitTime_s: 34.62,
+      transitOverhead_s: 23.79,
+      source: "SRO Stewards Bulletin Doc 4, Barber Motorsports Park Sep 2025",
+      isOfficial: true,
+    },
+    {
+      trackName: "sebring",
+      series: "WRL",
+      eventYear: null,
+      speedLimitMps: 15.6464,
+      driveThrough_s: 44.0,
+      pitRoadLength_m: 611.11,
+      transitTime_s: 39.06,
+      transitOverhead_s: 26.84,
+      source: "SRO Stewards Bulletin Doc 5, Sebring International Raceway May 2025",
+      isOfficial: true,
+    },
+    {
+      trackName: "road-america",
+      series: "WRL",
+      eventYear: null,
+      speedLimitMps: 15.6464,
+      driveThrough_s: 52.0,
+      pitRoadLength_m: 722.22,
+      transitTime_s: 46.16,
+      transitOverhead_s: 31.71,
+      source: "SRO Stewards Bulletin Doc 5, Road America Aug 2025",
+      isOfficial: true,
+    },
+    {
+      trackName: "cota",
+      series: "WRL",
+      eventYear: null,
+      speedLimitMps: 15.6464,
+      driveThrough_s: 41.0,
+      pitRoadLength_m: 569.44,
+      transitTime_s: 36.39,
+      transitOverhead_s: 25.01,
+      source: "SRO Stewards Bulletin Doc 3, Circuit of the Americas Apr 2025",
+      isOfficial: true,
+    },
+    {
+      trackName: "vir",
+      series: "WRL",
+      eventYear: null,
+      speedLimitMps: 15.6464,
+      driveThrough_s: 30.0,
+      pitRoadLength_m: 416.67,
+      transitTime_s: 26.63,
+      transitOverhead_s: 18.30,
+      source: "SRO Stewards Bulletin Doc 4, Virginia International Raceway Jul 2025",
+      isOfficial: true,
+    },
+  ];
+
+  for (const cfg of trackConfigs) {
+    const existing = await prisma.trackPitConfig.findFirst({
+      where: {
+        trackName: cfg.trackName,
+        series: cfg.series,
+        eventYear: cfg.eventYear,
+      },
+    });
+    if (existing) {
+      await prisma.trackPitConfig.update({
+        where: { id: existing.id },
+        data: cfg,
+      });
+    } else {
+      await prisma.trackPitConfig.create({ data: cfg });
+    }
+  }
+  console.log(`✓ Track pit configs: ${trackConfigs.length} upserted`);
+
+  // ── 3. Load Race Data ────────────────────────────────────────────
   const dataPath = path.join(__dirname, "seed-data.json");
   const annPath = path.join(__dirname, "seed-annotations.json");
 
