@@ -180,21 +180,25 @@ export function RaceDetailPage() {
           onSelectRace={handleSelectRace}
           selectedRaceId={id || null}
           selectedEventId={effectiveEventId}
+          mobileOpen={mobileDrawerOpen}
+          onMobileClose={() => setMobileDrawerOpen(false)}
         />
         <main className="flex-1 min-w-0 overflow-y-auto">{content}</main>
       </div>
 
       {/* Mobile: full-width content + drawer overlay */}
-      <div className="md:hidden min-w-0">{content}</div>
-      <EventSidebar
-        isCollapsed={false}
-        onToggle={() => {}}
-        onSelectRace={handleSelectRace}
-        selectedRaceId={id || null}
-        selectedEventId={effectiveEventId}
-        mobileOpen={mobileDrawerOpen}
-        onMobileClose={() => setMobileDrawerOpen(false)}
-      />
+      <div className="md:hidden min-w-0">
+        {content}
+        <EventSidebar
+          isCollapsed={false}
+          onToggle={() => {}}
+          onSelectRace={handleSelectRace}
+          selectedRaceId={id || null}
+          selectedEventId={effectiveEventId}
+          mobileOpen={mobileDrawerOpen}
+          onMobileClose={() => setMobileDrawerOpen(false)}
+        />
+      </div>
     </>
   );
 
