@@ -600,11 +600,13 @@ export function LapChart({
       </div>
 
       {/* ── Chart + side panel row ─────────────────────────────── */}
-      <div className="flex" style={{ height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)", minHeight: 300 }}>
+      <div className="flex flex-1 min-h-0">
+        {/* Left column: chart + data panel */}
+        <div className="flex-1 flex flex-col min-h-0">
         {/* Chart canvas */}
         <div
           ref={wrapperRef}
-          className="rounded-lg border relative overflow-hidden flex-1 min-w-0"
+          className="rounded-lg border relative overflow-hidden flex-1 min-w-0 min-h-0"
           style={{
             background: CHART_STYLE.card,
             borderColor: CHART_STYLE.border,
@@ -657,6 +659,13 @@ export function LapChart({
             )}
           </div>
         </div>
+
+        {/* ── Data panel ───────────────────────────────────────────── */}
+        <DataPanel info={info} focusNum={focusNum} compSet={compSet} data={data} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
+          h2hDefaultCarRef.current = undefined;
+          setSidePanel(panel);
+        }} />
+        </div>{/* end left-col */}
 
         {/* Side panel */}
         <div
@@ -734,12 +743,6 @@ export function LapChart({
           )}
         </div>
       </div>
-
-      {/* ── Data panel ───────────────────────────────────────────── */}
-      <DataPanel info={info} focusNum={focusNum} compSet={compSet} data={data} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
-        h2hDefaultCarRef.current = undefined;
-        setSidePanel(panel);
-      }} />
 
       {/* ── Legend ────────────────────────────────────────────────── */}
       <div
