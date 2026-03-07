@@ -364,7 +364,7 @@ export function AdminUploadPage() {
         </div>
         {!hasFiles && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Supports IMSA JSON, SpeedHive CSV, and WRL Website CSV (Summary + All Laps)
+            Supports IMSA JSON, SpeedHive CSV, WRL Website CSV, SRO Alkamel CSV, and GR Cup Alkamel CSV
           </div>
         )}
       </div>
@@ -486,6 +486,8 @@ function RaceGroupCard({
     imsa: "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400",
     speedhive: "bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400",
     "wrl-website": "bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400",
+    sro: "bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400",
+    grcup: "bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400",
   };
 
   const borderColor =
@@ -509,7 +511,15 @@ function RaceGroupCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${formatColors[group.format]}`}>
-              {group.format === "imsa" ? "IMSA" : group.format === "wrl-website" ? "WRL Website" : "SpeedHive"}
+              {group.format === "imsa"
+                ? "IMSA"
+                : group.format === "wrl-website"
+                  ? "WRL Website"
+                  : group.format === "sro"
+                    ? "SRO GT4"
+                    : group.format === "grcup"
+                      ? "GR Cup"
+                      : "SpeedHive"}
             </span>
             <ValidationBadge validation={v} />
             {!group.complete && (

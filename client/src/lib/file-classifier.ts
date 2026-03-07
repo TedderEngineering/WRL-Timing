@@ -8,9 +8,12 @@ export type FileType =
   | "summaryCsv"
   | "lapsCsv"
   | "flagsPdf"
+  | "sroResultsCsv"
+  | "grResultsCsv"
+  | "alkamelLapsCsv"
   | "unknown";
 
-export type FormatId = "imsa" | "speedhive" | "wrl-website";
+export type FormatId = "imsa" | "speedhive" | "wrl-website" | "sro" | "grcup";
 
 export interface DetectedFile {
   file: File;
@@ -67,6 +70,8 @@ const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
   imsa: ["timeCardsJson"],
   speedhive: ["summaryCsv", "lapsCsv"],
   "wrl-website": ["summaryCsv", "lapsCsv"],
+  sro: ["sroResultsCsv", "alkamelLapsCsv"],
+  grcup: ["grResultsCsv", "alkamelLapsCsv"],
 };
 
 /** Maps internal FileType to the server-side slot key */
@@ -78,6 +83,9 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   summaryCsv: "summaryCsv",
   lapsCsv: "lapsCsv",
   flagsPdf: "flagsJson", // PDF flags map to flagsJson slot (server handles base64)
+  sroResultsCsv: "resultsCsv",
+  grResultsCsv: "resultsCsv",
+  alkamelLapsCsv: "lapsCsv",
   unknown: "unknown",
 };
 
@@ -89,6 +97,9 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   summaryCsv: "Summary CSV",
   lapsCsv: "All Laps CSV",
   flagsPdf: "Flags PDF",
+  sroResultsCsv: "Results CSV",
+  grResultsCsv: "Results CSV",
+  alkamelLapsCsv: "Laps CSV",
   unknown: "Unknown",
 };
 
@@ -223,6 +234,45 @@ export function classifyFile(file: File, content: string): DetectedFile {
       }
     }
 
+    // SRO Results CSV: semicolon-delimited with CLASS_TYPE and DRIVERS columns
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("class_type") &&
+      headerLower.includes("drivers")
+    ) {
+      result.type = "sroResultsCsv";
+      result.format = "sro";
+      result.metadata = { series: "SRO" };
+      result.groupKey = `sro_${extractAlkamelEventKey(file.name)}`;
+      return result;
+    }
+
+    // GR Cup Results CSV: semicolon-delimited with DRIVER_FIRSTNAME column
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("driver_firstname") &&
+      headerLower.includes("position")
+    ) {
+      result.type = "grResultsCsv";
+      result.format = "grcup";
+      result.metadata = { series: "GR_CUP" };
+      result.groupKey = `grcup_${extractAlkamelEventKey(file.name)}`;
+      return result;
+    }
+
+    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT but no DRIVER_NUMBER
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("crossing_finish_line_in_pit") &&
+      !headerLower.includes("driver_number")
+    ) {
+      result.type = "alkamelLapsCsv";
+      // Format determined during pending resolution (SRO or GR Cup)
+      result.format = "sro"; // default, will be corrected during resolution
+      result.groupKey = "__alkamel_laps_pending__";
+      return result;
+    }
+
     // SpeedHive CSVs: filename pattern or space-separated headers like "Start Number"
     const fn = file.name.toLowerCase();
     const shSummary = fn.match(/(\d+)_summary\.csv$/);
@@ -269,8 +319,12 @@ export async function classifyFiles(
         continue;
       }
 
-      // PDFs and IMSA CSVs wait for IMSA group resolution
-      if (detected.groupKey === "__pdf_pending__" || detected.groupKey === "__imsa_csv_pending__") {
+      // PDFs, IMSA CSVs, and Alkamel laps wait for group resolution
+      if (
+        detected.groupKey === "__pdf_pending__" ||
+        detected.groupKey === "__imsa_csv_pending__" ||
+        detected.groupKey === "__alkamel_laps_pending__"
+      ) {
         pendingImsa.push(detected);
         continue;
       }
@@ -293,14 +347,29 @@ export async function classifyFiles(
     }
   }
 
-  // Resolve pending IMSA files (PDFs, CSVs): attach to first IMSA group, or leave unmatched
+  // Resolve pending files: attach to matching group by format, or leave unmatched
   for (const pending of pendingImsa) {
-    const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
-    if (imsaGroup) {
-      pending.groupKey = imsaGroup.id;
-      mergeIntoGroup(groups, pending);
+    if (pending.groupKey === "__alkamel_laps_pending__") {
+      // Alkamel laps → attach to first SRO or GR Cup group
+      const alkamelGroup = Array.from(groups.values()).find(
+        (g) => g.format === "sro" || g.format === "grcup"
+      );
+      if (alkamelGroup) {
+        pending.groupKey = alkamelGroup.id;
+        pending.format = alkamelGroup.format;
+        mergeIntoGroup(groups, pending);
+      } else {
+        unmatched.push(pending);
+      }
     } else {
-      unmatched.push(pending);
+      // IMSA PDFs and CSVs → attach to first IMSA group
+      const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
+      if (imsaGroup) {
+        pending.groupKey = imsaGroup.id;
+        mergeIntoGroup(groups, pending);
+      } else {
+        unmatched.push(pending);
+      }
     }
   }
 
@@ -458,6 +527,18 @@ function extractSpeedhiveMetadata(filename: string, content: string): Partial<Ra
   }
 
   return meta;
+}
+
+/** Extract a grouping key from Alkamel CSV filenames.
+ *  e.g. "05_Provisional_Results_by_Class_Race_1_COTA.csv" → "Race_1_COTA"
+ *  Falls back to full filename (minus extension) if no pattern matches. */
+function extractAlkamelEventKey(filename: string): string {
+  const fn = filename.replace(/\.csv$/i, "");
+  // Try to extract "Race_N_VENUE" pattern
+  const raceMatch = fn.match(/(Race_\d+.*)/i);
+  if (raceMatch) return raceMatch[1];
+  // Strip leading number prefix (e.g. "05_" or "23_")
+  return fn.replace(/^\d+_/, "");
 }
 
 function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<RaceGroupMetadata> {
