@@ -736,7 +736,7 @@ export function LapChart({
       </div>
 
       {/* ── Data panel ───────────────────────────────────────────── */}
-      <DataPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
+      <DataPanel info={info} focusNum={focusNum} compSet={compSet} data={data} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
         h2hDefaultCarRef.current = undefined;
         setSidePanel(panel);
       }} />

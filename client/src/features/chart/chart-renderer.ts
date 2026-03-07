@@ -73,6 +73,7 @@ export interface PitInfoData {
   strategyType?: string;
   strategyTarget?: string;
   timing: PitTimingData | null;
+  alsoPittingCars?: number[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -799,6 +800,7 @@ export function buildLapInfo(
         driverChanged: marker.driverChanged,
         strategyType: marker.strategyType,
         timing: marker.pitTiming ?? null,
+        alsoPittingCars: marker.alsoPittingCars,
       };
     }
   }

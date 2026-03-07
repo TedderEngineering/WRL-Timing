@@ -1,8 +1,11 @@
-import { formatLapTime, type LapInfoData } from "./chart-renderer";
+import { formatLapTime, getCompColor, type LapInfoData } from "./chart-renderer";
+import type { RaceChartData } from "@shared/types";
 
 interface DataPanelProps {
   info: LapInfoData | null;
   focusNum: number;
+  compSet: Set<number>;
+  data: RaceChartData;
   navPrev: () => void;
   navNext: () => void;
   setSidePanel: (panel: string | null) => void;
@@ -21,7 +24,7 @@ function secToDisplay(sec: number): string {
   return m > 0 ? `${m}:${s.toFixed(2).padStart(5, "0")}` : s.toFixed(2);
 }
 
-export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: DataPanelProps) {
+export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, setSidePanel }: DataPanelProps) {
   if (!info) {
     return (
       <div
@@ -175,7 +178,16 @@ export function DataPanel({ info, focusNum, navPrev, navNext, setSidePanel }: Da
         {isPit && info.reason ? (
           <>
             <ZoneLabel>Event</ZoneLabel>
-            <EventPreview reason={info.reason} posDelta={info.posDelta} posDeltaColor={posDeltaColor} />
+            <EventPreview
+              reason={info.reason}
+              posDelta={info.posDelta}
+              posDeltaColor={posDeltaColor}
+              alsoPittingCars={info.pitInfo?.alsoPittingCars}
+              data={data}
+              compSet={compSet}
+              focusNum={focusNum}
+              activeLap={info.lap.l}
+            />
           </>
         ) : isPit ? (
           <div className="text-xs italic" style={{ color: "rgba(255,255,255,0.25)" }}>
@@ -265,11 +277,102 @@ function PitField({ label, value, warn }: { label: string; value: string; warn?:
   );
 }
 
-function EventPreview({ reason, posDelta, posDeltaColor }: { reason: string; posDelta: number; posDeltaColor: string }) {
+const CLASS_ORDER = ["GTU", "GTO", "GP1", "GP2", "GP3"];
+
+interface EventPreviewProps {
+  reason: string;
+  posDelta: number;
+  posDeltaColor: string;
+  alsoPittingCars?: number[];
+  data?: RaceChartData;
+  compSet?: Set<number>;
+  focusNum?: number;
+  activeLap?: number;
+}
+
+function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, compSet, focusNum, activeLap }: EventPreviewProps) {
   const isPitStop = reason.startsWith("Pit stop");
 
+  if (isPitStop && alsoPittingCars && alsoPittingCars.length > 0 && data) {
+    // Build per-car info grouped by class
+    const carInfos: { num: number; cls: string; delta: number }[] = [];
+    for (const num of alsoPittingCars) {
+      const car = data.cars[String(num)];
+      if (!car) continue;
+      let delta = 0;
+      if (activeLap) {
+        const lapD = car.laps.find(l => l.l === activeLap);
+        const prevD = car.laps.find(l => l.l === activeLap - 1);
+        if (lapD && prevD) delta = prevD.p - lapD.p;
+      }
+      carInfos.push({ num, cls: car.cls, delta });
+    }
+
+    const byClass = CLASS_ORDER
+      .map(cls => [cls, carInfos.filter(c => c.cls === cls)] as const)
+      .filter(([, cars]) => cars.length > 0);
+
+    // Extract pit cycle delta from reason string
+    const cycleMatch = reason.match(/(Gained|Lost)\s+\d+\s+in pit cycle/i);
+
+    return (
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0" style={{
+            background: "rgba(251,191,36,0.12)",
+            border: "1px solid rgba(251,191,36,0.3)",
+            color: "#fcd34d",
+          }}>
+            PIT
+          </span>
+          {cycleMatch && (
+            <span className="text-[10px] font-semibold shrink-0" style={{ color: posDeltaColor }}>
+              {cycleMatch[0].replace(/ in pit cycle$/i, "")}
+            </span>
+          )}
+          <span className="text-[8px] tracking-[0.06em] uppercase" style={{ color: "rgba(255,255,255,0.25)" }}>
+            {carInfos.length} also pitted
+          </span>
+        </div>
+        <div className="flex flex-col gap-px overflow-hidden">
+          {byClass.map(([cls, cars]) => (
+            <div key={cls} className="flex items-center gap-1 min-w-0">
+              <span className="shrink-0 text-[8px] font-bold tracking-[0.06em] rounded px-1 py-px text-center" style={{
+                background: "#1e2535",
+                border: "1px solid #2d3748",
+                color: "#9ca3af",
+                minWidth: 28,
+              }}>{cls}</span>
+              <div className="flex flex-wrap gap-0.5 min-w-0">
+                {cars.map(car => {
+                  const color = compSet && focusNum != null
+                    ? (compSet.has(car.num) ? getCompColor(compSet, focusNum, car.num) : "#6b7280")
+                    : "#6b7280";
+                  return (
+                    <span key={car.num} className="inline-flex items-center gap-px rounded text-[9px] font-bold px-1 py-px" style={{
+                      background: `${color}18`,
+                      border: `1px solid ${color}55`,
+                      color,
+                      fontFamily: "monospace",
+                      lineHeight: 1.3,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {car.delta < 0 && <span style={{ color: "#34d399", fontSize: 6, lineHeight: 1 }}>▲</span>}
+                      {car.delta > 0 && <span style={{ color: "#f87171", fontSize: 6, lineHeight: 1 }}>▼</span>}
+                      #{car.num}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (isPitStop) {
-    // Extract pit cycle delta and info parts
+    // Fallback: no structured alsoPittingCars
     const body = reason.replace(/^Pit stop\s*—?\s*/, "");
     const parts = body.split(/;\s*/).filter(Boolean);
     const seen = new Set<string>();
@@ -308,14 +411,10 @@ function EventPreview({ reason, posDelta, posDeltaColor }: { reason: string; pos
   }
 
   // Racing lap — parse per-car segments
-  // Format: "Gained — passed #6 Team on pace; #31 Team pitted"
-  //    or:  "Lost — #6 Team on pace; #31 Team pitted"
-  //    or:  "Gained 3 positions" (no car detail)
   const body = reason.replace(/^(Gained|Lost)\s*—?\s*(passed\s+)?/i, "");
   const isGain = posDelta > 0;
   const verb = isGain ? "Passed" : "Lost to";
 
-  // Parse each segment: "#NUM TeamName qualifier" → "#NUM qualifier"
   const segments = body.split(/;\s*/).filter(Boolean);
   const seen = new Set<string>();
   const items: string[] = [];
