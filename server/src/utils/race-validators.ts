@@ -57,6 +57,7 @@ const pitMarkerSchema = z.object({
     isDriveThrough:     z.boolean().optional(),
     decompositionLevel: z.enum(["total_only","full_segments"]).optional(),
   }).optional(),
+  alsoPittingCars: z.array(z.number().int()).optional(),
 });
 
 const settleMarkerSchema = z.object({

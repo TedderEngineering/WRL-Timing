@@ -34,6 +34,7 @@ interface PitMarker {
   stintNumber?: number;
   pitTiming?: PitTiming;
   strategyType?: StrategyType;
+  alsoPittingCars?: number[];
 }
 interface SettleMarker {
   l: number;
@@ -194,10 +195,16 @@ export function generateAnnotations(
       let reason = "";
 
       if (isPit) {
-        reason = buildPitReason(
+        const pitResult = buildPitReason(
           num, cls, lapNum, laps, i,
           pittersOnLap, fcyLaps, carClass
         );
+        reason = pitResult.reason;
+        // Attach alsoPittingCars to the most recent pit marker
+        const lastPit = pits[pits.length - 1];
+        if (lastPit && lastPit.l === lapNum && pitResult.alsoPittingCars.length > 0) {
+          lastPit.alsoPittingCars = pitResult.alsoPittingCars;
+        }
       } else if (posDelta > 0) {
         reason = buildGainReason(posDelta, gained, teamLookup);
       } else if (posDelta < 0) {
@@ -647,7 +654,7 @@ function buildPitReason(
   pittersOnLap: Map<number, number[]>,
   fcyLaps: Set<number>,
   carClass: Map<number, string>
-): string {
+): { reason: string; alsoPittingCars: number[] } {
   const details: string[] = [];
 
   // Pit cycle net: pre-pit pos vs. settle pos
@@ -686,8 +693,8 @@ function buildPitReason(
     );
   }
 
-  if (details.length === 0) return "Pit stop";
-  return `Pit stop — ${details.join("; ")}`;
+  const reason = details.length === 0 ? "Pit stop" : `Pit stop — ${details.join("; ")}`;
+  return { reason, alsoPittingCars: sameClassPitters };
 }
 
 function makeSettle(

@@ -714,6 +714,9 @@ export function LapChart({
                   posDelta={info.posDelta}
                   focusNum={focusNum}
                   isPit={info.isPit}
+                  data={data}
+                  annotations={annotations}
+                  activeLap={activeLap}
                   onOpenH2H={(carNum) => {
                     h2hDefaultCarRef.current = carNum;
                     setSidePanel("h2h");

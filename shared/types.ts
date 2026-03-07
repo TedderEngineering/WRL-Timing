@@ -207,6 +207,7 @@ export interface PitMarker {
   stintNumber?: number;
   pitTiming?: PitTimingData;
   strategyType?: "undercut" | "overcut" | "cover" | "scheduled";
+  alsoPittingCars?: number[];
 }
 
 export interface SettleMarker {
