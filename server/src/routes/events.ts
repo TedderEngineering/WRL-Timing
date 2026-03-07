@@ -29,8 +29,16 @@ eventsRouter.get(
           track: true,
           date: true,
           season: true,
-          _count: { select: { races: true } },
-          races: { select: { date: true }, orderBy: { date: "asc" } },
+          _count: {
+            select: {
+              races: isAdmin ? true : { where: { status: "PUBLISHED" } },
+            },
+          },
+          races: {
+            where: isAdmin ? {} : { status: "PUBLISHED" },
+            select: { date: true },
+            orderBy: { date: "asc" },
+          },
         },
         orderBy: { date: "desc" },
       });
