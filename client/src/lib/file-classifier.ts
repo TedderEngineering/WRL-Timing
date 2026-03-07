@@ -269,7 +269,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
       result.type = "alkamelLapsCsv";
       // Format determined during pending resolution (SRO or GR Cup)
       result.format = "sro"; // default, will be corrected during resolution
-      result.groupKey = "__alkamel_laps_pending__";
+      result.groupKey = extractAlkamelEventKey(file.name);
       return result;
     }
 
@@ -323,7 +323,7 @@ export async function classifyFiles(
       if (
         detected.groupKey === "__pdf_pending__" ||
         detected.groupKey === "__imsa_csv_pending__" ||
-        detected.groupKey === "__alkamel_laps_pending__"
+        detected.type === "alkamelLapsCsv"
       ) {
         pendingImsa.push(detected);
         continue;
@@ -347,16 +347,19 @@ export async function classifyFiles(
     }
   }
 
-  // Resolve pending files: attach to matching group by format, or leave unmatched
+  // Resolve pending files: attach to matching group, or leave unmatched
   for (const pending of pendingImsa) {
-    if (pending.groupKey === "__alkamel_laps_pending__") {
-      // Alkamel laps → attach to first SRO or GR Cup group
-      const alkamelGroup = Array.from(groups.values()).find(
-        (g) => g.format === "sro" || g.format === "grcup"
+    if (pending.type === "alkamelLapsCsv") {
+      // Alkamel laps → find the SRO/GR Cup group whose key contains this event key
+      const eventKey = pending.groupKey!;
+      const matchingGroup = Array.from(groups.values()).find(
+        (g) =>
+          (g.format === "sro" || g.format === "grcup") &&
+          g.id.endsWith(eventKey)
       );
-      if (alkamelGroup) {
-        pending.groupKey = alkamelGroup.id;
-        pending.format = alkamelGroup.format;
+      if (matchingGroup) {
+        pending.groupKey = matchingGroup.id;
+        pending.format = matchingGroup.format;
         mergeIntoGroup(groups, pending);
       } else {
         unmatched.push(pending);
