@@ -376,13 +376,25 @@ export async function classifyFiles(
   // Resolve pending files: attach to matching group, or leave unmatched
   for (const pending of pendingImsa) {
     if (pending.type === "alkamelLapsCsv") {
-      // Alkamel laps → find the SRO/GR Cup group whose key contains this event key
-      const eventKey = pending.groupKey!;
-      const matchingGroup = Array.from(groups.values()).find(
-        (g) =>
-          (g.format === "sro" || g.format === "grcup") &&
-          g.id.endsWith(eventKey)
-      );
+      // Alkamel laps → match to SRO/GR Cup group by race number + venue code
+      const lapsKey = pending.groupKey!; // already normalized by extractAlkamelEventKey
+      const lapsSig = extractRaceSignature(lapsKey);
+      // If the laps filename contains "GRCUP", it belongs to a grcup group
+      const lapsIsGrcup = lapsKey.includes("GRCUP");
+      const candidates = lapsSig
+        ? Array.from(groups.values()).filter((g) => {
+            if (g.format !== "sro" && g.format !== "grcup") return false;
+            const groupSig = extractRaceSignature(normalizeEventKey(g.id));
+            return groupSig !== null &&
+              groupSig.raceNum === lapsSig.raceNum &&
+              groupSig.venue === lapsSig.venue;
+          })
+        : [];
+      // Prefer format-matching candidate, fall back to first match
+      const matchingGroup =
+        candidates.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
+        candidates[0] ||
+        null;
       if (matchingGroup) {
         pending.groupKey = matchingGroup.id;
         pending.format = matchingGroup.format;
@@ -559,16 +571,16 @@ function extractSpeedhiveMetadata(filename: string, content: string): Partial<Ra
 }
 
 /** Derive display metadata from an Alkamel event key.
- *  e.g. key "Race_1_COTA", series "SRO" → { series: "SRO", track: "COTA", name: "SRO Race 1 — COTA" }
- *  Track is the trailing all-caps token(s). Race number from "Race_N". */
+ *  e.g. key "RACE_1_COTA", series "SRO" → { series: "SRO", track: "COTA", name: "SRO Race 1 — COTA" }
+ *  Track is the trailing all-caps token(s). Race number from "RACE_N". */
 function extractAlkamelMetadata(eventKey: string, series: string): Partial<RaceGroupMetadata> {
   const meta: Partial<RaceGroupMetadata> = { series };
 
-  // Extract track: last underscore-separated token(s) that are all-caps
+  // Extract track: last underscore-separated token(s) that are all-caps (skip RACE and digits)
   const tokens = eventKey.split("_");
   const capsTokens: string[] = [];
   for (let i = tokens.length - 1; i >= 0; i--) {
-    if (/^[A-Z0-9]+$/.test(tokens[i]) && tokens[i] !== "Race") {
+    if (/^[A-Z][A-Z0-9]*$/.test(tokens[i]) && tokens[i] !== "RACE") {
       capsTokens.unshift(tokens[i]);
     } else {
       break;
@@ -589,16 +601,35 @@ function extractAlkamelMetadata(eventKey: string, series: string): Partial<RaceG
   return meta;
 }
 
+/** Normalize an Alkamel event key to a canonical form for comparison.
+ *  Trims, replaces whitespace with underscores, collapses runs, uppercases. */
+function normalizeEventKey(raw: string): string {
+  return raw.trim().replace(/\s+/g, "_").replace(/_+/g, "_").toUpperCase();
+}
+
+/** Extract the race number and trailing venue code from a normalized event key.
+ *  e.g. "RACE_1_OFFICIAL_COTA" → { raceNum: "1", venue: "COTA" }
+ *  e.g. "RACE_1_GRCUP_COTA"   → { raceNum: "1", venue: "COTA" }
+ *  Venue is always the last token. Returns null if no Race_N pattern found. */
+function extractRaceSignature(key: string): { raceNum: string; venue: string } | null {
+  const m = key.match(/RACE_(\d+)/);
+  if (!m) return null;
+  const tokens = key.split("_");
+  const venue = tokens[tokens.length - 1];
+  return { raceNum: m[1], venue };
+}
+
 /** Extract a grouping key from Alkamel CSV filenames.
- *  e.g. "05_Provisional_Results_by_Class_Race_1_COTA.csv" → "Race_1_COTA"
- *  Falls back to full filename (minus extension) if no pattern matches. */
+ *  e.g. "05_Provisional_Results_by_Class_Race_1_COTA.csv" → "RACE_1_COTA"
+ *  Falls back to full filename (minus extension) if no pattern matches.
+ *  Always returns a normalized uppercase key. */
 function extractAlkamelEventKey(filename: string): string {
   const fn = filename.replace(/\.csv$/i, "");
-  // Try to extract "Race_N_VENUE" pattern
-  const raceMatch = fn.match(/(Race_\d+.*)/i);
-  if (raceMatch) return raceMatch[1];
+  // Try to extract "Race_N_VENUE" or "Race N VENUE" pattern
+  const raceMatch = fn.match(/(Race[\s_]\d+.*)/i);
+  if (raceMatch) return normalizeEventKey(raceMatch[1]);
   // Strip leading number prefix (e.g. "05_" or "23_")
-  return fn.replace(/^\d+_/, "");
+  return normalizeEventKey(fn.replace(/^\d+_/, ""));
 }
 
 function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<RaceGroupMetadata> {
