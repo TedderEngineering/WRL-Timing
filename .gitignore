@@ -36,3 +36,21 @@ coverage/
 # Docker volumes (local)
 pgdata/
 redisdata/
+
+# Vercel
+.vercel
+.env.vercel
+
+# Claude Code
+.claude/
+
+# Vite cache & TS build info
+client/.vite/
+client/tsconfig.tsbuildinfo
+
+# Throwaway scripts (prefixed _)
+server/scripts/_*
+
+# Local resources & scratch files
+resources/
+strategy_dashboard.html
