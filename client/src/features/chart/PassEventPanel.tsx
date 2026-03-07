@@ -183,39 +183,72 @@ export function PassEventPanel({ reason, posDelta, focusNum, isPit, onOpenH2H, o
           const isLoss = cycleDelta < 0;
           const cycleColor = isLoss ? "#f87171" : cycleDelta > 0 ? "#4ade80" : "rgba(255,255,255,0.5)";
 
-          // Build description parts: "Lost N" + "X class cars also pitted"
+          // Build description parts: "Lost N" + "X cars also pitted"
           const descParts: string[] = [];
           if (cycleDelta !== 0) {
             descParts.push(`${isLoss ? "Lost" : "Gained"} ${Math.abs(cycleDelta)}`);
           }
+
+          // Extract car numbers from "also pitting: #33, #52, ..."
+          const alsoPittingCars: number[] = [];
           for (const ev of pitInfoEvents) {
-            descParts.push(ev.text.replace(/also pitting$/, "also pitted"));
+            const alsoMatch = ev.text.match(/^also pitting:\s*(.+)$/i);
+            if (alsoMatch) {
+              for (const m of alsoMatch[1].matchAll(/#(\d+)/g)) {
+                alsoPittingCars.push(parseInt(m[1], 10));
+              }
+            } else {
+              descParts.push(ev.text.replace(/also pitting$/, "also pitted"));
+            }
+          }
+          if (alsoPittingCars.length > 0) {
+            descParts.push(`${alsoPittingCars.length} class cars also pitted`);
           }
 
           return (
-            <div
-              className="flex items-center gap-2 px-4 py-2.5 border-b"
-              style={{ borderColor: "rgba(255,255,255,0.05)" }}
-            >
-              <span className="text-xs font-bold shrink-0 w-16" style={{ color: cycleColor }}>
-                {isLoss ? "▼ Lost" : cycleDelta > 0 ? "▲ Gained" : "—"}
-              </span>
-              <span
-                className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
-                style={{ background: "rgba(251,191,36,0.12)", color: "#fcd34d" }}
+            <>
+              <div
+                className="flex items-center gap-2 px-4 py-2.5 border-b"
+                style={{ borderColor: "rgba(255,255,255,0.05)" }}
               >
-                Pit cycle
-              </span>
-              <span className="text-xs truncate min-w-0" style={{ color: "rgba(255,255,255,0.6)" }}>
-                {descParts.join(" · ")}
-              </span>
-              <span
-                className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
-                style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.color }}
-              >
-                {style.label}
-              </span>
-            </div>
+                <span className="text-xs font-bold shrink-0 w-16" style={{ color: cycleColor }}>
+                  {isLoss ? "▼ Lost" : cycleDelta > 0 ? "▲ Gained" : "—"}
+                </span>
+                <span
+                  className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                  style={{ background: "rgba(251,191,36,0.12)", color: "#fcd34d" }}
+                >
+                  Pit cycle
+                </span>
+                <span className="text-xs truncate min-w-0" style={{ color: "rgba(255,255,255,0.6)" }}>
+                  {descParts.join(" · ")}
+                </span>
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ml-auto"
+                  style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.color }}
+                >
+                  {style.label}
+                </span>
+              </div>
+              {alsoPittingCars.length > 0 && (
+                <div className="px-4 py-2.5 border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                  <div className="text-[10px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    Also pitted this lap
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-[52px] overflow-y-auto">
+                    {alsoPittingCars.map((n) => (
+                      <span
+                        key={n}
+                        className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", color: "#fcd34d" }}
+                      >
+                        #{n}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           );
         })()}
 

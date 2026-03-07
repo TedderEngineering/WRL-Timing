@@ -681,13 +681,9 @@ function buildPitReason(
   );
 
   if (sameClassPitters.length > 0) {
-    if (sameClassPitters.length <= 5) {
-      details.push(
-        `also pitting: ${sameClassPitters.map((n) => "#" + n).join(", ")}`
-      );
-    } else {
-      details.push(`${sameClassPitters.length} class cars also pitting`);
-    }
+    details.push(
+      `also pitting: ${sameClassPitters.map((n) => "#" + n).join(", ")}`
+    );
   }
 
   if (details.length === 0) return "Pit stop";
