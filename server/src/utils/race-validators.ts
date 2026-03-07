@@ -46,6 +46,17 @@ const pitMarkerSchema = z.object({
   c: z.string(),
   yo: z.number().default(0),
   da: z.number().default(0),
+  pitTiming: z.object({
+    pitInTime:          z.number().nullable().optional(),
+    pitRoadTime:        z.number().nullable().optional(),
+    pitOutTime:         z.number().nullable().optional(),
+    totalPitLoss:       z.number().nullable().optional(),
+    inLapTime:          z.number().nullable().optional(),
+    outLapTime:         z.number().nullable().optional(),
+    avgGreenLapTime:    z.number().nullable().optional(),
+    isDriveThrough:     z.boolean().optional(),
+    decompositionLevel: z.enum(["total_only","full_segments"]).optional(),
+  }).optional(),
 });
 
 const settleMarkerSchema = z.object({
