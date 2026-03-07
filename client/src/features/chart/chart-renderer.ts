@@ -590,7 +590,9 @@ export function drawChart(
         const cl = data.cars[String(cn)]?.laps;
         const cd = cl?.find((l) => l.l === activeLap);
         if (!cd) return;
-        const cx2 = xForCar(String(cn), cd.l);
+        // Hrs mode: align all dots at focus car's elapsed time (same vertical line)
+        // Both mode: each car uses its own time mapped to focus car's lap scale
+        const cx2 = xAxisMode === "hours" ? ax : xForCar(String(cn), cd.l);
         const cy2 = y(cd[pk]);
         const col = getCompColor(compSet, focusNum, cn);
         ctx.beginPath();
