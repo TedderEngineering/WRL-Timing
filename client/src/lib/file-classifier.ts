@@ -11,6 +11,7 @@ export type FileType =
   | "sroResultsCsv"
   | "grResultsCsv"
   | "alkamelLapsCsv"
+  | "unsupportedPdf"
   | "unknown";
 
 export type FormatId = "imsa" | "speedhive" | "wrl-website" | "sro" | "grcup";
@@ -86,6 +87,7 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   sroResultsCsv: "resultsCsv",
   grResultsCsv: "resultsCsv",
   alkamelLapsCsv: "lapsCsv",
+  unsupportedPdf: "unknown",
   unknown: "unknown",
 };
 
@@ -100,6 +102,7 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   sroResultsCsv: "Results CSV",
   grResultsCsv: "Results CSV",
   alkamelLapsCsv: "Laps CSV",
+  unsupportedPdf: "Unsupported PDF",
   unknown: "Unknown",
 };
 
@@ -132,6 +135,18 @@ export function classifyFile(file: File, content: string): DetectedFile {
 
   // PDF detection
   if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+    const fn = file.name.toLowerCase();
+    const isSroGrcupAdjacent =
+      /grcup|gr_cup|sro|gt4/.test(fn) ||
+      /^0[05]_/.test(fn) ||
+      (/^20_/.test(fn) && !/time_?cards|imsa|weathertech/.test(fn));
+
+    if (isSroGrcupAdjacent) {
+      result.type = "unsupportedPdf";
+      result.format = null;
+      return result;
+    }
+
     result.type = "flagsPdf";
     result.format = "imsa";
     // Group with any existing IMSA group (resolved later in classifyFiles)
@@ -242,8 +257,10 @@ export function classifyFile(file: File, content: string): DetectedFile {
     ) {
       result.type = "sroResultsCsv";
       result.format = "sro";
-      result.metadata = { series: "SRO" };
-      result.groupKey = `sro_${extractAlkamelEventKey(file.name)}`;
+      const sroKey = extractAlkamelEventKey(file.name);
+      const sroMeta = extractAlkamelMetadata(sroKey, "SRO");
+      result.metadata = sroMeta;
+      result.groupKey = `sro_${sroKey}`;
       return result;
     }
 
@@ -255,8 +272,10 @@ export function classifyFile(file: File, content: string): DetectedFile {
     ) {
       result.type = "grResultsCsv";
       result.format = "grcup";
-      result.metadata = { series: "GR_CUP" };
-      result.groupKey = `grcup_${extractAlkamelEventKey(file.name)}`;
+      const grKey = extractAlkamelEventKey(file.name);
+      const grMeta = extractAlkamelMetadata(grKey, "GR_CUP");
+      result.metadata = grMeta;
+      result.groupKey = `grcup_${grKey}`;
       return result;
     }
 
@@ -303,16 +322,23 @@ export function classifyFile(file: File, content: string): DetectedFile {
 export async function classifyFiles(
   files: File[],
   existingGroups: Map<string, RaceGroup>,
-  existingUnmatched: DetectedFile[]
-): Promise<{ groups: Map<string, RaceGroup>; unmatched: DetectedFile[] }> {
+  existingUnmatched: DetectedFile[],
+  existingUnsupported: DetectedFile[] = []
+): Promise<{ groups: Map<string, RaceGroup>; unmatched: DetectedFile[]; unsupported: DetectedFile[] }> {
   const groups = new Map(existingGroups);
   const unmatched = [...existingUnmatched];
+  const unsupported = [...existingUnsupported];
   const pendingImsa: DetectedFile[] = [];
 
   for (const file of files) {
     try {
       const content = await readFileContent(file);
       const detected = classifyFile(file, content);
+
+      if (detected.type === "unsupportedPdf") {
+        unsupported.push(detected);
+        continue;
+      }
 
       if (detected.type === "unknown" || !detected.format) {
         unmatched.push(detected);
@@ -382,7 +408,7 @@ export async function classifyFiles(
     groups.set(id, { ...group, complete, missingRequired });
   }
 
-  return { groups, unmatched };
+  return { groups, unmatched, unsupported };
 }
 
 // ─── Build files payload for API ─────────────────────────────────────────────
@@ -527,6 +553,37 @@ function extractSpeedhiveMetadata(filename: string, content: string): Partial<Ra
         meta.season = isoMatch[1];
       }
     }
+  }
+
+  return meta;
+}
+
+/** Derive display metadata from an Alkamel event key.
+ *  e.g. key "Race_1_COTA", series "SRO" → { series: "SRO", track: "COTA", name: "SRO Race 1 — COTA" }
+ *  Track is the trailing all-caps token(s). Race number from "Race_N". */
+function extractAlkamelMetadata(eventKey: string, series: string): Partial<RaceGroupMetadata> {
+  const meta: Partial<RaceGroupMetadata> = { series };
+
+  // Extract track: last underscore-separated token(s) that are all-caps
+  const tokens = eventKey.split("_");
+  const capsTokens: string[] = [];
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (/^[A-Z0-9]+$/.test(tokens[i]) && tokens[i] !== "Race") {
+      capsTokens.unshift(tokens[i]);
+    } else {
+      break;
+    }
+  }
+  const track = capsTokens.length > 0 ? capsTokens.join(" ") : "";
+  if (track) meta.track = track;
+
+  // Extract race number from "Race_N"
+  const raceNum = eventKey.match(/Race_(\d+)/i);
+  const seriesLabel = series === "GR_CUP" ? "GR Cup" : series;
+  if (raceNum && track) {
+    meta.name = `${seriesLabel} Race ${raceNum[1]} — ${track}`;
+  } else if (raceNum) {
+    meta.name = `${seriesLabel} Race ${raceNum[1]}`;
   }
 
   return meta;

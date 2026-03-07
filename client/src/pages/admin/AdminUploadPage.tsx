@@ -38,6 +38,7 @@ interface BulkImportResult {
 export function AdminUploadPage() {
   const [groups, setGroups] = useState<Map<string, RaceGroup>>(new Map());
   const [unmatchedFiles, setUnmatchedFiles] = useState<DetectedFile[]>([]);
+  const [unsupportedFiles, setUnsupportedFiles] = useState<DetectedFile[]>([]);
   const [processing, setProcessing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -47,24 +48,26 @@ export function AdminUploadPage() {
   const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const validationSeq = useRef(0);
 
-  const hasFiles = groups.size > 0 || unmatchedFiles.length > 0;
+  const hasFiles = groups.size > 0 || unmatchedFiles.length > 0 || unsupportedFiles.length > 0;
 
   // ── File handling ────────────────────────────────────────────────────────
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
       setProcessing(true);
-      const { groups: newGroups, unmatched } = await classifyFiles(
+      const { groups: newGroups, unmatched, unsupported } = await classifyFiles(
         Array.from(fileList),
         groups,
-        unmatchedFiles
+        unmatchedFiles,
+        unsupportedFiles
       );
       setGroups(newGroups);
       setUnmatchedFiles(unmatched);
+      setUnsupportedFiles(unsupported);
       setProcessing(false);
       setImportDone(false);
     },
-    [groups, unmatchedFiles]
+    [groups, unmatchedFiles, unsupportedFiles]
   );
 
   const onDrop = useCallback(
@@ -116,6 +119,10 @@ export function AdminUploadPage() {
 
   const removeUnmatched = useCallback((idx: number) => {
     setUnmatchedFiles((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const removeUnsupported = useCallback((idx: number) => {
+    setUnsupportedFiles((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
   // ── Auto-validation (debounced) ─────────────────────────────────────────
@@ -406,6 +413,38 @@ export function AdminUploadPage() {
                 <button
                   onClick={() => removeUnmatched(idx)}
                   className="text-xs text-red-500 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Unsupported files */}
+      {unsupportedFiles.length > 0 && (
+        <div className="space-y-2 mb-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Unsupported Files ({unsupportedFiles.length})
+          </h2>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-200 dark:divide-gray-800">
+            {unsupportedFiles.map((df, idx) => (
+              <div key={idx} className="flex items-center justify-between px-4 py-2.5">
+                <div>
+                  <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
+                    {df.file.name}
+                  </span>
+                  <span className="ml-2 text-xs text-gray-400">
+                    ({(df.file.size / 1024).toFixed(0)} KB)
+                  </span>
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    PDF files cannot be imported. A CSV version is required.
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeUnsupported(idx)}
+                  className="text-xs text-red-500 hover:text-red-700 shrink-0 ml-3"
                 >
                   Remove
                 </button>
