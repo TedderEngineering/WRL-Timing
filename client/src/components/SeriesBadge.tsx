@@ -29,6 +29,12 @@ const SERIES_CONFIG: Record<
     text: "#f87171",
     logo: "https://www.sro-motorsports.com/assets/img/sro-motorsports-group.svg",
   },
+  GR_CUP: {
+    color: "#EB0A1E",
+    bg: "rgba(235,10,30,0.12)",
+    text: "#f87171",
+    logo: "",
+  },
 };
 
 const SIZE_HEIGHT: Record<BadgeSize, number> = { sm: 12, md: 16, lg: 20 };

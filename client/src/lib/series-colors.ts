@@ -2,6 +2,7 @@
 export const SERIES_COLORS: Record<string, { bg: string; text: string }> = {
   IMSA: { bg: "#0057B8", text: "#FFFFFF" },
   SRO: { bg: "#C41E3A", text: "#FFFFFF" },
+  GR_CUP: { bg: "#EB0A1E", text: "#FFFFFF" },
   WRL: { bg: "#16A34A", text: "#FFFFFF" },
 };
 
