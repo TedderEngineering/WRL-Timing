@@ -307,31 +307,45 @@ function EventPreview({ reason, posDelta, posDeltaColor }: { reason: string; pos
     );
   }
 
-  // Racing lap — count cars involved
-  const rawParts = reason.split(/;\s*/);
+  // Racing lap — parse per-car segments
+  // Format: "Gained — passed #6 Team on pace; #31 Team pitted"
+  //    or:  "Lost — #6 Team on pace; #31 Team pitted"
+  //    or:  "Gained 3 positions" (no car detail)
+  const body = reason.replace(/^(Gained|Lost)\s*—?\s*(passed\s+)?/i, "");
+  const isGain = posDelta > 0;
+  const verb = isGain ? "Passed" : "Lost to";
+
+  // Parse each segment: "#NUM TeamName qualifier" → "#NUM qualifier"
+  const segments = body.split(/;\s*/).filter(Boolean);
   const seen = new Set<string>();
-  const carNums: string[] = [];
-  for (const p of rawParts) {
-    const t = p.trim();
+  const items: string[] = [];
+  for (const seg of segments) {
+    const t = seg.trim().replace(/^passed\s+/i, "");
     if (!t || seen.has(t)) continue;
     seen.add(t);
-    const m = t.match(/^#(\d+)/);
-    if (m) carNums.push(m[1]);
+    const m = t.match(/^#(\d+)\b.*?\b(on pace|pitted|\(yellow\))$/i);
+    if (m) items.push(`#${m[1]} ${m[2]}`);
   }
 
-  const isGain = posDelta > 0;
-  const verb = isGain ? "Passed" : "Passed by";
+  if (items.length === 0) {
+    if (posDelta === 0) return null;
+    return (
+      <div className="flex items-center gap-2 truncate">
+        <span className="text-xs font-semibold shrink-0" style={{ color: posDeltaColor }}>
+          Position changed
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 truncate">
       <span className="text-xs font-semibold shrink-0" style={{ color: posDeltaColor }}>
-        {verb} {carNums.length} car{carNums.length !== 1 ? "s" : ""}
+        {verb}
       </span>
-      {carNums.length > 0 && carNums.length <= 4 && (
-        <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
-          {carNums.map((n) => `#${n}`).join(", ")}
-        </span>
-      )}
+      <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>
+        {items.join(" · ")}
+      </span>
     </div>
   );
 }
