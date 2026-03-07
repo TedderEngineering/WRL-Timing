@@ -184,7 +184,7 @@ export function RaceDetailPage() {
           mobileOpen={mobileDrawerOpen}
           onMobileClose={() => setMobileDrawerOpen(false)}
         />
-        <main className="flex-1 min-w-0 overflow-y-auto">{content}</main>
+        <main className="flex-1 min-w-0 overflow-hidden">{content}</main>
       </div>
 
       {/* Mobile: full-width content + drawer overlay */}
@@ -341,7 +341,7 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
-    <div className="max-w-[1600px] mx-auto px-2 sm:px-4 py-1 sm:py-1.5">
+    <div className="px-2 sm:px-4 py-1 sm:py-1.5">
       {/* Header — single row: breadcrumb / title / track+date */}
       <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
         <div className="flex items-center gap-2 shrink-0">
