@@ -534,7 +534,7 @@ export function LapChart({
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-1 flex-1 min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* ── Compare controls ──────────────────────────────────────── */}
       <div className="px-1">
         <div>
@@ -600,7 +600,7 @@ export function LapChart({
       </div>
 
       {/* ── Chart + side panel row ─────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex" style={{ height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)", minHeight: 300 }}>
         {/* Left column: chart + data panel */}
         <div className="flex-1 flex flex-col min-h-0">
         {/* Chart canvas */}
