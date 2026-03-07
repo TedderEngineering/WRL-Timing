@@ -534,7 +534,7 @@ export function LapChart({
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    <div className="flex flex-col gap-1 flex-1 min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* ── Compare controls ──────────────────────────────────────── */}
       <div className="px-1">
         <div>
