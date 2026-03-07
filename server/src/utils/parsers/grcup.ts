@@ -1,31 +1,31 @@
 /**
- * SRO GT4 America parser
+ * Toyota GR Cup parser
  *
  * Uses Alkamel timing CSVs (semicolon-delimited):
- *   1. Results CSV (05_Provisional_Results): Entry list with classes, drivers, positions
- *   2. Laps CSV (23_AnalysisEnduranceWithSections): Lap-by-lap timing with elapsed times
+ *   1. Results CSV (00_Results): Entry list with single-driver layout
+ *   2. Laps CSV (23_AnalysisEnduranceWithSections): Lap-by-lap timing (same schema as SRO)
  *
- * Pit timing tier: total_only (single mandatory stop in 60-min races)
+ * Pit timing tier: total_only (pit-stop-free format; incidental rows stored but not featured)
  */
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { generateAnnotations } from "./position-analysis.js";
-import { parseSROResults } from "../parseSROResults.js";
+import { parseGRCupResults } from "../parseGRCupResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
 
-export const sroParser: RaceDataParser = {
-  id: "sro",
-  name: "SRO GT4 America",
-  series: "SRO",
+export const grcupParser: RaceDataParser = {
+  id: "grcup",
+  name: "Toyota GR Cup",
+  series: "GR_CUP",
   description:
-    "Import from SRO Alkamel timing exports. Supports GT4 America results and lap data CSVs.",
+    "Import from Toyota GR Cup Alkamel timing exports. Results and lap data CSVs.",
   fileSlots: [
     {
       key: "resultsCsv",
-      label: "Results CSV (05_Provisional_Results…)",
+      label: "Results CSV (00_Results…)",
       description:
-        "SRO results export with final classification, car numbers, classes, and finishing positions.",
+        "GR Cup results export with final classification, car numbers, and single-driver layout.",
       required: true,
     },
     {
@@ -39,20 +39,20 @@ export const sroParser: RaceDataParser = {
 
   parse(files) {
     const { resultsCsv, lapsCsv } = files;
-    if (!resultsCsv) throw new Error("Missing SRO results CSV");
-    if (!lapsCsv) throw new Error("Missing SRO laps CSV");
+    if (!resultsCsv) throw new Error("Missing GR Cup results CSV");
+    if (!lapsCsv) throw new Error("Missing GR Cup laps CSV");
 
     const warnings: string[] = [];
 
     // ── Parse results for entry metadata ────────────────────────
-    const entries = parseSROResults(resultsCsv);
-    if (entries.length === 0) throw new Error("No entries found in SRO results CSV");
+    const entries = parseGRCupResults(resultsCsv);
+    if (entries.length === 0) throw new Error("No entries found in GR Cup results CSV");
 
     const entryMap = new Map(entries.map((e) => [e.carNumber, e]));
 
     // ── Parse laps and derive positions ─────────────────────────
     const rawLaps = parseAlkamelLaps(lapsCsv);
-    if (rawLaps.length === 0) throw new Error("No laps found in SRO laps CSV");
+    if (rawLaps.length === 0) throw new Error("No laps found in GR Cup laps CSV");
 
     const positionedLaps = derivePositions(rawLaps);
 
@@ -115,7 +115,7 @@ export const sroParser: RaceDataParser = {
     }
 
     const totalCars = Object.keys(cars).length;
-    if (totalCars === 0) throw new Error("No valid car data found in SRO CSVs");
+    if (totalCars === 0) throw new Error("No valid car data found in GR Cup CSVs");
 
     // ── Detect FCY periods ───────────────────────────────────────
     const fcy = detectFcyPeriods(cars, maxLap);

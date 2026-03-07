@@ -652,7 +652,9 @@ adminRouter.post(
         ? "imsa"
         : seriesLower.includes("sro")
           ? "sro"
-          : "speedhive";
+          : seriesLower.includes("gr_cup") || seriesLower.includes("grcup")
+            ? "grcup"
+            : "speedhive";
       const parser = getParser(format);
       if (!parser) {
         throw new AppError(400, `No parser for series: ${race.series}`, "NO_PARSER");

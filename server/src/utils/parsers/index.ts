@@ -12,6 +12,7 @@ import type { RaceDataParser } from "./types.js";
 import { speedhiveParser } from "./speedhive.js";
 import { imsaParser } from "./imsa.js";
 import { sroParser } from "./sro.js";
+import { grcupParser } from "./grcup.js";
 import { wrlWebsiteParser } from "./wrl-website.js";
 
 const PARSERS: RaceDataParser[] = [
@@ -19,6 +20,7 @@ const PARSERS: RaceDataParser[] = [
   wrlWebsiteParser,
   imsaParser,
   sroParser,
+  grcupParser,
 ];
 
 /** Get a parser by its format ID */
