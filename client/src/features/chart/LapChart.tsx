@@ -113,7 +113,7 @@ export function LapChart({
     drawChart(canvas, data, annotations, chartState, d, watermarkEmail);
   }, [data, annotations, chartState, dim, resize, watermarkEmail]);
 
-  // Resize on window resize
+  // Resize on window resize AND container reflow (e.g. side panel open/close)
   useEffect(() => {
     const onResize = () => {
       const d = resize();
@@ -121,7 +121,18 @@ export function LapChart({
     };
     window.addEventListener("resize", onResize);
     onResize();
-    return () => window.removeEventListener("resize", onResize);
+
+    const wrapper = wrapperRef.current;
+    let ro: ResizeObserver | undefined;
+    if (wrapper) {
+      ro = new ResizeObserver(onResize);
+      ro.observe(wrapper);
+    }
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      ro?.disconnect();
+    };
   }, [resize]);
 
   // ── Coordinate helpers ──────────────────────────────────────────
