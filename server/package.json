@@ -23,7 +23,8 @@
     "dev:db:reset": "npx prisma migrate reset --force",
     "test": "vitest run",
     "test:watch": "vitest",
-    "download:alkamel": "tsx scripts/alkamel-download.ts"
+    "download:alkamel": "tsx scripts/alkamel-download.ts",
+    "download:imsa": "tsx scripts/imsa-download.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",

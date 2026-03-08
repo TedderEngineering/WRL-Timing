@@ -535,10 +535,26 @@ export async function classifyFiles(
         mergeIntoGroup(groups, pending);
       }
     } else {
-      // IMSA PDFs and CSVs → attach to first IMSA group
-      const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
-      if (imsaGroup) {
-        pending.groupKey = imsaGroup.id;
+      // IMSA PDFs and CSVs → match by metadata (track + date) first, then fallback to first group
+      const imsaGroups = Array.from(groups.values()).filter((g) => g.format === "imsa");
+      let imsaMatch = null;
+
+      // Strategy 1: Match by tag metadata (track + date)
+      if (pending.metadata.track && pending.metadata.date && imsaGroups.length > 1) {
+        const metaMatches = imsaGroups.filter((g) =>
+          g.metadata.track === pending.metadata.track && g.metadata.date === pending.metadata.date
+        );
+        const needsFile = metaMatches.filter((g) => !g.files.has(pending.type));
+        imsaMatch = (needsFile.length > 0 ? needsFile : metaMatches)[0] || null;
+      }
+
+      // Strategy 2: First IMSA group that needs this file type
+      if (!imsaMatch) {
+        imsaMatch = imsaGroups.find((g) => !g.files.has(pending.type)) || imsaGroups[0] || null;
+      }
+
+      if (imsaMatch) {
+        pending.groupKey = imsaMatch.id;
         mergeIntoGroup(groups, pending);
       } else {
         unmatched.push(pending);
