@@ -280,11 +280,12 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT but no DRIVER_NUMBER
+    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT and LAP_IMPROVEMENT
+    // (IMSA Time Cards CSV also has CROSSING_FINISH_LINE_IN_PIT but is caught earlier by `elapsed` check)
     if (
       headerLower.includes(";") &&
       headerLower.includes("crossing_finish_line_in_pit") &&
-      !headerLower.includes("driver_number")
+      headerLower.includes("lap_improvement")
     ) {
       result.type = "alkamelLapsCsv";
       // Format determined during pending resolution (SRO or GR Cup)
