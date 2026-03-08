@@ -22,7 +22,8 @@
     "dev:setup": "docker compose up -d && sleep 3 && npx prisma migrate dev && npx prisma db seed",
     "dev:db:reset": "npx prisma migrate reset --force",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "download:alkamel": "tsx scripts/alkamel-download.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
