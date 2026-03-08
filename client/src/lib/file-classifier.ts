@@ -405,11 +405,12 @@ export async function classifyFiles(
         continue;
       }
 
-      // PDFs, IMSA CSVs, and Alkamel laps wait for group resolution
+      // PDFs, IMSA CSVs, Alkamel laps, and pit stop PDFs wait for group resolution
       if (
         detected.groupKey === "__pdf_pending__" ||
         detected.groupKey === "__imsa_csv_pending__" ||
-        detected.type === "alkamelLapsCsv"
+        detected.type === "alkamelLapsCsv" ||
+        detected.type === "alkamelPitStopPdf"
       ) {
         pendingImsa.push(detected);
         continue;
@@ -435,8 +436,8 @@ export async function classifyFiles(
 
   // Resolve pending files: attach to matching group, or leave unmatched
   for (const pending of pendingImsa) {
-    if (pending.type === "alkamelLapsCsv") {
-      // Alkamel laps → match to SRO/GR Cup group by race number + venue code
+    if (pending.type === "alkamelLapsCsv" || pending.type === "alkamelPitStopPdf") {
+      // Alkamel laps/pit PDFs → match to SRO/GR Cup group by race number + venue code
       const lapsKey = pending.groupKey!; // already normalized by extractAlkamelEventKey
       const lapsSig = extractRaceSignature(lapsKey);
       const lapsIsGrcup = lapsKey.includes("GRCUP");
@@ -473,7 +474,7 @@ export async function classifyFiles(
         pending.groupKey = matchingGroup.id;
         pending.format = matchingGroup.format;
         mergeIntoGroup(groups, pending);
-      } else {
+      } else if (pending.type === "alkamelLapsCsv") {
         // Fallback: IMSA CSVs (same Alkamel format) attach to IMSA group as timeCardsCsv
         const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
         if (imsaGroup) {
@@ -484,6 +485,9 @@ export async function classifyFiles(
         } else {
           unmatched.push(pending);
         }
+      } else {
+        // Pit stop PDFs with no matching group → create their own group
+        mergeIntoGroup(groups, pending);
       }
     } else {
       // IMSA PDFs and CSVs → attach to first IMSA group
