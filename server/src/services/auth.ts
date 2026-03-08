@@ -205,6 +205,17 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
     throw new AppError(401, "Refresh token has been revoked", "TOKEN_REVOKED");
   }
 
+  // Check if this session was displaced by a newer login
+  if (storedToken.revokedAt) {
+    // Clean up the revoked token
+    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    throw new AppError(
+      401,
+      "Your account was signed in from another location. If this wasn't you, change your password immediately.",
+      "SESSION_DISPLACED"
+    );
+  }
+
   // Delete old token (rotation)
   await prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
