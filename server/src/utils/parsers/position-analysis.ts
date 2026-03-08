@@ -1326,9 +1326,11 @@ export function computePitTiming(
       : 0);
 
   // Base result: total_only decomposition
+  // pitRoadTime = totalPitLoss when no pit stop time cards are available
+  // (best estimate from lap-level timing data)
   const timing: PitTiming = {
     pitInTime: null,
-    pitRoadTime: null,
+    pitRoadTime: totalPitLoss > 0 ? totalPitLoss : null,
     pitOutTime: null,
     isDriveThrough: false,
     totalPitLoss,
