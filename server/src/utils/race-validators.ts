@@ -15,7 +15,7 @@ const lapDataSchema = z.object({
 });
 
 const carDataSchema = z.object({
-  num: z.number().int().positive(),
+  num: z.number().int().nonnegative(),
   team: z.string().min(1),
   cls: z.string().min(1),
   make: z.string().optional(),
