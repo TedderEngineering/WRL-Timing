@@ -439,7 +439,7 @@ export function AdminUploadPage() {
                     ({(df.file.size / 1024).toFixed(0)} KB)
                   </span>
                   <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                    PDF files cannot be imported. A CSV version is required.
+                    {df.warning || "PDF files cannot be imported. A CSV version is required."}
                   </div>
                 </div>
                 <button
@@ -566,6 +566,11 @@ function RaceGroupCard({
                 Missing: {group.missingRequired.join(", ")}
               </span>
             )}
+            {group.warnings?.map((w, i) => (
+              <span key={`gw-${i}`} className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">
+                {w}
+              </span>
+            ))}
             {v?.duplicate && (
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400">
                 Duplicate
