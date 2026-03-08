@@ -22,7 +22,10 @@ authRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password, displayName } = registerSchema.parse(req.body);
-      const result = await authService.register(email, password, displayName);
+      const result = await authService.register(email, password, displayName, {
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
 
       // Set refresh token as httpOnly cookie
       res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -45,7 +48,10 @@ authRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password } = loginSchema.parse(req.body);
-      const result = await authService.login(email, password);
+      const result = await authService.login(email, password, {
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
 

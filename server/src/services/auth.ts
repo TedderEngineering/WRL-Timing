@@ -13,6 +13,7 @@ import {
   getRefreshTokenExpiry,
 } from "../utils/tokens.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email.js";
+import { getSessionLimit } from "../config/sessionLimits.js";
 
 export interface AuthResult {
   accessToken: string;
@@ -46,7 +47,8 @@ function formatSubscription(sub: { plan: string; status: string; currentPeriodEn
 export async function register(
   email: string,
   password: string,
-  displayName?: string
+  displayName?: string,
+  meta: SessionMeta = {}
 ): Promise<AuthResult> {
   // Check if email already exists
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -95,7 +97,7 @@ export async function register(
   );
 
   // Generate tokens
-  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role);
+  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role, meta);
 
   return {
     accessToken,
@@ -116,7 +118,11 @@ export async function register(
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
-export async function login(email: string, password: string): Promise<AuthResult> {
+export async function login(
+  email: string,
+  password: string,
+  meta: SessionMeta = {}
+): Promise<AuthResult> {
   const user = await prisma.user.findUnique({ where: { email }, include: { subscription: true } });
   if (!user) {
     throw new AppError(401, "Invalid email or password", "INVALID_CREDENTIALS");
@@ -137,7 +143,26 @@ export async function login(email: string, password: string): Promise<AuthResult
     data: { lastLoginAt: new Date() },
   });
 
-  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role);
+  // Enforce session limits — revoke oldest sessions if over the limit
+  const plan = user.subscription?.plan ?? "FREE";
+  const limit = getSessionLimit(plan);
+
+  const activeSessions = await prisma.refreshToken.findMany({
+    where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // limit - 1 because we're about to create a new session
+  const excess = activeSessions.length - (limit - 1);
+  if (excess > 0) {
+    const toRevoke = activeSessions.slice(0, excess).map((s) => s.id);
+    await prisma.refreshToken.updateMany({
+      where: { id: { in: toRevoke } },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role, meta);
 
   return {
     accessToken,
@@ -400,7 +425,17 @@ export async function completeOnboarding(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function createTokenPair(userId: string, email: string, role: "USER" | "ADMIN") {
+interface SessionMeta {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+async function createTokenPair(
+  userId: string,
+  email: string,
+  role: "USER" | "ADMIN",
+  meta: SessionMeta = {}
+) {
   const accessToken = generateAccessToken({ userId, email, role });
 
   // Create refresh token record
@@ -413,13 +448,21 @@ async function createTokenPair(userId: string, email: string, role: "USER" | "AD
       userId,
       tokenHash: refreshHash,
       expiresAt: getRefreshTokenExpiry(),
+      ipAddress: meta.ipAddress ?? null,
+      userAgent: meta.userAgent ?? null,
     },
   });
 
-  // Clean up expired refresh tokens for this user (background)
+  // Clean up expired / revoked refresh tokens for this user (background)
   prisma.refreshToken
     .deleteMany({
-      where: { userId, expiresAt: { lt: new Date() } },
+      where: {
+        userId,
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { revokedAt: { not: null } },
+        ],
+      },
     })
     .catch(() => {});
 
