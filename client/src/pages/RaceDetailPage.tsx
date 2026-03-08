@@ -163,14 +163,13 @@ export function RaceDetailPage() {
   };
 
   // ── Grid wrapper with sidebar ──────────────────────────────────
+  // Sidebar race items are <Link> elements that handle URL navigation
+  // directly. This callback updates local state for immediate re-render.
   const handleSelectRace = useCallback(
     (raceId: string) => {
       setSelectedRaceId(raceId);
-      const next: Record<string, string> = { race: raceId };
-      if (effectiveEventId) next.event = effectiveEventId;
-      setSearchParams(next);
     },
-    [effectiveEventId, setSearchParams],
+    [],
   );
 
   const withSidebar = (content: React.ReactNode) => (

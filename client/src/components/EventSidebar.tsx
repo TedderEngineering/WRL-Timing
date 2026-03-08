@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import type { EventWithRaces } from "@shared/types";
 import { fetchEvent } from "../lib/api";
 import { cn } from "../lib/utils";
@@ -136,12 +137,14 @@ export default function EventSidebar({
                   month: "short",
                   day: "numeric",
                 });
+                const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
                 return (
-                  <button
+                  <Link
                     key={race.id}
+                    to={raceUrl}
                     onClick={() => handleSelectRace(race.id)}
                     className={cn(
-                      "w-full flex items-center gap-2 px-3 h-9 text-left transition-colors",
+                      "w-full flex items-center gap-2 px-3 h-9 transition-colors no-underline",
                       isActive
                         ? "bg-gray-800/50 border-l-2 border-blue-500"
                         : "hover:bg-gray-800/40 border-l-2 border-transparent",
@@ -158,7 +161,7 @@ export default function EventSidebar({
                     <span className="text-[10px] text-gray-600 shrink-0">
                       {dateStr}
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -260,12 +263,14 @@ export default function EventSidebar({
                         month: "short",
                         day: "numeric",
                       });
+                      const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
                       return (
-                        <button
+                        <Link
                           key={race.id}
+                          to={raceUrl}
                           onClick={() => handleSelectRace(race.id)}
                           className={cn(
-                            "w-full flex items-center gap-2 px-3 h-9 text-left transition-colors",
+                            "w-full flex items-center gap-2 px-3 h-9 transition-colors no-underline",
                             isActive
                               ? "bg-gray-800/50 border-l-2 border-blue-500"
                               : "hover:bg-gray-800/40 border-l-2 border-transparent",
@@ -282,7 +287,7 @@ export default function EventSidebar({
                           <span className="text-[10px] text-gray-600 shrink-0">
                             {dateStr}
                           </span>
-                        </button>
+                        </Link>
                       );
                     })}
                   </div>
