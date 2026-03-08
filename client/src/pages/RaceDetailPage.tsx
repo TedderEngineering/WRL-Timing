@@ -21,8 +21,15 @@ export function RaceDetailRedirect() {
 
 export function RaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const id = searchParams.get("race") || undefined;
+  const urlRaceId = searchParams.get("race") || undefined;
   const urlEventId = searchParams.get("event") || undefined;
+
+  // Track selected race in state — setSearchParams alone may not trigger
+  // a re-render in React Router v7 / React 19, so state guarantees it.
+  const [selectedRaceId, setSelectedRaceId] = useState(urlRaceId);
+  useEffect(() => { setSelectedRaceId(urlRaceId); }, [urlRaceId]);
+  const id = selectedRaceId;
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const autoLoadAttempted = useRef(false);
@@ -45,6 +52,7 @@ export function RaceDetailPage() {
         const firstEvent = events[0];
         return fetchEvent(firstEvent.id).then((detail) => {
           if (detail.races.length > 0) {
+            setSelectedRaceId(detail.races[0].id);
             setSearchParams(
               { event: firstEvent.id, race: detail.races[0].id },
               { replace: true },
@@ -67,6 +75,7 @@ export function RaceDetailPage() {
     fetchEvent(urlEventId)
       .then((detail) => {
         if (detail.races.length > 0) {
+          setSelectedRaceId(detail.races[0].id);
           setSearchParams(
             { event: urlEventId, race: detail.races[0].id },
             { replace: true },
@@ -156,6 +165,7 @@ export function RaceDetailPage() {
   // ── Grid wrapper with sidebar ──────────────────────────────────
   const handleSelectRace = useCallback(
     (raceId: string) => {
+      setSelectedRaceId(raceId);
       const next: Record<string, string> = { race: raceId };
       if (effectiveEventId) next.event = effectiveEventId;
       setSearchParams(next);
