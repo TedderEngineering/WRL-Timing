@@ -220,6 +220,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
   if (file.name.toLowerCase().endsWith(".csv")) {
     const headerLine = clean.split("\n")[0] || "";
     const headerLower = headerLine.toLowerCase();
+    console.log("[classify]", file.name, "| header:", headerLower.slice(0, 120));
 
     // IMSA Time Cards CSV: semicolon-delimited with NUMBER, DRIVER_NUMBER, LAP_NUMBER, ELAPSED
     if (
@@ -289,6 +290,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
       // Format determined during pending resolution (SRO or GR Cup)
       result.format = "sro"; // default, will be corrected during resolution
       result.groupKey = extractAlkamelEventKey(file.name);
+      console.log("[alkamel-laps detected]", file.name, "| groupKey:", result.groupKey);
       return result;
     }
 
@@ -379,7 +381,6 @@ export async function classifyFiles(
       // Alkamel laps → match to SRO/GR Cup group by race number + venue code
       const lapsKey = pending.groupKey!; // already normalized by extractAlkamelEventKey
       const lapsSig = extractRaceSignature(lapsKey);
-      // If the laps filename contains "GRCUP", it belongs to a grcup group
       const lapsIsGrcup = lapsKey.includes("GRCUP");
       const candidates = lapsSig
         ? Array.from(groups.values()).filter((g) => {
@@ -390,6 +391,11 @@ export async function classifyFiles(
               groupSig.venue === lapsSig.venue;
           })
         : [];
+      console.log("[laps resolution]", pending.file.name,
+        "| lapsKey:", lapsKey,
+        "| lapsSig:", lapsSig,
+        "| lapsIsGrcup:", lapsIsGrcup,
+        "| candidates:", candidates.map(g => g.id));
       // Prefer format-matching candidate, fall back to first match
       const matchingGroup =
         candidates.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
