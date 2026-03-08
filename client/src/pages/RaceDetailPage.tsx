@@ -154,11 +154,14 @@ export function RaceDetailPage() {
   };
 
   // ── Grid wrapper with sidebar ──────────────────────────────────
-  const handleSelectRace = (raceId: string) => {
-    const next: Record<string, string> = { race: raceId };
-    if (effectiveEventId) next.event = effectiveEventId;
-    setSearchParams(next);
-  };
+  const handleSelectRace = useCallback(
+    (raceId: string) => {
+      const next: Record<string, string> = { race: raceId };
+      if (effectiveEventId) next.event = effectiveEventId;
+      setSearchParams(next);
+    },
+    [effectiveEventId, setSearchParams],
+  );
 
   const withSidebar = (content: React.ReactNode) => (
     <>

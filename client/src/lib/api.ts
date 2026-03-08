@@ -98,8 +98,8 @@ class ApiClient {
     return this.refreshPromise;
   }
 
-  get<T>(path: string) {
-    return this.request<T>(path);
+  get<T>(path: string, options?: { signal?: AbortSignal }) {
+    return this.request<T>(path, options);
   }
 
   post<T>(path: string, body?: unknown) {

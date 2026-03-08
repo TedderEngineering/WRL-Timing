@@ -48,7 +48,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     setRaceMeta(null);
 
     api
-      .get<ChartDataResponse>(`/races/${raceId}/chart-data`)
+      .get<ChartDataResponse>(`/races/${raceId}/chart-data`, { signal: controller.signal })
       .then((response) => {
         if (controller.signal.aborted) return;
         setData(response.data as unknown as RaceChartData);
