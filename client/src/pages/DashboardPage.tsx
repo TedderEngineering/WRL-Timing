@@ -27,6 +27,7 @@ interface RaceItem {
 export function DashboardPage() {
   const { user } = useAuth();
   const [latestRaces, setLatestRaces] = useState<RaceItem[]>([]);
+  const [totalRaceCount, setTotalRaceCount] = useState(0);
   const [recentlyViewed, setRecentlyViewed] = useState<RaceItem[]>([]);
   const [favorites, setFavorites] = useState<RaceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +44,10 @@ export function DashboardPage() {
           api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
         ]);
 
-        if (latestRes.status === "fulfilled") setLatestRaces(latestRes.value.races);
+        if (latestRes.status === "fulfilled") {
+          setLatestRaces(latestRes.value.races);
+          setTotalRaceCount(latestRes.value.total);
+        }
         if (recentRes.status === "fulfilled") setRecentlyViewed(recentRes.value.races);
         if (favRes.status === "fulfilled") setFavorites(favRes.value.races);
       } catch {
@@ -84,7 +88,7 @@ export function DashboardPage() {
   const newToAnalyze = latestRaces.filter((r) => !viewedIds.has(r.id)).slice(0, 6);
 
   const greeting = getGreeting();
-  const totalRaces = latestRaces.length > 0 ? 24 : 0; // placeholder count
+  const totalRaces = totalRaceCount;
   const lockedCount = isFree ? Math.max(0, totalRaces - 3) : 0;
 
   return (
