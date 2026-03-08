@@ -104,6 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
           api.setAccessToken(null);
           setState({ user: null, isLoading: false, isAuthenticated: false });
+
+          if (err.code === "SESSION_DISPLACED") {
+            // Delay slightly so state clears before alert blocks the thread
+            setTimeout(() => {
+              alert(
+                "You were signed out because your account logged in from another location.\n\nIf this wasn't you, change your password immediately."
+              );
+            }, 100);
+          }
         } else {
           // Transient error (network, 500, etc.)
           // If already authenticated, keep current session — token may still be valid.
