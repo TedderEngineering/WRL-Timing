@@ -220,7 +220,6 @@ export function classifyFile(file: File, content: string): DetectedFile {
   if (file.name.toLowerCase().endsWith(".csv")) {
     const headerLine = clean.split("\n")[0] || "";
     const headerLower = headerLine.toLowerCase();
-    console.log("[classify]", file.name, "| header:", headerLower.slice(0, 120));
 
     // IMSA Time Cards CSV: semicolon-delimited with NUMBER, DRIVER_NUMBER, LAP_NUMBER, ELAPSED
     if (
@@ -280,18 +279,15 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT and LAP_IMPROVEMENT
-    // (IMSA Time Cards CSV also has CROSSING_FINISH_LINE_IN_PIT but is caught earlier by `elapsed` check)
+    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT
     if (
       headerLower.includes(";") &&
-      headerLower.includes("crossing_finish_line_in_pit") &&
-      headerLower.includes("lap_improvement")
+      headerLower.includes("crossing_finish_line_in_pit")
     ) {
       result.type = "alkamelLapsCsv";
       // Format determined during pending resolution (SRO or GR Cup)
       result.format = "sro"; // default, will be corrected during resolution
       result.groupKey = extractAlkamelEventKey(file.name);
-      console.log("[alkamel-laps detected]", file.name, "| groupKey:", result.groupKey);
       return result;
     }
 
@@ -392,11 +388,6 @@ export async function classifyFiles(
               groupSig.venue === lapsSig.venue;
           })
         : [];
-      console.log("[laps resolution]", pending.file.name,
-        "| lapsKey:", lapsKey,
-        "| lapsSig:", lapsSig,
-        "| lapsIsGrcup:", lapsIsGrcup,
-        "| candidates:", candidates.map(g => g.id));
       // Prefer format-matching candidate, fall back to first match
       const matchingGroup =
         candidates.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
