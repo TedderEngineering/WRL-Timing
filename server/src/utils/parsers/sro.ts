@@ -4,15 +4,19 @@
  * Uses Alkamel timing CSVs (semicolon-delimited):
  *   1. Results CSV (05_Provisional_Results): Entry list with classes, drivers, positions
  *   2. Laps CSV (23_AnalysisEnduranceWithSections): Lap-by-lap timing with elapsed times
+ *   3. Pit Stops PDF (20_Pit Stops Time Cards): Pit in/out timestamps and driver changes
  *
- * Pit timing tier: total_only (single mandatory stop in 60-min races)
+ * Pit timing tier: total_only (or full when pit stop PDF is provided)
  */
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
+import type { PitStopTimeCard } from "./position-analysis.js";
 import { generateAnnotations } from "./position-analysis.js";
 import { parseSROResults } from "../parseSROResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
+import { extractBase64, extractPdfText } from "../pdf-extract.js";
+import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
 
 export const sroParser: RaceDataParser = {
   id: "sro",
@@ -35,10 +39,18 @@ export const sroParser: RaceDataParser = {
         "Alkamel lap-by-lap timing data with elapsed times, pit crossings, and flag status.",
       required: true,
     },
+    {
+      key: "pitStopPdf",
+      label: "Pit Stops PDF (20_Pit Stops Time Cards)",
+      description:
+        "Alkamel pit stop time cards with pit in/out timestamps, pit duration, and driver changes. Optional — pit timing will be estimated from lap times if omitted.",
+      required: false,
+      accept: ".pdf",
+    },
   ],
 
-  parse(files) {
-    const { resultsCsv, lapsCsv } = files;
+  async parse(files) {
+    const { resultsCsv, lapsCsv, pitStopPdf } = files;
     if (!lapsCsv) throw new Error("Missing SRO laps CSV");
 
     const warnings: string[] = [];
@@ -139,7 +151,22 @@ export const sroParser: RaceDataParser = {
       classCarCounts,
     };
 
-    const annotations = generateAnnotations(raceData);
+    // ── Parse pit stop PDF for precise pit timing (optional) ────
+    let pitTimeCards: Map<number, PitStopTimeCard[]> | undefined;
+    if (pitStopPdf) {
+      try {
+        const pdfText = await extractPdfText(pitStopPdf);
+        const parsed = parseAlkamelPitStopPdf(pdfText);
+        if (parsed.size > 0) {
+          pitTimeCards = parsed;
+          warnings.push(`Pit time cards built for ${pitTimeCards.size} cars`);
+        }
+      } catch (e: any) {
+        warnings.push(`Could not parse pit stop PDF: ${e.message}. Continuing without it.`);
+      }
+    }
+
+    const annotations = generateAnnotations(raceData, undefined, pitTimeCards);
 
     return { data: raceData, annotations, warnings };
   },

@@ -13,6 +13,7 @@ export type FileType =
   | "sroResultsPdf"
   | "grResultsPdf"
   | "alkamelLapsCsv"
+  | "alkamelPitStopPdf"
   | "unsupportedPdf"
   | "unknown";
 
@@ -92,6 +93,7 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   sroResultsPdf: "resultsPdf",
   grResultsPdf: "resultsPdf",
   alkamelLapsCsv: "lapsCsv",
+  alkamelPitStopPdf: "pitStopPdf",
   unsupportedPdf: "unknown",
   unknown: "unknown",
 };
@@ -109,6 +111,7 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   sroResultsPdf: "Results PDF",
   grResultsPdf: "Results PDF",
   alkamelLapsCsv: "Laps CSV",
+  alkamelPitStopPdf: "Pit Stops PDF",
   unsupportedPdf: "Unsupported PDF",
   unknown: "Unknown",
 };
@@ -164,11 +167,21 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // Pit stop time card PDF (20_ prefix)
-    if (/^20_/.test(fn) && !/time_?cards|imsa|weathertech/.test(fn)) {
-      result.type = "unsupportedPdf";
-      result.format = null;
-      result.warning = "Pit stop time card PDF — not required for import";
+    // Pit stop time card PDF (20_ prefix) — route to SRO/GR Cup group
+    if (/^20_/.test(fn) && /pit[\s_]?stop/i.test(fn)) {
+      const isGrcup = /gr[\s_]?cup|grcup/i.test(fn);
+      result.type = "alkamelPitStopPdf";
+      if (isGrcup) {
+        result.format = "grcup";
+        const grKey = extractAlkamelEventKey(file.name);
+        result.metadata = extractAlkamelMetadata(grKey, "GR_CUP");
+        result.groupKey = `grcup_${grKey}`;
+      } else {
+        result.format = "sro";
+        const sroKey = extractAlkamelEventKey(file.name);
+        result.metadata = extractAlkamelMetadata(sroKey, "SRO");
+        result.groupKey = `sro_${sroKey}`;
+      }
       return result;
     }
 
