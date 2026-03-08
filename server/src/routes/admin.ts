@@ -193,8 +193,8 @@ adminRouter.post(
       if (!Array.isArray(races) || races.length === 0) {
         throw new AppError(400, '"races" must be a non-empty array', "MISSING_FIELDS");
       }
-      if (races.length > 20) {
-        throw new AppError(400, "Maximum 20 races per request", "TOO_MANY_RACES");
+      if (races.length > 50) {
+        throw new AppError(400, "Maximum 50 races per request", "TOO_MANY_RACES");
       }
 
       const results = [];
@@ -302,8 +302,8 @@ adminRouter.post(
       if (!Array.isArray(races) || races.length === 0) {
         throw new AppError(400, '"races" must be a non-empty array', "MISSING_FIELDS");
       }
-      if (races.length > 20) {
-        throw new AppError(400, "Maximum 20 races per request", "TOO_MANY_RACES");
+      if (races.length > 50) {
+        throw new AppError(400, "Maximum 50 races per request", "TOO_MANY_RACES");
       }
 
       const results = [];

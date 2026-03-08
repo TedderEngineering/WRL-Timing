@@ -164,7 +164,7 @@ export function AdminUploadPage() {
       });
 
       try {
-        const payload = needsValidation.map((g) => ({
+        const allPayload = needsValidation.map((g) => ({
           groupKey: g.id,
           format: g.format,
           metadata: {
@@ -179,17 +179,25 @@ export function AdminUploadPage() {
           files: buildFilesPayload(g),
         }));
 
-        const res = await api.post<{ results: BulkValidateResult[] }>(
-          "/admin/races/validate-bulk",
-          { races: payload }
-        );
+        // Batch into chunks of 10 to stay within server limits
+        const BATCH_SIZE = 10;
+        const allResults: BulkValidateResult[] = [];
+        for (let i = 0; i < allPayload.length; i += BATCH_SIZE) {
+          if (seq !== validationSeq.current) return;
+          const batch = allPayload.slice(i, i + BATCH_SIZE);
+          const res = await api.post<{ results: BulkValidateResult[] }>(
+            "/admin/races/validate-bulk",
+            { races: batch }
+          );
+          allResults.push(...res.results);
+        }
 
         // Only apply if still the latest sequence
         if (seq !== validationSeq.current) return;
 
         setGroups((prev) => {
           const next = new Map(prev);
-          for (const r of res.results) {
+          for (const r of allResults) {
             const current = next.get(r.groupKey);
             if (current) {
               next.set(r.groupKey, {
@@ -261,7 +269,7 @@ export function AdminUploadPage() {
     });
 
     try {
-      const payload = importableGroups.map((g) => ({
+      const allPayload = importableGroups.map((g) => ({
         groupKey: g.id,
         format: g.format,
         metadata: {
@@ -276,10 +284,18 @@ export function AdminUploadPage() {
         files: buildFilesPayload(g),
       }));
 
-      const res = await api.post<{ results: BulkImportResult[] }>(
-        "/admin/races/import-bulk",
-        { races: payload }
-      );
+      // Batch into chunks of 10 to stay within server limits
+      const BATCH_SIZE = 10;
+      const allResults: BulkImportResult[] = [];
+      for (let i = 0; i < allPayload.length; i += BATCH_SIZE) {
+        const batch = allPayload.slice(i, i + BATCH_SIZE);
+        const res = await api.post<{ results: BulkImportResult[] }>(
+          "/admin/races/import-bulk",
+          { races: batch }
+        );
+        allResults.push(...res.results);
+      }
+      const res = { results: allResults };
 
       setGroups((prev) => {
         const next = new Map(prev);
