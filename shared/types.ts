@@ -139,6 +139,7 @@ export interface CarData {
   cls: string;
   make?: string;
   vehicle?: string;
+  status?: string;
   finishPos: number;
   finishPosClass: number;
   laps: LapData[];

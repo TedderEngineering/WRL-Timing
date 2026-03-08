@@ -442,6 +442,7 @@ export function RaceDetailPage() {
                     >
                       {visibleCars.map((n) => {
                         const c = data.cars[String(n)];
+                        if (c.laps.length === 0) return null;
                         const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
                         const tag = c.make || c.cls;
                         return (

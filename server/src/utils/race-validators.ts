@@ -20,9 +20,10 @@ const carDataSchema = z.object({
   cls: z.string().min(1),
   make: z.string().optional(),
   vehicle: z.string().optional(),
+  status: z.string().optional(),
   finishPos: z.number().int().positive(),
   finishPosClass: z.number().int().positive(),
-  laps: z.array(lapDataSchema).min(1),
+  laps: z.array(lapDataSchema).min(0),
 });
 
 export const raceDataJsonSchema = z.object({

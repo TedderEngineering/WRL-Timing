@@ -23,6 +23,7 @@ export interface SROEntry {
   bestLapTime: string;
   finishPosition: number;
   classPosition: number;
+  status: string;
 }
 
 export function parseSROResults(csvText: string): SROEntry[] {
@@ -77,6 +78,7 @@ function parseFormat05(lines: string[]): SROEntry[] {
       bestLapTime: cols[12] || "",
       finishPosition,
       classPosition,
+      status: lapsCompleted > 0 ? "Classified" : "DNS",
     });
   }
 
@@ -123,6 +125,7 @@ function parseFormat03(lines: string[]): SROEntry[] {
       bestLapTime: cols[8] || "",
       finishPosition,
       classPosition: 0, // derived below
+      status: cols[2] || (lapsCompleted > 0 ? "Classified" : "DNS"),
     });
   }
 

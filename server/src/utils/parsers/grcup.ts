@@ -106,11 +106,30 @@ export const grcupParser: RaceDataParser = {
       classCarCounts[cls] = (classCarCounts[cls] || 0) + 1;
     }
 
-    // Warn about entries with no laps
+    // Add DNS/DNF entries to roster with empty laps
     for (const [carNum, entry] of entryMap) {
       const num = parseInt(carNum, 10);
       if (!isNaN(num) && !cars[String(num)]) {
-        warnings.push(`Car #${carNum} (${entry.teamName}) in results but has no lap data`);
+        const rawStatus = entry.status?.toLowerCase() || "";
+        const status = rawStatus.includes("not start") || rawStatus === "dns" || entry.lapsCompleted === 0
+          ? "DNS" : "DNF";
+        warnings.push(`Car #${carNum} (${entry.teamName}) — ${status} (${entry.lapsCompleted} laps completed)`);
+
+        const cls = entry.carClass || "Unknown";
+        cars[String(num)] = {
+          num,
+          team: entry.teamName,
+          cls,
+          vehicle: entry.vehicle,
+          status,
+          finishPos: entry.finishPosition,
+          finishPosClass: entry.classPosition,
+          laps: [],
+        };
+
+        if (!classGroups[cls]) classGroups[cls] = [];
+        classGroups[cls].push(num);
+        classCarCounts[cls] = (classCarCounts[cls] || 0) + 1;
       }
     }
 

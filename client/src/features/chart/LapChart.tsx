@@ -572,25 +572,29 @@ export function LapChart({
           {/* Car chips */}
           <div className="flex flex-wrap gap-1">
             {visibleCars.map((n) => {
+              const car = data.cars[String(n)];
+              const isDNS = car?.laps.length === 0;
               const isOn = compSet.has(n);
               const isFocus = n === focusNum;
-              const col = isOn && !isFocus ? getCompColor(compSet, focusNum, n) : undefined;
+              const col = isOn && !isFocus && !isDNS ? getCompColor(compSet, focusNum, n) : undefined;
               return (
                 <button
                   key={n}
-                  onClick={() => !isFocus && toggleComp(n)}
-                  disabled={isFocus}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
+                  onClick={() => !isFocus && !isDNS && toggleComp(n)}
+                  disabled={isFocus || isDNS}
+                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all"
                   style={{
-                    borderColor: col || CHART_STYLE.border,
-                    background: col ? `${col}33` : "transparent",
-                    color: isFocus ? CHART_STYLE.dim : isOn ? "#fff" : CHART_STYLE.dim,
+                    borderColor: isDNS ? "rgba(255,255,255,0.05)" : col || CHART_STYLE.border,
+                    background: isDNS ? "rgba(255,255,255,0.02)" : col ? `${col}33` : "transparent",
+                    color: isDNS ? "rgba(255,255,255,0.2)" : isFocus ? CHART_STYLE.dim : isOn ? "#fff" : CHART_STYLE.dim,
                     opacity: isFocus ? 0.3 : 1,
-                    pointerEvents: isFocus ? "none" : undefined,
+                    cursor: isDNS ? "default" : "pointer",
                   }}
-                  title={`${data.cars[String(n)]?.team}${data.cars[String(n)]?.make ? ` · ${data.cars[String(n)]?.make}` : ''} (${data.cars[String(n)]?.cls})`}
+                  title={isDNS
+                    ? `${car?.team} (${car?.cls}) — ${car?.status || "DNS"}`
+                    : `${car?.team}${car?.make ? ` · ${car?.make}` : ''} (${car?.cls})`}
                 >
-                  #{n}
+                  #{n}{isDNS ? ` ${car?.status || "DNS"}` : ""}
                 </button>
               );
             })}
