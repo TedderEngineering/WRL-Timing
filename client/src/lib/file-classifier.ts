@@ -861,7 +861,7 @@ function extractFilenameMeta(filename: string): Partial<RaceGroupMetadata> {
     else meta.series = seriesLabel;
     // Build race name from filename + tag (e.g. "GR Cup Race 1 — Barber Motorsports Park")
     const raceNum = nameWithoutExt.match(/Race[\s_](\d+)/i);
-    const displaySeries = meta.series === "GR_CUP" ? "GR Cup" : meta.series === "SRO" ? "SRO" : seriesLabel;
+    const displaySeries = meta.series === "GR_CUP" ? "GR Cup" : meta.series === "SRO" ? "Pirelli GT4" : seriesLabel;
     if (raceNum) {
       meta.name = `${displaySeries} Race ${raceNum[1]} — ${meta.track}`;
     } else {
