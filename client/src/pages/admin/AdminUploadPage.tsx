@@ -131,7 +131,8 @@ export function AdminUploadPage() {
     if (validateTimer.current) clearTimeout(validateTimer.current);
 
     const completeGroups = Array.from(groups.values()).filter(
-      (g) => g.complete && g.importStatus === "idle" && g.metadata.name.trim()
+      (g) => g.complete && g.importStatus === "idle" &&
+        g.metadata.name.trim() && g.metadata.date && g.metadata.track.trim() && g.metadata.series.trim()
     );
 
     // Only validate groups that haven't been validated yet
@@ -519,7 +520,9 @@ function RaceGroupCard({
   onRemove: () => void;
 }) {
   const needsTrack = (group.format === "speedhive" || group.format === "wrl-website") && !group.metadata.track.trim();
-  const [expanded, setExpanded] = useState(needsTrack);
+  const needsDate = !group.metadata.date;
+  const needsInput = needsTrack || needsDate;
+  const [expanded, setExpanded] = useState(needsInput);
 
   const formatColors: Record<FormatId, string> = {
     imsa: "bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400",
@@ -597,7 +600,11 @@ function RaceGroupCard({
             ) : (
               <span className="text-amber-600 dark:text-amber-400 font-medium">No track</span>
             )}
-            {group.metadata.date && <span> · {group.metadata.date}</span>}
+            {group.metadata.date ? (
+              <span> · {group.metadata.date}</span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400 font-medium"> · No date</span>
+            )}
             {group.metadata.series && <span> · {group.metadata.series}</span>}
           </div>
         </div>
@@ -671,14 +678,24 @@ function RaceGroupCard({
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Date
+              <label
+                className={`block text-xs font-medium mb-1 ${
+                  needsDate
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
+                Date *{needsDate && " (required)"}
               </label>
               <input
                 type="date"
                 value={group.metadata.date}
                 onChange={(e) => onUpdateMetadata("date", e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+                className={`w-full px-2.5 py-1.5 border rounded-lg bg-white dark:bg-gray-900 text-sm ${
+                  needsDate
+                    ? "border-amber-400 dark:border-amber-600 ring-1 ring-amber-200 dark:ring-amber-800"
+                    : "border-gray-300 dark:border-gray-700"
+                }`}
               />
             </div>
             <div>
