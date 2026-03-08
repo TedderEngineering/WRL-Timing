@@ -97,9 +97,15 @@ export function AdminUploadPage() {
         const next = new Map(prev);
         const g = next.get(groupId);
         if (g) {
+          const updated = { ...g.metadata, [field]: value };
+          // Auto-fill season from date year when season is empty
+          if (field === "date" && value && !g.metadata.season) {
+            const year = value.split("-")[0];
+            if (/^\d{4}$/.test(year)) updated.season = year;
+          }
           next.set(groupId, {
             ...g,
-            metadata: { ...g.metadata, [field]: value },
+            metadata: updated,
             validation: null, // clear validation on edit
           });
         }

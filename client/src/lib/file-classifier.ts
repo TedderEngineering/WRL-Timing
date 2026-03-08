@@ -395,6 +395,15 @@ export async function classifyFiles(
       const content = await readFileContent(file);
       const detected = classifyFile(file, content);
 
+      // Enrich with metadata from filename tag (e.g., "[Barber, 2025-04-26, GR Cup]")
+      // Tag metadata is more specific (includes track), so it overrides event-key-derived values
+      const fnameMeta = extractFilenameMeta(file.name);
+      for (const [k, v] of Object.entries(fnameMeta)) {
+        if (v) {
+          (detected.metadata as any)[k] = v;
+        }
+      }
+
       if (detected.type === "unsupportedPdf") {
         unsupported.push(detected);
         continue;
@@ -437,37 +446,73 @@ export async function classifyFiles(
   // Resolve pending files: attach to matching group, or leave unmatched
   for (const pending of pendingImsa) {
     if (pending.type === "alkamelLapsCsv" || pending.type === "alkamelPitStopPdf") {
-      // Alkamel laps/pit PDFs → match to SRO/GR Cup group by race number + venue code
-      const lapsKey = pending.groupKey!; // already normalized by extractAlkamelEventKey
-      const lapsSig = extractRaceSignature(lapsKey);
-      const lapsIsGrcup = lapsKey.includes("GRCUP");
-      const candidates = lapsSig
-        ? Array.from(groups.values()).filter((g) => {
-            if (g.format !== "sro" && g.format !== "grcup") return false;
+      const lapsKey = pending.groupKey!;
+      const lapsIsGrcup = lapsKey.includes("GRCUP") || pending.metadata.series === "GR_CUP";
+      const sroGrcupGroups = Array.from(groups.values()).filter(
+        (g) => g.format === "sro" || g.format === "grcup"
+      );
+      let matchingGroup: typeof sroGrcupGroups[0] | null = null;
+
+      // Strategy 1: Match by tag metadata (track + date) — most reliable for tagged files
+      if (pending.metadata.track && pending.metadata.date) {
+        const metaMatches = sroGrcupGroups.filter((g) =>
+          g.metadata.track === pending.metadata.track && g.metadata.date === pending.metadata.date
+        );
+        const needsFile = metaMatches.filter((g) => !g.files.has(pending.type));
+        const pool = needsFile.length > 0 ? needsFile : metaMatches;
+        matchingGroup =
+          pool.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
+          pool[0] || null;
+      }
+
+      // Strategy 2: Match by race signature (raceNum + venue) — for untagged files
+      if (!matchingGroup) {
+        const lapsSig = extractRaceSignature(lapsKey);
+        let candidates = lapsSig
+          ? sroGrcupGroups.filter((g) => {
+              const groupSig = extractRaceSignature(normalizeEventKey(g.id));
+              return groupSig !== null &&
+                groupSig.raceNum === lapsSig.raceNum &&
+                groupSig.venue === lapsSig.venue;
+            })
+          : [];
+        // Race-number-only fallback
+        if (candidates.length === 0 && lapsSig) {
+          candidates = sroGrcupGroups.filter((g) => {
             const groupSig = extractRaceSignature(normalizeEventKey(g.id));
-            return groupSig !== null &&
-              groupSig.raceNum === lapsSig.raceNum &&
-              groupSig.venue === lapsSig.venue;
-          })
-        : [];
-      // Prefer format-matching candidate, fall back to first match
-      let matchingGroup =
-        candidates.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
-        candidates[0] ||
-        null;
-      // Venue-only fallback: match by last token when race signature fails
+            return groupSig !== null && groupSig.raceNum === lapsSig.raceNum;
+          });
+        }
+        const needsFile = candidates.filter((g) => !g.files.has(pending.type));
+        const pool = needsFile.length > 0 ? needsFile : candidates;
+        matchingGroup =
+          pool.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
+          pool[0] || null;
+      }
+
+      // Strategy 3: Venue-only fallback (last token match)
       if (!matchingGroup) {
         const lapsTokens = lapsKey.split("_");
         const lapsVenue = lapsTokens[lapsTokens.length - 1];
-        if (lapsVenue && lapsVenue !== "RACE") {
-          const venueMatches = Array.from(groups.values()).filter((g) =>
-            (g.format === "sro" || g.format === "grcup") &&
+        if (lapsVenue && lapsVenue !== "RACE" && !/^\d+$/.test(lapsVenue)) {
+          const venueMatches = sroGrcupGroups.filter((g) =>
             normalizeEventKey(g.id).endsWith(`_${lapsVenue}`)
           );
           matchingGroup =
             venueMatches.find((g) => lapsIsGrcup ? g.format === "grcup" : g.format === "sro") ||
-            venueMatches[0] ||
-            null;
+            venueMatches[0] || null;
+        }
+      }
+
+      // Strategy 4: Last resort — only one group of matching format needs this file
+      if (!matchingGroup) {
+        const formatGroups = sroGrcupGroups.filter(
+          (g) => g.format === (lapsIsGrcup ? "grcup" : "sro") && !g.files.has(pending.type)
+        );
+        if (formatGroups.length === 1) matchingGroup = formatGroups[0];
+        if (!matchingGroup) {
+          const anyNeeding = sroGrcupGroups.filter((g) => !g.files.has(pending.type));
+          if (anyNeeding.length === 1) matchingGroup = anyNeeding[0];
         }
       }
       if (matchingGroup) {
@@ -539,6 +584,14 @@ export async function classifyFiles(
     groups.set(id, { ...group, complete, missingRequired, warnings });
   }
 
+  // Fill season from date where missing
+  for (const [, group] of groups) {
+    if (!group.metadata.season && group.metadata.date) {
+      const year = group.metadata.date.split("-")[0];
+      if (/^\d{4}$/.test(year)) group.metadata.season = year;
+    }
+  }
+
   return { groups, unmatched, unsupported };
 }
 
@@ -565,7 +618,7 @@ function mergeIntoGroup(groups: Map<string, RaceGroup>, detected: DetectedFile) 
       date: detected.metadata.date || "",
       track: detected.metadata.track || "",
       series: detected.metadata.series || "",
-      season: detected.metadata.season || String(new Date().getFullYear()),
+      season: detected.metadata.season || "",
     };
     groups.set(gKey, {
       id: gKey,
@@ -753,26 +806,80 @@ function extractRaceSignature(key: string): { raceNum: string; venue: string } |
   const m = key.match(/RACE_(\d+)/);
   if (!m) return null;
   const tokens = key.split("_");
-  const venue = tokens[tokens.length - 1];
+  // Find the last token that looks like a venue code (skip 8-digit dates like 20250426)
+  let venue = "";
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (/^\d{8}$/.test(tokens[i])) continue;
+    venue = tokens[i];
+    break;
+  }
   return { raceNum: m[1], venue };
 }
 
+/** Extract metadata from a bracketed tag in the filename.
+ *  e.g. "03_Results GR Cup Race 1 [Barber Motorsports Park, 2025-04-26, GR Cup].CSV"
+ *  → { track: "Barber Motorsports Park", date: "2025-04-26", season: "2025", series: "GR_CUP" }
+ */
+function extractFilenameMeta(filename: string): Partial<RaceGroupMetadata> {
+  const meta: Partial<RaceGroupMetadata> = {};
+  const nameWithoutExt = filename.replace(/\.(csv|pdf|json)$/i, "");
+  const m = nameWithoutExt.match(/\[(.+?),\s*(\d{4}-\d{2}-\d{2}),\s*(.+?)\]\s*$/);
+  if (m) {
+    meta.track = m[1].trim();
+    meta.date = m[2];
+    meta.season = m[2].split("-")[0];
+    const seriesLabel = m[3].trim();
+    if (/gr\s*cup/i.test(seriesLabel)) meta.series = "GR_CUP";
+    else if (/gt4|sro/i.test(seriesLabel)) meta.series = "SRO";
+    else meta.series = seriesLabel;
+    // Build race name from filename + tag (e.g. "GR Cup Race 1 — Barber Motorsports Park")
+    const raceNum = nameWithoutExt.match(/Race[\s_](\d+)/i);
+    const displaySeries = meta.series === "GR_CUP" ? "GR Cup" : meta.series === "SRO" ? "SRO" : seriesLabel;
+    if (raceNum) {
+      meta.name = `${displaySeries} Race ${raceNum[1]} — ${meta.track}`;
+    } else {
+      meta.name = `${displaySeries} — ${meta.track}`;
+    }
+  }
+  return meta;
+}
+
+/** Words that appear in Alkamel filenames after "Race N" but are not venue codes */
+const DOC_STRIP_WORDS = /\b(Official|Provisional|Results|AnalysisEnduranceWithSections|by|Class|GT4|GR[\s_]?Cup|SRO|GTWCA|GTA|TGRNA)\b/gi;
+
 /** Extract a grouping key from Alkamel CSV filenames.
  *  e.g. "05_Provisional_Results_by_Class_Race_1_COTA.csv" → "RACE_1_COTA"
+ *  e.g. "03_Results GR Cup Race 1 Official.CSV" → "RACE_1"
  *  Falls back to venue-only key after stripping doc-type words.
  *  Always returns a normalized uppercase key. */
 function extractAlkamelEventKey(filename: string): string {
-  const fn = filename.replace(/\.(csv|pdf)$/i, "");
+  let fn = filename.replace(/\.(csv|pdf)$/i, "");
+  // Extract and strip metadata tag: " [Track, YYYY-MM-DD, Series]"
+  const tagMatch = fn.match(/\s*\[(.+?),\s*(\d{4}-\d{2}-\d{2})(?:,\s*.+?)?\]\s*$/);
+  if (tagMatch) {
+    fn = fn.slice(0, tagMatch.index!);
+  }
+  // Build tag suffix (TRACK_YYYYMMDD) for unique grouping across events
+  let tagSuffix = "";
+  if (tagMatch) {
+    const track = normalizeEventKey(tagMatch[1].trim());
+    const date = tagMatch[2].replace(/-/g, "");
+    tagSuffix = `_${track}_${date}`;
+  }
   // Try to extract "Race_N_VENUE" or "Race N VENUE" pattern
   const raceMatch = fn.match(/(Race[\s_]\d+.*)/i);
-  if (raceMatch) return normalizeEventKey(raceMatch[1]);
+  if (raceMatch) {
+    // Strip doc-type words (Official, GR Cup, GT4, etc.) to leave just "Race N [VENUE]"
+    let key = raceMatch[1].replace(DOC_STRIP_WORDS, "");
+    return normalizeEventKey(key) + tagSuffix;
+  }
   // Strip leading number prefix and known document-type words to get venue-only key
   let stripped = fn.replace(/^\d+_/, "");
   stripped = stripped
-    .replace(/\b(Official|Provisional|Results|AnalysisEnduranceWithSections|by|Class|GT4)\b/gi, "")
+    .replace(DOC_STRIP_WORDS, "")
     .replace(/[\s_]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return normalizeEventKey(stripped || fn);
+  return normalizeEventKey(stripped || fn) + tagSuffix;
 }
 
 function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<RaceGroupMetadata> {

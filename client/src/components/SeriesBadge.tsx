@@ -37,12 +37,26 @@ const SERIES_CONFIG: Record<
   },
 };
 
+// Normalize series string for lookup: "GR Cup" → "GR_CUP", "gr_cup" → "GR_CUP"
+function normalizeSeriesKey(series: string): string {
+  return series.toUpperCase().replace(/[\s-]+/g, "_");
+}
+
 const SIZE_HEIGHT: Record<BadgeSize, number> = { sm: 12, md: 16, lg: 20 };
 
+const DISPLAY_LABELS: Record<string, string> = {
+  GR_CUP: "GR Cup",
+};
+
 function getConfig(series: string) {
-  const key = series.toUpperCase();
+  const key = normalizeSeriesKey(series);
+  // Direct match first
+  if (SERIES_CONFIG[key]) {
+    return { ...SERIES_CONFIG[key], label: DISPLAY_LABELS[key] || key };
+  }
+  // Substring match fallback
   for (const [name, config] of Object.entries(SERIES_CONFIG)) {
-    if (key.includes(name)) return { ...config, label: name };
+    if (key.includes(name)) return { ...config, label: DISPLAY_LABELS[name] || name };
   }
   return {
     color: "#4B5563",

@@ -81,6 +81,9 @@ export async function ingestRaceData(
 
   // ── Insert into DB (transactional) ───────────────────────────────
   const result = await prisma.$transaction(async (tx) => {
+    // Find or create Event for this race
+    const eventId = await findOrCreateEvent(tx, metadata);
+
     // Create Race
     const race = await tx.race.create({
       data: {
@@ -94,6 +97,7 @@ export async function ingestRaceData(
         maxLap: data.maxLap,
         totalCars: carNums.length,
         createdBy,
+        eventId,
         chartData: data as any,
         annotationData: annotations as any,
       },
@@ -254,4 +258,59 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
   }, { timeout: 30000 });
 
   return { raceId, ...result, warnings: [] };
+}
+
+// ─── Event auto-grouping ──────────────────────────────────────────────────────
+
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const STRIP_WORDS = /\b(raceway|speedway|park|circuit|international|motorsports|motorplex)\b/gi;
+
+function normalizeTrack(track: string): string {
+  return track.toLowerCase().trim().replace(STRIP_WORDS, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Find an existing event or create a new one for this race's metadata.
+ * Groups by: same series, matching track name, dates within 3 days.
+ */
+async function findOrCreateEvent(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  metadata: RaceMetadata
+): Promise<string> {
+  const season = String(metadata.season);
+  const normTrack = normalizeTrack(metadata.track);
+
+  // Look for existing events with same series and season
+  const candidates = await tx.event.findMany({
+    where: {
+      series: metadata.series,
+      season,
+    },
+    select: { id: true, track: true, date: true },
+  });
+
+  for (const candidate of candidates) {
+    const candNorm = normalizeTrack(candidate.track);
+    const trackMatch = candNorm === normTrack ||
+      (candNorm.split(" ")[0] === normTrack.split(" ")[0] && candNorm.split(" ")[0].length >= 3);
+    const dateClose = Math.abs(candidate.date.getTime() - metadata.date.getTime()) <= THREE_DAYS_MS;
+
+    if (trackMatch && dateClose) {
+      return candidate.id;
+    }
+  }
+
+  // No match — create new event
+  const event = await tx.event.create({
+    data: {
+      name: `${metadata.track} ${season}`,
+      series: metadata.series,
+      track: metadata.track,
+      date: metadata.date,
+      season,
+      status: "PUBLISHED",
+    },
+  });
+
+  return event.id;
 }

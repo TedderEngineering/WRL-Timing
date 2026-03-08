@@ -7,15 +7,13 @@ import { useFilterOptions } from "../hooks/useChartData";
 import { SeriesBadge } from "../components/SeriesBadge";
 import type { EventSummary } from "@shared/types";
 
-const ALL_SERIES = ["IMSA", "SRO", "WRL"];
+const FALLBACK_SERIES = ["IMSA", "SRO", "GR_CUP", "WRL"];
 
 type SortKey = "date-desc" | "date-asc" | "track-az";
 
 export function RaceListPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [seriesFilters, setSeriesFilters] = useState<Set<string>>(
-    () => new Set(ALL_SERIES),
-  );
+  const [seriesFilters, setSeriesFilters] = useState<Set<string> | null>(null);
   const [seasonFilter, setSeasonFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("date-desc");
 
@@ -26,10 +24,23 @@ export function RaceListPage() {
 
   const filters = useFilterOptions();
 
-  const allSelected = seriesFilters.size === ALL_SERIES.length;
+  // Build the canonical series list from DB + fallbacks
+  const allSeries = useMemo(() => {
+    const dbSeries = filters?.series ?? [];
+    const merged = new Set([...FALLBACK_SERIES, ...dbSeries]);
+    return Array.from(merged);
+  }, [filters]);
+
+  // Initialize series filters once allSeries is known
+  if (seriesFilters === null && allSeries.length > 0) {
+    setSeriesFilters(new Set(allSeries));
+  }
+  const activeFilters = seriesFilters ?? new Set(allSeries);
+
+  const allSelected = activeFilters.size >= allSeries.length;
 
   // Derive a single series string for the API (or undefined if multi/all)
-  const seriesParam = seriesFilters.size === 1 ? [...seriesFilters][0] : undefined;
+  const seriesParam = activeFilters.size === 1 ? [...activeFilters][0] : undefined;
 
   // Fetch default events on mount and when filters change
   useEffect(() => {
@@ -41,9 +52,9 @@ export function RaceListPage() {
     })
       .then((data) => {
         // Client-side multi-series filter when not all selected and more than one
-        if (!allSelected && seriesFilters.size > 1) {
-          setEvents(data.filter((ev) => seriesFilters.has(ev.series.toUpperCase())));
-        } else if (!allSelected && seriesFilters.size === 0) {
+        if (!allSelected && activeFilters.size > 1) {
+          setEvents(data.filter((ev) => activeFilters.has(ev.series)));
+        } else if (!allSelected && activeFilters.size === 0) {
           setEvents([]);
         } else {
           setEvents(data);
@@ -51,7 +62,7 @@ export function RaceListPage() {
       })
       .catch(() => setEventsError("Failed to load events"))
       .finally(() => setEventsLoading(false));
-  }, [seriesParam, seriesFilters.size, seasonFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seriesParam, activeFilters.size, seasonFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Client-side sort
   const sortedEvents = useMemo(() => {
@@ -81,13 +92,13 @@ export function RaceListPage() {
 
   // Filter search results client-side for multi-series
   const filteredSearchResults =
-    searchResults && !allSelected && seriesFilters.size > 0
-      ? searchResults.filter((sr) => seriesFilters.has(sr.series.toUpperCase()))
+    searchResults && !allSelected && activeFilters.size > 0
+      ? searchResults.filter((sr) => activeFilters.has(sr.series))
       : searchResults;
 
   const toggleSeries = (s: string) => {
     setSeriesFilters((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev ?? allSeries);
       if (next.has(s)) {
         next.delete(s);
       } else {
@@ -100,7 +111,7 @@ export function RaceListPage() {
   const hasActiveFilters = !allSelected || seasonFilter !== "" || searchQuery !== "";
 
   const clearFilters = () => {
-    setSeriesFilters(new Set(ALL_SERIES));
+    setSeriesFilters(new Set(allSeries));
     setSeasonFilter("");
     setSearchQuery("");
   };
@@ -144,8 +155,8 @@ export function RaceListPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         {/* Series filter chips */}
         <div className="flex gap-2 flex-wrap">
-          {ALL_SERIES.map((s) => {
-            const active = seriesFilters.has(s);
+          {allSeries.map((s) => {
+            const active = activeFilters.has(s);
             return (
               <button
                 key={s}
