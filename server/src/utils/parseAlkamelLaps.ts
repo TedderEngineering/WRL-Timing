@@ -57,8 +57,8 @@ const FLAG_MAP: Record<string, string> = {
  *
  * Column indices (0-indexed after splitting on ";" and trimming):
  *   0:NUMBER  2:LAP_NUMBER  3:LAP_TIME  5:CROSSING_FINISH_LINE_IN_PIT
- *   13:ELAPSED  19:DRIVER_NAME  20:PIT_TIME  21:CLASS  24:TEAM
- *   26:FLAG_AT_FL
+ *   13:ELAPSED  19:DRIVER_NAME  20:PIT_TIME  21:CLASS  23:TEAM
+ *   24:MANUFACTURER  25:FLAG_AT_FL
  */
 export function parseAlkamelLaps(csvText: string): AlkamelLap[] {
   const clean = csvText.replace(/^\uFEFF/, "");
@@ -80,14 +80,14 @@ export function parseAlkamelLaps(csvText: string): AlkamelLap[] {
 
     const lapTimeSec = parseTimestamp(cols[3]) ?? 0;
     const elapsedSec = parseTimestamp(cols[13]) ?? 0;
-    const flagRaw = (cols[26] || "").toUpperCase();
+    const flagRaw = (cols[25] || "").toUpperCase();
     const flagStatus = FLAG_MAP[flagRaw] || "GREEN";
     const pitField = (cols[5] || "").trim();
     const isPit = pitField.length > 0;
     const pitTimeSec = parseTimestamp(cols[20] || "");
     const driverName = cols[19] || "";
     const carClass = cols[21] || "";
-    const team = cols[24] || "";
+    const team = cols[23] || "";
 
     laps.push({
       carNumber,

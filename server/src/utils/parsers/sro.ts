@@ -23,10 +23,10 @@ export const sroParser: RaceDataParser = {
   fileSlots: [
     {
       key: "resultsCsv",
-      label: "Results CSV (05_Provisional_Results…)",
+      label: "Results CSV (05_Provisional_Results or 03_Results)",
       description:
-        "SRO results export with final classification, car numbers, classes, and finishing positions.",
-      required: true,
+        "SRO results export with final classification, car numbers, classes, and finishing positions. Preferred but optional — laps CSV carries sufficient data for import.",
+      required: false,
     },
     {
       key: "lapsCsv",
@@ -39,16 +39,22 @@ export const sroParser: RaceDataParser = {
 
   parse(files) {
     const { resultsCsv, lapsCsv } = files;
-    if (!resultsCsv) throw new Error("Missing SRO results CSV");
     if (!lapsCsv) throw new Error("Missing SRO laps CSV");
 
     const warnings: string[] = [];
 
-    // ── Parse results for entry metadata ────────────────────────
-    const entries = parseSROResults(resultsCsv);
-    if (entries.length === 0) throw new Error("No entries found in SRO results CSV");
-
-    const entryMap = new Map(entries.map((e) => [e.carNumber, e]));
+    // ── Parse results for entry metadata (optional — PDF-only imports skip this) ──
+    let entryMap = new Map<string, import("../parseSROResults.js").SROEntry>();
+    if (resultsCsv) {
+      const entries = parseSROResults(resultsCsv);
+      if (entries.length === 0) {
+        warnings.push("Results CSV contained no entries — using laps data for metadata");
+      } else {
+        entryMap = new Map(entries.map((e) => [e.carNumber, e]));
+      }
+    } else {
+      warnings.push("No results CSV — positions and metadata derived from laps data");
+    }
 
     // ── Parse laps and derive positions ─────────────────────────
     const rawLaps = parseAlkamelLaps(lapsCsv);
