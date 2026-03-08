@@ -397,9 +397,12 @@ export async function classifyFiles(
 
       // Enrich with metadata from filename tag (e.g., "[Barber, 2025-04-26, GR Cup]")
       // Tag metadata is more specific (includes track), so it overrides event-key-derived values
+      // Exception: IMSA JSON files already have rich event names (e.g., "Rolex 24 at Daytona")
+      // that should not be replaced by the generic tag-derived name
       const fnameMeta = extractFilenameMeta(file.name);
       for (const [k, v] of Object.entries(fnameMeta)) {
         if (v) {
+          if (k === "name" && detected.format === "imsa" && detected.metadata.name) continue;
           (detected.metadata as any)[k] = v;
         }
       }
@@ -521,11 +524,19 @@ export async function classifyFiles(
         mergeIntoGroup(groups, pending);
       } else if (pending.type === "alkamelLapsCsv") {
         // Fallback: IMSA CSVs (same Alkamel format) attach to IMSA group as timeCardsCsv
-        const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
-        if (imsaGroup) {
+        const imsaGroups = Array.from(groups.values()).filter((g) => g.format === "imsa");
+        let imsaMatch = null;
+        // Match by tag metadata (track + date) when multiple IMSA groups exist
+        if (pending.metadata.track && pending.metadata.date && imsaGroups.length > 1) {
+          imsaMatch = imsaGroups.find((g) =>
+            g.metadata.track === pending.metadata.track && g.metadata.date === pending.metadata.date
+          ) || null;
+        }
+        if (!imsaMatch) imsaMatch = imsaGroups[0] || null;
+        if (imsaMatch) {
           pending.type = "timeCardsCsv" as FileType;
           pending.format = "imsa";
-          pending.groupKey = imsaGroup.id;
+          pending.groupKey = imsaMatch.id;
           mergeIntoGroup(groups, pending);
         } else {
           unmatched.push(pending);
