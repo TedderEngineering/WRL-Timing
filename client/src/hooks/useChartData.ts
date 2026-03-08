@@ -25,6 +25,10 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ChartDataError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Track which raceId the current data belongs to, so we never return
+  // stale data from a previous race during the gap between id change
+  // and effect execution.
+  const [fetchedId, setFetchedId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     // Wait for auth to resolve so the request carries the token
@@ -33,6 +37,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     if (!raceId) {
       setIsLoading(false);
       setError({ message: "No race ID provided" });
+      setFetchedId(undefined);
       return;
     }
 
@@ -46,6 +51,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     setData(null);
     setAnnotations(null);
     setRaceMeta(null);
+    setFetchedId(undefined);
 
     api
       .get<ChartDataResponse>(`/races/${raceId}/chart-data`, { signal: controller.signal })
@@ -54,6 +60,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
         setData(response.data as unknown as RaceChartData);
         setAnnotations((response.annotations || {}) as unknown as AnnotationData);
         setRaceMeta(response.race);
+        setFetchedId(raceId);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -63,13 +70,25 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
         } else {
           setError({ message: err.message || "Failed to load chart data" });
         }
+        setFetchedId(raceId);
         setIsLoading(false);
       });
 
     return () => controller.abort();
   }, [raceId, authLoading]);
 
-  return { data, annotations, raceMeta, isLoading: authLoading || isLoading, error };
+  // If raceId changed but the effect hasn't run yet, the stored data
+  // belongs to a previous race. Return null to prevent stale-data
+  // consumption (e.g. chart init using wrong car numbers).
+  const isStale = raceId !== fetchedId;
+
+  return {
+    data: isStale ? null : data,
+    annotations: isStale ? null : annotations,
+    raceMeta: isStale ? null : raceMeta,
+    isLoading: authLoading || isLoading || isStale,
+    error: isStale ? null : error,
+  };
 }
 
 // ─── Race list fetching ──────────────────────────────────────────────────────

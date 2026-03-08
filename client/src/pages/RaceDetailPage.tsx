@@ -99,8 +99,12 @@ export function RaceDetailPage() {
   const [classView, setClassView] = useState("");
   const [activeLap, setActiveLap] = useState<number | null>(null);
 
-  // Initialize chart state when race data loads (or when race changes)
+  // Reset chart init tracking when race changes so the init effect
+  // re-runs when the NEW race's data arrives (prevents stale init).
   const chartInitId = useRef<string | null>(null);
+  useEffect(() => { chartInitId.current = null; }, [id]);
+
+  // Initialize chart state when race data loads (or when race changes)
   useEffect(() => {
     if (!data || !id || chartInitId.current === id) return;
     chartInitId.current = id;
