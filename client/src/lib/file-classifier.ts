@@ -10,6 +10,8 @@ export type FileType =
   | "flagsPdf"
   | "sroResultsCsv"
   | "grResultsCsv"
+  | "sroResultsPdf"
+  | "grResultsPdf"
   | "alkamelLapsCsv"
   | "unsupportedPdf"
   | "unknown";
@@ -41,6 +43,7 @@ export interface RaceGroup {
   files: Map<FileType, DetectedFile>;
   complete: boolean;
   missingRequired: string[];
+  warnings?: string[];
   validation: ValidationState | null;
   importStatus: "idle" | "importing" | "success" | "error";
   importResult?: { raceId: string; entriesCreated: number; lapsCreated: number };
@@ -86,6 +89,8 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   flagsPdf: "flagsJson", // PDF flags map to flagsJson slot (server handles base64)
   sroResultsCsv: "resultsCsv",
   grResultsCsv: "resultsCsv",
+  sroResultsPdf: "resultsPdf",
+  grResultsPdf: "resultsPdf",
   alkamelLapsCsv: "lapsCsv",
   unsupportedPdf: "unknown",
   unknown: "unknown",
@@ -101,6 +106,8 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   flagsPdf: "Flags PDF",
   sroResultsCsv: "Results CSV",
   grResultsCsv: "Results CSV",
+  sroResultsPdf: "Results PDF",
+  grResultsPdf: "Results PDF",
   alkamelLapsCsv: "Laps CSV",
   unsupportedPdf: "Unsupported PDF",
   unknown: "Unknown",
@@ -136,20 +143,47 @@ export function classifyFile(file: File, content: string): DetectedFile {
   // PDF detection
   if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
     const fn = file.name.toLowerCase();
-    const isSroGrcupAdjacent =
-      /grcup|gr_cup|sro|gt4/.test(fn) ||
-      /^0[05]_/.test(fn) ||
-      (/^20_/.test(fn) && !/time_?cards|imsa|weathertech/.test(fn));
 
-    if (isSroGrcupAdjacent) {
+    // GR Cup results PDF (00_ prefix)
+    if (/^00_/.test(fn)) {
+      result.type = "grResultsPdf";
+      result.format = "grcup";
+      const grKey = extractAlkamelEventKey(file.name);
+      const grMeta = extractAlkamelMetadata(grKey, "GR_CUP");
+      result.metadata = grMeta;
+      result.groupKey = `grcup_${grKey}`;
+      return result;
+    }
+
+    // SRO results PDF (05_ prefix)
+    if (/^05_/.test(fn)) {
+      result.type = "sroResultsPdf";
+      result.format = "sro";
+      const sroKey = extractAlkamelEventKey(file.name);
+      const sroMeta = extractAlkamelMetadata(sroKey, "SRO");
+      result.metadata = sroMeta;
+      result.groupKey = `sro_${sroKey}`;
+      return result;
+    }
+
+    // Pit stop time card PDF (20_ prefix)
+    if (/^20_/.test(fn) && !/time_?cards|imsa|weathertech/.test(fn)) {
+      result.type = "unsupportedPdf";
+      result.format = null;
+      result.warning = "Pit stop time card PDF — not required for import";
+      return result;
+    }
+
+    // Other SRO/GR Cup adjacent PDFs
+    if (/grcup|gr_cup|sro|gt4/.test(fn)) {
       result.type = "unsupportedPdf";
       result.format = null;
       return result;
     }
 
+    // IMSA flags PDF
     result.type = "flagsPdf";
     result.format = "imsa";
-    // Group with any existing IMSA group (resolved later in classifyFiles)
     result.groupKey = "__pdf_pending__";
     return result;
   }
@@ -414,8 +448,8 @@ export async function classifyFiles(
 
   // Recalculate completeness for all groups
   for (const [id, group] of groups) {
-    const { complete, missingRequired } = checkCompleteness(group);
-    groups.set(id, { ...group, complete, missingRequired });
+    const { complete, missingRequired, warnings } = checkCompleteness(group);
+    groups.set(id, { ...group, complete, missingRequired, warnings });
   }
 
   return { groups, unmatched, unsupported };
@@ -479,14 +513,25 @@ function mergeIntoGroup(groups: Map<string, RaceGroup>, detected: DetectedFile) 
   }
 }
 
-function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequired: string[] } {
+function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequired: string[]; warnings: string[] } {
   const required = REQUIRED_SLOTS[group.format] || [];
   const missingRequired: string[] = [];
+  const warnings: string[] = [];
   const hasCsv = group.files.has("timeCardsCsv" as FileType);
   for (const slot of required) {
     if (!group.files.has(slot)) {
       // timeCardsJson is satisfied when timeCardsCsv is present instead
       if (slot === "timeCardsJson" && hasCsv) continue;
+      // sroResultsCsv is satisfied when sroResultsPdf is present (with warning)
+      if (slot === "sroResultsCsv" && group.files.has("sroResultsPdf" as FileType)) {
+        warnings.push("Results PDF only — CSV version preferred");
+        continue;
+      }
+      // grResultsCsv is satisfied when grResultsPdf is present (with warning)
+      if (slot === "grResultsCsv" && group.files.has("grResultsPdf" as FileType)) {
+        warnings.push("Results PDF only — CSV version preferred");
+        continue;
+      }
       missingRequired.push(FILE_TYPE_LABELS[slot]);
     }
   }
@@ -495,7 +540,7 @@ function checkCompleteness(group: RaceGroup): { complete: boolean; missingRequir
   if (tcJson?.warning && !hasCsv) {
     missingRequired.push(FILE_TYPE_LABELS["timeCardsCsv" as FileType]);
   }
-  return { complete: missingRequired.length === 0, missingRequired };
+  return { complete: missingRequired.length === 0, missingRequired, warnings };
 }
 
 /** Extract IMSA session metadata from a string peek (first ~2000 chars) using regex.
@@ -622,7 +667,7 @@ function extractRaceSignature(key: string): { raceNum: string; venue: string } |
  *  Falls back to full filename (minus extension) if no pattern matches.
  *  Always returns a normalized uppercase key. */
 function extractAlkamelEventKey(filename: string): string {
-  const fn = filename.replace(/\.csv$/i, "");
+  const fn = filename.replace(/\.(csv|pdf)$/i, "");
   // Try to extract "Race_N_VENUE" or "Race N VENUE" pattern
   const raceMatch = fn.match(/(Race[\s_]\d+.*)/i);
   if (raceMatch) return normalizeEventKey(raceMatch[1]);
