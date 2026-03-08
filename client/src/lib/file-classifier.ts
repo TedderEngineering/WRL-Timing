@@ -144,25 +144,23 @@ export function classifyFile(file: File, content: string): DetectedFile {
   if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
     const fn = file.name.toLowerCase();
 
-    // GR Cup results PDF (00_ prefix)
-    if (/^00_/.test(fn)) {
-      result.type = "grResultsPdf";
-      result.format = "grcup";
-      const grKey = extractAlkamelEventKey(file.name);
-      const grMeta = extractAlkamelMetadata(grKey, "GR_CUP");
-      result.metadata = grMeta;
-      result.groupKey = `grcup_${grKey}`;
-      return result;
-    }
-
-    // SRO results PDF (05_ prefix)
-    if (/^05_/.test(fn)) {
-      result.type = "sroResultsPdf";
-      result.format = "sro";
-      const sroKey = extractAlkamelEventKey(file.name);
-      const sroMeta = extractAlkamelMetadata(sroKey, "SRO");
-      result.metadata = sroMeta;
-      result.groupKey = `sro_${sroKey}`;
+    // Results PDF (00_ or 05_ prefix) — use filename keywords for series
+    if (/^0[035]_/.test(fn)) {
+      const isGrcup = /gr[\s_]?cup/i.test(fn);
+      if (isGrcup) {
+        result.type = "grResultsPdf";
+        result.format = "grcup";
+        const grKey = extractAlkamelEventKey(file.name);
+        result.metadata = extractAlkamelMetadata(grKey, "GR_CUP");
+        result.groupKey = `grcup_${grKey}`;
+      } else {
+        // Default to SRO for 05_/03_ prefix and non-GR Cup 00_ files (covers GT4, generic)
+        result.type = "sroResultsPdf";
+        result.format = "sro";
+        const sroKey = extractAlkamelEventKey(file.name);
+        result.metadata = extractAlkamelMetadata(sroKey, "SRO");
+        result.groupKey = `sro_${sroKey}`;
+      }
       return result;
     }
 
@@ -255,7 +253,21 @@ export function classifyFile(file: File, content: string): DetectedFile {
     const headerLine = clean.split("\n")[0] || "";
     const headerLower = headerLine.toLowerCase();
 
+    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT
+    // Must be checked BEFORE IMSA — Alkamel CSVs also contain number/driver_number/lap_number/elapsed
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("crossing_finish_line_in_pit")
+    ) {
+      result.type = "alkamelLapsCsv";
+      // Format determined during pending resolution (SRO, GR Cup, or IMSA fallback)
+      result.format = "sro"; // default, corrected during resolution
+      result.groupKey = extractAlkamelEventKey(file.name);
+      return result;
+    }
+
     // IMSA Time Cards CSV: semicolon-delimited with NUMBER, DRIVER_NUMBER, LAP_NUMBER, ELAPSED
+    // (Alkamel CSVs with CROSSING_FINISH_LINE_IN_PIT are caught above)
     if (
       headerLower.includes("number") &&
       headerLower.includes("driver_number") &&
@@ -264,7 +276,6 @@ export function classifyFile(file: File, content: string): DetectedFile {
     ) {
       result.type = "timeCardsCsv";
       result.format = "imsa";
-      // Group with any existing IMSA group (resolved later like PDFs)
       result.groupKey = "__imsa_csv_pending__";
       return result;
     }
@@ -298,7 +309,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // GR Cup Results CSV: semicolon-delimited with DRIVER_FIRSTNAME column
+    // GR Cup Results CSV: semicolon-delimited with DRIVER_FIRSTNAME (no number suffix)
     if (
       headerLower.includes(";") &&
       headerLower.includes("driver_firstname") &&
@@ -313,15 +324,18 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT
+    // SRO Results CSV (generic Alkamel export): semicolon-delimited with DRIVER1_FIRSTNAME (numbered)
     if (
       headerLower.includes(";") &&
-      headerLower.includes("crossing_finish_line_in_pit")
+      headerLower.includes("driver1_firstname") &&
+      headerLower.includes("position")
     ) {
-      result.type = "alkamelLapsCsv";
-      // Format determined during pending resolution (SRO or GR Cup)
-      result.format = "sro"; // default, will be corrected during resolution
-      result.groupKey = extractAlkamelEventKey(file.name);
+      result.type = "sroResultsCsv";
+      result.format = "sro";
+      const sroKey = extractAlkamelEventKey(file.name);
+      const sroMeta = extractAlkamelMetadata(sroKey, "SRO");
+      result.metadata = sroMeta;
+      result.groupKey = `sro_${sroKey}`;
       return result;
     }
 
@@ -432,7 +446,16 @@ export async function classifyFiles(
         pending.format = matchingGroup.format;
         mergeIntoGroup(groups, pending);
       } else {
-        unmatched.push(pending);
+        // Fallback: IMSA CSVs (same Alkamel format) attach to IMSA group as timeCardsCsv
+        const imsaGroup = Array.from(groups.values()).find((g) => g.format === "imsa");
+        if (imsaGroup) {
+          pending.type = "timeCardsCsv" as FileType;
+          pending.format = "imsa";
+          pending.groupKey = imsaGroup.id;
+          mergeIntoGroup(groups, pending);
+        } else {
+          unmatched.push(pending);
+        }
       }
     } else {
       // IMSA PDFs and CSVs → attach to first IMSA group
