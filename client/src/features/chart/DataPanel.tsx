@@ -1,5 +1,8 @@
+import { useState, useCallback, useRef } from "react";
 import { formatLapTime, getCompColor, type LapInfoData } from "./chart-renderer";
 import type { RaceChartData } from "@shared/types";
+import { useAuth } from "../../features/auth/AuthContext";
+import { hasTeamAccess } from "../../lib/utils";
 
 interface DataPanelProps {
   info: LapInfoData | null;
@@ -25,6 +28,29 @@ function secToDisplay(sec: number): string {
 }
 
 export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, setSidePanel }: DataPanelProps) {
+  const { user } = useAuth();
+  const isTeam = hasTeamAccess(user);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const showTeamToast = useCallback(() => {
+    setToast("Interactive analysis is available with a Team subscription");
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // Gated click handler — opens panel for Team users, shows toast for others
+  const gatedClick = useCallback(
+    (panel: string) => {
+      if (isTeam) {
+        setSidePanel(panel);
+      } else {
+        showTeamToast();
+      }
+    },
+    [isTeam, setSidePanel, showTeamToast],
+  );
+
   if (!info) {
     return (
       <div
@@ -54,7 +80,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
 
   return (
     <div
-      className="flex items-stretch overflow-hidden"
+      className="relative flex items-stretch overflow-hidden"
       style={{ height: 88, background: "#0c0e16", borderTop: "1px solid rgba(255,255,255,0.08)" }}
     >
       {/* Mobile nav prev */}
@@ -107,7 +133,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
         <div
           className="flex flex-col justify-center px-4 shrink-0 cursor-pointer hover:bg-white/[0.03] transition-colors"
           style={{ width: "auto", minWidth: 120, maxWidth: 420 }}
-          onClick={() => setSidePanel("pit")}
+          onClick={() => gatedClick("pit")}
         >
           <ZoneLabel>{info.pitInfo?.pitLabel || "Pit Stop"}</ZoneLabel>
           <div className="flex gap-3 sm:gap-5">
@@ -133,7 +159,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
           <Divider />
           <div
             className="hidden lg:flex items-center gap-4 px-4 shrink-0 cursor-pointer hover:bg-white/[0.03] transition-colors"
-            onClick={() => setSidePanel("gap")}
+            onClick={() => gatedClick("gap")}
           >
             {info.paceInfo.compAvg && (
               <div className="flex flex-col justify-center">
@@ -173,7 +199,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
       {/* Zone 5 — Reason / position change events */}
       <div
         className={`flex-1 min-w-0 flex flex-col justify-center px-4 overflow-hidden${info.reason ? " cursor-pointer hover:bg-white/[0.03] transition-colors" : ""}`}
-        onClick={info.reason ? () => setSidePanel("event") : undefined}
+        onClick={info.reason ? () => gatedClick("event") : undefined}
       >
         {isPit && info.reason ? (
           <>
@@ -211,7 +237,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
       <div
         className="hidden sm:flex flex-col justify-center px-4 shrink-0 text-right cursor-pointer hover:bg-white/[0.03] transition-colors"
         style={{ width: 180 }}
-        onClick={() => setSidePanel("gap")}
+        onClick={() => gatedClick("gap")}
       >
         <ZoneLabel>Car Info</ZoneLabel>
         <div className="text-[13px] font-semibold text-white">#{focusNum}</div>
@@ -227,7 +253,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
       <Divider className="hidden sm:block" />
       <div className="hidden sm:flex items-center justify-center shrink-0" style={{ width: 100 }}>
         <button
-          onClick={() => setSidePanel("h2h")}
+          onClick={() => gatedClick("h2h")}
           className="px-3 py-1.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors hover:bg-white/[0.08]"
           style={{
             background: "rgba(99,102,241,0.1)",
@@ -243,6 +269,16 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
       <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-l border-white/[0.07] cursor-pointer active:bg-white/5" style={{ color: "rgba(255,255,255,0.4)" }}>
         ▶
       </button>
+
+      {/* Team-gated toast */}
+      {toast && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 -top-12 px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap animate-fade-in pointer-events-none"
+          style={{ background: "rgba(15,17,26,0.95)", border: "1px solid rgba(255,255,255,0.12)", color: "#e2e8f0", zIndex: 50 }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

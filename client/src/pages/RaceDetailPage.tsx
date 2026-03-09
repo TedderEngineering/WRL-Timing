@@ -4,7 +4,7 @@ import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { StrategyTab } from "../features/chart/StrategyTab";
-import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+
 import { CHART_STYLE } from "../features/chart";
 import { getVisibleCars } from "../features/chart/chart-renderer";
 import { api, fetchEvents, fetchEvent } from "../lib/api";
@@ -384,13 +384,12 @@ export function RaceDetailPage() {
       {/* Tab bar + dropdowns on one row */}
       {(() => {
         const isTeam = hasTeamAccess(user);
-        const showDropdowns = activeTab !== "strategy" && activeTab !== "pitanalysis";
+        const showDropdowns = activeTab !== "strategy";
 
         const tabs = [
           { id: "position" as const, label: "Position Trace", locked: false },
           { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
           { id: "strategy" as const, label: "Strategy", locked: !isTeam },
-          { id: "pitanalysis" as const, label: "Pit Analysis", locked: !isTeam },
         ];
 
         return (
@@ -545,14 +544,6 @@ export function RaceDetailPage() {
         />
       )}
 
-      {activeTab === "pitanalysis" && id && (
-        <PitAnalysisTab
-          raceId={id}
-          focusNum={focusNum}
-          setFocusNum={setFocusNum}
-          onSwitchToTrace={() => setActiveTab("position")}
-        />
-      )}
     </div>
   );
 }
