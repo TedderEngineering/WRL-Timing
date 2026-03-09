@@ -26,7 +26,7 @@ const BASE_URL = "https://imsa.results.alkamelcloud.com";
 
 const CHAMPIONSHIP_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /weathertech\s+sportsc/i, label: "IMSA WeatherTech" },
-  { pattern: /airbnb\s+endurance/i, label: "IMSA Endurance" },
+  { pattern: /airbnb\s+endurance/i, label: "IMSA Airbnb Endurance Challenge" },
   { pattern: /michelin\s+pilot\s+challenge/i, label: "IMSA MPC" },
   { pattern: /vp\s+racing/i, label: "IMSA VPRC" },
   { pattern: /mx-?5\s+cup/i, label: "MX-5 Cup" },

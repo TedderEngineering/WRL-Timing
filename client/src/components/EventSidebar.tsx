@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import type { EventWithRaces } from "@shared/types";
 import { fetchEvent } from "../lib/api";
-import { cn } from "../lib/utils";
+import { cn, hasFullAccess } from "../lib/utils";
+import { useAuth } from "../features/auth/AuthContext";
 import { SeriesBadge } from "./SeriesBadge";
+import { UpgradePrompt } from "./UpgradePrompt";
 
 interface EventSidebarProps {
   isCollapsed: boolean;
@@ -40,6 +42,9 @@ export default function EventSidebar({
   mobileOpen,
   onMobileClose,
 }: EventSidebarProps) {
+  const { user } = useAuth();
+  const fullAccess = hasFullAccess(user);
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [shouldNudge, setShouldNudge] = useState(true);
   const hasInteracted = useRef(false);
 
@@ -132,12 +137,30 @@ export default function EventSidebar({
             <div className="py-1">
               {eventData.races.map((race) => {
                 const isActive = selectedRaceId === race.id;
+                const isLocked = !fullAccess && race.accessible === false;
                 const d = new Date(race.date);
                 const dateStr = d.toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 });
                 const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
+
+                if (isLocked) {
+                  return (
+                    <button
+                      key={race.id}
+                      onClick={() => setShowUpgrade(true)}
+                      className="w-full flex items-center gap-2 px-3 h-9 border-l-2 border-transparent"
+                      style={{ filter: "blur(1.5px) grayscale(0.4)", opacity: 0.4 }}
+                    >
+                      <span className="text-sm truncate flex-1 text-gray-500">{race.name}</span>
+                      <svg className="h-3 w-3 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </button>
+                  );
+                }
+
                 return (
                   <Link
                     key={race.id}
@@ -258,12 +281,30 @@ export default function EventSidebar({
                   <div className="py-1">
                     {eventData.races.map((race) => {
                       const isActive = selectedRaceId === race.id;
+                      const isLocked = !fullAccess && race.accessible === false;
                       const d = new Date(race.date);
                       const dateStr = d.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       });
                       const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
+
+                      if (isLocked) {
+                        return (
+                          <button
+                            key={race.id}
+                            onClick={() => setShowUpgrade(true)}
+                            className="w-full flex items-center gap-2 px-3 h-9 border-l-2 border-transparent"
+                            style={{ filter: "blur(1.5px) grayscale(0.4)", opacity: 0.4 }}
+                          >
+                            <span className="text-sm truncate flex-1 text-gray-500">{race.name}</span>
+                            <svg className="h-3 w-3 text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                          </button>
+                        );
+                      }
+
                       return (
                         <Link
                           key={race.id}
@@ -297,6 +338,8 @@ export default function EventSidebar({
           </aside>
         </div>
       )}
+
+      <UpgradePrompt open={showUpgrade} onClose={() => setShowUpgrade(false)} />
     </>
   );
 }

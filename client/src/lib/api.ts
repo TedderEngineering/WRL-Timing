@@ -150,17 +150,20 @@ export const api = new ApiClient();
 
 // ─── Event API ───────────────────────────────────────────────────────────────
 
+export interface EventsResponse {
+  events: EventSummary[];
+  freeAccessRaceIds: string[];
+}
+
 export function fetchEvents(params?: {
   series?: string;
   season?: string;
-}): Promise<EventSummary[]> {
+}): Promise<EventsResponse> {
   const qs = new URLSearchParams();
   if (params?.series) qs.set("series", params.series);
   if (params?.season) qs.set("season", params.season);
   const query = qs.toString();
-  return api
-    .get<{ events: EventSummary[] }>(`/events${query ? `?${query}` : ""}`)
-    .then((r) => r.events);
+  return api.get<EventsResponse>(`/events${query ? `?${query}` : ""}`);
 }
 
 export function fetchEvent(eventId: string): Promise<EventWithRaces> {
@@ -169,10 +172,15 @@ export function fetchEvent(eventId: string): Promise<EventWithRaces> {
 
 // ─── Search API ─────────────────────────────────────────────────────────────
 
+export interface SearchResponse {
+  events: SearchResult[];
+  freeAccessRaceIds: string[];
+}
+
 export async function searchEvents(
   params: { q?: string; series?: string; season?: string },
   signal?: AbortSignal,
-): Promise<SearchResult[]> {
+): Promise<SearchResponse> {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.series) qs.set("series", params.series);
@@ -180,10 +188,10 @@ export async function searchEvents(
   const query = qs.toString();
   try {
     const res = await fetch(`${BASE_URL}/search${query ? `?${query}` : ""}`, { signal });
-    if (!res.ok) return [];
+    if (!res.ok) return { events: [], freeAccessRaceIds: [] };
     const data = await res.json();
-    return data.events ?? [];
+    return { events: data.events ?? [], freeAccessRaceIds: data.freeAccessRaceIds ?? [] };
   } catch {
-    return [];
+    return { events: [], freeAccessRaceIds: [] };
   }
 }

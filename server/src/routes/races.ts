@@ -103,34 +103,33 @@ racesRouter.get(
     try {
       const raceId = req.params.id as string;
 
-      // Premium access gating
+      // Access gating — enforce free-tier limits
       const race = await prisma.race.findUnique({
         where: { id: raceId },
-        select: { id: true, premium: true },
+        select: { id: true, premium: true, createdAt: true },
       });
-      if (race?.premium) {
-        if (!req.user) {
-          throw new AppError(403, "Login required for premium races.", "AUTH_REQUIRED");
-        }
-        if (req.user.role !== "ADMIN") {
+
+      if (race) {
+        // Determine user's plan
+        let userPlan: string | null = null;
+        const userRole = req.user?.role ?? null;
+
+        if (req.user && userRole !== "ADMIN") {
           const sub = await prisma.subscription.findUnique({
             where: { userId: req.user.userId },
           });
-          const isPaid = sub && (sub.plan === "PRO" || sub.plan === "TEAM");
-          const isActive = isPaid && sub.status === "ACTIVE";
-          const inGracePeriod =
-            isPaid &&
-            sub.status === "CANCELED" &&
-            sub.currentPeriodEnd &&
-            sub.currentPeriodEnd > new Date();
+          userPlan = sub?.plan ?? "FREE";
+        }
 
-          if (!isActive && !inGracePeriod) {
-            throw new AppError(
-              403,
-              "Upgrade to Pro or Team to access this race.",
-              "SUBSCRIPTION_REQUIRED"
-            );
+        const access = await raceSvc.canUserAccessRace(race, userPlan, userRole);
+        if (!access.accessible) {
+          if (!req.user) {
+            throw new AppError(403, "Sign in to access this race.", "AUTH_REQUIRED");
           }
+          if (access.reason === "available_soon") {
+            throw new AppError(403, "This race will be available to free members shortly. Pro members get instant access.", "AVAILABLE_SOON");
+          }
+          throw new AppError(403, "Upgrade to Pro or Team to access this race.", "SUBSCRIPTION_REQUIRED");
         }
       }
 

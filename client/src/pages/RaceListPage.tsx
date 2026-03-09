@@ -4,6 +4,8 @@ import { EventCard } from "../components/EventCard";
 import { SearchBar } from "../components/SearchBar";
 import { useEventSearch } from "../hooks/useEventSearch";
 import { useFilterOptions } from "../hooks/useChartData";
+import { useAuth } from "../features/auth/AuthContext";
+import { hasFullAccess } from "../lib/utils";
 import { SeriesBadge } from "../components/SeriesBadge";
 import type { EventSummary } from "@shared/types";
 
@@ -12,6 +14,9 @@ const FALLBACK_SERIES = ["IMSA", "SRO", "GR_CUP", "WRL"];
 type SortKey = "date-desc" | "date-asc" | "track-az";
 
 export function RaceListPage() {
+  const { user } = useAuth();
+  const fullAccess = hasFullAccess(user);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [seriesFilters, setSeriesFilters] = useState<Set<string> | null>(null);
   const [seasonFilter, setSeasonFilter] = useState("");
@@ -19,6 +24,7 @@ export function RaceListPage() {
 
   // Default event list (cached -- not refetched on search clear)
   const [events, setEvents] = useState<EventSummary[]>([]);
+  const [freeAccessRaceIds, setFreeAccessRaceIds] = useState<string[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
@@ -51,13 +57,15 @@ export function RaceListPage() {
       season: seasonFilter || undefined,
     })
       .then((data) => {
+        setFreeAccessRaceIds(data.freeAccessRaceIds);
+        const eventsList = data.events;
         // Client-side multi-series filter when not all selected and more than one
         if (!allSelected && activeFilters.size > 1) {
-          setEvents(data.filter((ev) => activeFilters.has(ev.series)));
+          setEvents(eventsList.filter((ev) => activeFilters.has(ev.series)));
         } else if (!allSelected && activeFilters.size === 0) {
           setEvents([]);
         } else {
-          setEvents(data);
+          setEvents(eventsList);
         }
       })
       .catch(() => setEventsError("Failed to load events"))
@@ -82,11 +90,26 @@ export function RaceListPage() {
     return sorted;
   }, [events, sortBy]);
 
+  // Compute per-event accessibility
+  const freeSet = useMemo(() => new Set(freeAccessRaceIds), [freeAccessRaceIds]);
+
+  const isEventAccessible = (ev: EventSummary): boolean => {
+    if (fullAccess) return true;
+    if (!ev.raceIds || ev.raceIds.length === 0) return false;
+    return ev.raceIds.some((id) => freeSet.has(id));
+  };
+
   // Live search (debounced, abortable)
-  const { results: searchResults, isSearching } = useEventSearch(searchQuery, {
+  const {
+    results: searchResults,
+    freeAccessRaceIds: searchFreeIds,
+    isSearching,
+  } = useEventSearch(searchQuery, {
     series: seriesParam,
     season: seasonFilter || undefined,
   });
+
+  const searchFreeSet = useMemo(() => new Set(searchFreeIds), [searchFreeIds]);
 
   const isSearchMode = searchResults !== null;
 
@@ -95,6 +118,13 @@ export function RaceListPage() {
     searchResults && !allSelected && activeFilters.size > 0
       ? searchResults.filter((sr) => activeFilters.has(sr.series))
       : searchResults;
+
+  const isSearchEventAccessible = (ev: EventSummary): boolean => {
+    if (fullAccess) return true;
+    // Search results include races directly — check race IDs
+    const raceIds = ev.raceIds ?? (ev as any).races?.map((r: any) => r.id) ?? [];
+    return raceIds.some((id: string) => searchFreeSet.has(id));
+  };
 
   const toggleSeries = (s: string) => {
     setSeriesFilters((prev) => {
@@ -235,12 +265,14 @@ export function RaceListPage() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredSearchResults.map((sr) => (
-                <EventCard
-                  key={sr.id}
-                  event={sr}
-                  searchRaces={sr.races}
-                  matchedOn={sr.matchedOn}
-                />
+                <div key={sr.id} className="relative">
+                  <EventCard
+                    event={sr}
+                    searchRaces={sr.races}
+                    matchedOn={sr.matchedOn}
+                    accessible={isSearchEventAccessible(sr)}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -262,7 +294,12 @@ export function RaceListPage() {
           {!eventsLoading && sortedEvents.length > 0 && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {sortedEvents.map((ev) => (
-                <EventCard key={ev.id} event={ev} />
+                <div key={ev.id} className="relative">
+                  <EventCard
+                    event={ev}
+                    accessible={isEventAccessible(ev)}
+                  />
+                </div>
               ))}
             </div>
           )}

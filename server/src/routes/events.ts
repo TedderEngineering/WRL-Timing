@@ -2,8 +2,17 @@ import { Router, Request, Response, NextFunction } from "express";
 import { optionalAuth } from "../middleware/auth.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
+import { getFreeAccessRaceIds } from "../services/races.js";
 
 export const eventsRouter = Router();
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function getUserPlan(userId: string | undefined): Promise<string> {
+  if (!userId) return "FREE";
+  const sub = await prisma.subscription.findUnique({ where: { userId } });
+  return sub?.plan ?? "FREE";
+}
 
 // ─── GET /api/events — List published events with race counts ────────────────
 
@@ -36,14 +45,20 @@ eventsRouter.get(
           },
           races: {
             where: isAdmin ? {} : { status: "PUBLISHED" },
-            select: { date: true },
+            select: { id: true, date: true },
             orderBy: { date: "asc" },
           },
         },
         orderBy: { date: "desc" },
       });
 
+      // Determine free access race IDs for non-premium users
+      const plan = isAdmin ? "ADMIN" : await getUserPlan(req.user?.userId);
+      const fullAccess = isAdmin || plan === "PRO" || plan === "TEAM";
+      const freeRaceIds = fullAccess ? [] : await getFreeAccessRaceIds();
+
       res.json({
+        freeAccessRaceIds: freeRaceIds,
         events: events.map((e) => {
           const raceDates = e.races.map((r) => r.date);
           const startDate = raceDates[0] ?? e.date;
@@ -56,6 +71,7 @@ eventsRouter.get(
             date: e.date,
             season: e.season,
             raceCount: e._count.races,
+            raceIds: e.races.map((r) => r.id),
             startDate,
             endDate,
           };
@@ -100,6 +116,12 @@ eventsRouter.get(
         throw new AppError(404, "Event not found");
       }
 
+      // Determine per-race accessibility
+      const plan = isAdmin ? "ADMIN" : await getUserPlan(req.user?.userId);
+      const fullAccess = isAdmin || plan === "PRO" || plan === "TEAM";
+      const freeRaceIds = fullAccess ? null : await getFreeAccessRaceIds();
+      const freeSet = freeRaceIds ? new Set(freeRaceIds) : null;
+
       res.json({
         id: event.id,
         name: event.name,
@@ -107,7 +129,10 @@ eventsRouter.get(
         track: event.track,
         date: event.date,
         season: event.season,
-        races: event.races,
+        races: event.races.map((r) => ({
+          ...r,
+          accessible: fullAccess || (freeSet?.has(r.id) ?? false),
+        })),
       });
     } catch (err) {
       next(err);

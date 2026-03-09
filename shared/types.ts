@@ -59,6 +59,7 @@ export interface EventSummary {
   raceCount: number;
   startDate: string;
   endDate: string;
+  raceIds?: string[];
 }
 
 export interface EventRace {
@@ -69,6 +70,7 @@ export interface EventRace {
   series: string;
   subSeries: string | null;
   roundNumber: number | null;
+  accessible?: boolean;
 }
 
 export interface EventWithRaces extends EventSummary {
