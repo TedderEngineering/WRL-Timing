@@ -54,3 +54,6 @@ server/scripts/_*
 # Local resources & scratch files
 resources/
 strategy_dashboard.html
+
+# Downloaded timing data
+server/downloads/
