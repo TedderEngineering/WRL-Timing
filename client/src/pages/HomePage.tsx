@@ -61,7 +61,7 @@ export function HomePage() {
               <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-full px-4 py-1.5 mb-6">
                 <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                 <span className="text-sm text-brand-300 font-medium tracking-wide">
-                  Live race data available
+                  Endurance race analytics
                 </span>
               </div>
 
