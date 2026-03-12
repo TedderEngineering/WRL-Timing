@@ -451,7 +451,8 @@ export function LapChart({
   // When class view changes, replace compSet with all cars in that class
   useEffect(() => {
     if (!classView) {
-      setCompSet(new Set());
+      const allCars = Object.keys(data.cars).map(Number);
+      setCompSet(new Set(allCars.filter((n) => n !== focusNum)));
       return;
     }
     const classCars = data.classGroups[classView] ?? [];
@@ -498,8 +499,6 @@ export function LapChart({
     [focusNum]
   );
 
-  const clearComp = useCallback(() => setCompSet(new Set()), []);
-
   // ── Visible cars list ───────────────────────────────────────────
   const visibleCars = useMemo(
     () => getVisibleCars(data, classView).sort((a, b) => a - b),
@@ -507,31 +506,20 @@ export function LapChart({
   );
 
 
-  // ── Presets ─────────────────────────────────────────────────────
-  const presets = useMemo(() => {
-    if (classView) {
-      const classCars = data.classGroups[classView] || [];
-      const result: Array<{ label: string; cars: number[] }> = [
-        { label: `All ${classView}`, cars: classCars },
-      ];
-      // Show manufacturer presets within the selected class (IMSA races)
-      if ((data as any).makeGroups) {
-        const mg = (data as any).makeGroups as Record<string, number[]>;
-        for (const [make, makeCars] of Object.entries(mg).sort()) {
-          const inClass = makeCars.filter((n) => classCars.includes(n));
-          if (inClass.length > 0) {
-            result.push({ label: make, cars: inClass });
-          }
-        }
+  // ── Make presets (only when a class is selected and ≥2 makes exist) ──
+  const makePresets = useMemo(() => {
+    if (!classView) return [];
+    const classCars = data.classGroups[classView] || [];
+    const mg = (data as any).makeGroups as Record<string, number[]> | undefined;
+    if (!mg) return [];
+    const result: Array<{ label: string; cars: number[] }> = [];
+    for (const [make, makeCars] of Object.entries(mg).sort()) {
+      const inClass = makeCars.filter((n) => classCars.includes(n));
+      if (inClass.length > 0) {
+        result.push({ label: make, cars: inClass });
       }
-      return result;
     }
-    return [
-      { label: "All Classes", cars: Object.keys(data.cars).map(Number) },
-      ...Object.entries(data.classGroups)
-        .sort()
-        .map(([cls, cars]) => ({ label: cls, cars })),
-    ];
+    return result;
   }, [data, classView]);
 
   // Cursor style
@@ -581,39 +569,35 @@ export function LapChart({
                   {cls} ({cars.length})
                 </button>
               ))}
+              {/* MAKE section — only when a class is selected and ≥2 makes */}
+              {classView && makePresets.length >= 2 && (
+                <>
+                  <div className="mx-3 border-l border-white/20 h-4 self-center" />
+                  <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+                    Make
+                  </span>
+                  {makePresets.map((p) => {
+                    const relevant = p.cars.filter((n) => n !== focusNum);
+                    const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
+                    return (
+                      <button
+                        key={p.label}
+                        onClick={() => setPreset(p.cars)}
+                        className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+                        style={{
+                          background: isActive ? "#4472C4" : CHART_STYLE.card,
+                          borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
+                          color: isActive ? "#fff" : CHART_STYLE.muted,
+                        }}
+                      >
+                        {p.label} ({p.cars.length})
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
-          {/* Label + preset pills on one row */}
-          <div className="flex flex-wrap items-center gap-1 mb-1">
-            <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
-              Compare
-            </span>
-            {presets.map((p) => {
-              const relevant = p.cars.filter((n) => n !== focusNum);
-              const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
-              return (
-                <button
-                  key={p.label}
-                  onClick={() => setPreset(p.cars)}
-                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                  style={{
-                    background: isActive ? "#4472C4" : CHART_STYLE.card,
-                    borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
-                    color: isActive ? "#fff" : CHART_STYLE.muted,
-                  }}
-                >
-                  {p.label} ({p.cars.length})
-                </button>
-              );
-            })}
-            <button
-              onClick={clearComp}
-              className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-              style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
-            >
-              Clear
-            </button>
-          </div>
           {/* Car chips */}
           <div className="flex flex-wrap gap-1">
             {visibleCars.map((n) => {

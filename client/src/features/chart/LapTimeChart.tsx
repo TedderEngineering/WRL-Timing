@@ -801,7 +801,8 @@ export function LapTimeChart({
   // When class view changes, replace compSet with all cars in that class
   useEffect(() => {
     if (!classView) {
-      setCompSet(new Set());
+      const allCars = Object.keys(data.cars).map(Number);
+      setCompSet(new Set(allCars.filter((n) => n !== focusNum)));
       return;
     }
     const classCars = data.classGroups[classView] ?? [];
