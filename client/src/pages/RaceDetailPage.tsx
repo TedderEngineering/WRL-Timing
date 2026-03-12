@@ -47,7 +47,8 @@ export function RaceDetailPage() {
     autoLoadAttempted.current = true;
 
     fetchEvents()
-      .then((events) => {
+      .then((res) => {
+        const events = res.events;
         if (events.length === 0) return;
         const firstEvent = events[0];
         return fetchEvent(firstEvent.id).then((detail) => {

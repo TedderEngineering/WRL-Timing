@@ -246,6 +246,8 @@ export function generateAnnotations(
       for (const [fcyStart, fcyEnd] of data.fcy) {
         const preFcyLap =
           laps.find((ld: LapData) => ld.l === fcyStart - 1) ||
+          laps.find((ld: LapData) => ld.l === fcyStart - 2) ||
+          laps.find((ld: LapData) => ld.l === fcyStart - 3) ||
           laps.find((ld: LapData) => ld.l === fcyStart);
         if (!preFcyLap) continue;
 
@@ -1917,15 +1919,18 @@ export function enrichPitMarkersWithDrivers(
       outDriver !== undefined &&
       inDriver !== outDriver;
 
-    marker.outDriver = outDriver;
-    marker.inDriver = inDriver;
-    marker.driverChanged = driverChanged;
+    // Only set if not already enriched by a higher-priority path (e.g. IMSA time cards)
+    if (!marker.outDriver) {
+      marker.outDriver = outDriver;
+      marker.inDriver = inDriver;
+      marker.driverChanged = driverChanged;
 
-    // Update label with out-driver last name
-    if (outDriver) {
-      const parts = outDriver.trim().split(/\s+/);
-      const lastName = parts[parts.length - 1].toUpperCase();
-      marker.lb = `Pit ${stintNumber - 1} · ${lastName}`;
+      // Update label with out-driver last name
+      if (outDriver) {
+        const parts = outDriver.trim().split(/\s+/);
+        const lastName = parts[parts.length - 1].toUpperCase();
+        marker.lb = `Pit ${stintNumber - 1} · ${lastName}`;
+      }
     }
     // Otherwise keep existing "Pit Stop N" label
   }

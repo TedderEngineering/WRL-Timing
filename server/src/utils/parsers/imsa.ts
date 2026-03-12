@@ -17,8 +17,8 @@
 
 import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import { generateAnnotations, parseIMSAPitStopData, toPitStopTimeCards } from "./position-analysis.js";
-import type { PitStopTimeCard } from "./position-analysis.js";
+import { generateAnnotations, parseIMSAPitStopData, toPitStopTimeCards, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
+import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
 
@@ -1206,6 +1206,31 @@ export const imsaParser: RaceDataParser = {
     // Merge position-change analysis with IMSA-specific annotations
     // (driver changes, RC messages, penalties, pit labels)
     const mergedAnnotations = generateAnnotations(raceData, annotations, pitTimeCards);
+
+    // ── Fallback: enrich pit markers not already enriched by time card data ──
+    for (const [carNum, rawLaps] of carLapsRaw) {
+      const num = parseInt(carNum, 10);
+      const ann = mergedAnnotations[String(num)];
+      if (!ann?.pits?.length) continue;
+
+      const participant = participantMap.get(carNum);
+      const resolveDriver = (drvNum: string): string | undefined => {
+        if (participant) {
+          const d = participant.drivers.find((dr: any) => String(dr.number) === drvNum);
+          if (d) return d.surname;
+        }
+        return undefined;
+      };
+
+      const driverLaps = rawLaps.map((rl) => ({
+        lap: rl.lapNum,
+        driverName: resolveDriver(rl.driverNum),
+      }));
+      const knownDrivers = buildKnownDrivers(
+        rawLaps.map((rl) => ({ driverName: resolveDriver(rl.driverNum) }))
+      );
+      enrichPitMarkersWithDrivers(ann.pits as PitMarker[], driverLaps, knownDrivers);
+    }
 
     return {
       data: raceData,

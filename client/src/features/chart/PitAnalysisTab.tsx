@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { api, ApiClientError } from "../../lib/api";
 import { Link } from "react-router-dom";
-import { CHART_STYLE } from "./constants";
 
 // ─── API response types ─────────────────────────────────────────────────────
 
