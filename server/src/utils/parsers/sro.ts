@@ -11,8 +11,8 @@
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import type { PitStopTimeCard } from "./position-analysis.js";
-import { generateAnnotations } from "./position-analysis.js";
+import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
+import { generateAnnotations, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
 import { parseSROResults } from "../parseSROResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
@@ -184,6 +184,22 @@ export const sroParser: RaceDataParser = {
     }
 
     const annotations = generateAnnotations(raceData, undefined, pitTimeCards);
+
+    // ── Enrich pit markers with driver names from Alkamel CSV ───
+    for (const [carNum, carLaps] of lapsByCar) {
+      const num = parseInt(carNum, 10);
+      const ann = annotations[String(num)];
+      if (!ann?.pits?.length) continue;
+
+      const driverLaps = carLaps.map((lap) => ({
+        lap: lap.lapNumber,
+        driverName: lap.driverName || undefined,
+      }));
+      const knownDrivers = buildKnownDrivers(
+        carLaps.map((lap) => ({ driverName: lap.driverName || undefined }))
+      );
+      enrichPitMarkersWithDrivers(ann.pits as PitMarker[], driverLaps, knownDrivers);
+    }
 
     return { data: raceData, annotations, warnings };
   },

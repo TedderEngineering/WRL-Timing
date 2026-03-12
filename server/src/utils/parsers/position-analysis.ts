@@ -22,7 +22,7 @@ interface Crossover {
   reason: "on pace" | "pitted" | "yellow";
 }
 
-interface PitMarker {
+export interface PitMarker {
   l: number;
   lb: string;
   c: string;

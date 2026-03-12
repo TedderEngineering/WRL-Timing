@@ -357,7 +357,7 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
-    <div className="px-2 sm:px-4 py-1 sm:py-1.5">
+    <div className="px-2 sm:px-4 py-1 sm:py-1.5 h-full overflow-y-auto">
       {/* Header — single row: breadcrumb / title / track+date */}
       <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
         <div className="flex items-center gap-2 shrink-0">

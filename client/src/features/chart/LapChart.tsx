@@ -44,7 +44,7 @@ interface LapChartProps {
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, compSet, setCompSet,
-  classView, activeLap, setActiveLap,
+  classView, setClassView, activeLap, setActiveLap,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -297,6 +297,8 @@ export function LapChart({
         const clamped = Math.max(1, Math.min(data.maxLap, lap));
         showLapInfo(clamped);
       }
+      // Transfer focus to chart so arrow keys advance laps instead of dropdown
+      wrapperRef.current?.focus();
     };
 
     window.addEventListener("mousemove", onMove);
@@ -535,9 +537,42 @@ export function LapChart({
 
   return (
     <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* ── Compare controls ──────────────────────────────────────── */}
+      {/* ── Class filter + Compare controls ──────────────────────── */}
       <div className="px-1">
         <div>
+          {/* Class view filter (only when multiple classes exist) */}
+          {Object.keys(data.classGroups).length > 1 && (
+            <div className="flex flex-wrap items-center gap-1 mb-1">
+              <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
+                Class
+              </span>
+              <button
+                onClick={() => setClassView("")}
+                className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+                style={{
+                  background: !classView ? "#4472C4" : CHART_STYLE.card,
+                  borderColor: !classView ? "#4472C4" : CHART_STYLE.border,
+                  color: !classView ? "#fff" : CHART_STYLE.muted,
+                }}
+              >
+                All ({data.totalCars})
+              </button>
+              {Object.entries(data.classGroups).sort().map(([cls, cars]) => (
+                <button
+                  key={cls}
+                  onClick={() => setClassView(classView === cls ? "" : cls)}
+                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+                  style={{
+                    background: classView === cls ? "#4472C4" : CHART_STYLE.card,
+                    borderColor: classView === cls ? "#4472C4" : CHART_STYLE.border,
+                    color: classView === cls ? "#fff" : CHART_STYLE.muted,
+                  }}
+                >
+                  {cls} ({cars.length})
+                </button>
+              ))}
+            </div>
+          )}
           {/* Label + preset pills on one row */}
           <div className="flex flex-wrap items-center gap-1 mb-1">
             <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
@@ -608,7 +643,8 @@ export function LapChart({
         {/* Chart canvas */}
         <div
           ref={wrapperRef}
-          className="rounded-lg border relative overflow-hidden flex-1 min-w-0"
+          tabIndex={0}
+          className="rounded-lg border relative overflow-hidden flex-1 min-w-0 outline-none"
           style={{
             background: CHART_STYLE.card,
             borderColor: CHART_STYLE.border,
