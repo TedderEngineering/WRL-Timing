@@ -448,6 +448,16 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
+  // When class view changes, replace compSet with all cars in that class
+  useEffect(() => {
+    if (!classView) {
+      setCompSet(new Set());
+      return;
+    }
+    const classCars = data.classGroups[classView] ?? [];
+    setCompSet(new Set(classCars.filter((n) => n !== focusNum)));
+  }, [classView, data, focusNum]);
+
   // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
     setSidePanel((prev) => {

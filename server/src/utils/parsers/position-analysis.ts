@@ -1934,6 +1934,28 @@ export function enrichPitMarkersWithDrivers(
     }
     // Otherwise keep existing "Pit Stop N" label
   }
+
+  // ── Create start-of-race driver annotation at lap 1 ──────────────────────
+  if (driverLaps.length > 0) {
+    const firstLap = driverLaps[0];
+    let startDriver = firstLap.driverName?.trim();
+    if (startDriver && knownDrivers && !knownDrivers.has(startDriver)) {
+      startDriver = undefined;
+    }
+    if (startDriver) {
+      const parts = startDriver.split(/\s+/);
+      const lastName = parts[parts.length - 1].toUpperCase();
+      pitMarkers.unshift({
+        l: firstLap.lap,
+        lb: `Start · ${lastName}`,
+        c: "#fbbf24",
+        yo: 0,
+        da: 0,
+        outDriver: startDriver,
+        stintNumber: 1,
+      });
+    }
+  }
 }
 
 // ─── V3: IMSA Time Cards Integration ────────────────────────────────────────
