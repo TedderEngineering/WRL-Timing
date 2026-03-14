@@ -134,10 +134,6 @@ function MobileMenu() {
             <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
               Events
             </Link>
-            <Link to="/qualifying" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
-              Qualifying
-            </Link>
-
             {!isAuthenticated && (
               <Link to="/pricing" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
                 Pricing
@@ -206,12 +202,6 @@ export function Layout() {
                 className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
               >
                 Events
-              </Link>
-              <Link
-                to="/qualifying"
-                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-              >
-                Qualifying
               </Link>
               {!isAuthenticated && (
                 <Link

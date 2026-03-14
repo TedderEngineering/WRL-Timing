@@ -109,6 +109,17 @@ eventsRouter.get(
             },
             orderBy: { date: "asc" },
           },
+          qualifyingSessions: {
+            where: isAdmin ? {} : { status: "PUBLISHED" },
+            select: {
+              id: true,
+              name: true,
+              sessionName: true,
+              date: true,
+              series: true,
+            },
+            orderBy: { date: "asc" },
+          },
         },
       });
 
@@ -133,6 +144,7 @@ eventsRouter.get(
           ...r,
           accessible: fullAccess || (freeSet?.has(r.id) ?? false),
         })),
+        qualifyingSessions: event.qualifyingSessions,
       });
     } catch (err) {
       next(err);

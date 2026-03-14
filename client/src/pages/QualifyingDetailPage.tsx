@@ -14,6 +14,8 @@ interface SessionMeta {
   track: string;
   series: string;
   season: number;
+  eventId?: string;
+  eventName?: string;
 }
 
 export function QualifyingDetailPage() {
@@ -125,16 +127,30 @@ export function QualifyingDetailPage() {
       <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
         <div className="flex items-center gap-2 shrink-0">
           <Link
-            to="/qualifying"
+            to="/races"
             className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
           >
-            Qualifying
+            Events
           </Link>
-          <span className="text-gray-600 text-xs">/</span>
-          <span className="text-xs text-brand-400 font-medium">
-            {meta.series} {meta.season}
-          </span>
-          <span className="text-gray-600 text-xs">/</span>
+          <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+          {meta.eventName ? (
+            <>
+              <Link
+                to={`/chart?event=${meta.eventId}`}
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              >
+                {meta.eventName}
+              </Link>
+              <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-brand-400 font-medium">
+                {meta.series} {meta.season}
+              </span>
+              <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
+            </>
+          )}
         </div>
         <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
           {meta.name}

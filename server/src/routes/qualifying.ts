@@ -55,7 +55,9 @@ qualifyingRouter.get(
           track: true,
           series: true,
           season: true,
+          eventId: true,
           chartData: true,
+          event: { select: { id: true, name: true } },
         },
       });
 
@@ -77,6 +79,8 @@ qualifyingRouter.get(
           track: session.track,
           series: session.series,
           season: session.season,
+          eventId: session.eventId ?? undefined,
+          eventName: session.event?.name ?? undefined,
         },
         data: session.chartData,
       });

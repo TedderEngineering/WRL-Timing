@@ -73,8 +73,17 @@ export interface EventRace {
   accessible?: boolean;
 }
 
+export interface EventQualifyingSession {
+  id: string;
+  name: string;
+  sessionName: string;
+  date: string;
+  series: string;
+}
+
 export interface EventWithRaces extends EventSummary {
   races: EventRace[];
+  qualifyingSessions?: EventQualifyingSession[];
 }
 
 export type SearchMatchedOn = "track" | "series" | "race" | "sub_series" | "name";

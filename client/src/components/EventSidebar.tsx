@@ -133,6 +133,23 @@ export default function EventSidebar({
               </div>
             </div>
 
+            {/* Qualifying sessions */}
+            {eventData.qualifyingSessions && eventData.qualifyingSessions.length > 0 && (
+              <div className="py-1 border-b border-gray-800">
+                {eventData.qualifyingSessions.map((qs) => (
+                  <Link
+                    key={qs.id}
+                    to={`/qualifying/${qs.id}`}
+                    onClick={() => onMobileClose?.()}
+                    className="w-full flex items-center gap-2 px-3 h-9 transition-colors no-underline hover:bg-gray-800/40 border-l-2 border-transparent"
+                  >
+                    <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-600/30 text-amber-400 shrink-0">Q</span>
+                    <span className="text-sm truncate flex-1 text-gray-400">{qs.sessionName}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
             {/* Flat race list */}
             <div className="py-1">
               {eventData.races.map((race) => {
@@ -278,6 +295,21 @@ export default function EventSidebar({
                       <span className="text-[11px] text-gray-500">{dateRange}</span>
                     </div>
                   </div>
+                  {eventData.qualifyingSessions && eventData.qualifyingSessions.length > 0 && (
+                    <div className="py-1 border-b border-gray-800">
+                      {eventData.qualifyingSessions.map((qs) => (
+                        <Link
+                          key={qs.id}
+                          to={`/qualifying/${qs.id}`}
+                          onClick={() => onMobileClose?.()}
+                          className="w-full flex items-center gap-2 px-3 h-9 transition-colors no-underline hover:bg-gray-800/40 border-l-2 border-transparent"
+                        >
+                          <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-600/30 text-amber-400 shrink-0">Q</span>
+                          <span className="text-sm truncate flex-1 text-gray-400">{qs.sessionName}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                   <div className="py-1">
                     {eventData.races.map((race) => {
                       const isActive = selectedRaceId === race.id;
