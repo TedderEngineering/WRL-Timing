@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../lib/api";
+import { api, fetchEvents } from "../../lib/api";
+import type { EventSummary } from "@shared/types";
 
 export function AdminQualifyingUploadPage() {
   const navigate = useNavigate();
@@ -14,15 +15,37 @@ export function AdminQualifyingUploadPage() {
   const [eventId, setEventId] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: string; carCount: number; lapCount: number } | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Fetch events for dropdown
+  useEffect(() => {
+    fetchEvents()
+      .then((res) => setEvents(res.events))
+      .catch(() => {})
+      .finally(() => setEventsLoading(false));
+  }, []);
+
+  // Auto-fill track/series/season when event is selected
+  const handleEventChange = (id: string) => {
+    setEventId(id);
+    const ev = events.find((e) => e.id === id);
+    if (ev) {
+      setTrack(ev.track);
+      setSeason(ev.season);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!csvFile) { setError("Select a CSV file"); return; }
+    if (!eventId) { setError("Select an event"); return; }
 
     setUploading(true);
     setError(null);
@@ -34,7 +57,7 @@ export function AdminQualifyingUploadPage() {
       const res = await api.post<{ id: string; name: string; carCount: number; lapCount: number }>(
         "/admin/qualifying",
         {
-          metadata: { name, sessionName, date, track, series, season, eventId: eventId || undefined },
+          metadata: { name, sessionName, date, track, series, season, eventId },
           timecards: csvText,
         }
       );
@@ -58,6 +81,26 @@ export function AdminQualifyingUploadPage() {
       </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* Event (required) */}
+        <div>
+          <label className={labelClass}>Event *</label>
+          <select
+            className={inputClass}
+            value={eventId}
+            onChange={(e) => handleEventChange(e.target.value)}
+            required
+          >
+            <option value="">
+              {eventsLoading ? "Loading events..." : "Select an event"}
+            </option>
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name} — {ev.track} ({ev.series} {ev.season})
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Name */}
         <div>
           <label className={labelClass}>Session Name (display)</label>
@@ -135,18 +178,6 @@ export function AdminQualifyingUploadPage() {
           </div>
         </div>
 
-        {/* Event ID (optional) */}
-        <div>
-          <label className={labelClass}>Event ID (optional)</label>
-          <input
-            type="text"
-            className={inputClass}
-            placeholder="Link to an existing event"
-            value={eventId}
-            onChange={(e) => setEventId(e.target.value)}
-          />
-        </div>
-
         {/* CSV file upload */}
         <div>
           <label className={labelClass}>Time Cards CSV (23_Time Cards_Qualify...)</label>
@@ -207,7 +238,7 @@ export function AdminQualifyingUploadPage() {
         {/* Submit */}
         <button
           type="submit"
-          disabled={uploading || !csvFile}
+          disabled={uploading || !csvFile || !eventId}
           className="self-start px-6 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
         >
           {uploading ? "Uploading..." : "Upload Qualifying Session"}

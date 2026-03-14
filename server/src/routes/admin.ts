@@ -1021,10 +1021,10 @@ adminRouter.post(
       }
 
       const { name, sessionName, date, track, series, season, eventId } = metadata;
-      if (!name || !sessionName || !date || !track || !series || !season) {
+      if (!name || !sessionName || !date || !track || !series || !season || !eventId) {
         throw new AppError(
           400,
-          "metadata must include name, sessionName, date, track, series, season",
+          "metadata must include name, sessionName, date, track, series, season, eventId",
           "MISSING_METADATA"
         );
       }
@@ -1049,7 +1049,7 @@ adminRouter.post(
           status: "PUBLISHED",
           chartData: chartData as any,
           createdBy: req.user!.userId,
-          eventId: eventId || null,
+          eventId,
         },
       });
 
