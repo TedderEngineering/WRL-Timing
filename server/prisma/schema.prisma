@@ -58,6 +58,7 @@ model User {
   favorites           UserFavorite[]
   raceViews           UserRaceView[]
   createdRaces        Race[]                   @relation("RaceCreator")
+  createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
   auditLogs           AuditLog[]
 
   @@map("users")
@@ -141,7 +142,8 @@ model Event {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  races Race[]
+  races                Race[]
+  qualifyingSessions   QualifyingSession[]
 
   @@index([series, track, date])
   @@index([status])
@@ -286,6 +288,33 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([adminUserId])
   @@map("audit_log")
+}
+
+// ─── Qualifying Sessions ─────────────────────────────────────────────────────
+
+model QualifyingSession {
+  id          String     @id @default(cuid())
+  name        String                          // e.g. "Qualify 2 — Barber 2026"
+  sessionName String     @map("session_name") // e.g. "Qualify 2"
+  date        DateTime
+  track       String
+  series      String                          // "SRO GT4 America", "Toyota GR Cup", "IMSA"
+  season      Int
+  status      RaceStatus @default(DRAFT)
+  chartData   Json?      @map("chart_data")   // QualifyingChartData blob
+  createdBy   String     @map("created_by")
+  eventId     String?    @map("event_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  creator User  @relation("QualifyingCreator", fields: [createdBy], references: [id])
+  event   Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([series, season])
+  @@index([date(sort: Desc)])
+  @@index([eventId])
+  @@map("qualifying_sessions")
 }
 
 // ─── Pit Stop Analysis ──────────────────────────────────────────────────────
