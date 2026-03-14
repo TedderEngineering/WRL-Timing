@@ -14,10 +14,11 @@ export type FileType =
   | "grResultsPdf"
   | "alkamelLapsCsv"
   | "alkamelPitStopPdf"
+  | "qualifyingCsv"
   | "unsupportedPdf"
   | "unknown";
 
-export type FormatId = "imsa" | "speedhive" | "wrl-website" | "sro" | "grcup";
+export type FormatId = "imsa" | "speedhive" | "wrl-website" | "sro" | "grcup" | "qualifying";
 
 export interface DetectedFile {
   file: File;
@@ -77,6 +78,7 @@ const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
   "wrl-website": ["summaryCsv", "lapsCsv"],
   sro: ["sroResultsCsv", "alkamelLapsCsv"],
   grcup: ["grResultsCsv", "alkamelLapsCsv"],
+  qualifying: ["qualifyingCsv"],
 };
 
 /** Maps internal FileType to the server-side slot key */
@@ -94,6 +96,7 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   grResultsPdf: "resultsPdf",
   alkamelLapsCsv: "lapsCsv",
   alkamelPitStopPdf: "pitStopPdf",
+  qualifyingCsv: "timecards",
   unsupportedPdf: "unknown",
   unknown: "unknown",
 };
@@ -112,6 +115,7 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   grResultsPdf: "Results PDF",
   alkamelLapsCsv: "Laps CSV",
   alkamelPitStopPdf: "Pit Stops PDF",
+  qualifyingCsv: "Qualifying CSV",
   unsupportedPdf: "Unsupported PDF",
   unknown: "Unknown",
 };
@@ -265,6 +269,23 @@ export function classifyFile(file: File, content: string): DetectedFile {
   if (file.name.toLowerCase().endsWith(".csv")) {
     const headerLine = clean.split("\n")[0] || "";
     const headerLower = headerLine.toLowerCase();
+
+    // Qualifying CSV: Alkamel format but filename contains "Qualify" or "Qualifying"
+    // Must be checked BEFORE alkamelLapsCsv — same header format
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("crossing_finish_line_in_pit") &&
+      /qualif/i.test(file.name)
+    ) {
+      result.type = "qualifyingCsv";
+      result.format = "qualifying";
+      const eventKey = extractAlkamelEventKey(file.name);
+      result.groupKey = `qualifying_${eventKey}`;
+      // Extract session name from filename (e.g. "Qualify 2", "Qualifying Race")
+      const sessionMatch = file.name.match(/(Qualif(?:y|ying)\s*(?:Race\s*)?\d*)/i);
+      result.metadata.name = sessionMatch ? sessionMatch[1].trim() : "Qualifying";
+      return result;
+    }
 
     // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT
     // Must be checked BEFORE IMSA — Alkamel CSVs also contain number/driver_number/lap_number/elapsed

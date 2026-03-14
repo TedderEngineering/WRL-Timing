@@ -11,6 +11,8 @@ import {
   type ValidationState,
   type FormatId,
 } from "../../lib/file-classifier";
+import { fetchEvents } from "../../lib/api";
+import type { EventSummary } from "@shared/types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +45,12 @@ export function AdminUploadPage() {
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importDone, setImportDone] = useState(false);
+
+  // Events for qualifying auto-match
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  useEffect(() => {
+    fetchEvents().then((r) => setEvents(r.events)).catch(() => {});
+  }, []);
 
   // Debounced validation
   const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,7 +145,7 @@ export function AdminUploadPage() {
     if (validateTimer.current) clearTimeout(validateTimer.current);
 
     const completeGroups = Array.from(groups.values()).filter(
-      (g) => g.complete && g.importStatus === "idle" &&
+      (g) => g.complete && g.importStatus === "idle" && g.format !== "qualifying" &&
         g.metadata.name.trim() && g.metadata.date && g.metadata.track.trim() && g.metadata.series.trim()
     );
 
@@ -245,14 +253,40 @@ export function AdminUploadPage() {
 
   // ── Bulk import ─────────────────────────────────────────────────────────
 
-  const importableGroups = Array.from(groups.values()).filter(
+  const importableRaceGroups = Array.from(groups.values()).filter(
     (g) =>
       g.complete &&
       g.importStatus === "idle" &&
+      g.format !== "qualifying" &&
       g.validation?.status !== "invalid" &&
       g.validation?.status !== "validating" &&
       g.metadata.name.trim()
   );
+
+  const importableQualifyingGroups = Array.from(groups.values()).filter(
+    (g) =>
+      g.complete &&
+      g.importStatus === "idle" &&
+      g.format === "qualifying" &&
+      g.metadata.name.trim() &&
+      g.metadata.date &&
+      g.metadata.track.trim()
+  );
+
+  const importableGroups = [...importableRaceGroups, ...importableQualifyingGroups];
+
+  /** Find the best matching event for a qualifying group by track + date */
+  function findEventForQualifying(g: RaceGroup): EventSummary | undefined {
+    const track = g.metadata.track.trim().toLowerCase();
+    const date = g.metadata.date;
+    // Exact track + same season
+    return events.find((ev) =>
+      ev.track.toLowerCase() === track &&
+      (!date || ev.season === date.split("-")[0])
+    ) || events.find((ev) =>
+      ev.track.toLowerCase().includes(track) || track.includes(ev.track.toLowerCase())
+    );
+  }
 
   const handleImport = useCallback(async () => {
     if (importableGroups.length === 0) return;
@@ -268,8 +302,60 @@ export function AdminUploadPage() {
       return next;
     });
 
+    // ── Import qualifying groups first ──
+    for (const g of importableQualifyingGroups) {
+      try {
+        const matchedEvent = findEventForQualifying(g);
+        if (!matchedEvent) {
+          setGroups((prev) => {
+            const next = new Map(prev);
+            const current = next.get(g.id);
+            if (current) next.set(g.id, { ...current, importStatus: "error", importError: `No matching event found for track "${g.metadata.track}"` });
+            return next;
+          });
+          continue;
+        }
+
+        const files = buildFilesPayload(g);
+        const res = await api.post<{ id: string; name: string; carCount: number; lapCount: number }>(
+          "/admin/qualifying",
+          {
+            metadata: {
+              name: `${g.metadata.name} — ${g.metadata.track}`,
+              sessionName: g.metadata.name,
+              date: g.metadata.date,
+              track: g.metadata.track.trim(),
+              series: g.metadata.series.trim() || matchedEvent.series,
+              season: g.metadata.season || matchedEvent.season,
+              eventId: matchedEvent.id,
+            },
+            timecards: files.timecards,
+          }
+        );
+
+        setGroups((prev) => {
+          const next = new Map(prev);
+          const current = next.get(g.id);
+          if (current) next.set(g.id, {
+            ...current,
+            importStatus: "success",
+            importResult: { raceId: res.id, entriesCreated: res.carCount, lapsCreated: res.lapCount },
+          });
+          return next;
+        });
+      } catch (err: any) {
+        setGroups((prev) => {
+          const next = new Map(prev);
+          const current = next.get(g.id);
+          if (current) next.set(g.id, { ...current, importStatus: "error", importError: err.message || "Import failed" });
+          return next;
+        });
+      }
+    }
+
+    // ── Import race groups ──
     try {
-      const allPayload = importableGroups.map((g) => ({
+      const allPayload = importableRaceGroups.map((g) => ({
         groupKey: g.id,
         format: g.format,
         metadata: {
@@ -283,6 +369,12 @@ export function AdminUploadPage() {
         },
         files: buildFilesPayload(g),
       }));
+
+      if (allPayload.length === 0) {
+        setImporting(false);
+        setImportDone(true);
+        return;
+      }
 
       // Batch into chunks of 10 to stay within server limits
       const BATCH_SIZE = 10;
@@ -394,7 +486,7 @@ export function AdminUploadPage() {
         </div>
         {!hasFiles && (
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Supports IMSA JSON, SpeedHive CSV, WRL Website CSV, SRO Alkamel CSV, and GR Cup Alkamel CSV
+            Supports IMSA JSON, SpeedHive CSV, WRL Website CSV, SRO/GR Cup Alkamel CSV, and Qualifying CSV
           </div>
         )}
       </div>
@@ -508,7 +600,10 @@ export function AdminUploadPage() {
       {groupsList.length > 0 && (
         <div className="sticky bottom-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 -mx-6 lg:-mx-8 px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {importableGroups.length} race{importableGroups.length !== 1 ? "s" : ""} ready
+            {importableGroups.length} item{importableGroups.length !== 1 ? "s" : ""} ready
+            {importableQualifyingGroups.length > 0 && (
+              <span className="text-indigo-500"> ({importableQualifyingGroups.length} qualifying)</span>
+            )}
             {groupsList.some((g) => !g.complete) && (
               <span className="ml-2 text-amber-600 dark:text-amber-400">
                 · {groupsList.filter((g) => !g.complete).length} incomplete
@@ -522,7 +617,7 @@ export function AdminUploadPage() {
           >
             {importing
               ? "Importing..."
-              : `Import ${importableGroups.length} Race${importableGroups.length !== 1 ? "s" : ""}`}
+              : `Import ${importableGroups.length} Item${importableGroups.length !== 1 ? "s" : ""}`}
           </button>
         </div>
       )}
@@ -552,6 +647,7 @@ function RaceGroupCard({
     "wrl-website": "bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400",
     sro: "bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400",
     grcup: "bg-rose-100 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400",
+    qualifying: "bg-indigo-100 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400",
   };
 
   const borderColor =
@@ -583,7 +679,9 @@ function RaceGroupCard({
                     ? "SRO GT4"
                     : group.format === "grcup"
                       ? "GR Cup"
-                      : "SpeedHive"}
+                      : group.format === "qualifying"
+                        ? "Qualifying"
+                        : "SpeedHive"}
             </span>
             <ValidationBadge validation={v} />
             {!group.complete && (
@@ -650,10 +748,10 @@ function RaceGroupCard({
           )}
           {group.importStatus === "success" && group.importResult && (
             <Link
-              to={`/chart?race=${group.importResult.raceId}`}
+              to={group.format === "qualifying" ? `/qualifying/${group.importResult.raceId}` : `/chart?race=${group.importResult.raceId}`}
               className="px-3 py-1 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700"
             >
-              View Chart
+              {group.format === "qualifying" ? "View Qualifying" : "View Chart"}
             </Link>
           )}
         </div>
