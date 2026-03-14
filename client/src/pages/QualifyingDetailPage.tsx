@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { CHART_STYLE } from "../features/chart/constants";
+import { CHART_STYLE, COMP_PALETTE } from "../features/chart/constants";
 import { StatsTable } from "../features/qualifying/StatsTable";
 import { SectorTrace } from "../features/qualifying/SectorTrace";
 import type { QualifyingChartData } from "@shared/types";
@@ -236,16 +236,29 @@ export function QualifyingDetailPage() {
 
       {/* ── Car toggle chips ────────────────────────────────────── */}
       <div className="flex flex-wrap gap-1 mt-1 px-1">
-        {visibleCars.map((car) => {
+        {/* Clear chip */}
+        <button
+          onClick={() => setCompSet(new Set())}
+          className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
+          style={{
+            borderColor: compSet.size === 0 ? "#4472C4" : CHART_STYLE.border,
+            background: compSet.size === 0 ? "rgba(68,114,196,0.2)" : "transparent",
+            color: compSet.size === 0 ? "#fff" : CHART_STYLE.dim,
+          }}
+        >
+          Clear
+        </button>
+        {visibleCars.map((car, idx) => {
           const isOn = compSet.has(car.num);
+          const col = isOn ? COMP_PALETTE[idx % COMP_PALETTE.length] : undefined;
           return (
             <button
               key={car.num}
               onClick={() => toggleCar(car.num)}
               className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
               style={{
-                borderColor: isOn ? CHART_STYLE.text : CHART_STYLE.border,
-                background: isOn ? "rgba(255,255,255,0.08)" : "transparent",
+                borderColor: col || CHART_STYLE.border,
+                background: col ? `${col}33` : "transparent",
                 color: isOn ? "#fff" : CHART_STYLE.dim,
               }}
               title={`${car.team} · ${car.driver} (${car.cls})`}
