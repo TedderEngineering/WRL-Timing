@@ -45,9 +45,9 @@ export function QualifyingDetailPage() {
         setMeta(res.session);
         setData(res.data);
 
-        // Default: all cars selected
-        const allNums = new Set(res.data.cars.map((c) => c.num));
-        setCompSet(allNums);
+        // Default: top 5 cars by bestLap (cars are already sorted by bestLap)
+        const top5 = new Set(res.data.cars.slice(0, 5).map((c) => c.num));
+        setCompSet(top5);
         setClassView("");
       })
       .catch(() => setError("Failed to load qualifying data"))
@@ -61,13 +61,13 @@ export function QualifyingDetailPage() {
     return data.cars.filter((c) => c.cls === classView);
   }, [data, classView]);
 
-  // ── When class filter changes, reset compSet to all in class ────
+  // ── When class filter changes, reset compSet to top 5 in class ──
   useEffect(() => {
     if (!data) return;
     const cars = classView
       ? data.cars.filter((c) => c.cls === classView)
       : data.cars;
-    setCompSet(new Set(cars.map((c) => c.num)));
+    setCompSet(new Set(cars.slice(0, 5).map((c) => c.num)));
   }, [classView, data]);
 
   // ── Toggle a single car in compSet ──────────────────────────────
