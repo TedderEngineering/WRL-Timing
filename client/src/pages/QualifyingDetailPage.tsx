@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { CHART_STYLE } from "../features/chart/constants";
+import { StatsTable } from "../features/qualifying/StatsTable";
+import { SectorTrace } from "../features/qualifying/SectorTrace";
 import type { QualifyingChartData } from "@shared/types";
 
 interface SessionMeta {
@@ -241,20 +243,10 @@ export function QualifyingDetailPage() {
       {/* ── Tab content ─────────────────────────────────────────── */}
       <div className="mt-3">
         {activeTab === "stats" && (
-          <div
-            className="rounded-lg border p-8 text-center"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            <p style={{ color: CHART_STYLE.muted }}>Stats Table — coming in QF-13</p>
-          </div>
+          <StatsTable data={data} compSet={compSet} classView={classView} />
         )}
         {activeTab === "trace" && (
-          <div
-            className="rounded-lg border p-8 text-center"
-            style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
-          >
-            <p style={{ color: CHART_STYLE.muted }}>Sector Trace — coming in QF-14</p>
-          </div>
+          <SectorTrace data={data} compSet={compSet} classView={classView} />
         )}
       </div>
     </div>
