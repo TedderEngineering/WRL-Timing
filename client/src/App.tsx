@@ -37,6 +37,7 @@ import { AdminRacesPage } from "./pages/admin/AdminRacesPage";
 import { AdminUploadPage } from "./pages/admin/AdminUploadPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAuditLogPage } from "./pages/admin/AdminAuditLogPage";
+import { AdminQualifyingUploadPage } from "./pages/admin/AdminQualifyingUploadPage";
 
 export function App() {
   return (
@@ -112,6 +113,7 @@ export function App() {
           <Route index element={<AdminDashboardPage />} />
           <Route path="races" element={<AdminRacesPage />} />
           <Route path="races/new" element={<AdminUploadPage />} />
+          <Route path="qualifying/new" element={<AdminQualifyingUploadPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="audit-log" element={<AdminAuditLogPage />} />
         </Route>
