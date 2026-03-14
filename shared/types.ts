@@ -244,6 +244,55 @@ export interface ChartDataResponse {
   annotations: AnnotationData;
 }
 
+// ─── Qualifying Session Data ─────────────────────────────────────────────────
+
+/** One lap attempt in a qualifying session */
+export interface QualifyingLap {
+  l: number;           // lap number
+  lt: string;          // formatted lap time "M:SS.mmm"
+  ltSec: number;       // lap time in seconds
+  s1: number;          // S1 seconds
+  s2: number;          // S2 seconds
+  s3: number;          // S3 seconds
+  s1f: string;         // formatted S1 "M:SS.mmm"
+  s2f: string;         // formatted S2
+  s3f: string;         // formatted S3
+  s1imp: number;       // 0/1/2 improvement flag
+  s2imp: number;
+  s3imp: number;
+  flag: string;        // "GF" | "FCY" | "SC" | "FF"
+  pit: boolean;        // true if CROSSING_FINISH_LINE_IN_PIT
+  kph?: number;
+  lapImp: number;      // 0/1/2 lap improvement flag
+}
+
+/** One car's entry in a qualifying session */
+export interface QualifyingCar {
+  num: string;         // car number as string
+  team: string;
+  driver: string;
+  cls: string;         // class
+  mfr: string;         // manufacturer
+  laps: QualifyingLap[];
+  bestLap: number;           // best ltSec across all laps
+  bestLapNum: number;        // lap number of best lap
+  theoreticalBest: number;   // min(s1) + min(s2) + min(s3)
+  bestS1: number;
+  bestS2: number;
+  bestS3: number;
+}
+
+/** Top-level qualifying session data blob */
+export interface QualifyingChartData {
+  sessionName: string;
+  track: string;
+  series: string;
+  date: string;
+  cars: QualifyingCar[];
+  classes: string[];          // sorted unique class list
+  totalLaps: number;          // total lap rows parsed
+}
+
 // ─── Race Admin ──────────────────────────────────────────────────────────────
 
 export interface RaceAdminSummary extends RaceSummary {
