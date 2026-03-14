@@ -8,6 +8,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
 import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
+import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
 
 export const adminRouter = Router();
 
@@ -997,6 +998,85 @@ adminRouter.put(
       });
 
       res.json({ message: `User role changed to ${role}`, role });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── POST /api/admin/qualifying — Upload qualifying session ──────────────────
+
+adminRouter.post(
+  "/qualifying",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { metadata, timecards } = req.body;
+
+      if (!metadata || !timecards) {
+        throw new AppError(
+          400,
+          'Request body must include "metadata" (object) and "timecards" (CSV string)',
+          "MISSING_FIELDS"
+        );
+      }
+
+      const { name, sessionName, date, track, series, season, eventId } = metadata;
+      if (!name || !sessionName || !date || !track || !series || !season) {
+        throw new AppError(
+          400,
+          "metadata must include name, sessionName, date, track, series, season",
+          "MISSING_METADATA"
+        );
+      }
+
+      // Parse the qualifying CSV
+      const chartData = parseQualifyingCsv(timecards, sessionName);
+
+      // Fill in metadata fields the parser leaves empty
+      chartData.track = track;
+      chartData.series = series;
+      chartData.date = date;
+
+      // Create the qualifying session record
+      const session = await prisma.qualifyingSession.create({
+        data: {
+          name,
+          sessionName,
+          date: new Date(date),
+          track,
+          series,
+          season: parseInt(season, 10),
+          status: "PUBLISHED",
+          chartData: chartData as any,
+          createdBy: req.user!.userId,
+          eventId: eventId || null,
+        },
+      });
+
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          adminUserId: req.user!.userId,
+          action: "CREATE_QUALIFYING",
+          targetType: "qualifying_session",
+          targetId: session.id,
+          details: {
+            name,
+            sessionName,
+            track,
+            series,
+            carCount: chartData.cars.length,
+            lapCount: chartData.totalLaps,
+          },
+        },
+      });
+
+      res.status(201).json({
+        id: session.id,
+        name: session.name,
+        carCount: chartData.cars.length,
+        lapCount: chartData.totalLaps,
+      });
     } catch (err) {
       next(err);
     }
