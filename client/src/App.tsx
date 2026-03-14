@@ -20,6 +20,8 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RaceListPage } from "./pages/RaceListPage";
 import { RaceDetailPage, RaceDetailRedirect } from "./pages/RaceDetailPage";
+import { QualifyingListPage } from "./pages/QualifyingListPage";
+import { QualifyingDetailPage } from "./pages/QualifyingDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 // Settings pages
@@ -78,6 +80,10 @@ export function App() {
         <Route path="/chart" element={<RaceDetailPage />} />
         {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
         <Route path="/races/:id" element={<RaceDetailRedirect />} />
+
+        {/* Qualifying routes (public — auth optional) */}
+        <Route path="/qualifying" element={<QualifyingListPage />} />
+        <Route path="/qualifying/:id" element={<QualifyingDetailPage />} />
 
         {/* Settings (protected, nested layout) */}
         <Route
