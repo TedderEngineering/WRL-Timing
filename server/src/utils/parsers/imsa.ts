@@ -153,6 +153,40 @@ function kphToMph(kph: string): number {
   return v > 0 ? v * 0.621371 : 0;
 }
 
+/**
+ * Build a Set of lap numbers on which a real pit stop occurred,
+ * by cross-referencing pit entry timestamps against lap completion times.
+ *
+ * This is the authoritative pit detection method for IMSA/SRO races
+ * where a 20_Pit_Stops_Time_Cards JSON is provided. It replaces the
+ * crossing_pit_finish_lane signal, which fires false positives on
+ * formation/rolling-start laps.
+ */
+function buildPitLapSet(
+  laps: Array<{ lapNum: number; hour: string }>,
+  pitStops: Array<{ inTime: number }>
+): Set<number> {
+  // Map lap N → time-of-day in seconds when lap N completed
+  const lapEnd = new Map<number, number>();
+  for (const l of laps) {
+    lapEnd.set(l.lapNum, parseTimeOfDay(l.hour));
+  }
+
+  const pitLaps = new Set<number>();
+  for (const pit of pitStops) {
+    for (const l of laps) {
+      const start = lapEnd.get(l.lapNum - 1) ?? 0;
+      const end = lapEnd.get(l.lapNum) ?? 0;
+      if (pit.inTime >= start && pit.inTime <= end) {
+        pitLaps.add(l.lapNum);
+        break;
+      }
+    }
+  }
+
+  return pitLaps;
+}
+
 // ─── Annotation helpers ──────────────────────────────────────────────────────
 
 const PIT_COLOR = "#fbbf24"; // yellow
@@ -606,6 +640,26 @@ export const imsaParser: RaceDataParser = {
         if (laps.length > 0) {
           carLapsRaw.set(carNum, laps);
         }
+      }
+    }
+
+    // ── Fix pit flags using authoritative pit stop data ──────────────
+    // When 20_Pit_Stops_Time_Cards is available, cross-reference pit entry
+    // timestamps against lap completion times instead of relying on
+    // crossing_pit_finish_lane (which fires false positives on rolling starts).
+    if (pitTimeCards) {
+      let fixedCount = 0;
+      for (const [carNumStr, laps] of carLapsRaw) {
+        const carNumInt = parseInt(carNumStr, 10);
+        const stops = pitTimeCards.get(carNumInt) ?? [];
+        const pitLapSet = buildPitLapSet(laps, stops);
+        for (const l of laps) {
+          if (l.pit !== pitLapSet.has(l.lapNum)) fixedCount++;
+          l.pit = pitLapSet.has(l.lapNum);
+        }
+      }
+      if (fixedCount > 0) {
+        warnings.push(`Pit detection: corrected ${fixedCount} lap(s) using 20_Pit_Stops cross-reference`);
       }
     }
 
