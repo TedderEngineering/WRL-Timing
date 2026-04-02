@@ -570,6 +570,26 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet, classVie
               <div className="flex flex-col gap-0.5">
                 {compCarData.map((car) => {
                   if (!car) return null;
+
+                  if (car.relation === null || car.compPos === null) {
+                    return (
+                      <div
+                        key={car.carNum}
+                        className="flex items-center gap-2 py-0.5 text-[11px]"
+                      >
+                        <span className="font-mono font-bold text-white w-9 shrink-0">
+                          #{car.carNum}
+                        </span>
+                        <span className="text-white/40 flex-1 truncate text-[10px]">
+                          {car.team}
+                        </span>
+                        <span className="text-white/25 text-[10px] italic">
+                          No data at L{activeLap}
+                        </span>
+                      </div>
+                    );
+                  }
+
                   const relColor =
                     car.relation === "ahead"
                       ? "text-emerald-400"
@@ -577,11 +597,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet, classVie
                       ? "text-red-400"
                       : "text-amber-400";
                   const relIcon =
-                    car.relation === "ahead"
-                      ? "▲"
-                      : car.relation === "behind"
-                      ? "▼"
-                      : "=";
+                    car.relation === "ahead" ? "▲" : car.relation === "behind" ? "▼" : "=";
                   const relLabel =
                     car.relation === "ahead"
                       ? `P${car.compPos} ahead`
