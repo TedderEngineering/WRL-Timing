@@ -732,7 +732,6 @@ export function LapChart({
                   focusNum={focusNum}
                   activeLap={activeLap}
                   compSet={compSet}
-                  classView={classView}
                 />
               )}
               {sidePanel === "h2h" && activeLap !== null && (
