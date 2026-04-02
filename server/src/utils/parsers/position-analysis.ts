@@ -1342,6 +1342,14 @@ export function computePitTiming(
     decompositionLevel: "total_only",
   };
 
+  // If SRO CSV PIT_TIME is available on the out-lap, use it as real pit road time
+  if (!pitStopData && outLapRecord?.ptSec) {
+    timing.pitRoadTime = outLapRecord.ptSec;
+    timing.outLapTime = outLapRecord.ltSec - outLapRecord.ptSec;
+    timing.isDriveThrough = outLapRecord.ptSec < 90;
+    timing.decompositionLevel = "full_segments";
+  }
+
   // If IMSA Time Card data is available, compute full segments
   if (pitStopData) {
     const pitRoadTime = pitStopData.outTime - pitStopData.inTime;

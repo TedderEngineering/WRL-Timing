@@ -12,6 +12,7 @@ const lapDataSchema = z.object({
   pit: z.number().int().min(0).max(1),
   spd: z.number().nonnegative().optional(),
   hr: z.number().nonnegative().optional(),
+  ptSec: z.number().optional(),
 });
 
 const carDataSchema = z.object({

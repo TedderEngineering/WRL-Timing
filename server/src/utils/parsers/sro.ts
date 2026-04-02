@@ -116,6 +116,7 @@ export const sroParser: RaceDataParser = {
           ltSec: lap.lapTimeSec > 0 ? lap.lapTimeSec : 0.001,
           flag: lap.flagStatus,
           pit: lap.isPit ? 1 : 0,
+          ptSec: lap.pitTimeSec != null && lap.pitTimeSec > 0 ? lap.pitTimeSec : undefined,
         })),
       };
 
