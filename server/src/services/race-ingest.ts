@@ -91,6 +91,7 @@ export async function ingestRaceData(
         date: metadata.date,
         track: metadata.track,
         series: metadata.series,
+        sanctioningBody: mapSeriesToSanctioningBody(metadata.series),
         season: metadata.season,
         status: metadata.status,
         premium: metadata.premium,
@@ -269,9 +270,18 @@ function normalizeTrack(track: string): string {
   return track.toLowerCase().trim().replace(STRIP_WORDS, "").replace(/\s+/g, " ").trim();
 }
 
+/** Map a series name to its sanctioning body. */
+export function mapSeriesToSanctioningBody(series: string): string {
+  const s = series.trim();
+  if (s === "WRL") return "WRL";
+  if (s === "IMSA" || s.toLowerCase().includes("whelen") || s.toLowerCase().includes("mx-5")) return "IMSA";
+  // Everything else is SRO-sanctioned (SRO, GR_CUP, GTWC, Lamborghini, Mustang, Porsche, etc.)
+  return "SRO";
+}
+
 /**
  * Find an existing event or create a new one for this race's metadata.
- * Groups by: same series, matching track name, dates within 3 days.
+ * Groups by: same sanctioning body, matching track name, dates within 3 days.
  */
 async function findOrCreateEvent(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -279,11 +289,12 @@ async function findOrCreateEvent(
 ): Promise<string> {
   const season = String(metadata.season);
   const normTrack = normalizeTrack(metadata.track);
+  const sanctioningBody = mapSeriesToSanctioningBody(metadata.series);
 
-  // Look for existing events with same series and season
+  // Look for existing events with same sanctioning body and season
   const candidates = await tx.event.findMany({
     where: {
-      series: metadata.series,
+      sanctioningBody,
       season,
     },
     select: { id: true, track: true, date: true },
@@ -305,6 +316,7 @@ async function findOrCreateEvent(
     data: {
       name: `${metadata.track} ${season}`,
       series: metadata.series,
+      sanctioningBody,
       track: metadata.track,
       date: metadata.date,
       season,

@@ -9,7 +9,7 @@ import { hasFullAccess } from "../lib/utils";
 import { SeriesBadge } from "../components/SeriesBadge";
 import type { EventSummary } from "@shared/types";
 
-const FALLBACK_SERIES = ["IMSA", "SRO", "GR_CUP", "WRL"];
+const FALLBACK_SERIES = ["IMSA", "SRO", "WRL"];
 
 type SortKey = "date-desc" | "date-asc" | "track-az";
 
@@ -32,7 +32,7 @@ export function RaceListPage() {
 
   // Build the canonical series list from DB + fallbacks
   const allSeries = useMemo(() => {
-    const dbSeries = filters?.series ?? [];
+    const dbSeries = filters?.sanctioningBodies ?? [];
     const merged = new Set([...FALLBACK_SERIES, ...dbSeries]);
     return Array.from(merged);
   }, [filters]);
