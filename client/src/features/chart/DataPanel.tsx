@@ -139,7 +139,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
           <div className="flex gap-3 sm:gap-5">
             <PitField label="In-Lap" value={secToDisplay(timing.inLapTime)} />
             {timing.pitRoadTime !== null && <PitField label="Pit Road" value={secToDisplay(timing.pitRoadTime)} />}
-            <PitField label="Out-Lap" value={secToDisplay(timing.outLapTime)} />
+            <PitField label="Out-Lap" value={timing.outLapTime != null ? secToDisplay(timing.outLapTime) : "—"} />
             <PitField label="Grn Avg" value={secToDisplay(timing.avgGreenLapTime)} />
             <PitField label="Pit Loss" value={secToDisplay(timing.totalPitLoss)} warn />
           </div>

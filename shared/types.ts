@@ -174,9 +174,10 @@ export interface PitTimingData {
   pitOutTime: number | null;
   isDriveThrough: boolean;
   totalPitLoss: number;
-  inLapTime: number;
-  outLapTime: number;
+  inLapTime: number | null;
+  outLapTime: number | null;
   avgGreenLapTime: number;
+  splitReliable: boolean;
   decompositionLevel: "total_only" | "full_segments";
   spcAnalysis?: {
     totalLoss: SPCClassificationData;

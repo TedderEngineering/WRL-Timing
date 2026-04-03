@@ -82,7 +82,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
     s.sort((a, b) => {
       switch (sortKey) {
         case "car": return dir * (a.carNum - b.carNum);
-        case "inLap": return dir * (a.timing.inLapTime - b.timing.inLapTime);
+        case "inLap": return dir * ((a.timing.inLapTime ?? 999) - (b.timing.inLapTime ?? 999));
         case "pitRoad": return dir * ((a.timing.pitRoadTime ?? 999) - (b.timing.pitRoadTime ?? 999));
         case "pitLoss": return dir * (a.timing.totalPitLoss - b.timing.totalPitLoss);
         default: return 0;
@@ -186,7 +186,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
                     {row.timing.pitRoadTime !== null ? secToDisplay(row.timing.pitRoadTime) : "—"}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums" style={{ color: "rgba(255,255,255,0.8)" }}>
-                    {secToDisplay(row.timing.outLapTime)}
+                    {row.timing.outLapTime != null ? secToDisplay(row.timing.outLapTime) : "—†"}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums" style={{ color: "rgba(255,255,255,0.5)" }}>
                     {secToDisplay(row.timing.avgGreenLapTime)}
@@ -199,6 +199,11 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
             })}
           </tbody>
         </table>
+        {sorted.some((r) => !r.timing.splitReliable) && (
+          <div className="text-[10px] px-2 pt-1 pb-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+            † In/out split unavailable — pit box is before the timing loop
+          </div>
+        )}
       </div>
     </div>
   );

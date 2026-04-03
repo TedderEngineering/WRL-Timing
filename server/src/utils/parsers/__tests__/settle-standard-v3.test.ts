@@ -273,7 +273,7 @@ describe("computeSPC", () => {
       inLapTime: 130,
       outLapTime: 100,
       avgGreenLapTime: 90,
-      decompositionLevel: "total_only",
+      splitReliable: true, decompositionLevel: "total_only",
     };
   }
 
@@ -465,7 +465,7 @@ describe("computeCycleComparisons", () => {
         timing: {
           pitInTime: 20, pitRoadTime: 60, pitOutTime: 15,
           isDriveThrough: false, totalPitLoss: 45, inLapTime: 130,
-          outLapTime: 100, avgGreenLapTime: 90, decompositionLevel: "full_segments",
+          outLapTime: 100, avgGreenLapTime: 90, splitReliable: true, decompositionLevel: "full_segments",
         },
         cycleId: 0,
       },
@@ -474,7 +474,7 @@ describe("computeCycleComparisons", () => {
         timing: {
           pitInTime: 22, pitRoadTime: 65, pitOutTime: 18,
           isDriveThrough: false, totalPitLoss: 50, inLapTime: 135,
-          outLapTime: 105, avgGreenLapTime: 90, decompositionLevel: "full_segments",
+          outLapTime: 105, avgGreenLapTime: 90, splitReliable: true, decompositionLevel: "full_segments",
         },
         cycleId: 0,
       },
@@ -500,7 +500,7 @@ describe("computeCycleComparisons", () => {
         timing: {
           pitInTime: null, pitRoadTime: null, pitOutTime: null,
           isDriveThrough: false, totalPitLoss: 45, inLapTime: 130,
-          outLapTime: 100, avgGreenLapTime: 90, decompositionLevel: "total_only",
+          outLapTime: 100, avgGreenLapTime: 90, splitReliable: true, decompositionLevel: "total_only",
         },
         cycleId: 0,
       },
@@ -509,7 +509,7 @@ describe("computeCycleComparisons", () => {
         timing: {
           pitInTime: null, pitRoadTime: null, pitOutTime: null,
           isDriveThrough: false, totalPitLoss: 50, inLapTime: 135,
-          outLapTime: 105, avgGreenLapTime: 90, decompositionLevel: "total_only",
+          outLapTime: 105, avgGreenLapTime: 90, splitReliable: true, decompositionLevel: "total_only",
         },
         cycleId: 0,
       },

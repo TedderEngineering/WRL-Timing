@@ -381,6 +381,26 @@ function v3Pipeline(
     classCycles.set(className, cycles);
   }
 
+  // Pre-compute all pit events per class (for settle window calculation)
+  const classPitEvents = new Map<string, PitEvent[]>();
+  for (const car of carList) {
+    const cls = car.cls;
+    if (!classPitEvents.has(cls)) classPitEvents.set(cls, []);
+    const evts = classPitEvents.get(cls)!;
+    const lps = car.laps;
+    let j = 0;
+    while (j < lps.length) {
+      if (lps[j].pit === 1) {
+        const inLap = lps[j].l;
+        while (j < lps.length && lps[j].pit === 1) j++;
+        const outLap = j < lps.length ? lps[j].l : inLap + 1;
+        evts.push({ inLap, outLap });
+      } else {
+        j++;
+      }
+    }
+  }
+
   // ── 2-8. Per-car: prox volatility, per-pit processing ──────────
   // Collect all pit events for cross-car operations (cycle comparison, SPC)
   const allPitEventsWithTiming: PitEventWithTiming[] = [];
@@ -446,8 +466,16 @@ function v3Pipeline(
       );
 
       // 6. CUSUM settle detection
+      const classPits = classPitEvents.get(cls) || [];
+      let classPitWindowEnd = pe.outLap;
+      for (const other of classPits) {
+        if (Math.abs(other.inLap - pe.inLap) <= 5) {
+          classPitWindowEnd = Math.max(classPitWindowEnd, other.outLap);
+        }
+      }
+
       const settleResult = cusumSettleDetection(
-        car, pe, classVol, baseline, fcyLaps
+        car, pe, classVol, baseline, fcyLaps, classPitWindowEnd
       );
 
       const settlePosition = settleResult?.settlePosition ?? preBaseline;
@@ -1005,7 +1033,8 @@ export function cusumSettleDetection(
   pitEvent: PitEvent,
   classVolatility: number[],
   baseline: { mean: number; stddev: number },
-  fcyLaps: Set<number>
+  fcyLaps: Set<number>,
+  classPitWindowEnd: number = pitEvent.outLap
 ): CusumSettleResult | null {
   const laps = car.laps;
   if (!Array.isArray(laps) || laps.length === 0) return null;
@@ -1016,10 +1045,9 @@ export function cusumSettleDetection(
 
   const lastLap = laps[laps.length - 1].l;
 
-  // Determine search start — advance past FCY if pit was during caution
-  let searchStart = pitEvent.outLap + 1;
+  let searchStart = Math.max(pitEvent.outLap + 1, classPitWindowEnd + 1);
   if (fcyLaps.has(pitEvent.inLap)) {
-    for (let L = pitEvent.outLap + 1; L <= lastLap; L++) {
+    for (let L = searchStart; L <= lastLap; L++) {
       if (!fcyLaps.has(L)) {
         searchStart = L;
         break;
@@ -1225,9 +1253,10 @@ export interface PitTiming {
   totalPitLoss: number;
 
   // Raw values used in computation
-  inLapTime: number;
-  outLapTime: number;
+  inLapTime: number | null;
+  outLapTime: number | null;
   avgGreenLapTime: number;
+  splitReliable: boolean;
 
   // What level of decomposition is available
   decompositionLevel: "total_only" | "full_segments";
@@ -1261,6 +1290,7 @@ function computeAvgGreenLapTime(
   // Collect green non-pit laps before the pit
   const candidates: number[] = [];
   for (const ld of laps) {
+    if (ld.l === 1) continue;
     if (ld.l >= beforeLap) continue;
     if (ld.pit === 1) continue;
     if (fcyLaps.has(ld.l)) continue;
@@ -1275,14 +1305,34 @@ function computeAvgGreenLapTime(
   const recent = candidates.slice(-10);
   if (recent.length === 0) return 0;
 
-  // Outlier filter: exclude >2 stddev from mean
-  const m = mean(recent);
-  if (recent.length < 3) return m;
+  const earlyGreen: number[] = [];
+  for (const ld of laps) {
+    if (ld.l <= 1 || ld.l > 10 || ld.l >= beforeLap) continue;
+    if (ld.pit === 1) continue;
+    if (fcyLaps.has(ld.l)) continue;
+    const f = ld.flag.toUpperCase();
+    if (f === "GF" || f === "GREEN" || f === "G") {
+      earlyGreen.push(ld.ltSec);
+    }
+  }
+  let roughMedian = 0;
+  if (earlyGreen.length > 0) {
+    const sorted = [...earlyGreen].sort((a, b) => a - b);
+    roughMedian = sorted[Math.floor((sorted.length - 1) / 2)];
+  }
+  const cleaned = roughMedian > 0
+    ? recent.filter((t) => t <= roughMedian * 1.15)
+    : recent;
 
-  const sd = stddev(recent);
+  if (cleaned.length === 0) return roughMedian > 0 ? roughMedian : (recent.length > 0 ? mean(recent) : 0);
+
+  const m = mean(cleaned);
+  if (cleaned.length < 3) return m;
+
+  const sd = stddev(cleaned);
   if (sd === 0) return m;
 
-  const filtered = recent.filter((t) => Math.abs(t - m) <= 2 * sd);
+  const filtered = cleaned.filter((t) => Math.abs(t - m) <= 2 * sd);
   return filtered.length > 0 ? mean(filtered) : m;
 }
 
@@ -1339,15 +1389,22 @@ export function computePitTiming(
     inLapTime,
     outLapTime,
     avgGreenLapTime,
+    splitReliable: true,
     decompositionLevel: "total_only",
   };
 
   // If SRO CSV PIT_TIME is available on the out-lap, use it as real pit road time
   if (!pitStopData && outLapRecord?.ptSec) {
     timing.pitRoadTime = outLapRecord.ptSec;
-    timing.outLapTime = outLapRecord.ltSec - outLapRecord.ptSec;
     timing.isDriveThrough = outLapRecord.ptSec < 90;
     timing.decompositionLevel = "full_segments";
+    const outDriveTime = outLapRecord.ltSec - outLapRecord.ptSec;
+    if (avgGreenLapTime > 0 && outDriveTime < avgGreenLapTime * 0.6) {
+      timing.outLapTime = null;
+      timing.splitReliable = false;
+    } else {
+      timing.outLapTime = outDriveTime;
+    }
   }
 
   // If IMSA Time Card data is available, compute full segments
