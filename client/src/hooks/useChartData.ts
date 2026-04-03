@@ -120,7 +120,7 @@ interface RaceListResult {
 }
 
 interface FilterOptions {
-  series: string[];
+  sanctioningBodies: string[];
   tracks: string[];
   seasons: number[];
 }

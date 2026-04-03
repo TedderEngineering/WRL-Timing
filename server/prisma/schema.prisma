@@ -132,20 +132,22 @@ model Subscription {
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 model Event {
-  id        String     @id @default(cuid())
-  name      String
-  series    String
-  track     String
-  date      DateTime // event start date
-  season    String // e.g. "2025"
-  status    RaceStatus @default(PUBLISHED)
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  id              String     @id @default(cuid())
+  name            String
+  series          String
+  sanctioningBody String     @default("SRO") @map("sanctioning_body")
+  track           String
+  date            DateTime // event start date
+  season          String // e.g. "2025"
+  status          RaceStatus @default(PUBLISHED)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
   races                Race[]
   qualifyingSessions   QualifyingSession[]
 
   @@index([series, track, date])
+  @@index([sanctioningBody])
   @@index([status])
   @@index([date(sort: Desc)])
   @@map("events")
@@ -154,13 +156,14 @@ model Event {
 // ─── Race Data ────────────────────────────────────────────────────────────────
 
 model Race {
-  id             String     @id @default(cuid())
-  name           String
-  date           DateTime
-  track          String
-  series         String
-  season         Int
-  status         RaceStatus @default(DRAFT)
+  id              String     @id @default(cuid())
+  name            String
+  date            DateTime
+  track           String
+  series          String
+  sanctioningBody String     @default("SRO") @map("sanctioning_body")
+  season          Int
+  status          RaceStatus @default(DRAFT)
   premium        Boolean    @default(false)
   maxLap         Int?       @map("max_lap")
   totalCars      Int?       @map("total_cars")
@@ -184,6 +187,7 @@ model Race {
 
   @@index([status])
   @@index([series, season])
+  @@index([sanctioningBody])
   @@index([date(sort: Desc)])
   @@index([eventId])
   @@map("races")

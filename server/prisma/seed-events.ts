@@ -19,6 +19,14 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
+/** Map a series name to its sanctioning body. */
+function mapSeriesToSanctioningBody(series: string): string {
+  const s = series.trim();
+  if (s === "WRL") return "WRL";
+  if (s === "IMSA" || s.toLowerCase().includes("whelen") || s.toLowerCase().includes("mx-5")) return "IMSA";
+  return "SRO";
+}
+
 /** Words stripped from the end of a track name for comparison only */
 const STRIP_WORDS = /\b(raceway|speedway|park|circuit|international|motorsports|motorplex)\b/gi;
 
@@ -79,7 +87,7 @@ async function main() {
   for (let i = 1; i < races.length; i++) {
     const prev = current[current.length - 1];
     const race = races[i];
-    const sameSeries = race.series === prev.series;
+    const sameSeries = mapSeriesToSanctioningBody(race.series) === mapSeriesToSanctioningBody(prev.series);
     const sameTrack = sameSeries && tracksMatch(race.track, prev.track);
     const withinWindow =
       Math.abs(race.date.getTime() - prev.date.getTime()) <= THREE_DAYS_MS;
@@ -112,6 +120,7 @@ async function main() {
       data: {
         name,
         series: earliest.series,
+        sanctioningBody: mapSeriesToSanctioningBody(earliest.series),
         track: canonicalTrack,
         date: earliest.date,
         season,

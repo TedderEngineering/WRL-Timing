@@ -26,7 +26,7 @@ eventsRouter.get(
 
       const where: any = {};
       if (!isAdmin) where.status = "PUBLISHED";
-      if (series) where.series = { equals: String(series), mode: "insensitive" };
+      if (series) where.sanctioningBody = { equals: String(series), mode: "insensitive" };
       if (season) where.season = String(season);
 
       const events = await prisma.event.findMany({
@@ -35,6 +35,7 @@ eventsRouter.get(
           id: true,
           name: true,
           series: true,
+          sanctioningBody: true,
           track: true,
           date: true,
           season: true,
@@ -66,7 +67,8 @@ eventsRouter.get(
           return {
             id: e.id,
             name: e.name,
-            series: e.series,
+            series: e.sanctioningBody,
+            sanctioningBody: e.sanctioningBody,
             track: e.track,
             date: e.date,
             season: e.season,

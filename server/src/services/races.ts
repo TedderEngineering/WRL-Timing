@@ -494,12 +494,12 @@ export async function getUserFavorites(userId: string, limit = 12) {
 // ─── Distinct filter values ──────────────────────────────────────────────────
 
 export async function getFilterOptions() {
-  const [series, tracks, seasons] = await prisma.$transaction([
+  const [sanctioningBodies, tracks, seasons] = await prisma.$transaction([
     prisma.race.findMany({
       where: { status: "PUBLISHED" },
-      select: { series: true },
-      distinct: ["series"],
-      orderBy: { series: "asc" },
+      select: { sanctioningBody: true },
+      distinct: ["sanctioningBody"],
+      orderBy: { sanctioningBody: "asc" },
     }),
     prisma.race.findMany({
       where: { status: "PUBLISHED" },
@@ -516,7 +516,7 @@ export async function getFilterOptions() {
   ]);
 
   return {
-    series: series.map((s) => s.series),
+    sanctioningBodies: sanctioningBodies.map((s) => s.sanctioningBody),
     tracks: tracks.map((t) => t.track),
     seasons: seasons.map((s) => s.season),
   };

@@ -53,6 +53,7 @@ export interface EventSummary {
   id: string;
   name: string;
   series: string;
+  sanctioningBody: string;
   track: string;
   date: string;
   season: string;
