@@ -322,6 +322,7 @@ export function classifyFile(file: File, content: string): DetectedFile {
 
     // Redmist Flags CSV: headers [flag, start, end, duration]
     // Content check: first data row's flag must be green/yellow/red/checkered
+    // Supplementary file: uses WRL Website metadata extractor for consistent groupKey
     if (
       headerLower.includes("flag") &&
       headerLower.includes("start") &&
@@ -332,15 +333,16 @@ export function classifyFile(file: File, content: string): DetectedFile {
       const firstDataFlag = dataLines.find(l => l.trim())?.split(",")[0]?.trim() || "";
       if (/^(green|yellow|red|checkered)$/i.test(firstDataFlag)) {
         result.type = "redmistFlagsCsv";
-        result.format = "speedhive";
-        result.metadata = extractSpeedhiveMetadata(file.name, content);
-        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_flags\.csv$/i, "")}`;
+        result.format = "wrl-website"; // match WRL Website format for group compatibility
+        result.metadata = extractWrlWebsiteMetadata(file.name, content);
+        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_(flags|all_laps|summary|control_log)\.csv$/i, "")}`;
         return result;
       }
     }
 
     // Redmist Control Log CSV: headers [sequence, timestamp, description, action]
     // Content check: at least one of first 5 data rows has a recognized action
+    // Supplementary file: uses WRL Website metadata extractor for consistent groupKey
     if (
       headerLower.includes("sequence") &&
       headerLower.includes("timestamp") &&
@@ -358,9 +360,9 @@ export function classifyFile(file: File, content: string): DetectedFile {
       });
       if (hasKnownAction) {
         result.type = "redmistControlLogCsv";
-        result.format = "speedhive";
-        result.metadata = extractSpeedhiveMetadata(file.name, content);
-        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_control_log\.csv$/i, "")}`;
+        result.format = "wrl-website"; // match WRL Website format for group compatibility
+        result.metadata = extractWrlWebsiteMetadata(file.name, content);
+        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_(flags|all_laps|summary|control_log)\.csv$/i, "")}`;
         return result;
       }
     }
@@ -985,9 +987,9 @@ function extractWrlWebsiteMetadata(filename: string, _content: string): Partial<
   const meta: Partial<RaceGroupMetadata> = { series: "WRL" };
   const fn = filename.replace(/\.csv$/i, "");
 
-  // Date: YYYY-MM-DD or YYYYMMDD before _summary/_all_laps
+  // Date: YYYY-MM-DD or YYYYMMDD before known suffix (_summary/_all_laps/_flags/_control_log)
   const isoDate = fn.match(/(\d{4})-(\d{2})-(\d{2})/);
-  const compactDate = fn.match(/(\d{4})(\d{2})(\d{2})(?:_(?:summary|all_laps))/);
+  const compactDate = fn.match(/(\d{4})(\d{2})(\d{2})(?:_(?:summary|all_laps|flags|control_log))/);
   if (isoDate) {
     meta.date = isoDate[0];
     meta.season = isoDate[1];
