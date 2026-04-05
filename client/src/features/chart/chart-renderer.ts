@@ -305,11 +305,39 @@ export function drawChart(
   const leaderHours = useTimeX ? computeLapElapsedHours(data) : null;
   const focusCarHours = useTimeX ? allCarHours!.get(String(focusNum)) : null;
 
-  /** Get x-pixel for a car's lap, using time-based mapping in Hrs/Both modes. */
+  // Build garage-start-time overrides: for garage laps in Hrs mode,
+  // use the START time (end of previous lap) instead of the END time.
+  // Key: "carNum:lapNum", Value: start-time in hours.
+  const garageStartHours = new Map<string, number>();
+  if (useTimeX) {
+    for (const [carNum, carAnn] of Object.entries(annotations)) {
+      if (!carAnn?.pits) continue;
+      const carH = allCarHours!.get(carNum);
+      if (!carH) continue;
+      const carLaps = data.cars[carNum]?.laps;
+      if (!carLaps) continue;
+      for (const pit of carAnn.pits) {
+        if (!(pit as PitMarker).isGarage) continue;
+        // Find the previous lap's cumulative time = garage start
+        const lapIdx = carLaps.findIndex((l) => l.l === pit.l);
+        if (lapIdx <= 0) continue; // no previous lap
+        const prevLapNum = carLaps[lapIdx - 1].l;
+        const prevH = carH.get(prevLapNum);
+        if (prevH != null) {
+          garageStartHours.set(`${carNum}:${pit.l}`, prevH);
+        }
+      }
+    }
+  }
+
+  /** Get x-pixel for a car's lap, using time-based mapping in Hrs/Both modes.
+   *  For garage laps, uses the START time (entry into garage) instead of END time. */
   const xForCar = (carNum: string, lapNum: number): number => {
     if (!useTimeX) return x(lapNum);
+    // Check for garage start-time override
+    const garageH = garageStartHours.get(`${carNum}:${lapNum}`);
     const carH = allCarHours!.get(carNum);
-    const h = carH?.get(lapNum);
+    const h = garageH ?? carH?.get(lapNum);
     if (h == null) return x(lapNum); // fallback
     if (xAxisMode === "both") {
       // Both: focus car uses lap numbers, others use time mapped to focus car's lap scale
@@ -543,9 +571,10 @@ export function drawChart(
     if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
       const px = xForCar(focusNumStr, d.l);
       const py = y(d[pk]);
+      const marker = ann.pits.find((p: PitMarker) => p.l === d.l);
       ctx.beginPath();
       ctx.arc(px, py, 4, 0, Math.PI * 2);
-      ctx.fillStyle = "#fbbf24";
+      ctx.fillStyle = marker?.isGarage ? "#f97316" : "#fbbf24";
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 1;
       ctx.fill();

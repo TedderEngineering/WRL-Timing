@@ -60,6 +60,7 @@ const pitMarkerSchema = z.object({
     decompositionLevel: z.enum(["total_only","full_segments"]).optional(),
   }).optional(),
   alsoPittingCars: z.array(z.number().int()).optional(),
+  isGarage: z.boolean().optional(),
 });
 
 const settleMarkerSchema = z.object({

@@ -11,6 +11,7 @@
  */
 
 import type { RaceDataJson, AnnotationJson } from "../race-validators.js";
+import { GARAGE_THRESHOLD_SECONDS } from "./csv-utils.js";
 
 // ─── Inferred sub-types from RaceDataJson ────────────────────────────────────
 
@@ -35,6 +36,7 @@ export interface PitMarker {
   pitTiming?: PitTiming;
   strategyType?: StrategyType;
   alsoPittingCars?: number[];
+  isGarage?: boolean;
 }
 interface SettleMarker {
   l: number;
@@ -149,12 +151,14 @@ export function generateAnnotations(
       if (isPit) {
         pitCount++;
         if (!existingPits.some((ep) => ep.l === lapNum)) {
+          const isGarage = d.ltSec > GARAGE_THRESHOLD_SECONDS;
           pits.push({
             l: lapNum,
-            lb: `Pit ${pitCount}`,
-            c: "#fbbf24",
+            lb: isGarage ? `Pit ${pitCount} (garage)` : `Pit ${pitCount}`,
+            c: isGarage ? "#f97316" : "#fbbf24",
             yo: 0,
             da: 0,
+            isGarage: isGarage || undefined,
           });
         }
       }

@@ -19,7 +19,7 @@
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import { parseCSV, mapHeaders, col, parseLapTime } from "./csv-utils.js";
+import { parseCSV, mapHeaders, col, parseLapTime, detectPitStopsWRL } from "./csv-utils.js";
 import { generateAnnotations } from "./position-analysis.js";
 
 export const wrlWebsiteParser: RaceDataParser = {
@@ -106,7 +106,8 @@ export const wrlWebsiteParser: RaceDataParser = {
 
       const lapTimeStr = col(row, lapsHdr, "lap_time");
       const ltSec = parseLapTime(lapTimeStr);
-      const inPit = col(row, lapsHdr, "in_pit").toLowerCase() === "yes";
+      // NOTE: In_Pit column is unreliable for WRL data — pit detection
+      // is done via lap-time anomaly detection after all laps are parsed.
       const overallPos = parseInt(col(row, lapsHdr, "overall_position"), 10) || lapNum;
       const classPos = parseInt(col(row, lapsHdr, "class_position"), 10) || 0;
       const flagStatus = col(row, lapsHdr, "flag_status").toLowerCase();
@@ -128,7 +129,7 @@ export const wrlWebsiteParser: RaceDataParser = {
         lt: lapTimeStr,
         ltSec: ltSec > 0 ? ltSec : 0.001,
         flag,
-        pit: inPit ? 1 : 0,
+        pit: 0,   // set by detectPitStopsWRL() below
         spd: 0,
       });
 
@@ -141,6 +142,14 @@ export const wrlWebsiteParser: RaceDataParser = {
           finPos: parseInt(col(row, lapsHdr, "overall_position"), 10) || 999,
           finPosCls: parseInt(col(row, lapsHdr, "class_position"), 10) || 999,
         });
+      }
+    }
+
+    // ── Detect pit stops via lap-time anomaly ─────────────────────
+    for (const [, laps] of carLaps) {
+      const { pitLaps } = detectPitStopsWRL(laps);
+      for (const lap of laps) {
+        if (pitLaps.has(lap.l)) lap.pit = 1;
       }
     }
 

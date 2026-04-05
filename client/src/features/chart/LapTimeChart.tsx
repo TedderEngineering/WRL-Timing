@@ -189,9 +189,10 @@ function drawLapTimeChart(
   // 6. Pit dots along bottom edge
   for (const d of focusCar.laps) {
     if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
+      const marker = ann.pits.find((p: any) => p.l === d.l);
       ctx.beginPath();
       ctx.arc(x(d.l), dim.H - dim.MB, 3, 0, Math.PI * 2);
-      ctx.fillStyle = "#fbbf24";
+      ctx.fillStyle = marker?.isGarage ? "#f97316" : "#fbbf24";
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 1;
       ctx.fill();

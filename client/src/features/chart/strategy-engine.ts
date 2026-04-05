@@ -322,6 +322,7 @@ export function computeStrategyMetrics(
     for (let i = 0; i < laps.length; i++) {
       const d = laps[i];
       if (d.pit !== 1) continue;
+      if (d.ltSec > 900) continue; // skip garage stays from pit timing aggregates
       const prevLap = i > 0 ? laps[i - 1] : null;
       const nextLap = i < laps.length - 1 ? laps[i + 1] : null;
       const dur = avgGreenPace > 0 && d.ltSec > 1
@@ -339,15 +340,16 @@ export function computeStrategyMetrics(
     // ── Aggregates ──────────────────────────────────────────────
     const stintCount = stints.length;
     const pitLaps = laps.filter((d) => d.pit === 1);
+    const normalPitLaps = pitLaps.filter((d) => d.ltSec <= 900); // exclude garage stays
     let totalPitTime = 0;
     let yellowPitCount = 0;
-    for (const d of pitLaps) {
+    for (const d of normalPitLaps) {
       if (avgGreenPace > 0 && d.ltSec > 1) {
         totalPitTime += Math.max(0, d.ltSec - avgGreenPace);
       }
       if (fcyLaps.has(d.l)) yellowPitCount++;
     }
-    const avgPitDuration = pitLaps.length > 0 ? totalPitTime / pitLaps.length : 0;
+    const avgPitDuration = normalPitLaps.length > 0 ? totalPitTime / normalPitLaps.length : 0;
     const yellowPitPct = pitLaps.length > 0 ? (yellowPitCount / pitLaps.length) * 100 : 0;
 
     const totalRaceTime = laps.reduce((s, d) => s + (d.ltSec > 0 ? d.ltSec : 0), 0);

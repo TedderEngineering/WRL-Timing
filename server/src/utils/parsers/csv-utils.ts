@@ -162,3 +162,95 @@ export function parseLapTime(lt: string): number {
   const val = parseFloat(clean);
   return isNaN(val) ? 0 : val;
 }
+
+// ─── Pit Stop Detection (lap-time anomaly for WRL) ──────────────────────────
+
+/**
+ * Detects pit stops for WRL/SpeedHive lap data using lap-time anomaly.
+ *
+ * The SpeedHive `In Pit` column is unreliable for WRL data:
+ *  - Fires at normal lap times when car passes pit lane sensor (false +)
+ *  - Misses pit stops that happen under yellow flag (false -)
+ *
+ * This function uses lap time relative to the car's green-flag median
+ * as the primary signal. Green-flag laps use a lower threshold (1.42x)
+ * because there is no caution pace to confuse things. Yellow-flag laps
+ * use 1.50x because normal caution pace reaches up to 1.43x.
+ * Yellow laps are NOT excluded — WRL teams pit under yellow constantly.
+ */
+export const GREEN_PIT_THRESHOLD = 1.42; // green flag: any 42%+ slowdown = pit
+export const FCY_PIT_THRESHOLD   = 1.50; // yellow flag: keep 1.50x (caution pace reaches 1.43x)
+export const GARAGE_THRESHOLD_SECONDS = 900; // > 15 min = extended garage stay
+export const PIT_GROUP_GAP             = 2;  // consecutive laps within gap = 1 stop
+
+export interface PitDetectionResult {
+  pitLaps: Set<number>;     // all pit laps (normal + garage)
+  garageLaps: Set<number>;  // subset: laps > GARAGE_THRESHOLD_SECONDS
+}
+
+export function detectPitStopsWRL(
+  laps: Array<{ l: number; ltSec: number; flag: string }>
+): PitDetectionResult {
+  const empty: PitDetectionResult = { pitLaps: new Set(), garageLaps: new Set() };
+
+  // Step 1: baseline = median of GREEN-flag lap times
+  const greenTimes = laps
+    .filter(r => r.flag === "GREEN" && r.ltSec > 1)
+    .map(r => r.ltSec);
+
+  if (greenTimes.length === 0) return empty;
+
+  const greenMedian = medianOf(greenTimes);
+
+  // Step 2: flag slow laps across ALL flag conditions (including Yellow)
+  // No upper cap — extended garage stays are real stops, not race halts.
+  // RED flag laps are still excluded (race-wide halt, not car-specific).
+  const slowLaps = new Set<number>();
+  for (const r of laps) {
+    if (r.flag === "RED") continue;      // red flag = race halt, not pit
+    if (r.ltSec <= 1) continue;          // missing/invalid time
+    const threshold = r.flag === "GREEN"
+      ? greenMedian * GREEN_PIT_THRESHOLD
+      : greenMedian * FCY_PIT_THRESHOLD;
+    if (r.ltSec > threshold) {
+      slowLaps.add(r.l);
+    }
+  }
+
+  // Step 3: group consecutive slow laps → one pit stop event
+  const sorted = [...slowLaps].sort((a, b) => a - b);
+  if (sorted.length === 0) return empty;
+
+  const groups: number[][] = [[sorted[0]]];
+  for (const lap of sorted.slice(1)) {
+    const lastGroup = groups[groups.length - 1];
+    if (lap <= lastGroup[lastGroup.length - 1] + PIT_GROUP_GAP) {
+      lastGroup.push(lap);
+    } else {
+      groups.push([lap]);
+    }
+  }
+
+  // Step 4: pit stop lap = first lap of each group
+  const pitLaps = new Set(groups.map(g => g[0]));
+
+  // Step 5: identify garage stays (laps exceeding GARAGE_THRESHOLD_SECONDS)
+  const lapByNum = new Map(laps.map(r => [r.l, r]));
+  const garageLaps = new Set<number>();
+  for (const lapNum of pitLaps) {
+    const r = lapByNum.get(lapNum);
+    if (r && r.ltSec > GARAGE_THRESHOLD_SECONDS) {
+      garageLaps.add(lapNum);
+    }
+  }
+
+  return { pitLaps, garageLaps };
+}
+
+export function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}
