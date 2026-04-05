@@ -203,8 +203,10 @@ export function detectPitStopsWRL(
   const greenMedian = medianOf(greenTimes);
 
   // Step 2: flag slow laps across ALL flag conditions (including Yellow)
-  // No upper cap — extended garage stays are real stops, not race halts.
-  // RED flag laps are still excluded (race-wide halt, not car-specific).
+  // GREEN: no upper cap — long green laps are car-specific garage stays.
+  // YELLOW: 600s cap — long yellow laps are field-wide extended cautions, not pits.
+  // RED: excluded entirely (race-wide halt).
+  const FCY_UPPER_CAP = 600;
   const slowLaps = new Set<number>();
   for (const r of laps) {
     if (r.flag === "RED") continue;      // red flag = race halt, not pit
@@ -212,8 +214,10 @@ export function detectPitStopsWRL(
     const threshold = r.flag === "GREEN"
       ? greenMedian * GREEN_PIT_THRESHOLD
       : greenMedian * FCY_PIT_THRESHOLD;
-    if (r.ltSec > threshold) {
-      slowLaps.add(r.l);
+    if (r.flag === "GREEN" && r.ltSec > threshold) {
+      slowLaps.add(r.l);               // no upper cap for green
+    } else if (r.flag !== "RED" && r.ltSec > threshold && r.ltSec < FCY_UPPER_CAP) {
+      slowLaps.add(r.l);               // 600s cap for yellow (extended FCY filter)
     }
   }
 
