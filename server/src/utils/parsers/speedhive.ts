@@ -14,7 +14,7 @@
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV } from "./csv-utils.js";
+import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV, parseControlLogCSV, enrichAnnotationsFromControlLog } from "./csv-utils.js";
 import type { PitDetectLapRow } from "./csv-utils.js";
 import { generateAnnotations } from "./position-analysis.js";
 
@@ -158,7 +158,7 @@ export const speedhiveParser: RaceDataParser = {
     }
 
     // ── Parse flags into flag periods ──────────────────────────────
-    const flagPeriods = parseFlagsCSV(flagsCsv);
+    const { periods: flagPeriods, raceStartMs } = parseFlagsCSV(flagsCsv);
     if (flagPeriods.length === 0) {
       warnings.push("Flags CSV produced no valid flag periods — falling back to threshold-only detection");
     }
@@ -279,6 +279,18 @@ export const speedhiveParser: RaceDataParser = {
 
     const raceData: RaceDataJson = { maxLap, totalCars, greenPaceCutoff, cars, fcy, classGroups, classCarCounts };
     const annotations = generateAnnotations(raceData);
+
+    // ── Enrich annotations from control log ─────────────────────
+    if (controlLogCsv && raceStartMs > 0) {
+      const controlEvents = parseControlLogCSV(controlLogCsv, raceStartMs);
+      if (controlEvents.length > 0) {
+        enrichAnnotationsFromControlLog(annotations, controlEvents, cars);
+        const penaltyCount = controlEvents.filter(e => e.type === "penalty").length;
+        const garageCount = controlEvents.filter(e => e.type === "garage_context").length;
+        if (penaltyCount > 0) warnings.push(`Control log: ${penaltyCount} penalty event(s) enriched`);
+        if (garageCount > 0) warnings.push(`Control log: ${garageCount} garage context event(s) enriched`);
+      }
+    }
 
     return {
       data: raceData,

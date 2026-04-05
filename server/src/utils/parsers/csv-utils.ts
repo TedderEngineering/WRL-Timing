@@ -250,7 +250,12 @@ function buildCumulativeTime(
  * Race start = Start of first Green row.
  * Rows with empty or unrecognized Flag are discarded.
  */
-export function parseFlagsCSV(csvText: string): FlagPeriod[] {
+export interface FlagsParseResult {
+  periods: FlagPeriod[];
+  raceStartMs: number;  // wall-clock ms of first Green start (for timestamp conversion)
+}
+
+export function parseFlagsCSV(csvText: string): FlagsParseResult {
   const rows = parseCSV(csvText);
   if (rows.length < 2) return [];
 
@@ -258,7 +263,9 @@ export function parseFlagsCSV(csvText: string): FlagPeriod[] {
   const flagIdx = hdr.get("flag");
   const startIdx = hdr.get("start");
   const endIdx = hdr.get("end");
-  if (flagIdx === undefined || startIdx === undefined || endIdx === undefined) return [];
+  if (flagIdx === undefined || startIdx === undefined || endIdx === undefined) {
+    return { periods: [], raceStartMs: 0 };
+  }
 
   const raw: Array<{ flag: FlagType; startMs: number; endMs: number }> = [];
   for (let i = 1; i < rows.length; i++) {
@@ -273,16 +280,18 @@ export function parseFlagsCSV(csvText: string): FlagPeriod[] {
     raw.push({ flag, startMs, endMs });
   }
 
-  if (raw.length === 0) return [];
+  if (raw.length === 0) return { periods: [], raceStartMs: 0 };
 
   const firstGreen = raw.find(r => r.flag === "Green");
   const raceStartMs = firstGreen ? firstGreen.startMs : raw[0].startMs;
 
-  return raw.map(r => ({
+  const periods = raw.map(r => ({
     flag: r.flag,
     startSec: (r.startMs - raceStartMs) / 1000,
     endSec: (r.endMs - raceStartMs) / 1000,
   }));
+
+  return { periods, raceStartMs };
 }
 
 function normalizeFlagName(s: string): FlagType {
@@ -528,4 +537,167 @@ function findSlowGroups(
     }
   }
   return { groups, slowSet };
+}
+
+// ─── Control Log Parser ─────────────────────────────────────────────────────
+
+export interface ControlLogEvent {
+  sequence: number;
+  timestampMs: number;       // wall-clock ms
+  elapsedSec: number;        // seconds from race start (computed from raceStartMs)
+  carNumbers: number[];      // extracted car numbers (from Car_1, Car_2)
+  description: string;
+  action: string;
+  status: string;
+  type: "penalty" | "garage_context" | "other";
+}
+
+const PENALTY_ACTIONS = new Set([
+  "1 lap", "drive through penalty", "stop and go",
+  "drive through", "stop & go", "black flag",
+]);
+
+/**
+ * Parse the Redmist control log CSV into structured events.
+ * Filters to actionable events: penalties and garage stop context.
+ */
+export function parseControlLogCSV(
+  csvText: string,
+  raceStartMs: number
+): ControlLogEvent[] {
+  const rows = parseCSV(csvText);
+  if (rows.length < 2) return [];
+
+  const hdr = mapHeaders(rows[0]);
+  const seqIdx = hdr.get("sequence");
+  const tsIdx = hdr.get("timestamp");
+  const car1Idx = hdr.get("car_1");
+  const car2Idx = hdr.get("car_2");
+  const descIdx = hdr.get("description");
+  const actionIdx = hdr.get("action");
+  const statusIdx = hdr.get("status");
+
+  if (tsIdx === undefined || descIdx === undefined) return [];
+
+  const events: ControlLogEvent[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const tsStr = (row[tsIdx] ?? "").trim();
+    const timestampMs = parseDateTimeMs(tsStr);
+    if (timestampMs === 0) continue;
+
+    const desc = (row[descIdx] ?? "").trim();
+    const action = actionIdx !== undefined ? (row[actionIdx] ?? "").trim() : "";
+    const status = statusIdx !== undefined ? (row[statusIdx] ?? "").trim() : "";
+
+    // Extract car numbers from Car_1, Car_2 (format: "#120 Team Name" or just "#120")
+    const carNumbers: number[] = [];
+    for (const idx of [car1Idx, car2Idx]) {
+      if (idx === undefined) continue;
+      const val = (row[idx] ?? "").trim();
+      const match = val.match(/^#?(\d+)/);
+      if (match) carNumbers.push(parseInt(match[1], 10));
+    }
+
+    // Classify event type
+    const actionLower = action.toLowerCase();
+    const descLower = desc.toLowerCase();
+
+    let type: ControlLogEvent["type"] = "other";
+    if (PENALTY_ACTIONS.has(actionLower)) {
+      type = "penalty";
+    } else if (descLower.includes("contact") && PENALTY_ACTIONS.has(actionLower)) {
+      type = "penalty";
+    } else if (descLower.includes("stopped") && actionLower === "no action needed") {
+      type = "garage_context";
+    }
+
+    if (type === "other") continue; // skip non-actionable events
+
+    events.push({
+      sequence: seqIdx !== undefined ? parseInt((row[seqIdx] ?? "0"), 10) : i,
+      timestampMs,
+      elapsedSec: raceStartMs > 0 ? (timestampMs - raceStartMs) / 1000 : 0,
+      carNumbers,
+      description: desc,
+      action,
+      status,
+      type,
+    });
+  }
+
+  return events;
+}
+
+/**
+ * Find the lap number a car was on at a given elapsed time.
+ * Returns the lap whose cumulative time first exceeds elapsedSec.
+ */
+function lapAtElapsedSec(
+  laps: Array<{ l: number; ltSec: number }>,
+  elapsedSec: number
+): number | null {
+  let cumSec = 0;
+  for (const lap of laps) {
+    cumSec += lap.ltSec;
+    if (cumSec >= elapsedSec) return lap.l;
+  }
+  return laps.length > 0 ? laps[laps.length - 1].l : null;
+}
+
+/**
+ * Enrich annotations with control log events.
+ * Adds penalty text to the reasons dict and enriches garage marker labels.
+ *
+ * @param annotations - mutable annotation dict (modified in place)
+ * @param events - parsed control log events
+ * @param cars - race data cars (for lap lookup)
+ */
+export function enrichAnnotationsFromControlLog(
+  annotations: Record<string, { reasons: Record<string, string>; pits: any[]; settles: any[] }>,
+  events: ControlLogEvent[],
+  cars: Record<string, { laps: Array<{ l: number; ltSec: number; pit: number }> }>
+): void {
+  for (const evt of events) {
+    for (const carNum of evt.carNumbers) {
+      const carStr = String(carNum);
+      const car = cars[carStr];
+      const ann = annotations[carStr];
+      if (!car || !ann) continue;
+
+      const lapNum = lapAtElapsedSec(car.laps, evt.elapsedSec);
+      if (lapNum == null) continue;
+
+      if (evt.type === "penalty") {
+        // Find the slow lap closest to the event (within ±5 laps) for penalty serving
+        let servingLap = lapNum;
+        const window = car.laps.filter(l => l.l >= lapNum && l.l <= lapNum + 5);
+        if (window.length > 0) {
+          const slowest = window.reduce((a, b) => a.ltSec > b.ltSec ? a : b);
+          servingLap = slowest.l;
+        }
+
+        const lapKey = String(servingLap);
+        const penaltyText = `Penalty: ${evt.action}` +
+          (evt.description && evt.description.toLowerCase() !== evt.action.toLowerCase()
+            ? ` — ${evt.description}` : "");
+        const existing = ann.reasons[lapKey];
+        ann.reasons[lapKey] = existing
+          ? `${existing}; ${penaltyText}`
+          : penaltyText;
+      } else if (evt.type === "garage_context") {
+        // Enrich existing garage marker label with reason text
+        const pitMarker = ann.pits.find(
+          (p: any) => p.isGarage && Math.abs(p.l - lapNum) <= 3
+        );
+        if (pitMarker) {
+          const reason = evt.description.replace(/\.$/, "").trim();
+          if (reason && !pitMarker.lb.includes(reason)) {
+            pitMarker.lb = `${pitMarker.lb} — ${reason}`;
+          }
+        }
+      }
+    }
+  }
 }

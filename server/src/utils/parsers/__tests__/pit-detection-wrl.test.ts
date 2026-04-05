@@ -8,6 +8,8 @@ import {
   parseFlagsCSV,
   flagAtElapsed,
   yellowP25Pace,
+  parseControlLogCSV,
+  enrichAnnotationsFromControlLog,
   medianOf,
   GREEN_PIT_THRESHOLD,
   YELLOW_PIT_THRESHOLD,
@@ -71,7 +73,7 @@ describe("parseFlagsCSV", () => {
       "Yellow,2026-04-04 10:00:01,2026-04-04 10:15:00,14:59",
       "Green,2026-04-04 10:15:01,2026-04-04 11:00:00,44:59",
     ].join("\n");
-    const periods = parseFlagsCSV(csv);
+    const { periods } = parseFlagsCSV(csv);
     expect(periods.length).toBe(3);
     expect(periods[0].flag).toBe("Green");
     expect(periods[0].startSec).toBe(0);
@@ -88,7 +90,7 @@ describe("parseFlagsCSV", () => {
       ",2026-04-04 10:00:01,2026-04-04 10:05:00,4:59",
       "Yellow,2026-04-04 10:05:01,2026-04-04 10:15:00,9:59",
     ].join("\n");
-    const periods = parseFlagsCSV(csv);
+    const { periods } = parseFlagsCSV(csv);
     expect(periods.length).toBe(2);
     expect(periods[0].flag).toBe("Green");
     expect(periods[1].flag).toBe("Yellow");
@@ -96,7 +98,7 @@ describe("parseFlagsCSV", () => {
 
   it("returns empty for missing headers", () => {
     const csv = "Col1,Col2,Col3\nA,B,C\n";
-    expect(parseFlagsCSV(csv).length).toBe(0);
+    expect(parseFlagsCSV(csv).periods.length).toBe(0);
   });
 
   it("race start from first Green row", () => {
@@ -105,10 +107,11 @@ describe("parseFlagsCSV", () => {
       "Yellow,2026-04-04 08:55:00,2026-04-04 08:59:59,4:59",
       "Green,2026-04-04 09:00:00,2026-04-04 10:00:00,1:00:00",
     ].join("\n");
-    const periods = parseFlagsCSV(csv);
+    const { periods, raceStartMs } = parseFlagsCSV(csv);
     expect(periods[0].flag).toBe("Yellow");
     expect(periods[0].startSec).toBe(-300); // 5 min before race start
     expect(periods[1].startSec).toBe(0);     // race start
+    expect(raceStartMs).toBeGreaterThan(0);  // race start wall-clock available
   });
 });
 
@@ -304,5 +307,118 @@ describe("constants", () => {
     expect(YELLOW_PIT_THRESHOLD).toBe(1.40);
     expect(GARAGE_THRESHOLD_SECONDS).toBe(900);
     expect(PIT_GROUP_GAP).toBe(2);
+  });
+});
+
+// ─── Tests: parseControlLogCSV ──────────────────────────────────────────────
+
+describe("parseControlLogCSV", () => {
+  const raceStartMs = new Date("2026-04-05T09:00:00").getTime();
+
+  it("parses penalty events", () => {
+    const csv = [
+      "Sequence,Timestamp,Corner,Car_1,Car_1_At_Fault,Car_2,Car_2_At_Fault,Description,Action,Status,Notes",
+      "10,2026-04-05T10:00:00,5,#59 Team A,Yes,,,Pit Lane Infraction,1 Lap,Final,",
+      "11,2026-04-05T10:05:00,,,,,,,No Action Needed,Final,",
+    ].join("\n");
+    const events = parseControlLogCSV(csv, raceStartMs);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe("penalty");
+    expect(events[0].carNumbers).toEqual([59]);
+    expect(events[0].action).toBe("1 Lap");
+    expect(events[0].elapsedSec).toBe(3600);
+  });
+
+  it("parses garage context events", () => {
+    const csv = [
+      "Sequence,Timestamp,Corner,Car_1,Car_1_At_Fault,Car_2,Car_2_At_Fault,Description,Action,Status,Notes",
+      "20,2026-04-05T11:00:00,8,#119 AE Victory,,,,Stopped DL.,No Action Needed,Final,",
+    ].join("\n");
+    const events = parseControlLogCSV(csv, raceStartMs);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe("garage_context");
+    expect(events[0].carNumbers).toEqual([119]);
+    expect(events[0].description).toBe("Stopped DL.");
+  });
+
+  it("extracts multiple car numbers", () => {
+    const csv = [
+      "Sequence,Timestamp,Corner,Car_1,Car_1_At_Fault,Car_2,Car_2_At_Fault,Description,Action,Status,Notes",
+      "30,2026-04-05T12:00:00,3,#330 HQ Auto,Yes,#25 Team B,Yes,Contact,1 Lap,Final,",
+    ].join("\n");
+    const events = parseControlLogCSV(csv, raceStartMs);
+    expect(events.length).toBe(1);
+    expect(events[0].carNumbers).toEqual([330, 25]);
+    expect(events[0].type).toBe("penalty");
+  });
+
+  it("skips non-actionable events", () => {
+    const csv = [
+      "Sequence,Timestamp,Corner,Car_1,Car_1_At_Fault,Car_2,Car_2_At_Fault,Description,Action,Status,Notes",
+      "1,2026-04-05T09:00:00,,,,,,Green Flag,,,",
+      "5,2026-04-05T09:30:00,11,#290 Team,,,,4OFF,Warning,Final,",
+    ].join("\n");
+    const events = parseControlLogCSV(csv, raceStartMs);
+    expect(events.length).toBe(0);
+  });
+});
+
+// ─── Tests: enrichAnnotationsFromControlLog ─────────────────────────────────
+
+describe("enrichAnnotationsFromControlLog", () => {
+  it("adds penalty text to reasons dict", () => {
+    // Car with 10 laps, each 115s. Penalty at elapsed 575s (~lap 5)
+    const cars: Record<string, { laps: Array<{ l: number; ltSec: number; pit: number }> }> = {
+      "59": { laps: Array.from({ length: 10 }, (_, i) => ({
+        l: i + 1,
+        ltSec: i === 5 ? 200 : 115, // lap 6 is slow (penalty serving)
+        pit: 0,
+      })) },
+    };
+    const annotations: Record<string, any> = {
+      "59": { reasons: {}, pits: [], settles: [] },
+    };
+    const events = [{
+      sequence: 10,
+      timestampMs: 0,
+      elapsedSec: 575,  // ~lap 5
+      carNumbers: [59],
+      description: "Pit Lane Infraction",
+      action: "1 Lap",
+      status: "Final",
+      type: "penalty" as const,
+    }];
+
+    enrichAnnotationsFromControlLog(annotations, events, cars);
+    // Penalty should appear on the slowest lap in the 5-lap window (lap 6)
+    expect(annotations["59"].reasons["6"]).toContain("Penalty: 1 Lap");
+  });
+
+  it("enriches garage marker label with reason text", () => {
+    const cars: Record<string, any> = {
+      "119": { laps: Array.from({ length: 10 }, (_, i) => ({
+        l: i + 1, ltSec: 115, pit: 0,
+      })) },
+    };
+    const annotations: Record<string, any> = {
+      "119": {
+        reasons: {},
+        pits: [{ l: 5, lb: "Pit 2 (garage)", c: "#f97316", isGarage: true }],
+        settles: [],
+      },
+    };
+    const events = [{
+      sequence: 20,
+      timestampMs: 0,
+      elapsedSec: 500,  // ~lap 4-5
+      carNumbers: [119],
+      description: "Stopped DL.",
+      action: "No Action Needed",
+      status: "Final",
+      type: "garage_context" as const,
+    }];
+
+    enrichAnnotationsFromControlLog(annotations, events, cars);
+    expect(annotations["119"].pits[0].lb).toContain("Stopped DL");
   });
 });
