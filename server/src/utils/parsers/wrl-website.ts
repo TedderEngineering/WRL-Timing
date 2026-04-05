@@ -19,7 +19,8 @@
 
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
-import { parseCSV, mapHeaders, col, parseLapTime, detectPitStopsWRL } from "./csv-utils.js";
+import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV } from "./csv-utils.js";
+import type { PitDetectLapRow } from "./csv-utils.js";
 import { generateAnnotations } from "./position-analysis.js";
 
 export const wrlWebsiteParser: RaceDataParser = {
@@ -43,12 +44,28 @@ export const wrlWebsiteParser: RaceDataParser = {
         "WRL website all laps export — lap times, positions, pit stops, and flags for every car.",
       required: true,
     },
+    {
+      key: "flagsCsv",
+      label: "Flags CSV",
+      description:
+        "Redmist flags export — flag periods (Green/Yellow/Red/Checkered) with start and end timestamps.",
+      required: true,
+    },
+    {
+      key: "controlLogCsv",
+      label: "Control Log CSV",
+      description:
+        "Redmist control log — race control actions, incidents, and penalties.",
+      required: true,
+    },
   ],
 
   parse(files) {
-    const { summaryCsv, lapsCsv } = files;
+    const { summaryCsv, lapsCsv, flagsCsv, controlLogCsv } = files;
     if (!summaryCsv) throw new Error("Missing summary CSV");
     if (!lapsCsv) throw new Error("Missing laps CSV");
+    if (!flagsCsv) throw new Error("Missing flags CSV");
+    if (!controlLogCsv) throw new Error("Missing control log CSV");
 
     const warnings: string[] = [];
 
@@ -145,9 +162,28 @@ export const wrlWebsiteParser: RaceDataParser = {
       }
     }
 
-    // ── Detect pit stops via lap-time anomaly ─────────────────────
-    for (const [, laps] of carLaps) {
-      const { pitLaps } = detectPitStopsWRL(laps);
+    // ── Parse flags into flag periods ──────────────────────────────
+    const flagPeriods = parseFlagsCSV(flagsCsv);
+    if (flagPeriods.length === 0) {
+      warnings.push("Flags CSV produced no valid flag periods — falling back to threshold-only detection");
+    }
+
+    // ── Detect pit stops via flag-based classification ──────────
+    const classMap = new Map<string, string>();
+    for (const [num] of carLaps) {
+      classMap.set(
+        String(num),
+        carMeta.get(num)?.cls || carFromLaps.get(num)?.cls || "Unknown"
+      );
+    }
+    const allCarLapsStr = new Map<string, PitDetectLapRow[]>();
+    for (const [num, laps] of carLaps) {
+      allCarLapsStr.set(String(num), laps);
+    }
+    const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
+    for (const [numStr, { pitLaps }] of pitResults) {
+      const laps = allCarLapsStr.get(numStr);
+      if (!laps) continue;
       for (const lap of laps) {
         if (pitLaps.has(lap.l)) lap.pit = 1;
       }

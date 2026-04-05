@@ -16,6 +16,8 @@ export type FileType =
   | "alkamelPitStopPdf"
   | "qualifyingCsv"
   | "unsupportedPdf"
+  | "redmistFlagsCsv"
+  | "redmistControlLogCsv"
   | "unknown";
 
 export type FormatId = "imsa" | "speedhive" | "wrl-website" | "sro" | "grcup" | "qualifying";
@@ -74,8 +76,8 @@ export interface ValidationStats {
 
 const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
   imsa: ["timeCardsJson"],
-  speedhive: ["summaryCsv", "lapsCsv"],
-  "wrl-website": ["summaryCsv", "lapsCsv"],
+  speedhive: ["summaryCsv", "lapsCsv", "redmistFlagsCsv", "redmistControlLogCsv"],
+  "wrl-website": ["summaryCsv", "lapsCsv", "redmistFlagsCsv", "redmistControlLogCsv"],
   sro: ["sroResultsCsv", "alkamelLapsCsv"],
   grcup: ["grResultsCsv", "alkamelLapsCsv"],
   qualifying: ["qualifyingCsv"],
@@ -98,6 +100,8 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   alkamelPitStopPdf: "pitStopPdf",
   qualifyingCsv: "timecards",
   unsupportedPdf: "unknown",
+  redmistFlagsCsv: "flagsCsv",
+  redmistControlLogCsv: "controlLogCsv",
   unknown: "unknown",
 };
 
@@ -117,6 +121,8 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   alkamelPitStopPdf: "Pit Stops PDF",
   qualifyingCsv: "Qualifying CSV",
   unsupportedPdf: "Unsupported PDF",
+  redmistFlagsCsv: "Flags CSV (Redmist)",
+  redmistControlLogCsv: "Control Log CSV (Redmist)",
   unknown: "Unknown",
 };
 
@@ -312,6 +318,51 @@ export function classifyFile(file: File, content: string): DetectedFile {
       result.format = "imsa";
       result.groupKey = "__imsa_csv_pending__";
       return result;
+    }
+
+    // Redmist Flags CSV: headers [flag, start, end, duration]
+    // Content check: first data row's flag must be green/yellow/red/checkered
+    if (
+      headerLower.includes("flag") &&
+      headerLower.includes("start") &&
+      headerLower.includes("end") &&
+      headerLower.includes("duration")
+    ) {
+      const dataLines = clean.split("\n").slice(1);
+      const firstDataFlag = dataLines.find(l => l.trim())?.split(",")[0]?.trim() || "";
+      if (/^(green|yellow|red|checkered)$/i.test(firstDataFlag)) {
+        result.type = "redmistFlagsCsv";
+        result.format = "speedhive";
+        result.metadata = extractSpeedhiveMetadata(file.name, content);
+        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_flags\.csv$/i, "")}`;
+        return result;
+      }
+    }
+
+    // Redmist Control Log CSV: headers [sequence, timestamp, description, action]
+    // Content check: at least one of first 5 data rows has a recognized action
+    if (
+      headerLower.includes("sequence") &&
+      headerLower.includes("timestamp") &&
+      headerLower.includes("description") &&
+      headerLower.includes("action")
+    ) {
+      const dataLines = clean.split("\n").slice(1, 6);
+      const hdrCols = headerLine.split(",").map(h => h.trim().toLowerCase());
+      const actionIdx = hdrCols.indexOf("action");
+      const knownActions = ["no action needed", "warning", "final", "penalty", "drive through"];
+      const hasKnownAction = actionIdx >= 0 && dataLines.some(line => {
+        const cols = line.split(",");
+        const action = (cols[actionIdx] ?? "").trim().toLowerCase();
+        return knownActions.some(k => action.includes(k));
+      });
+      if (hasKnownAction) {
+        result.type = "redmistControlLogCsv";
+        result.format = "speedhive";
+        result.metadata = extractSpeedhiveMetadata(file.name, content);
+        result.groupKey = `wrl_${result.metadata.date || file.name.replace(/_control_log\.csv$/i, "")}`;
+        return result;
+      }
     }
 
     // WRL Website CSVs: underscore-separated headers like Overall_Position, Car_Number

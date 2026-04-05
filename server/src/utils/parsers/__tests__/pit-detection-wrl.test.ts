@@ -1,324 +1,308 @@
 /**
- * Unit tests for WRL pit stop detection via lap-time anomaly.
+ * Unit tests for WRL pit stop detection — flags-based + legacy fallback.
  */
 import { describe, it, expect } from "vitest";
 import {
   detectPitStopsWRL,
+  detectAllCarPitStops,
+  parseFlagsCSV,
+  flagAtElapsed,
+  yellowP25Pace,
   medianOf,
   GREEN_PIT_THRESHOLD,
-  FCY_PIT_THRESHOLD,
+  YELLOW_PIT_THRESHOLD,
   GARAGE_THRESHOLD_SECONDS,
   PIT_GROUP_GAP,
+  type PitDetectLapRow,
+  type FlagPeriod,
 } from "../csv-utils.js";
 
-// ─── Helper: build lap rows for a car ───────────────────────────────────────
+// ─── Helpers ─────��──────────────────────────────��───────────────────────────
 
-type LapRow = { l: number; ltSec: number; flag: string };
+function makeLap(l: number, ltSec: number, flag: string, p: number = 10): PitDetectLapRow {
+  return { l, ltSec, flag, p };
+}
 
-/**
- * Build a minimal fixture modeled on car #120 at Thunderhill 2026.
- * Green median ≈ 115s. Most pit laps are 175–220s (>1.5× median).
- * Lap 200 is a green-flag quick pit at 1.49× (above 1.42× green threshold
- * but below the old 1.5× uniform threshold — this is the case the
- * split-threshold fix catches).
- * Yellow laps stay ≤ 164s (<1.43× median).
- * Red flag laps at 500s should be excluded.
- */
-function buildCar120Fixture(): LapRow[] {
-  const laps: LapRow[] = [];
-  const greenBase = 115; // typical green lap time
-
-  // Pit stop laps and their approximate times
-  const pitLapTimes: Record<number, number> = {
-    35: 195,  // green-flag pit
-    46: 180,  // yellow-flag pit
-    84: 210,  // green-flag pit
-    89: 175,  // yellow-flag pit (above 1.5× FCY threshold)
-    98: 220,  // green-flag pit
-    129: 185, // yellow-flag pit
-    200: 171.4, // green-flag quick pit: 1.490× median (above 1.42× green threshold)
-  };
-
-  // Yellow-flag lap ranges (non-pit yellow laps stay at 1.0–1.43× median)
-  const yellowRanges: [number, number][] = [
-    [44, 50], [86, 92], [126, 132],
-  ];
-  const isYellow = (l: number) =>
-    yellowRanges.some(([s, e]) => l >= s && l <= e);
-
-  // Red flag lap
-  const redLaps = new Set([70]);
-
-  for (let l = 1; l <= 210; l++) {
-    if (redLaps.has(l)) {
-      laps.push({ l, ltSec: 500, flag: "RED" });
-      continue;
-    }
-
-    const flag = isYellow(l) ? "FCY" : "GREEN";
-
-    if (pitLapTimes[l] !== undefined) {
-      laps.push({ l, ltSec: pitLapTimes[l], flag });
-      continue;
-    }
-
-    // Normal lap: green ≈ 113–117s, yellow ≈ 120–164s (under 1.43× threshold)
-    if (flag === "FCY") {
-      // Normal yellow lap — keep well under 1.5× median
-      laps.push({ l, ltSec: greenBase * (1.0 + Math.random() * 0.4), flag });
-    } else {
-      // Normal green lap — slight variation
-      laps.push({ l, ltSec: greenBase + (Math.random() - 0.5) * 4, flag });
-    }
+function buildGreenLaps(
+  count: number,
+  base: number = 115,
+  overrides: Record<number, Partial<PitDetectLapRow>> = {}
+): PitDetectLapRow[] {
+  const laps: PitDetectLapRow[] = [];
+  for (let l = 1; l <= count; l++) {
+    const ov = overrides[l];
+    laps.push({
+      l,
+      ltSec: ov?.ltSec ?? (base + (Math.random() - 0.5) * 4),
+      flag: ov?.flag ?? "GREEN",
+      p: ov?.p ?? 10,
+    });
   }
-
   return laps;
 }
 
-/**
- * Build a fixture for car #119 at Thunderhill 2026.
- * Green median ≈ 115s. Has two extended garage stays:
- *   - Lap 4: 6154s (1.71 hours) — GREEN flag
- *   - Lap 48: 1572s (26 min) — GREEN flag
- * Both are real stops where the car was in the garage.
- * Also has normal pit stops at laps 20, 35, 60.
- */
-function buildCar119Fixture(): LapRow[] {
-  const laps: LapRow[] = [];
-  const greenBase = 115;
+// ─── Flag period fixture (Thunderhill 2026 simplified) ──────────────────────
 
-  const specialLaps: Record<number, { ltSec: number; flag: string }> = {
-    4: { ltSec: 6154, flag: "GREEN" },   // garage stay: 1.71 hours
-    20: { ltSec: 200, flag: "GREEN" },    // normal pit
-    35: { ltSec: 190, flag: "GREEN" },    // normal pit
-    48: { ltSec: 1572, flag: "GREEN" },   // garage stay: 26 min
-    60: { ltSec: 210, flag: "GREEN" },    // normal pit
-  };
+const THUNDERHILL_FLAGS: FlagPeriod[] = [
+  { flag: "Green",     startSec: 0,     endSec: 5192 },   // 0:00 – 1:26:32
+  { flag: "Yellow",    startSec: 5193,  endSec: 6340 },   // 1:26:33 – 1:45:40
+  { flag: "Green",     startSec: 6341,  endSec: 10869 },  // 1:45:41 – 3:01:09
+  { flag: "Yellow",    startSec: 10870, endSec: 11389 },  // 3:01:10 – 3:09:49
+  { flag: "Green",     startSec: 11390, endSec: 12079 },  // 3:09:50 – 3:21:19
+  { flag: "Yellow",    startSec: 12080, endSec: 12709 },  // 3:21:20 – 3:31:49
+  { flag: "Green",     startSec: 12710, endSec: 16109 },  // 3:31:50 – 4:28:29
+  { flag: "Yellow",    startSec: 16110, endSec: 16769 },  // 4:28:30 – 4:39:29
+  { flag: "Green",     startSec: 16770, endSec: 20339 },  // 4:39:30 – 5:38:59
+  { flag: "Red",       startSec: 20340, endSec: 21069 },  // 5:39:00 – 5:51:09
+  { flag: "Yellow",    startSec: 21070, endSec: 21679 },  // 5:51:10 – 6:01:19
+  { flag: "Green",     startSec: 21680, endSec: 21799 },  // 6:01:20 – 6:03:19
+  { flag: "Yellow",    startSec: 21800, endSec: 22399 },  // 6:03:20 – 6:13:19
+  { flag: "Green",     startSec: 22400, endSec: 28699 },  // 6:13:20 – 7:58:19
+  { flag: "Checkered", startSec: 28700, endSec: 34299 },
+];
 
-  for (let l = 1; l <= 70; l++) {
-    if (specialLaps[l]) {
-      laps.push({ l, ...specialLaps[l] });
-    } else {
-      laps.push({ l, ltSec: greenBase + (Math.random() - 0.5) * 4, flag: "GREEN" });
-    }
-  }
+// ─── Tests: parseFlagsCSV ──────���────────────────────────────────────────────
 
-  return laps;
-}
-
-/**
- * Build a fixture for car #55 at Thunderhill 2026.
- * Has one extremely long garage stay at lap 18: 16211s (4.5 hours).
- * Also has normal pits at laps 10, 30.
- */
-function buildCar55Fixture(): LapRow[] {
-  const laps: LapRow[] = [];
-  const greenBase = 115;
-
-  const specialLaps: Record<number, number> = {
-    10: 200,      // normal pit
-    18: 16211,    // garage stay: 4.5 hours
-    30: 195,      // normal pit
-  };
-
-  for (let l = 1; l <= 40; l++) {
-    if (specialLaps[l]) {
-      laps.push({ l, ltSec: specialLaps[l], flag: "GREEN" });
-    } else {
-      laps.push({ l, ltSec: greenBase + (Math.random() - 0.5) * 4, flag: "GREEN" });
-    }
-  }
-
-  return laps;
-}
-
-// ─── Tests ──────────────────────────────────────────────────────────────────
-
-describe("detectPitStopsWRL", () => {
-  it("detects 7 pit stops for car #120 Thunderhill fixture", () => {
-    const laps = buildCar120Fixture();
-    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
-
-    // Lap 200 is a green-flag quick pit at 1.49× — caught by GREEN_PIT_THRESHOLD (1.42)
-    expect(pitLaps).toEqual(new Set([35, 46, 84, 89, 98, 129, 200]));
-    // No garage stays (all pit laps < 900s)
-    expect(garageLaps.size).toBe(0);
+describe("parseFlagsCSV", () => {
+  it("parses valid flags CSV", () => {
+    const csv = [
+      "Flag,Start,End,Duration",
+      "Green,2026-04-04 09:00:00,2026-04-04 10:00:00,1:00:00",
+      "Yellow,2026-04-04 10:00:01,2026-04-04 10:15:00,14:59",
+      "Green,2026-04-04 10:15:01,2026-04-04 11:00:00,44:59",
+    ].join("\n");
+    const periods = parseFlagsCSV(csv);
+    expect(periods.length).toBe(3);
+    expect(periods[0].flag).toBe("Green");
+    expect(periods[0].startSec).toBe(0);
+    expect(periods[0].endSec).toBe(3600);
+    expect(periods[1].flag).toBe("Yellow");
+    expect(periods[1].startSec).toBe(3601);
+    expect(periods[2].flag).toBe("Green");
   });
 
-  it("returns empty result when car has no green-flag laps", () => {
-    const laps: LapRow[] = [
-      { l: 1, ltSec: 130, flag: "FCY" },
-      { l: 2, ltSec: 140, flag: "FCY" },
-      { l: 3, ltSec: 200, flag: "FCY" },
-    ];
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps.size).toBe(0);
+  it("discards rows with empty Flag", () => {
+    const csv = [
+      "Flag,Start,End,Duration",
+      "Green,2026-04-04 09:00:00,2026-04-04 10:00:00,1:00:00",
+      ",2026-04-04 10:00:01,2026-04-04 10:05:00,4:59",
+      "Yellow,2026-04-04 10:05:01,2026-04-04 10:15:00,9:59",
+    ].join("\n");
+    const periods = parseFlagsCSV(csv);
+    expect(periods.length).toBe(2);
+    expect(periods[0].flag).toBe("Green");
+    expect(periods[1].flag).toBe("Yellow");
   });
 
-  it("excludes RED flag laps even if they exceed threshold", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 20; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // Red flag lap at 500s — should NOT be flagged as pit
-    laps.push({ l: 21, ltSec: 500, flag: "RED" });
-    // Actual pit at lap 22 under green
-    laps.push({ l: 22, ltSec: 200, flag: "GREEN" });
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps).toEqual(new Set([22]));
-    expect(pitLaps.has(21)).toBe(false);
+  it("returns empty for missing headers", () => {
+    const csv = "Col1,Col2,Col3\nA,B,C\n";
+    expect(parseFlagsCSV(csv).length).toBe(0);
   });
 
-  it("groups consecutive slow laps within PIT_GROUP_GAP as one stop", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 30; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // Two consecutive slow laps (laps 10, 11) — should be one pit at lap 10
-    laps[9].ltSec = 200;
-    laps[10].ltSec = 190;
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps).toEqual(new Set([10]));
-  });
-
-  it("separates pit groups when gap exceeds PIT_GROUP_GAP", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 30; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // Slow at lap 10 and lap 15 — gap of 5 > PIT_GROUP_GAP=2, so two stops
-    laps[9].ltSec = 200;
-    laps[14].ltSec = 200;
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps).toEqual(new Set([10, 15]));
-  });
-
-  it("uses lower threshold for green laps than yellow laps", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 20; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // Green lap at 1.45× (163.3s) — above GREEN_PIT_THRESHOLD (1.42) → detected
-    laps.push({ l: 21, ltSec: 115 * 1.45, flag: "GREEN" });
-    // Yellow lap at 1.45× (163.3s) — below FCY_PIT_THRESHOLD (1.50) → NOT detected
-    laps.push({ l: 22, ltSec: 115 * 1.45, flag: "FCY" });
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps.has(21)).toBe(true);  // green: caught at 1.42
-    expect(pitLaps.has(22)).toBe(false); // yellow: not caught until 1.50
-  });
-
-  it("detects pit under yellow flag", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 20; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // Yellow-flag pit at lap 15: 180s = 1.57× green median
-    laps[14] = { l: 15, ltSec: 180, flag: "FCY" };
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps).toEqual(new Set([15]));
-  });
-
-  it("no longer excludes laps > 600s — they are garage stays, not ignored", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 20; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
-    }
-    // 700s green-flag lap — previously excluded by 600s cap, now detected as pit
-    laps.push({ l: 21, ltSec: 700, flag: "GREEN" });
-
-    const { pitLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps.has(21)).toBe(true);
+  it("race start from first Green row", () => {
+    const csv = [
+      "Flag,Start,End,Duration",
+      "Yellow,2026-04-04 08:55:00,2026-04-04 08:59:59,4:59",
+      "Green,2026-04-04 09:00:00,2026-04-04 10:00:00,1:00:00",
+    ].join("\n");
+    const periods = parseFlagsCSV(csv);
+    expect(periods[0].flag).toBe("Yellow");
+    expect(periods[0].startSec).toBe(-300); // 5 min before race start
+    expect(periods[1].startSec).toBe(0);     // race start
   });
 });
 
-describe("garage detection", () => {
-  it("car #119: lap 4 (6154s) and lap 48 (1572s) are garage stays", () => {
-    const laps = buildCar119Fixture();
-    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
+// ─── Tests: flagAtElapsed ───────────────────────────────────────────────────
 
-    // Both garage stays and normal pits appear in pitLaps
-    expect(pitLaps.has(4)).toBe(true);   // garage: 6154s
-    expect(pitLaps.has(48)).toBe(true);  // garage: 1572s
-    expect(pitLaps.has(20)).toBe(true);  // normal pit: 200s
-    expect(pitLaps.has(35)).toBe(true);  // normal pit: 190s
-    expect(pitLaps.has(60)).toBe(true);  // normal pit: 210s
+describe("flagAtElapsed", () => {
+  const periods: FlagPeriod[] = [
+    { flag: "Green",  startSec: 0,   endSec: 100 },
+    { flag: "Yellow", startSec: 101, endSec: 200 },
+    { flag: "Green",  startSec: 201, endSec: 400 },
+  ];
 
-    // Only garage stays appear in garageLaps
-    expect(garageLaps).toEqual(new Set([4, 48]));
-    expect(garageLaps.has(20)).toBe(false);
-    expect(garageLaps.has(35)).toBe(false);
-    expect(garageLaps.has(60)).toBe(false);
+  it("returns Green for time in green period", () => {
+    expect(flagAtElapsed(50, periods)).toBe("Green");
   });
 
-  it("car #55: lap 18 (16211s) is a garage stay", () => {
-    const laps = buildCar55Fixture();
-    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
-
-    expect(pitLaps.has(10)).toBe(true);  // normal pit
-    expect(pitLaps.has(18)).toBe(true);  // garage: 16211s
-    expect(pitLaps.has(30)).toBe(true);  // normal pit
-
-    expect(garageLaps).toEqual(new Set([18]));
+  it("returns Yellow for time in yellow period", () => {
+    expect(flagAtElapsed(150, periods)).toBe("Yellow");
   });
 
-  it("normal pits are never in garageLaps", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 20; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
+  it("returns closest prior flag for gap between periods", () => {
+    // Time 500 is after all periods — closest prior is Green (ended at 400)
+    expect(flagAtElapsed(500, periods)).toBe("Green");
+  });
+
+  it("returns Unknown for time before all periods", () => {
+    expect(flagAtElapsed(-10, periods)).toBe("Unknown");
+  });
+});
+
+// ─── Tests: yellowP25Pace ───────────────────────────────────────────────────
+
+describe("yellowP25Pace", () => {
+  it("returns P25 of laps in the yellow window", () => {
+    const yellowPeriod: FlagPeriod = { flag: "Yellow", startSec: 1000, endSec: 2000 };
+    // 20 cars, each with 1 lap crossing at 1500s with various times
+    const allCarLaps = new Map<string, PitDetectLapRow[]>();
+    const cumTimes = new Map<string, Map<number, number>>();
+    for (let c = 0; c < 20; c++) {
+      const lt = 120 + c * 10; // 120, 130, 140, ..., 310
+      allCarLaps.set(String(c), [makeLap(1, lt, "FCY")]);
+      cumTimes.set(String(c), new Map([[1, 1500]])); // all cross at 1500s
     }
-    laps.push({ l: 21, ltSec: 200, flag: "GREEN" }); // normal pit: 200s
-
-    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
-    expect(pitLaps.has(21)).toBe(true);
-    expect(garageLaps.size).toBe(0);
+    const p25 = yellowP25Pace(yellowPeriod, allCarLaps, cumTimes);
+    expect(p25).not.toBeNull();
+    // P25 of [120,130,...,310] = 20 values, index 5 = 170
+    expect(p25).toBe(170);
   });
 
-  it("threshold is exactly 900 seconds", () => {
-    const laps: LapRow[] = [];
-    for (let l = 1; l <= 30; l++) {
-      laps.push({ l, ltSec: 115, flag: "GREEN" });
+  it("returns null with fewer than 5 laps", () => {
+    const yellowPeriod: FlagPeriod = { flag: "Yellow", startSec: 1000, endSec: 2000 };
+    const allCarLaps = new Map<string, PitDetectLapRow[]>();
+    const cumTimes = new Map<string, Map<number, number>>();
+    for (let c = 0; c < 3; c++) {
+      allCarLaps.set(String(c), [makeLap(1, 150, "FCY")]);
+      cumTimes.set(String(c), new Map([[1, 1500]]));
     }
-    // Just under: 899s — pit but not garage (spaced apart to avoid grouping)
-    laps[9].ltSec = 899;   // lap 10
-    // Just over: 901s — pit AND garage
-    laps[19].ltSec = 901;  // lap 20
+    expect(yellowP25Pace(yellowPeriod, allCarLaps, cumTimes)).toBeNull();
+  });
 
-    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
+  it("excludes laps >= 600s from P25 calculation", () => {
+    const yellowPeriod: FlagPeriod = { flag: "Yellow", startSec: 1000, endSec: 2000 };
+    const allCarLaps = new Map<string, PitDetectLapRow[]>();
+    const cumTimes = new Map<string, Map<number, number>>();
+    // 5 normal + 5 garage-speed laps
+    for (let c = 0; c < 10; c++) {
+      const lt = c < 5 ? 150 : 800;
+      allCarLaps.set(String(c), [makeLap(1, lt, "FCY")]);
+      cumTimes.set(String(c), new Map([[1, 1500]]));
+    }
+    const p25 = yellowP25Pace(yellowPeriod, allCarLaps, cumTimes);
+    expect(p25).toBe(150); // only the 5 normal laps count
+  });
+});
+
+// ─── Tests: detectAllCarPitStops with flagPeriods ───────────────────────────
+
+describe("detectAllCarPitStops with flagPeriods", () => {
+  it("falls back to threshold-only when no flagPeriods provided", () => {
+    const laps = buildGreenLaps(20, 115, { 10: { ltSec: 200 } });
+    const allCars = new Map([["120", laps]]);
+    const classes = new Map([["120", "GTO"]]);
+    const results = detectAllCarPitStops(allCars, classes);
+    expect(results.get("120")!.pitLaps.has(10)).toBe(true);
+  });
+
+  it("falls back to threshold-only when flagPeriods is empty", () => {
+    const laps = buildGreenLaps(20, 115, { 10: { ltSec: 200 } });
+    const allCars = new Map([["120", laps]]);
+    const classes = new Map([["120", "GTO"]]);
+    const results = detectAllCarPitStops(allCars, classes, []);
+    expect(results.get("120")!.pitLaps.has(10)).toBe(true);
+  });
+
+  it("detects green-period pit stops using GREEN_PIT_THRESHOLD", () => {
+    // All laps in a green period
+    const flags: FlagPeriod[] = [{ flag: "Green", startSec: 0, endSec: 50000 }];
+    const laps = buildGreenLaps(30, 115, { 15: { ltSec: 200 } });
+    const allCars = new Map([["1", laps]]);
+    const classes = new Map([["1", "GTO"]]);
+    const results = detectAllCarPitStops(allCars, classes, flags);
+    expect(results.get("1")!.pitLaps.has(15)).toBe(true);
+  });
+
+  it("excludes RED period laps from pit detection", () => {
+    // Place red period at 1700-2500s so lap 15 (~1725s cumulative) lands in it
+    const flags: FlagPeriod[] = [
+      { flag: "Green", startSec: 0,    endSec: 1699 },
+      { flag: "Red",   startSec: 1700, endSec: 2500 },
+      { flag: "Green", startSec: 2501, endSec: 5000 },
+    ];
+    // Lap 15 cumulative ≈ 15 * 115 = 1725s → in Red period
+    // Make it slow (500s) — should NOT be detected as pit because it's Red
+    const laps = buildGreenLaps(30, 115, {
+      15: { ltSec: 500 },
+    });
+    const allCars = new Map([["1", laps]]);
+    const classes = new Map([["1", "GTO"]]);
+    const results = detectAllCarPitStops(allCars, classes, flags);
+    expect(results.get("1")!.pitLaps.has(15)).toBe(false);
+  });
+
+  it("detects garage stays regardless of flag period", () => {
+    const flags: FlagPeriod[] = [{ flag: "Green", startSec: 0, endSec: 50000 }];
+    const laps = buildGreenLaps(30, 115, { 10: { ltSec: 1500 } });
+    const allCars = new Map([["1", laps]]);
+    const classes = new Map([["1", "GTO"]]);
+    const results = detectAllCarPitStops(allCars, classes, flags);
+    expect(results.get("1")!.pitLaps.has(10)).toBe(true);
+    expect(results.get("1")!.garageLaps.has(10)).toBe(true);
+  });
+});
+
+// ─── Tests: legacy fallback (detectPitStopsWRL) ─────────────────────────────
+
+describe("detectPitStopsWRL (legacy fallback)", () => {
+  it("detects green-flag pits", () => {
+    const laps = buildGreenLaps(30, 115, {
+      10: { ltSec: 200 },
+      20: { ltSec: 195 },
+    });
+    const { pitLaps } = detectPitStopsWRL(laps);
     expect(pitLaps.has(10)).toBe(true);
     expect(pitLaps.has(20)).toBe(true);
-    expect(garageLaps.has(10)).toBe(false); // 899 ≤ 900
-    expect(garageLaps.has(20)).toBe(true);  // 901 > 900
+  });
+
+  it("returns empty when no green laps", () => {
+    const laps: PitDetectLapRow[] = [
+      makeLap(1, 130, "FCY"),
+      makeLap(2, 140, "FCY"),
+      makeLap(3, 200, "FCY"),
+    ];
+    expect(detectPitStopsWRL(laps).pitLaps.size).toBe(0);
+  });
+
+  it("excludes RED flag laps", () => {
+    const laps = buildGreenLaps(22, 115, {
+      21: { ltSec: 500, flag: "RED" },
+      22: { ltSec: 200, flag: "GREEN" },
+    });
+    const { pitLaps } = detectPitStopsWRL(laps);
+    expect(pitLaps.has(21)).toBe(false);
+    expect(pitLaps.has(22)).toBe(true);
+  });
+
+  it("groups consecutive slow laps", () => {
+    const laps = buildGreenLaps(30, 115, {
+      10: { ltSec: 200 },
+      11: { ltSec: 190 },
+    });
+    expect(detectPitStopsWRL(laps).pitLaps).toEqual(new Set([10]));
+  });
+
+  it("detects garage stays", () => {
+    const laps = buildGreenLaps(30, 115, { 20: { ltSec: 1500 } });
+    const { pitLaps, garageLaps } = detectPitStopsWRL(laps);
+    expect(pitLaps.has(20)).toBe(true);
+    expect(garageLaps.has(20)).toBe(true);
   });
 });
 
+// ─── Tests: medianOf and constants ──────────────────────────────────────────
+
 describe("medianOf", () => {
-  it("returns middle value for odd-length array", () => {
-    expect(medianOf([3, 1, 2])).toBe(2);
-  });
-
-  it("returns average of two middle values for even-length array", () => {
-    expect(medianOf([4, 1, 3, 2])).toBe(2.5);
-  });
-
-  it("handles single-element array", () => {
-    expect(medianOf([42])).toBe(42);
-  });
+  it("odd-length", () => expect(medianOf([3, 1, 2])).toBe(2));
+  it("even-length", () => expect(medianOf([4, 1, 3, 2])).toBe(2.5));
+  it("single", () => expect(medianOf([42])).toBe(42));
 });
 
 describe("constants", () => {
-  it("exports expected threshold values", () => {
+  it("exports expected values", () => {
     expect(GREEN_PIT_THRESHOLD).toBe(1.42);
-    expect(FCY_PIT_THRESHOLD).toBe(1.50);
+    expect(YELLOW_PIT_THRESHOLD).toBe(1.40);
     expect(GARAGE_THRESHOLD_SECONDS).toBe(900);
     expect(PIT_GROUP_GAP).toBe(2);
-  });
-
-  it("green threshold is lower than FCY threshold", () => {
-    expect(GREEN_PIT_THRESHOLD).toBeLessThan(FCY_PIT_THRESHOLD);
   });
 });
