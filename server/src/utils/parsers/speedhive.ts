@@ -177,7 +177,8 @@ export const speedhiveParser: RaceDataParser = {
     }
     const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
     for (const [numStr, { pitLaps }] of pitResults) {
-      const laps = allCarLapsStr.get(numStr);
+      const num = parseInt(numStr, 10);
+      const laps = carLaps.get(num);
       if (!laps) continue;
       for (const lap of laps) {
         if (pitLaps.has(lap.l)) lap.pit = 1;

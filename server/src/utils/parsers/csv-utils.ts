@@ -257,7 +257,7 @@ export interface FlagsParseResult {
 
 export function parseFlagsCSV(csvText: string): FlagsParseResult {
   const rows = parseCSV(csvText);
-  if (rows.length < 2) return [];
+  if (rows.length < 2) return { periods: [], raceStartMs: 0 };
 
   const hdr = mapHeaders(rows[0]);
   const flagIdx = hdr.get("flag");
