@@ -371,8 +371,8 @@ describe("enrichAnnotationsFromControlLog", () => {
     const cars: Record<string, { laps: Array<{ l: number; ltSec: number; pit: number }> }> = {
       "59": { laps: Array.from({ length: 10 }, (_, i) => ({
         l: i + 1,
-        ltSec: i === 5 ? 200 : 115, // lap 6 is slow (penalty serving)
-        pit: 0,
+        ltSec: i === 5 ? 200 : 115, // lap 6 is slow (penalty serving pit)
+        pit: i === 5 ? 1 : 0,     // lap 6 is a pit lap
       })) },
     };
     const annotations: Record<string, any> = {
@@ -381,7 +381,7 @@ describe("enrichAnnotationsFromControlLog", () => {
     const events = [{
       sequence: 10,
       timestampMs: 0,
-      elapsedSec: 575,  // ~lap 5
+      elapsedSec: 575,  // ~lap 5 — penalty issued, served at next pit lap (6)
       carNumbers: [59],
       description: "Pit Lane Infraction",
       action: "1 Lap",
@@ -390,7 +390,7 @@ describe("enrichAnnotationsFromControlLog", () => {
     }];
 
     enrichAnnotationsFromControlLog(annotations, events, cars);
-    // Penalty should appear on the slowest lap in the 5-lap window (lap 6)
+    // Penalty should appear on the first pit lap at or after the event (lap 6)
     expect(annotations["59"].reasons["6"]).toContain("Penalty: 1 Lap");
   });
 
