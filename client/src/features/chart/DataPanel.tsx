@@ -421,7 +421,8 @@ function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, 
     }
 
     const cycleMatch = deduped.find((p) => /^(Gained|Lost)\s+\d+\s+in pit cycle$/i.test(p));
-    const infoParts = deduped.filter((p) => p !== cycleMatch);
+    const penaltyParts = deduped.filter((p) => p.startsWith("Penalty:"));
+    const infoParts = deduped.filter((p) => p !== cycleMatch && !p.startsWith("Penalty:"));
 
     return (
       <div className="flex items-center gap-2 truncate">
@@ -432,16 +433,44 @@ function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, 
         }}>
           PIT
         </span>
+        {penaltyParts.length > 0 && (
+          <span className="text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0" style={{
+            background: "rgba(239,68,68,0.15)",
+            border: "1px solid rgba(239,68,68,0.4)",
+            color: "#fca5a5",
+          }}>
+            PENALTY
+          </span>
+        )}
         {cycleMatch && (
           <span className="text-xs font-semibold shrink-0" style={{ color: posDeltaColor }}>
             {cycleMatch.replace(/ in pit cycle$/i, "")}
           </span>
         )}
-        {infoParts.length > 0 && (
+        {(infoParts.length > 0 || penaltyParts.length > 0) && (
           <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
-            {infoParts.join(" · ")}
+            {[...penaltyParts.map(p => p.replace(/^Penalty:\s*/, "")), ...infoParts].join(" · ")}
           </span>
         )}
+      </div>
+    );
+  }
+
+  // Penalty annotation (standalone — not combined with "Pit stop" prefix)
+  if (reason.startsWith("Penalty:")) {
+    const parts = reason.split(/;\s*/).filter(Boolean);
+    return (
+      <div className="flex items-center gap-2 truncate">
+        <span className="text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0" style={{
+          background: "rgba(239,68,68,0.15)",
+          border: "1px solid rgba(239,68,68,0.4)",
+          color: "#fca5a5",
+        }}>
+          PENALTY
+        </span>
+        <span className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.5)" }}>
+          {parts.map(p => p.replace(/^Penalty:\s*/, "")).join(" · ")}
+        </span>
       </div>
     );
   }
