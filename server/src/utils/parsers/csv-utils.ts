@@ -209,6 +209,7 @@ export type PitDetectLapRow = {
   ltSec: number;
   flag: string;
   p: number;
+  pit?: number;
 };
 
 export interface PitDetectionResult {
@@ -579,6 +580,19 @@ export function parseControlLogCSV(
 
   if (tsIdx === undefined || descIdx === undefined) return [];
 
+  // Find the control log's own race start time (Green Flag event).
+  // The control log may use a different date than the flags CSV (data export quirk),
+  // so we compute elapsed time relative to the control log's own Green Flag timestamp.
+  let controlLogStartMs = raceStartMs;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const desc = descIdx !== undefined ? (row[descIdx] ?? "").trim().toLowerCase() : "";
+    if (desc === "green flag") {
+      const ts = parseDateTimeMs((row[tsIdx] ?? "").trim());
+      if (ts > 0) { controlLogStartMs = ts; break; }
+    }
+  }
+
   const events: ControlLogEvent[] = [];
 
   for (let i = 1; i < rows.length; i++) {
@@ -618,7 +632,7 @@ export function parseControlLogCSV(
     events.push({
       sequence: seqIdx !== undefined ? parseInt((row[seqIdx] ?? "0"), 10) : i,
       timestampMs,
-      elapsedSec: raceStartMs > 0 ? (timestampMs - raceStartMs) / 1000 : 0,
+      elapsedSec: controlLogStartMs > 0 ? (timestampMs - controlLogStartMs) / 1000 : 0,
       carNumbers,
       description: desc,
       action,

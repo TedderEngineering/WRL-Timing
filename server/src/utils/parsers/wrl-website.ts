@@ -182,8 +182,7 @@ export const wrlWebsiteParser: RaceDataParser = {
     }
     const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
     for (const [numStr, { pitLaps }] of pitResults) {
-      const num = parseInt(numStr, 10);
-      const laps = carLaps.get(num);
+      const laps = allCarLapsStr.get(numStr);
       if (!laps) continue;
       for (const lap of laps) {
         if (pitLaps.has(lap.l)) lap.pit = 1;
