@@ -601,13 +601,13 @@ export function parseControlLogCSV(
     }
 
     // Classify event type
-    const actionLower = action.toLowerCase();
+    const actionLower = action.toLowerCase().trim();
     const descLower = desc.toLowerCase();
 
     let type: ControlLogEvent["type"] = "other";
     if (PENALTY_ACTIONS.has(actionLower)) {
       type = "penalty";
-    } else if (descLower.includes("contact") && PENALTY_ACTIONS.has(actionLower)) {
+    } else if (descLower.includes("contact") && actionLower !== "no penalty" && PENALTY_ACTIONS.has(actionLower)) {
       type = "penalty";
     } else if (descLower.includes("stopped") && actionLower === "no action needed") {
       type = "garage_context";
