@@ -684,12 +684,19 @@ export function enrichAnnotationsFromControlLog(
       if (lapNum == null) continue;
 
       if (evt.type === "penalty") {
-        // Find the nearest pit lap at or after the event (within +15 laps).
-        // WRL penalties (Drive Through, 1 Lap) are always served during a pit stop.
+        // Find the nearest pit lap to the event (within ±5 backward, +15 forward).
+        // WRL penalties are served during pit stops. The penalty may be logged
+        // slightly after the car enters pit lane, so check backward too.
         let servingLap = lapNum;
-        const pitLap = car.laps.find(l => l.l >= lapNum && l.l <= lapNum + 15 && l.pit === 1);
-        if (pitLap) {
-          servingLap = pitLap.l;
+        const backwardPit = [...car.laps].reverse().find(l => l.l >= lapNum - 5 && l.l <= lapNum && l.pit === 1);
+        const forwardPit = car.laps.find(l => l.l > lapNum && l.l <= lapNum + 15 && l.pit === 1);
+        if (backwardPit && forwardPit) {
+          // Pick whichever is closer
+          servingLap = (lapNum - backwardPit.l) <= (forwardPit.l - lapNum) ? backwardPit.l : forwardPit.l;
+        } else if (backwardPit) {
+          servingLap = backwardPit.l;
+        } else if (forwardPit) {
+          servingLap = forwardPit.l;
         }
 
         const lapKey = String(servingLap);
