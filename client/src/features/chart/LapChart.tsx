@@ -58,6 +58,7 @@ export function LapChart({
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
   const [sidePanel, setSidePanel] = useState<string | null>(null);
   const h2hDefaultCarRef = useRef<number | undefined>(undefined);
+  const clearingRef = useRef(false);
 
   // ── Zoom state ─────────────────────────────────────────────────
   const [lapStart, setLapStart] = useState(1);
@@ -450,6 +451,10 @@ export function LapChart({
 
   // When class view changes, replace compSet with all cars in that class
   useEffect(() => {
+    if (clearingRef.current) {
+      clearingRef.current = false;
+      return; // skip auto-populate on Clear
+    }
     if (!classView) {
       const allCars = Object.keys(data.cars).map(Number);
       setCompSet(new Set(allCars.filter((n) => n !== focusNum)));
@@ -480,6 +485,12 @@ export function LapChart({
     },
     []
   );
+
+  const handleClear = useCallback(() => {
+    clearingRef.current = true;
+    setClassView("");
+    setCompSet(new Set());
+  }, [setClassView, setCompSet]);
 
   const setPreset = useCallback(
     (cars: number[]) => {
@@ -569,6 +580,17 @@ export function LapChart({
                   {cls} ({cars.length})
                 </button>
               ))}
+              <button
+                onClick={handleClear}
+                className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+                style={{
+                  background: CHART_STYLE.card,
+                  borderColor: CHART_STYLE.border,
+                  color: CHART_STYLE.muted,
+                }}
+              >
+                Clear
+              </button>
               {/* MAKE section — only when a class is selected and ≥2 makes */}
               {classView && makePresets.length >= 2 && (
                 <>
