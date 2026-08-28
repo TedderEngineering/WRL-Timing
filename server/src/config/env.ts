@@ -44,10 +44,17 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().default(3000),
 });
 
-// In development, be lenient about missing optional services
+// In development and under test, be lenient about missing optional services.
+//
+// "test" is included deliberately: vitest sets NODE_ENV=test, which previously
+// fell through to strict validation and made the whole suite refuse to load
+// unless real STRIPE_* credentials were present in .env. Unit tests should not
+// require live payment keys — and requiring them meant the suite only ran on a
+// machine configured against production.
 const parseEnv = () => {
-  if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
-    // For dev, provide sensible defaults for optional external services
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv === "development" || nodeEnv === "test" || !nodeEnv) {
+    // For dev and test, provide sensible defaults for optional external services
     return envSchema
       .extend({
         STRIPE_SECRET_KEY: z.string().default("sk_test_placeholder"),

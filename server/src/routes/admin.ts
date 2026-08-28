@@ -6,6 +6,8 @@ import * as raceSvc from "../services/races.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
+import { extractPdfText } from "../utils/pdf-extract.js";
+import { suggestRaceDate } from "../utils/suggestRaceDate.js";
 import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
@@ -21,6 +23,54 @@ adminRouter.get(
   "/formats",
   async (_req: Request, res: Response, _next: NextFunction) => {
     res.json({ formats: await getAllParsers() });
+  }
+);
+
+// ─── POST /api/admin/races/suggest-date — Derive a race date from a pit PDF ──
+//
+// The event header on Alkamel pit stop PDFs is a raster banner, so the circuit
+// and event name cannot be read from it. The page footer is text, and carries
+// the export timestamp — which, corroborated against the session's own clock,
+// gives the race date. Returns a suggestion plus a confidence, never a decision:
+// the upload page fills only a Date field the operator has left empty.
+
+adminRouter.post(
+  "/races/suggest-date",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { pitStopPdf, timeCardsCsv } = req.body ?? {};
+
+      if (typeof pitStopPdf !== "string" || !pitStopPdf) {
+        throw new AppError(
+          400,
+          'Request body must include "pitStopPdf" (base64 or data URL)',
+          "MISSING_PDF"
+        );
+      }
+
+      let pdfText: string;
+      try {
+        pdfText = await extractPdfText(pitStopPdf);
+      } catch (e: any) {
+        res.json({
+          date: null,
+          exportedAt: null,
+          sessionEnd: null,
+          confidence: "none",
+          note: `Could not read the PDF: ${e.message}`,
+        });
+        return;
+      }
+
+      res.json(
+        suggestRaceDate(
+          pdfText,
+          typeof timeCardsCsv === "string" ? timeCardsCsv : undefined
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
   }
 );
 

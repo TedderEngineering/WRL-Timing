@@ -21,6 +21,9 @@ import { generateAnnotations, parseIMSAPitStopData, toPitStopTimeCards, enrichPi
 import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
+import { parseSROResults, type SROEntry } from "../parseSROResults.js";
+import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
+import { findCarNumberCollisions, carNumberCollisionWarnings } from "../carNumberCollisions.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -101,6 +104,56 @@ interface IMSAFlagEvent {
 interface IMSAFlagsData {
   session: IMSASession;
   flags: IMSAFlagEvent[];
+}
+
+// ─── Flags CSV parser ────────────────────────────────────────────────────────
+
+/**
+ * Parse an IMSA "25_FlagsAnalysisWithRCMessages_Race.csv" export into the same
+ * IMSAFlagEvent shape the JSON flags file produces, so both feed one code path.
+ *
+ * The CSV is semicolon-delimited and its columns map one-to-one onto
+ * IMSAFlagEvent:
+ *   TIME;ELAPSED;REC_TYPE;FLAG;SECTOR;MESSAGE;FLAG_TIME;ACCUM_TIME;LAP
+ *
+ * REC_TYPE is "GF" | "FCY" | "FF" for flag transitions (which carry a real LAP)
+ * and "RCMessage" for race control text (LAP is 0). Unused numeric columns are
+ * written as "-" on RCMessage rows; those are normalised to "".
+ */
+export function parseImsaFlagsCsv(csvText: string): IMSAFlagEvent[] {
+  const rows = parseDelimitedCSV(csvText);
+  if (rows.length < 2) return [];
+
+  const hdr = mapHeaders(rows[0]);
+  if (!hdr.has("rec_type")) {
+    throw new Error("Missing required CSV column: REC_TYPE");
+  }
+
+  /** "-" is the export's placeholder for "not applicable". */
+  const clean = (v: string): string => (v === "-" ? "" : v);
+
+  const events: IMSAFlagEvent[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const recType = col(row, hdr, "rec_type");
+    if (!recType) continue;
+
+    const lapRaw = parseInt(col(row, hdr, "lap"), 10);
+
+    events.push({
+      time: col(row, hdr, "time"),
+      elapsed: clean(col(row, hdr, "elapsed")),
+      rec_type: recType,
+      flag: col(row, hdr, "flag"),
+      sector: col(row, hdr, "sector"),
+      message: col(row, hdr, "message"),
+      flag_time: clean(col(row, hdr, "flag_time")),
+      accum_time: clean(col(row, hdr, "accum_time")),
+      lap: isNaN(lapRaw) ? 0 : lapRaw,
+    });
+  }
+
+  return events;
 }
 
 // ─── Time utilities ──────────────────────────────────────────────────────────
@@ -198,14 +251,17 @@ export const imsaParser: RaceDataParser = {
   name: "IMSA Timing & Scoring",
   series: "IMSA",
   description:
-    "Import from IMSA JSON timing exports. Requires Time Cards JSON; optionally accepts Flags Analysis as JSON (with RC messages) or PDF (flag periods only). If no flags file, caution periods are detected from lap times.",
+    "Import from IMSA timing exports. Needs either the Time Cards JSON or the Time Cards CSV; results, flags and pit stops are optional and accepted as JSON, CSV or PDF depending on what the event published. If no flags file is supplied, caution periods are detected from lap times.",
   fileSlots: [
     {
+      // Not flagged required: either this or timeCardsCsv must be present, which
+      // a per-slot flag cannot express. parse() enforces the real rule and
+      // throws naming both files when neither is supplied.
       key: "timeCardsJson",
-      label: "Time Cards JSON",
+      label: "Time Cards JSON (or Time Cards CSV)",
       description:
-        "IMSA Time Cards export (23_Time_Cards_Race.json)",
-      required: true,
+        "IMSA Time Cards export (23_Time_Cards_Race.json). Optional when the Time Cards CSV is supplied instead — one of the two is required.",
+      required: false,
       accept: ".json",
     },
     {
@@ -228,14 +284,38 @@ export const imsaParser: RaceDataParser = {
       key: "timeCardsCsv",
       label: "Time Cards CSV (optional)",
       description:
-        "IMSA Time Cards CSV export (e.g. 23_Time_Cards_Race.csv) — per-lap timing with flag status, driver names, pit times. Enriches lap data with FLAG_AT_FL.",
+        "IMSA Time Cards CSV export (e.g. 23_Time_Cards_Race.csv) — per-lap timing with flag status, driver names, pit times. Enriches lap data with FLAG_AT_FL. Can stand in for the Time Cards JSON entirely.",
       required: false,
       accept: ".csv",
+    },
+    {
+      key: "resultsCsv",
+      label: "Results CSV (optional)",
+      description:
+        "IMSA results export (e.g. 03_Results_Race_Provisional.csv) — official classification, status, vehicle and full driver names. Overrides finishing positions derived from lap data.",
+      required: false,
+      accept: ".csv",
+    },
+    {
+      key: "flagsCsv",
+      label: "Flags CSV (optional)",
+      description:
+        "IMSA Flags Analysis CSV export (e.g. 25_FlagsAnalysisWithRCMessages_Race.csv) — flag transitions plus race control messages. Same content as the JSON flags file.",
+      required: false,
+      accept: ".csv",
+    },
+    {
+      key: "pitStopPdf",
+      label: "Pit Stops PDF (optional)",
+      description:
+        "IMSA Pit Stop Time Cards PDF (e.g. 20_Pit_Stops_Time_Cards_Race.pdf) — exact pit in/out times and driver changes, for when the JSON export is unavailable.",
+      required: false,
+      accept: ".pdf",
     },
   ],
 
   async parse(files) {
-    const { timeCardsJson, flagsJson, pitStopJson, timeCardsCsv } = files;
+    const { timeCardsJson, flagsJson, pitStopJson, timeCardsCsv, resultsCsv, flagsCsv, pitStopPdf } = files;
     const mainJson = timeCardsJson;
     if (!mainJson && !timeCardsCsv) throw new Error("Missing Time Cards JSON (23_Time_Cards_Race.json) or Time Cards CSV file");
     const flagsInput = flagsJson || null;
@@ -288,7 +368,29 @@ export const imsaParser: RaceDataParser = {
           warnings.push(`Could not parse Flags JSON: ${e.message}. FCY will be detected from lap times.`);
         }
       }
-    } else {
+    }
+
+    // ── Flags CSV path (IMSA 25_FlagsAnalysisWithRCMessages_Race.csv) ──
+    // Converted to the same IMSAFlagEvent shape as the JSON file, so flag
+    // transitions and RC messages flow through one code path from here on.
+    if (!flagsData && !pdfFcyPeriods && flagsCsv) {
+      try {
+        const csvFlagEvents = parseImsaFlagsCsv(flagsCsv);
+        if (csvFlagEvents.length > 0) {
+          flagsData = { session: {} as IMSASession, flags: csvFlagEvents };
+          const rcCount = csvFlagEvents.filter((f) => f.rec_type === "RCMessage").length;
+          warnings.push(
+            `Flags CSV: loaded ${csvFlagEvents.length} record(s), including ${rcCount} race control message(s).`
+          );
+        } else {
+          warnings.push("Flags CSV contained no records. FCY will be detected from lap times.");
+        }
+      } catch (e: any) {
+        warnings.push(`Could not parse Flags CSV: ${e.message}. FCY will be detected from lap times.`);
+      }
+    }
+
+    if (!flagsInput && !flagsCsv) {
       warnings.push("No flags file provided. Caution periods will be detected from lap times.");
     }
 
@@ -344,6 +446,24 @@ export const imsaParser: RaceDataParser = {
       }
     }
 
+    // ── Results CSV (optional) ────────────────────────────────────
+    // The official classification supersedes positions derived from lap data:
+    // it accounts for penalties and post-race exclusions that lap times cannot.
+    let resultsMap: Map<string, SROEntry> | null = null;
+    if (resultsCsv) {
+      try {
+        const entries = parseSROResults(resultsCsv);
+        if (entries.length > 0) {
+          resultsMap = new Map(entries.map((e) => [e.carNumber, e]));
+          warnings.push(`Results CSV: official classification loaded for ${resultsMap.size} entries.`);
+        } else {
+          warnings.push("Results CSV contained no entries — finishing positions derived from lap data.");
+        }
+      } catch (e: any) {
+        warnings.push(`Could not parse Results CSV: ${e.message}. Finishing positions derived from lap data.`);
+      }
+    }
+
     // ── Build pit time cards for v3 pipeline (optional) ──────────
     let pitTimeCards: Map<number, PitStopTimeCard[]> | undefined;
     if (pitStopJson) {
@@ -360,6 +480,26 @@ export const imsaParser: RaceDataParser = {
         }
       } catch (e: any) {
         warnings.push(`Could not build pit time cards: ${e.message}. Continuing without them.`);
+      }
+    }
+
+    // ── Pit stop PDF fallback (when the JSON export is unavailable) ──
+    // parseAlkamelPitStopPdf returns clock times in seconds from midnight,
+    // which is what buildPitLapSet compares against the HOUR column.
+    if (!pitTimeCards && pitStopPdf) {
+      try {
+        const pitPdfText = await extractPdfText(pitStopPdf);
+        const parsedPdfStops = parseAlkamelPitStopPdf(pitPdfText);
+        if (parsedPdfStops.size > 0) {
+          pitTimeCards = parsedPdfStops;
+          let stopCount = 0;
+          for (const [, stops] of parsedPdfStops) stopCount += stops.length;
+          warnings.push(`Pit stops PDF: ${stopCount} stop(s) across ${parsedPdfStops.size} cars.`);
+        } else {
+          warnings.push("Pit stops PDF yielded no stops. Pit timing will be estimated from lap times.");
+        }
+      } catch (e: any) {
+        warnings.push(`Could not parse Pit stops PDF: ${e.message}. Pit timing will be estimated from lap times.`);
       }
     }
 
@@ -837,12 +977,26 @@ export const imsaParser: RaceDataParser = {
     const overallFinishPos = new Map<string, number>();
     carFinishOrder.forEach((c, i) => overallFinishPos.set(c.num, i + 1));
 
+    // Leading zeros are lost when cars are keyed by parseInt below, so distinct
+    // entries such as "023" and "23" collapse onto one another. IMSA WeatherTech
+    // fields use three-digit numbers, so this is not hypothetical there.
+    warnings.push(
+      ...carNumberCollisionWarnings(
+        findCarNumberCollisions(
+          carLapsRaw.keys(),
+          new Map(Array.from(carLapsRaw, ([car, laps]) => [car, laps.length]))
+        )
+      )
+    );
+
     for (const [carNum, rawLaps] of carLapsRaw) {
       const participant = participantMap.get(carNum);
       const csvMeta = csvParticipants.get(carNum);
+      const resultEntry = resultsMap?.get(carNum);
 
-      // Need at least one source of participant info (JSON roster, CSV metadata, or pit stop data)
-      if (!participant && !csvMeta) {
+      // Need at least one source of participant info (JSON roster, CSV metadata,
+      // results CSV, or pit stop data)
+      if (!participant && !csvMeta && !resultEntry) {
         warnings.push(`Car #${carNum} has laps but no participant entry`);
         continue;
       }
@@ -850,10 +1004,10 @@ export const imsaParser: RaceDataParser = {
       const num = parseInt(carNum, 10);
       if (isNaN(num)) continue;
 
-      const cls = participant?.class || csvMeta?.cls || "Unknown";
+      const cls = participant?.class || csvMeta?.cls || resultEntry?.carClass || "Unknown";
       const pitEntry = pitStopMap?.get(num);
       const make = pitEntry?.manufacturer || participant?.manufacturer || csvMeta?.manufacturer || "";
-      const vehicle = pitEntry?.vehicle || participant?.vehicle || "";
+      const vehicle = pitEntry?.vehicle || participant?.vehicle || resultEntry?.vehicle || "";
 
       let team: string;
       if (participant) {
@@ -869,10 +1023,21 @@ export const imsaParser: RaceDataParser = {
         team = driverList
           ? `${csvMeta.team} (${driverList})`
           : csvMeta.team;
+      } else if (resultEntry) {
+        const driverList = resultEntry.driverNames.join(" / ");
+        team = driverList
+          ? `${resultEntry.teamName} (${driverList})`
+          : resultEntry.teamName;
       } else {
         team = `Car #${carNum}`;
       }
-      const finishPos = overallFinishPos.get(carNum) || 999;
+
+      // Official classification wins over the order derived from lap data,
+      // which cannot see penalties or post-race exclusions.
+      const finishPos =
+        resultEntry && resultEntry.finishPosition > 0
+          ? resultEntry.finishPosition
+          : overallFinishPos.get(carNum) || 999;
 
       // Build laps array with positions
       const lapEntries = rawLaps.map((rl) => {

@@ -14,6 +14,9 @@ export type FileType =
   | "grResultsPdf"
   | "alkamelLapsCsv"
   | "alkamelPitStopPdf"
+  | "imsaResultsCsv"
+  | "imsaFlagsCsv"
+  | "imsaPitStopPdf"
   | "qualifyingCsv"
   | "unsupportedPdf"
   | "redmistFlagsCsv"
@@ -83,6 +86,32 @@ const REQUIRED_SLOTS: Record<FormatId, FileType[]> = {
   qualifying: ["qualifyingCsv"],
 };
 
+/** Metadata derivable from an IMSA CSV export.
+ *
+ *  These files carry no event name, circuit or session date anywhere in their
+ *  contents, so only the series is certain.
+ *
+ *  A race number is deliberately NOT guessed from the filename. Real exports are
+ *  named "23_Time Cards_Race.csv" with no number, so the only thing such a guess
+ *  matched in practice was the "_1" a browser or OS appends to a duplicate
+ *  download — reading "Race 1" off a file that says nothing of the kind. Name,
+ *  track and date are left for the operator, unless the filename carries the
+ *  [Track, YYYY-MM-DD, Series] tag, which is applied separately. */
+function extractImsaCsvMetadata(_filename: string): Partial<RaceGroupMetadata> {
+  return { series: "IMSA" };
+}
+
+/** Group id used when a drop carries only IMSA CSV/PDF exports, which — unlike
+ *  the IMSA JSON files — contain no event name or session date to key a group on. */
+const IMSA_CSV_GROUP_ID = "imsa_csv";
+
+/** IMSA file types that identify an event well enough to start a group. */
+const IMSA_GROUP_SEEDING_TYPES = new Set<FileType>([
+  "timeCardsCsv",
+  "imsaResultsCsv",
+  "imsaFlagsCsv",
+]);
+
 /** Maps internal FileType to the server-side slot key */
 export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   timeCardsJson: "timeCardsJson",
@@ -98,6 +127,9 @@ export const FILE_TYPE_TO_SLOT: Record<FileType, string> = {
   grResultsPdf: "resultsPdf",
   alkamelLapsCsv: "lapsCsv",
   alkamelPitStopPdf: "pitStopPdf",
+  imsaResultsCsv: "resultsCsv",
+  imsaFlagsCsv: "flagsCsv",
+  imsaPitStopPdf: "pitStopPdf",
   qualifyingCsv: "timecards",
   unsupportedPdf: "unknown",
   redmistFlagsCsv: "flagsCsv",
@@ -119,6 +151,9 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   grResultsPdf: "Results PDF",
   alkamelLapsCsv: "Laps CSV",
   alkamelPitStopPdf: "Pit Stops PDF",
+  imsaResultsCsv: "Results CSV",
+  imsaFlagsCsv: "Flags CSV",
+  imsaPitStopPdf: "Pit Stops PDF",
   qualifyingCsv: "Qualifying CSV",
   unsupportedPdf: "Unsupported PDF",
   redmistFlagsCsv: "Flags CSV (Redmist)",
@@ -293,16 +328,49 @@ export function classifyFile(file: File, content: string): DetectedFile {
       return result;
     }
 
-    // Alkamel Laps CSV: semicolon-delimited with CROSSING_FINISH_LINE_IN_PIT
-    // Must be checked BEFORE IMSA — Alkamel CSVs also contain number/driver_number/lap_number/elapsed
+    // Alkamel per-lap CSVs. Three exports share the same first 26 columns:
+    //   IMSA  23_Time Cards                      — stops at FLAG_AT_FL
+    //   SRO   23_AnalysisEnduranceWithSections   — adds S1_SECONDS…FL_elapsed
+    //   GRCup 23_AnalysisEnduranceWithSections   — same as SRO
+    // The trailing section columns are the discriminator, so IMSA time cards are
+    // no longer misread as SRO laps. The filename is checked too, in case a
+    // future IMSA export gains section columns.
     if (
       headerLower.includes(";") &&
       headerLower.includes("crossing_finish_line_in_pit")
     ) {
+      const hasSectionColumns =
+        headerLower.includes("s1_seconds") || headerLower.includes("im1a_elapsed");
+      const isSectionsExport =
+        hasSectionColumns || /analysisendurance/i.test(file.name);
+
+      if (!isSectionsExport) {
+        // IMSA Time Cards CSV — can stand in for the Time Cards JSON
+        result.type = "timeCardsCsv";
+        result.format = "imsa";
+        result.metadata = extractImsaCsvMetadata(file.name);
+        result.groupKey = "__imsa_csv_pending__";
+        return result;
+      }
+
       result.type = "alkamelLapsCsv";
       // Format determined during pending resolution (SRO, GR Cup, or IMSA fallback)
       result.format = "sro"; // default, corrected during resolution
       result.groupKey = extractAlkamelEventKey(file.name);
+      return result;
+    }
+
+    // IMSA Flags Analysis CSV: TIME;ELAPSED;REC_TYPE;FLAG;SECTOR;MESSAGE;...
+    // Same content as the 25_ JSON export — flag transitions plus RC messages.
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("rec_type") &&
+      headerLower.includes("accum_time")
+    ) {
+      result.type = "imsaFlagsCsv";
+      result.format = "imsa";
+      result.metadata = extractImsaCsvMetadata(file.name);
+      result.groupKey = "__imsa_csv_pending__";
       return result;
     }
 
@@ -408,6 +476,24 @@ export function classifyFile(file: File, content: string): DetectedFile {
       const grMeta = extractAlkamelMetadata(grKey, "GR_CUP");
       result.metadata = grMeta;
       result.groupKey = `grcup_${grKey}`;
+      return result;
+    }
+
+    // IMSA Results CSV: same Alkamel 03_Results shape as SRO, but the timing
+    // provider's id columns are IMSA_* where SRO and GR Cup carry ECM *.
+    // Must be checked BEFORE the generic SRO branch, which also matches
+    // DRIVER1_FIRSTNAME + POSITION.
+    if (
+      headerLower.includes(";") &&
+      headerLower.includes("position") &&
+      (headerLower.includes("imsa_carid") ||
+        headerLower.includes("imsa_classid") ||
+        headerLower.includes("imsa_teamid"))
+    ) {
+      result.type = "imsaResultsCsv";
+      result.format = "imsa";
+      result.metadata = extractImsaCsvMetadata(file.name);
+      result.groupKey = "__imsa_csv_pending__";
       return result;
     }
 
@@ -520,11 +606,28 @@ export async function classifyFiles(
     }
   }
 
-  // Resolve pending files: attach to matching group, or leave unmatched
-  for (const pending of pendingImsa) {
+  // Resolve pending files: attach to matching group, or leave unmatched.
+  // IMSA-native files resolve first. A drop containing only IMSA exports has no
+  // JSON to key a group from, so those files seed the group that the shared
+  // Alkamel formats (pit stop PDF) then fall back to.
+  const imsaNativePending = pendingImsa.filter(
+    (d) => d.type !== "alkamelLapsCsv" && d.type !== "alkamelPitStopPdf"
+  );
+  const alkamelPending = pendingImsa.filter(
+    (d) => d.type === "alkamelLapsCsv" || d.type === "alkamelPitStopPdf"
+  );
+
+  for (const pending of [...imsaNativePending, ...alkamelPending]) {
     if (pending.type === "alkamelLapsCsv" || pending.type === "alkamelPitStopPdf") {
       const lapsKey = pending.groupKey!;
-      const lapsIsGrcup = lapsKey.includes("GRCUP") || pending.metadata.series === "GR_CUP";
+      // Decide series from the original filename, not from lapsKey:
+      // extractAlkamelEventKey strips "GR Cup" as a document-type word, so by the
+      // time the key exists the only marker distinguishing a GR Cup laps CSV from
+      // an SRO one is gone. Testing the key meant this was always false, both
+      // files preferred the SRO group, and whichever was processed first took it —
+      // so drop order decided which series each file was filed under.
+      const lapsIsGrcup =
+        /gr[\s_]?cup/i.test(pending.file.name) || pending.metadata.series === "GR_CUP";
       const sroGrcupGroups = Array.from(groups.values()).filter(
         (g) => g.format === "sro" || g.format === "grcup"
       );
@@ -616,7 +719,23 @@ export async function classifyFiles(
           unmatched.push(pending);
         }
       } else {
-        // Pit stop PDFs with no matching group → create their own group
+        // No SRO/GR Cup group wanted this pit stop PDF. If an IMSA group is
+        // present it is an IMSA export (the filenames are identical across
+        // series, so only grouping can tell them apart).
+        const imsaGroup = Array.from(groups.values()).find(
+          (g) => g.format === "imsa" && !g.files.has("imsaPitStopPdf" as FileType)
+        );
+        if (imsaGroup) {
+          pending.type = "imsaPitStopPdf" as FileType;
+          pending.format = "imsa";
+          pending.groupKey = imsaGroup.id;
+          // The PDF branch derived this file's metadata on the assumption it was
+          // SRO — including a name like "SRO Race 1" read off the filename. That
+          // assumption has just been overturned, so the derived values must not
+          // be merged into the IMSA group. Only a [Track, date, Series] filename
+          // tag survives, because the operator wrote it deliberately.
+          pending.metadata = { series: "IMSA", ...extractFilenameMeta(pending.file.name) };
+        }
         mergeIntoGroup(groups, pending);
       }
     } else {
@@ -641,7 +760,11 @@ export async function classifyFiles(
       if (imsaMatch) {
         pending.groupKey = imsaMatch.id;
         mergeIntoGroup(groups, pending);
+      } else if (IMSA_GROUP_SEEDING_TYPES.has(pending.type)) {
+        pending.groupKey = IMSA_CSV_GROUP_ID;
+        mergeIntoGroup(groups, pending);
       } else {
+        // A flags PDF on its own identifies no event and cannot seed a group.
         unmatched.push(pending);
       }
     }

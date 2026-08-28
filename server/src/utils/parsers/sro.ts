@@ -15,6 +15,7 @@ import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
 import { generateAnnotations, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
 import { parseSROResults } from "../parseSROResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
+import { findCarNumberCollisions, carNumberCollisionWarnings } from "../carNumberCollisions.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
 
@@ -87,6 +88,18 @@ export const sroParser: RaceDataParser = {
       lapsByCar.get(lap.carNumber)!.push(lap);
       if (lap.lapNumber > maxLap) maxLap = lap.lapNumber;
     }
+
+    // Leading zeros are lost when cars are keyed by parseInt below, so distinct
+    // entries such as "007", "07" and "7" collapse onto one another. Report it
+    // rather than under-reporting the field without explanation.
+    warnings.push(
+      ...carNumberCollisionWarnings(
+        findCarNumberCollisions(
+          lapsByCar.keys(),
+          new Map(Array.from(lapsByCar, ([car, laps]) => [car, laps.length]))
+        )
+      )
+    );
 
     for (const [carNum, carLaps] of lapsByCar) {
       carLaps.sort((a, b) => a.lapNumber - b.lapNumber);

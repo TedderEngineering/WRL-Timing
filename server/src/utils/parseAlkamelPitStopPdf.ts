@@ -11,6 +11,10 @@
  *   2 ...
  *
  * Columns: Nr. | In Time | Out Time | Pit Time | T. Pit Time | In Driver | Out Driver
+ *
+ * Also handles IMSA "20_Pit Stops Time Cards" exports. Those use a two-column
+ * page layout, which pdf-parse's default cell/line grouping de-interleaves into
+ * the same one-car-per-block, one-stop-per-line shape used above.
  * (In Time = pit entry clock time, Out Time = pit exit clock time)
  */
 
@@ -34,9 +38,37 @@ function parseClockTime(raw: string): number {
  * Parse a pit duration "M:SS.mmm" or "MM:SS.mmm" into seconds.
  */
 function parsePitDuration(raw: string): number {
-  const m = raw.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  const m = raw.match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);
   if (!m) return 0;
-  return parseInt(m[1]) * 60 + parseFloat(m[2]);
+  const minutes = m[1] ? parseInt(m[1]) : 0;
+  return minutes * 60 + parseFloat(m[2]);
+}
+
+/**
+ * Merge a block of stops into the result map.
+ *
+ * A car's stops can appear in more than one block: the two-column page layout
+ * splits some cars across columns, and long entry lists wrap across pages.
+ * Overwriting would discard the earlier block, so concatenate, drop rows that
+ * repeat an already-recorded (inTime, outTime) pair, and keep the stops in
+ * chronological order.
+ */
+function saveStops(
+  result: Map<number, PitStopTimeCard[]>,
+  carNumber: number,
+  stops: PitStopTimeCard[]
+): void {
+  if (stops.length === 0) return;
+  const existing = result.get(carNumber) ?? [];
+  const seen = new Set(existing.map((s) => `${s.inTime}|${s.outTime}`));
+  for (const stop of stops) {
+    const key = `${stop.inTime}|${stop.outTime}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    existing.push(stop);
+  }
+  existing.sort((a, b) => a.inTime - b.inTime);
+  result.set(carNumber, existing);
 }
 
 /**
@@ -56,14 +88,14 @@ export function parseAlkamelPitStopPdf(text: string): Map<number, PitStopTimeCar
 
     // Car header: starts with a car number followed by team name
     // e.g. "3 JMF Motorsports" or "007 ProSport Competition"
-    const carHeaderMatch = line.match(/^(\d+)\s+([A-Z][\w\s&'.,-]+)$/i);
+    const carHeaderMatch = line.match(/^(\d+)\s+([A-Z][\w\s&'.,\/-]+)$/i);
     if (carHeaderMatch) {
       // Check it's not a pit stop row (those start with a small number followed by timestamps)
       const possibleStopCheck = line.match(/^\d+\s+\d+:\d+:\d+/);
       if (!possibleStopCheck) {
         // Save previous car
-        if (currentCarNum !== null && currentStops.length > 0) {
-          result.set(currentCarNum, currentStops);
+        if (currentCarNum !== null) {
+          saveStops(result, currentCarNum, currentStops);
         }
         currentCarNum = parseInt(carHeaderMatch[1], 10);
         currentStops = [];
@@ -77,8 +109,11 @@ export function parseAlkamelPitStopPdf(text: string): Map<number, PitStopTimeCar
     // Pit stop row: <stopNum> <inTime> <outTime> <pitTime> <totalPitTime> <inDriver> <outDriver>
     // e.g. "1 17:30:33.280 17:33:09.732 2:36.452 2:36.452	J. Neudorf J. Webb"
     // The two driver names may be on the same line or separated by tab
+    // Pit Time and T. Pit Time are printed without a leading "0:" when the
+    // duration is under a minute (e.g. "55.544" rather than "0:55.544"), so the
+    // minutes component is optional.
     const stopMatch = line.match(
-      /^(\d+)\s+(\d+:\d+:\d+\.\d+)\s+(\d+:\d+:\d+\.\d+)\s+(\d+:\d+\.\d+)\s+(\d+:\d+\.\d+)\s+(.+)$/
+      /^(\d+)\s+(\d+:\d+:\d+\.\d+)\s+(\d+:\d+:\d+\.\d+)\s+((?:\d+:)?\d+\.\d+)\s+((?:\d+:)?\d+\.\d+)\s+(.+)$/
     );
     if (stopMatch && currentCarNum !== null) {
       const inTime = parseClockTime(stopMatch[2]);
@@ -103,8 +138,8 @@ export function parseAlkamelPitStopPdf(text: string): Map<number, PitStopTimeCar
   }
 
   // Save last car
-  if (currentCarNum !== null && currentStops.length > 0) {
-    result.set(currentCarNum, currentStops);
+  if (currentCarNum !== null) {
+    saveStops(result, currentCarNum, currentStops);
   }
 
   return result;
