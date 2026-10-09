@@ -13,7 +13,8 @@ class ApiClient {
   private async request<T>(
     path: string,
     options: RequestInit = {},
-    retry = true
+    retry = true,
+    asText = false
   ): Promise<T> {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
@@ -45,7 +46,7 @@ class ApiClient {
         try {
           await this.attemptRefresh();
           // Retry the original request with new token
-          return this.request<T>(path, options, false);
+          return this.request<T>(path, options, false, asText);
         } catch {
           // Refresh failed — propagate the 401
         }
@@ -56,12 +57,16 @@ class ApiClient {
         code: "UNKNOWN",
       }));
 
-      throw new ApiClientError(response.status, error.error, error.code);
+      throw new ApiClientError(response.status, error.error, error.code, error);
     }
 
     // Handle 204 No Content
     if (response.status === 204) {
       return undefined as T;
+    }
+
+    if (asText) {
+      return (await response.text()) as T;
     }
 
     return response.json();
@@ -102,6 +107,11 @@ class ApiClient {
     return this.request<T>(path, options);
   }
 
+  /** GET a text response (CSV etc.) with the same auth and refresh handling. */
+  getText(path: string) {
+    return this.request<string>(path, {}, true, true);
+  }
+
   post<T>(path: string, body?: unknown) {
     return this.request<T>(path, {
       method: "POST",
@@ -139,7 +149,9 @@ export class ApiClientError extends Error {
   constructor(
     public status: number,
     message: string,
-    public code?: string
+    public code?: string,
+    /** The parsed error body, for endpoints that return extra detail. */
+    public payload?: unknown
   ) {
     super(message);
     this.name = "ApiClientError";

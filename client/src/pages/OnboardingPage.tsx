@@ -4,6 +4,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { api } from "../lib/api";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
+import { takePostAuthRedirect } from "../lib/postAuthRedirect";
 
 type Theme = "light" | "dark" | "system";
 
@@ -223,7 +224,7 @@ export function OnboardingPage() {
     } catch {
       // Non-critical — proceed anyway
     }
-    navigate("/dashboard", { replace: true });
+    navigate(takePostAuthRedirect("/dashboard"), { replace: true });
   };
 
   return (

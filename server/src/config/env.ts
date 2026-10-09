@@ -22,6 +22,22 @@ const envSchema = z.object({
   STRIPE_PRICE_PRO_ANNUAL: z.string().optional(),
   STRIPE_PRICE_TEAM_ANNUAL: z.string().optional(),
 
+  // Finding Grip
+  // Who can use Finding Grip: "off" (nobody), "admin" (admins only),
+  // "testers" (admins + GRIP_TESTER_EMAILS) or "public" (every account).
+  GRIP_ACCESS: z.enum(["off", "admin", "testers", "public"]).default("admin"),
+  GRIP_TESTER_EMAILS: z.string().optional(),
+  // Stripe price id(s) for Finding Grip Pro, comma-separated. The first is
+  // sold at checkout; all of them are recognised in webhooks. Checkout is
+  // unavailable until set.
+  STRIPE_GRIP_PRO_PRICE_ID: z
+    .string()
+    .regex(/^price_\w+(\s*,\s*price_\w+)*$/, "Expected one or more price_… ids, comma-separated")
+    .optional(),
+  // The proprietary calculation model, as JSON. Read in services/grip/calc.ts.
+  // Never commit a real value anywhere in this repository.
+  GRIP_CALC_MODEL: z.string().optional(),
+
   // Supabase
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),

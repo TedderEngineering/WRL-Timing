@@ -61,6 +61,10 @@ model User {
   createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
   auditLogs           AuditLog[]
 
+  gripAccount            GripAccount?
+  gripReferenceSessions  GripReferenceSession[]
+  gripCalculations       GripCalculation[]
+
   @@map("users")
 }
 
@@ -365,4 +369,152 @@ model PitStopAnalysis {
   @@unique([raceId, carNumber, stopNumber])
   @@index([raceId])
   @@map("pit_stop_analysis")
+}
+
+// ─── Finding Grip ─────────────────────────────────────────────────────────────
+// Tire pressure and damper tools. Shares users, auth and the Stripe customer
+// with RaceTrace; everything else lives in grip_* tables.
+//
+// Pressures are stored in PSI and temperatures in °F. The client converts for
+// display. The calculation model and the damper table contents are NOT in this
+// repository: the model is read from the GRIP_CALC_MODEL environment variable
+// and the damper rows are loaded through the admin import endpoint.
+
+enum GripPlan {
+  FREE
+  PRO
+}
+
+enum GripUnits {
+  STANDARD
+  METRIC
+}
+
+enum GripWeather {
+  DRY
+  WET
+}
+
+model GripAccount {
+  userId               String             @id @map("user_id")
+  units                GripUnits          @default(STANDARD)
+  plan                 GripPlan           @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  // Lifetime count of calculations run. The free-tier limit uses this, so
+  // deleting a calculation does not hand the allowance back.
+  calcCount            Int                @default(0) @map("calc_count")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("grip_accounts")
+}
+
+model GripTrack {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  shortName String   @map("short_name")
+  country   String?
+  logoUrl   String?  @map("logo_url")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  referenceSessions GripReferenceSession[]
+  calculations      GripCalculation[]
+
+  @@map("grip_tracks")
+}
+
+model GripReferenceSession {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id")
+  name        String
+  trackId     String      @map("track_id")
+  sessionDate DateTime    @default(now()) @map("session_date")
+  weather     GripWeather @default(DRY)
+  trackTemp   Float       @map("track_temp")
+  ambientTemp Float       @map("ambient_temp")
+  durationMin Int         @map("duration_min")
+  coldLf      Float       @map("cold_lf")
+  coldRf      Float       @map("cold_rf")
+  coldLr      Float       @map("cold_lr")
+  coldRr      Float       @map("cold_rr")
+  hotLf       Float?      @map("hot_lf")
+  hotRf       Float?      @map("hot_rf")
+  hotLr       Float?      @map("hot_lr")
+  hotRr       Float?      @map("hot_rr")
+  wheelLf     Float       @map("wheel_lf")
+  wheelRf     Float       @map("wheel_rf")
+  wheelLr     Float       @map("wheel_lr")
+  wheelRr     Float       @map("wheel_rr")
+  notes       String?
+  useCount    Int         @default(0) @map("use_count")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track        GripTrack         @relation(fields: [trackId], references: [id])
+  calculations GripCalculation[]
+
+  @@index([userId, sessionDate(sort: Desc)])
+  @@map("grip_reference_sessions")
+}
+
+model GripCalculation {
+  id                 String      @id @default(cuid())
+  userId             String      @map("user_id")
+  referenceSessionId String?     @map("reference_session_id")
+  referenceName      String      @map("reference_name")
+  trackId            String      @map("track_id")
+  name               String
+  sessionDate        DateTime    @default(now()) @map("session_date")
+  weather            GripWeather
+  trackTemp          Float       @map("track_temp")
+  ambientTemp        Float       @map("ambient_temp")
+  durationMin        Int         @map("duration_min")
+  wheelLf            Float       @map("wheel_lf")
+  wheelRf            Float       @map("wheel_rf")
+  wheelLr            Float       @map("wheel_lr")
+  wheelRr            Float       @map("wheel_rr")
+  targetLf           Float       @map("target_lf")
+  targetRf           Float       @map("target_rf")
+  targetLr           Float       @map("target_lr")
+  targetRr           Float       @map("target_rr")
+  resultLf           Float       @map("result_lf")
+  resultRf           Float       @map("result_rf")
+  resultLr           Float       @map("result_lr")
+  resultRr           Float       @map("result_rr")
+  refColdLf          Float       @map("ref_cold_lf")
+  refColdRf          Float       @map("ref_cold_rf")
+  refColdLr          Float       @map("ref_cold_lr")
+  refColdRr          Float       @map("ref_cold_rr")
+  convertedToRef     Boolean     @default(false) @map("converted_to_ref")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track            GripTrack             @relation(fields: [trackId], references: [id])
+  referenceSession GripReferenceSession? @relation(fields: [referenceSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("grip_calculations")
+}
+
+model GripDamperScenario {
+  scenarioNumber Int     @id @map("scenario_number")
+  adjustmentType String  @map("adjustment_type") // rebound_only | two_way
+  turnDirection  String  @map("turn_direction") // left | right
+  overUnder      String  @map("over_under") // oversteer | understeer
+  cornerSegment  String  @map("corner_segment") // braking | turn_in | mid_corner | corner_exit
+  cornerSpeed    String  @map("corner_speed") // low | mid | high
+  option1        String  @map("option_1")
+  option2        String? @map("option_2")
+  option3        String? @map("option_3")
+
+  @@unique([adjustmentType, turnDirection, overUnder, cornerSegment, cornerSpeed], map: "grip_damper_scenarios_inputs_key")
+  @@map("grip_damper_scenarios")
 }
