@@ -170,11 +170,6 @@ export function GripDamperPage() {
           <Card className="space-y-3">
             <div ref={resultRef} className="flex items-center justify-between gap-2">
               <h2 className="font-bold text-gray-900 dark:text-gray-50">Damper change</h2>
-              {result && (
-                <Pill className="tabular-nums">
-                  Scenario {result.data.scenarioNumber} of {result.data.scenarioCount}
-                </Pill>
-              )}
             </div>
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
             {result ? (
