@@ -92,29 +92,3 @@ export async function requireTeamRole(
   }
   return membership.role;
 }
-
-/**
- * Join every team that has invited this account's email. Only for verified
- * addresses: otherwise anyone could register an invited address first.
- */
-export async function acceptPendingInvites(user: {
-  id: string;
-  email: string;
-  emailVerified: boolean;
-}): Promise<string[]> {
-  if (!user.emailVerified) return [];
-  const email = normalizeEmail(user.email);
-  const invites = await prisma.setupInvite.findMany({ where: { email } });
-  if (invites.length === 0) return [];
-  await prisma.$transaction([
-    ...invites.map((invite) =>
-      prisma.setupTeamMember.upsert({
-        where: { teamId_userId: { teamId: invite.teamId, userId: user.id } },
-        create: { teamId: invite.teamId, userId: user.id, role: invite.role },
-        update: {},
-      })
-    ),
-    prisma.setupInvite.deleteMany({ where: { id: { in: invites.map((i) => i.id) } } }),
-  ]);
-  return invites.map((i) => i.teamId);
-}

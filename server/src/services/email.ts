@@ -131,7 +131,7 @@ export function escapeHtml(text: string): string {
 }
 
 /**
- * Setup Sheet: tell someone they've been added to, or invited to, a team.
+ * Setup Sheet: tell someone they've been invited to a team.
  * `hasAccount` decides between "open Setup Sheet" and "create an account".
  */
 export async function sendSetupInviteEmail(params: {
@@ -149,17 +149,17 @@ export async function sendSetupInviteEmail(params: {
   const url = params.hasAccount ? site.url : `${site.url}/login?mode=signup&email=${encodeURIComponent(to)}`;
   const action = params.hasAccount ? "Open Setup Sheet" : "Create your account";
   const next = params.hasAccount
-    ? "Sign in with this email to see the team's cars, events and setups."
-    : "Create an account with this email address and verify it. You'll join the team as soon as you sign in.";
+    ? "Sign in with this email address to accept or decline."
+    : "Create an account with this email address and verify it, then accept the invite.";
 
   await sendEmail({
     fromName: site.name,
     to,
-    subject: `${params.inviterName} added you to ${params.teamName} — ${site.name}`.slice(0, 200),
+    subject: `${params.inviterName} invited you to ${params.teamName} — ${site.name}`.slice(0, 200),
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: ${site.accent};">${site.name}</h2>
-        <p>${inviter} added you to <strong>${team}</strong> as ${roleText}.</p>
+        <p>${inviter} invited you to join <strong>${team}</strong> as ${roleText}.</p>
         <p>${next} The same login works for RaceTrace and Finding Grip.</p>
         <a href="${url}"
            style="display: inline-block; background: ${site.accent}; color: white; padding: 12px 24px;

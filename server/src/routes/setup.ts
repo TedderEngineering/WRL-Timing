@@ -20,7 +20,6 @@ import { env } from "../config/env.js";
 import { setupSite, siteForRequest } from "../services/site.js";
 import { sendSetupInviteEmail } from "../services/email.js";
 import {
-  acceptPendingInvites,
   requireSetupAccess,
   requireTeamRole,
   roleAtLeast,
@@ -78,6 +77,26 @@ const perUser = rateLimit({
   max: 240,
   keyGenerator: (req) => req.user?.userId ?? req.ip ?? "anonymous",
   message: { error: "Too many requests. Please slow down.", code: "RATE_LIMITED" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Invites send email, so they get their own, much lower limit. */
+const inviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.user?.userId ?? req.ip ?? "anonymous",
+  message: { error: "That's a lot of invites in one hour. Try again later.", code: "RATE_LIMITED" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Imports are heavy transactions. */
+const importLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => req.user?.userId ?? req.ip ?? "anonymous",
+  message: { error: "Too many imports in a short time. Try again in a few minutes.", code: "RATE_LIMITED" },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -232,8 +251,29 @@ async function createSheetWithRevision(
   return sheet;
 }
 
-async function ownerCount(teamId: string) {
-  return prisma.setupTeamMember.count({ where: { teamId, role: "OWNER" } });
+/**
+ * Change a team's membership with its owner rows locked, so two owners
+ * demoting or removing each other at the same moment can't leave the team
+ * with none. `change` runs only if the team still has another owner, or if
+ * the member being changed isn't an owner.
+ */
+async function changeMemberKeepingAnOwner(
+  teamId: string,
+  userId: string,
+  losesOwnership: (member: { role: SetupRole }) => boolean,
+  change: (tx: Prisma.TransactionClient) => Promise<unknown>,
+  message: string
+) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT user_id FROM setup_team_members WHERE team_id = ${teamId} AND role = 'OWNER' FOR UPDATE`;
+    const member = await tx.setupTeamMember.findUnique({ where: { teamId_userId: { teamId, userId } } });
+    if (!member) throw notFound();
+    if (member.role === "OWNER" && losesOwnership(member)) {
+      const owners = await tx.setupTeamMember.count({ where: { teamId, role: "OWNER" } });
+      if (owners <= 1) throw new AppError(409, message, "LAST_OWNER");
+    }
+    await change(tx);
+  });
 }
 
 // ─── Me and teams ────────────────────────────────────────────────────────────
@@ -247,15 +287,24 @@ setupRouter.get(
       select: { id: true, email: true, displayName: true, emailVerified: true },
     });
     if (!user) throw new AppError(401, "Account not found", "INVALID_ACCOUNT");
-    const joined = await acceptPendingInvites(user);
     const memberships = await prisma.setupTeamMember.findMany({
       where: { userId: user.id },
       include: { team: { include: { _count: { select: { members: true } } } } },
       orderBy: { team: { name: "asc" } },
     });
-    const waitingInvites = user.emailVerified
-      ? 0
-      : await prisma.setupInvite.count({ where: { email: normalizeEmail(user.email) } });
+    // Invites are offered only to a verified address; the person accepts or declines.
+    const email = normalizeEmail(user.email);
+    const invites = user.emailVerified
+      ? await prisma.setupInvite.findMany({
+          where: { email },
+          include: {
+            team: { select: { name: true } },
+            invitedBy: { select: { displayName: true, email: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    const waitingInvites = user.emailVerified ? 0 : await prisma.setupInvite.count({ where: { email } });
     res.json({
       user: { id: user.id, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified },
       teams: memberships.map((m) => ({
@@ -264,10 +313,53 @@ setupRouter.get(
         role: m.role,
         memberCount: m.team._count.members,
       })),
-      joinedTeamIds: joined,
-      // Invites wait for a verified email; the client says so.
+      invites: invites.map((i) => ({
+        id: i.id,
+        teamId: i.teamId,
+        teamName: i.team.name,
+        role: i.role,
+        invitedByName: i.invitedBy ? i.invitedBy.displayName || i.invitedBy.email : null,
+        createdAt: i.createdAt,
+      })),
+      // Invites waiting for this account to verify its email; the client says so.
       waitingInvites,
     });
+  })
+);
+
+/** The invite must be addressed to the caller's verified email. */
+async function ownInvite(req: Request) {
+  const [user, invite] = await Promise.all([
+    prisma.user.findUnique({ where: { id: uid(req) }, select: { email: true, emailVerified: true } }),
+    prisma.setupInvite.findUnique({ where: { id: param(req, "id") } }),
+  ]);
+  if (!user || !invite || invite.email !== normalizeEmail(user.email)) throw notFound();
+  if (!user.emailVerified) throw new AppError(403, "Verify your email to accept invites", "EMAIL_NOT_VERIFIED");
+  return invite;
+}
+
+setupRouter.post(
+  "/invites/:id/accept",
+  wrap(async (req, res) => {
+    const invite = await ownInvite(req);
+    await prisma.$transaction([
+      prisma.setupTeamMember.upsert({
+        where: { teamId_userId: { teamId: invite.teamId, userId: uid(req) } },
+        create: { teamId: invite.teamId, userId: uid(req), role: invite.role },
+        update: {},
+      }),
+      prisma.setupInvite.delete({ where: { id: invite.id } }),
+    ]);
+    res.json({ teamId: invite.teamId });
+  })
+);
+
+setupRouter.post(
+  "/invites/:id/decline",
+  wrap(async (req, res) => {
+    const invite = await ownInvite(req);
+    await prisma.setupInvite.delete({ where: { id: invite.id } });
+    res.status(204).send();
   })
 );
 
@@ -334,8 +426,15 @@ setupRouter.get(
   })
 );
 
+/**
+ * Invite someone by email. Always a pending invite that they accept or decline
+ * in Setup Sheet once their address is verified, and the same answer whether
+ * or not the address has an account, so invites can't be used to find out
+ * who is signed up.
+ */
 setupRouter.post(
   "/teams/:teamId/invites",
+  inviteLimiter,
   wrap(async (req, res) => {
     const teamId = param(req, "teamId");
     await requireTeamRole(teamId, uid(req), "OWNER");
@@ -346,28 +445,27 @@ setupRouter.post(
 
     const [team, inviter, invitee] = await Promise.all([
       prisma.setupTeam.findUniqueOrThrow({ where: { id: teamId } }),
-      prisma.user.findUniqueOrThrow({ where: { id: uid(req) }, select: { email: true, displayName: true } }),
-      prisma.user.findUnique({ where: { email }, select: { id: true, emailVerified: true } }),
+      prisma.user.findUniqueOrThrow({
+        where: { id: uid(req) },
+        select: { email: true, displayName: true, emailVerified: true },
+      }),
+      prisma.user.findUnique({ where: { email }, select: { id: true } }),
     ]);
-    if (invitee?.id === uid(req)) throw new AppError(400, "You're already on this team", "ALREADY_MEMBER");
-
-    let status: "added" | "invited";
-    if (invitee?.emailVerified) {
-      await prisma.setupTeamMember.upsert({
-        where: { teamId_userId: { teamId, userId: invitee.id } },
-        create: { teamId, userId: invitee.id, role: body.role },
-        update: { role: body.role },
-      });
-      status = "added";
-    } else {
-      // No account yet, or an unverified one: wait until the address is verified.
-      await prisma.setupInvite.upsert({
-        where: { teamId_email: { teamId, email } },
-        create: { teamId, email, role: body.role, invitedById: uid(req) },
-        update: { role: body.role },
-      });
-      status = "invited";
+    if (!inviter.emailVerified) {
+      throw new AppError(403, "Verify your own email before inviting people", "EMAIL_NOT_VERIFIED");
     }
+    if (invitee) {
+      const already = await prisma.setupTeamMember.findUnique({
+        where: { teamId_userId: { teamId, userId: invitee.id } },
+      });
+      if (already) throw new AppError(409, "That person is already on this team", "ALREADY_MEMBER");
+    }
+
+    await prisma.setupInvite.upsert({
+      where: { teamId_email: { teamId, email } },
+      create: { teamId, email, role: body.role, invitedById: uid(req) },
+      update: { role: body.role, invitedById: uid(req) },
+    });
 
     // The email is a courtesy; the invite stands even if it can't be sent.
     const site = setupSite() ?? siteForRequest(req);
@@ -380,7 +478,7 @@ setupRouter.post(
       site,
     }).catch((err) => console.error("Setup invite email failed:", err));
 
-    res.status(201).json({ status });
+    res.status(201).json({ status: "invited" });
   })
 );
 
@@ -401,12 +499,13 @@ setupRouter.patch(
     const userId = param(req, "userId");
     await requireTeamRole(teamId, uid(req), "OWNER");
     const body = z.object({ role: roleSchema }).parse(req.body);
-    const member = await prisma.setupTeamMember.findUnique({ where: { teamId_userId: { teamId, userId } } });
-    if (!member) throw notFound();
-    if (member.role === "OWNER" && body.role !== "OWNER" && (await ownerCount(teamId)) <= 1) {
-      throw new AppError(409, "A team needs at least one owner. Make someone else an owner first.", "LAST_OWNER");
-    }
-    await prisma.setupTeamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { role: body.role } });
+    await changeMemberKeepingAnOwner(
+      teamId,
+      userId,
+      () => body.role !== "OWNER",
+      (tx) => tx.setupTeamMember.update({ where: { teamId_userId: { teamId, userId } }, data: { role: body.role } }),
+      "A team needs at least one owner. Make someone else an owner first."
+    );
     res.json({ userId, role: body.role });
   })
 );
@@ -418,16 +517,13 @@ setupRouter.delete(
     const teamId = param(req, "teamId");
     const userId = param(req, "userId");
     await requireTeamRole(teamId, uid(req), userId === uid(req) ? "VIEWER" : "OWNER");
-    const member = await prisma.setupTeamMember.findUnique({ where: { teamId_userId: { teamId, userId } } });
-    if (!member) throw notFound();
-    if (member.role === "OWNER" && (await ownerCount(teamId)) <= 1) {
-      throw new AppError(
-        409,
-        "A team needs at least one owner. Make someone else an owner first, or delete the team.",
-        "LAST_OWNER"
-      );
-    }
-    await prisma.setupTeamMember.delete({ where: { teamId_userId: { teamId, userId } } });
+    await changeMemberKeepingAnOwner(
+      teamId,
+      userId,
+      () => true,
+      (tx) => tx.setupTeamMember.delete({ where: { teamId_userId: { teamId, userId } } }),
+      "A team needs at least one owner. Make someone else an owner first, or delete the team."
+    );
     res.status(204).send();
   })
 );
@@ -644,12 +740,13 @@ setupRouter.patch(
   })
 );
 
+/** Owners only: this removes every session, sheet, note and edit in the event. */
 setupRouter.delete(
   "/events/:id",
   wrap(async (req, res) => {
     const event = await prisma.setupEvent.findUnique({ where: { id: param(req, "id") } });
     if (!event) throw notFound();
-    await requireTeamRole(event.teamId, uid(req), "ENGINEER");
+    await requireTeamRole(event.teamId, uid(req), "OWNER");
     await prisma.setupEvent.delete({ where: { id: event.id } });
     res.status(204).send();
   })
@@ -849,9 +946,15 @@ setupRouter.post(
     }
     const exists = await prisma.setupSheet.findUnique({ where: { sessionId_kind: { sessionId: session.id, kind: body.kind } } });
     if (exists) throw new AppError(409, `This session already has ${body.kind === "TARGET" ? "a target" : "an actual"} sheet`, "SHEET_EXISTS");
-    const sheet = await prisma.$transaction((tx) =>
-      createSheetWithRevision(tx, { sessionId: session.id, kind: body.kind, data, notes: null, userId: uid(req) })
-    );
+    const sheet = await prisma
+      .$transaction((tx) =>
+        createSheetWithRevision(tx, { sessionId: session.id, kind: body.kind, data, notes: null, userId: uid(req) })
+      )
+      .catch((err: { code?: string }) => {
+        // Someone else started the same sheet a moment ago.
+        if (err?.code === "P2002") throw new AppError(409, "This sheet was just started by someone else", "SHEET_EXISTS");
+        throw err;
+      });
     const people = await lookupPeople([sheet.updatedById]);
     res.status(201).json({ sheet: serializeSheet(sheet, people) });
   })
@@ -992,6 +1095,7 @@ const MAX_IMPORT_SESSIONS = 40;
  */
 setupRouter.post(
   "/teams/:teamId/import",
+  importLimiter,
   wrap(async (req, res) => {
     const teamId = param(req, "teamId");
     await requireTeamRole(teamId, uid(req), "ENGINEER");
@@ -1098,8 +1202,12 @@ setupRouter.post(
             } else if (!body.replace) {
               counts.skipped++;
             } else {
-              const changes = diffValues(readValues(prior.data), data);
-              const notesChanged = (prior.notes ?? null) !== (sheet.notes ?? null);
+              // Lock and re-read, so an edit saved a moment ago is neither lost
+              // silently nor missing from the recorded change.
+              const [locked] = await tx.$queryRaw<{ data: unknown; notes: string | null }[]>`
+                SELECT data, notes FROM setup_sheets WHERE id = ${prior.id} FOR UPDATE`;
+              const changes = diffValues(readValues(locked?.data ?? prior.data), data);
+              const notesChanged = (locked?.notes ?? null) !== (sheet.notes ?? null);
               await tx.setupSheet.update({ where: { id: prior.id }, data: { data, notes: sheet.notes, updatedById: userId } });
               if (changes.length > 0 || notesChanged) {
                 await tx.setupSheetRevision.create({

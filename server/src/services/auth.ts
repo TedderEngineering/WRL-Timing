@@ -255,8 +255,10 @@ export async function refresh(
 
   // Check if this session was displaced by a newer login
   if (storedToken.revokedAt) {
-    // Clean up the revoked token
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Keep the revoked row until it expires (background cleanup removes it):
+    // deleting it here would make a second, concurrent request from the same
+    // displaced browser find no row and take the token-theft path, which signs
+    // out every device, including the one that just signed in.
     throw new AppError(
       401,
       "Your account was signed in from another location. If this wasn't you, change your password immediately.",
@@ -327,6 +329,14 @@ export function isReplayAfterGrace(
 export async function logout(refreshTokenValue: string): Promise<void> {
   const tokenHash = hashToken(refreshTokenValue);
   await prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  // Also drop this user's just-rotated tokens, so a token replaced in the last
+  // few seconds can't keep getting access tokens through the grace window.
+  try {
+    const { userId } = verifyRefreshToken(refreshTokenValue);
+    await prisma.refreshToken.deleteMany({ where: { userId, rotatedAt: { not: null } } });
+  } catch {
+    // Expired or malformed: nothing more to clean up.
+  }
 }
 
 export async function logoutAll(userId: string): Promise<void> {
