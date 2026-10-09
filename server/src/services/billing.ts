@@ -3,6 +3,12 @@ import { stripe, TIER_PRICE_MAP } from "../lib/stripe.js";
 import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
 import { AppError } from "../middleware/error-handler.js";
+import {
+  isGripSubscription,
+  syncGripSubscription,
+  endGripSubscription,
+  applyGripInvoice,
+} from "./grip/billing.js";
 
 // ─── Create Checkout Session ────────────────────────────────────────────────
 
@@ -116,6 +122,10 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
+      if (isGripSubscription(sub)) {
+        await endGripSubscription(sub);
+        break;
+      }
       const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
       await prisma.subscription.updateMany({
         where: { stripeCustomerId: customerId },
@@ -130,6 +140,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "invoice.paid": {
       const invoice = event.data.object as Stripe.Invoice;
+      if (await applyGripInvoice(invoice, "paid")) break;
       const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
       if (customerId && invoice.lines?.data?.[0]?.period) {
         const period = invoice.lines.data[0].period;
@@ -147,6 +158,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
+      if (await applyGripInvoice(invoice, "payment_failed")) break;
       const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
       if (customerId) {
         await prisma.subscription.updateMany({
@@ -162,6 +174,13 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function syncSubscription(sub: Stripe.Subscription): Promise<void> {
+  // Finding Grip subscriptions share the Stripe customer but are tracked in
+  // grip_accounts, so they never change the RaceTrace plan.
+  if (isGripSubscription(sub)) {
+    await syncGripSubscription(sub);
+    return;
+  }
+
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
   const tier = (sub.metadata?.tier as "PRO" | "TEAM") || inferTierFromPrice(sub);
   const plan = tier === "PRO" || tier === "TEAM" ? tier : "PRO";

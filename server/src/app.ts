@@ -13,6 +13,7 @@ import { billingRouter } from "./routes/billing.js";
 import { eventsRouter } from "./routes/events.js";
 import { searchRouter } from "./routes/search.js";
 import { qualifyingRouter } from "./routes/qualifying.js";
+import { gripRouter } from "./routes/grip.js";
 
 export function createApp() {
   const app = express();
@@ -64,6 +65,7 @@ export function createApp() {
   app.use("/api/admin", adminRouter);
   app.use("/api/qualifying", qualifyingRouter);
   app.use("/api/billing", billingRouter);
+  app.use("/api/grip", gripRouter);
 
   // ─── Error Handling ─────────────────────────────────────────────────────────
   app.use(errorHandler);

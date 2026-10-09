@@ -5,13 +5,17 @@ import { useForm } from "../hooks/useForm";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
+import { peekPostAuthRedirect, clearPostAuthRedirect } from "../lib/postAuthRedirect";
 
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
+  const from =
+    (location.state as { from?: { pathname: string } })?.from?.pathname ||
+    peekPostAuthRedirect() ||
+    "/dashboard";
 
   if (isLoading) {
     return (
@@ -38,6 +42,7 @@ export function LoginPage() {
       },
       onSubmit: async (vals) => {
         await login(vals.email, vals.password);
+        clearPostAuthRedirect();
         navigate(from, { replace: true });
       },
     });

@@ -39,9 +39,49 @@ import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAuditLogPage } from "./pages/admin/AdminAuditLogPage";
 import { AdminQualifyingUploadPage } from "./pages/admin/AdminQualifyingUploadPage";
 
+// Finding Grip (tire pressure & damper tools) — its own shell under /grip
+import { GripAppLayout, GripPublicLayout } from "./features/grip/GripLayout";
+import { GripHomePage, GripPricingPage } from "./pages/grip/GripPublicPages";
+import { GripDashboardPage } from "./pages/grip/GripDashboardPage";
+import { GripSessionsPage } from "./pages/grip/GripSessionsPage";
+import { GripSessionFormPage } from "./pages/grip/GripSessionFormPage";
+import { GripCalculatorPage } from "./pages/grip/GripCalculatorPage";
+import { GripConvertPage } from "./pages/grip/GripConvertPage";
+import { GripDamperPage } from "./pages/grip/GripDamperPage";
+import { GripGuidePage } from "./pages/grip/GripGuidePage";
+import { GripSettingsPage } from "./pages/grip/GripSettingsPage";
+import { GripAdminPage } from "./pages/grip/GripAdminPage";
+
 export function App() {
   return (
     <Routes>
+      {/* Finding Grip — public pages */}
+      <Route element={<GripPublicLayout />}>
+        <Route path="/grip" element={<GripHomePage />} />
+        <Route path="/grip/pricing" element={<GripPricingPage />} />
+      </Route>
+
+      {/* Finding Grip — signed-in app (login and access are checked in the layout) */}
+      <Route element={<GripAppLayout />}>
+        <Route path="/grip/dashboard" element={<GripDashboardPage />} />
+        <Route path="/grip/sessions" element={<GripSessionsPage />} />
+        <Route path="/grip/sessions/new" element={<GripSessionFormPage />} />
+        <Route path="/grip/sessions/:id/edit" element={<GripSessionFormPage />} />
+        <Route path="/grip/calculate" element={<GripCalculatorPage />} />
+        <Route path="/grip/calculations/:id/convert" element={<GripConvertPage />} />
+        <Route path="/grip/damper" element={<GripDamperPage />} />
+        <Route path="/grip/guide" element={<GripGuidePage />} />
+        <Route path="/grip/settings" element={<GripSettingsPage />} />
+        <Route
+          path="/grip/admin"
+          element={
+            <ProtectedRoute requireAdmin>
+              <GripAdminPage />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+
       <Route element={<Layout />}>
         {/* Public routes */}
         <Route path="/" element={<HomePage />} />

@@ -56,12 +56,18 @@ class ApiClient {
         code: "UNKNOWN",
       }));
 
-      throw new ApiClientError(response.status, error.error, error.code);
+      throw new ApiClientError(response.status, error.error, error.code, error);
     }
 
     // Handle 204 No Content
     if (response.status === 204) {
       return undefined as T;
+    }
+
+    // Non-JSON responses (e.g. CSV exports) are returned as text
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return (await response.text()) as T;
     }
 
     return response.json();
@@ -102,6 +108,11 @@ class ApiClient {
     return this.request<T>(path, options);
   }
 
+  /** GET a text response (CSV etc.) with the same auth and refresh handling. */
+  getText(path: string) {
+    return this.request<string>(path);
+  }
+
   post<T>(path: string, body?: unknown) {
     return this.request<T>(path, {
       method: "POST",
@@ -139,7 +150,9 @@ export class ApiClientError extends Error {
   constructor(
     public status: number,
     message: string,
-    public code?: string
+    public code?: string,
+    /** The parsed error body, for endpoints that return extra detail. */
+    public payload?: unknown
   ) {
     super(message);
     this.name = "ApiClientError";
