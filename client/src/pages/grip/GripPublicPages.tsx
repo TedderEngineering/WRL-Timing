@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthContext";
-import { gripApi } from "@/features/grip/api";
-import { useLoad } from "@/features/grip/hooks";
+import { useGripStatus } from "@/features/grip/hooks";
 import { startCheckout } from "@/features/grip/UpgradeDialog";
 import {
   Card,
@@ -53,8 +52,12 @@ function PrivateNotice() {
 
 function useOpenToPublic() {
   const { isAuthenticated } = useAuth();
-  const status = useLoad(() => gripApi.status().catch(() => ({ open: false })));
-  return { loading: status.loading, show: isAuthenticated || !!status.data?.open };
+  const status = useGripStatus();
+  return {
+    loading: status.loading,
+    show: isAuthenticated || status.open,
+    free: status.free,
+  };
 }
 
 function Check() {
@@ -69,6 +72,38 @@ function Check() {
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
     </svg>
+  );
+}
+
+const FREE_FEATURES = [
+  "Unlimited reference sessions",
+  "Unlimited tire pressure calculations, dry and wet",
+  "Damper Tuning Tool, rebound-only and two-way",
+  "PSI / °F or bar / °C",
+];
+
+/** Shown in place of the plan cards while Finding Grip is free for everyone. */
+function FreeForAll() {
+  return (
+    <div className="max-w-xl mx-auto rounded-2xl border border-grip-500 bg-white dark:bg-gray-900 p-6 text-center">
+      <div className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
+        $0
+      </div>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        Every tool, no limits. All you need is a free account.
+      </p>
+      <ul className="mt-5 space-y-2 text-left text-sm text-gray-600 dark:text-gray-300">
+        {FREE_FEATURES.map((f) => (
+          <li key={f} className="flex gap-2">
+            <Check />
+            {f}
+          </li>
+        ))}
+      </ul>
+      <Link {...signUpProps} className={cn(primaryLinkClass, "mt-6 px-6 py-2.5 text-sm")}>
+        Create a free account
+      </Link>
+    </div>
   );
 }
 
@@ -193,7 +228,7 @@ function PlanCards() {
 
 export function GripHomePage() {
   const { isAuthenticated } = useAuth();
-  const { loading, show } = useOpenToPublic();
+  const { loading, show, free } = useOpenToPublic();
   if (isAuthenticated) return <Navigate to="/grip/dashboard" replace />;
   if (loading) return <Spinner />;
   if (!show) return <PrivateNotice />;
@@ -220,15 +255,27 @@ export function GripHomePage() {
               >
                 Get Started Free
               </Link>
-              <Link
-                to="/grip/pricing"
-                className={cn(secondaryLinkClass, "px-7 py-3 text-base")}
-              >
-                View Pricing
-              </Link>
+              {free ? (
+                <Link
+                  to="/login"
+                  state={{ from: { pathname: "/grip/dashboard" } }}
+                  className={cn(secondaryLinkClass, "px-7 py-3 text-base")}
+                >
+                  Log in
+                </Link>
+              ) : (
+                <Link
+                  to="/grip/pricing"
+                  className={cn(secondaryLinkClass, "px-7 py-3 text-base")}
+                >
+                  View Pricing
+                </Link>
+              )}
             </div>
             <p className="text-sm text-gray-500">
-              No credit card required. Free tier includes 3 calculations.
+              {free
+                ? "Free to use. No credit card. Sign in with your Tedder Engineering account."
+                : "No credit card required. Free tier includes 3 calculations."}
             </p>
           </div>
 
@@ -325,12 +372,14 @@ export function GripHomePage() {
 
       <section className="container-page pb-16">
         <h2 className="text-center text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
-          Simple, transparent pricing
+          {free ? "Free to use" : "Simple, transparent pricing"}
         </h2>
         <p className="mt-2 mb-8 text-center text-gray-600 dark:text-gray-400">
-          Start free. Upgrade when you need unlimited calculations and the damper tool.
+          {free
+            ? "Finding Grip is free for racers and track day drivers."
+            : "Start free. Upgrade when you need unlimited calculations and the damper tool."}
         </p>
-        <PlanCards />
+        {free ? <FreeForAll /> : <PlanCards />}
       </section>
     </div>
   );
@@ -346,10 +395,11 @@ const COMPARE: [string, string, string][] = [
 ];
 
 export function GripPricingPage() {
-  const { loading, show } = useOpenToPublic();
+  const { loading, show, free } = useOpenToPublic();
   const [params] = useSearchParams();
   if (loading) return <Spinner />;
   if (!show) return <PrivateNotice />;
+  if (free) return <Navigate to="/grip" replace />;
 
   return (
     <div className="container-page py-12 lg:py-16">

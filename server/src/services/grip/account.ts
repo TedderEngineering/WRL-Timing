@@ -18,7 +18,16 @@ export async function getOrCreateGripAccount(userId: string): Promise<GripAccoun
 }
 
 /**
- * True when the account currently has paid access. Mirrors the RaceTrace
+ * Finding Grip is free for every account unless GRIP_PRICING is "paid".
+ * In free mode there is no calculation limit and no Pro-only tool; the plan
+ * and billing code stays in place so paid plans can be switched on later.
+ */
+export function gripIsFree(): boolean {
+  return process.env.GRIP_PRICING !== "paid";
+}
+
+/**
+ * True when the account currently has full access. Mirrors the RaceTrace
  * rules: canceled subscriptions keep access to the end of the paid period,
  * past-due subscriptions get a 7-day grace period.
  */
@@ -27,7 +36,7 @@ export function hasGripPro(
   role: "USER" | "ADMIN",
   now: Date = new Date()
 ): boolean {
-  if (role === "ADMIN") return true;
+  if (role === "ADMIN" || gripIsFree()) return true;
   if (account.plan !== "PRO") return false;
 
   switch (account.status) {
@@ -52,6 +61,7 @@ export function serializeGripAccount(account: GripAccount, role: "USER" | "ADMIN
     plan: account.plan,
     status: account.status,
     isPro,
+    freeForAll: gripIsFree(),
     units: account.units,
     currentPeriodEnd: account.currentPeriodEnd,
     cancelAtPeriodEnd: account.cancelAtPeriodEnd,

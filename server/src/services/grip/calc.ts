@@ -66,9 +66,15 @@ export function parseCalcModel(json: string | undefined | null): CalcModel {
   if (!json || !json.trim()) {
     throw new CalcModelError("Calculation model is not configured");
   }
+  // The value may be the JSON itself or base64 of it. The encoded form has no
+  // quotes or braces, so it survives being pasted into a hosting dashboard.
+  let text = json.trim();
+  if (!text.startsWith("{") && /^[A-Za-z0-9+/=_\-\s]+$/.test(text)) {
+    text = Buffer.from(text.replace(/\s+/g, ""), "base64").toString("utf8").trim();
+  }
   let raw: unknown;
   try {
-    raw = JSON.parse(json);
+    raw = JSON.parse(text);
   } catch {
     throw new CalcModelError("Calculation model is not valid JSON");
   }

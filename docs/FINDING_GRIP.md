@@ -68,8 +68,9 @@ onboarding / auth layout (return visitors to the tool they came from).
 |---|---|---|
 | `GRIP_ACCESS` | `off`, `admin`, `testers` or `public` | `admin` |
 | `GRIP_TESTER_EMAILS` | Comma-separated emails for `testers` mode | empty |
-| `GRIP_CALC_MODEL` | Calculation model JSON (confidential) | unset: calculator returns 503 |
-| `STRIPE_GRIP_PRO_PRICE_ID` | Stripe price id(s) for Pro, comma-separated; the first is sold | unset: checkout returns 503 |
+| `GRIP_PRICING` | `free`: every account gets every tool with no limits, and the pricing and upgrade screens are hidden. `paid`: Free and Pro plans with Stripe checkout | `free` |
+| `GRIP_CALC_MODEL` | Calculation model (confidential): the JSON itself, or base64 of it if the host mangles quotes | unset: calculator returns 503 |
+| `STRIPE_GRIP_PRO_PRICE_ID` | Stripe price id(s) for Pro (only used when `GRIP_PRICING=paid`), comma-separated; the first is sold | unset: checkout returns 503 |
 
 ### Calculation model shape
 

@@ -45,6 +45,14 @@ describe("parseCalcModel", () => {
     expect(model.decimals).toBe(1);
   });
 
+  it("accepts the same model base64-encoded", () => {
+    const encoded = Buffer.from(TEST_MODEL, "utf8").toString("base64");
+    expect(parseCalcModel(encoded)).toEqual(parseCalcModel(TEST_MODEL));
+    expect(parseCalcModel(`  ${encoded}\n`)).toEqual(parseCalcModel(TEST_MODEL));
+    expect(() => parseCalcModel("not json at all")).toThrow("not valid JSON");
+    expect(() => parseCalcModel("bm90IGpzb24=")).toThrow("not valid JSON");
+  });
+
   it("rejects a missing model", () => {
     expect(() => parseCalcModel(undefined)).toThrow(CalcModelError);
     expect(() => parseCalcModel("  ")).toThrow("not configured");

@@ -131,10 +131,12 @@ export function GripAdminPage() {
         subtitle="Setup status, tracks and the damper table. Users and the audit log are in the main admin panel."
       />
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+      <div
+        className={`grid gap-3 grid-cols-2 ${setup.pricing === "paid" ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}
+      >
         {[
           ["Accounts", counts.accounts],
-          ["Pro subscribers", counts.pro],
+          ...(setup.pricing === "paid" ? [["Pro subscribers", counts.pro]] : []),
           ["Reference sessions", counts.sessions],
           ["Calculations", counts.calculations],
           ["Active tracks", counts.tracks],
@@ -170,15 +172,23 @@ export function GripAdminPage() {
             label="Damper table"
             detail={`${setup.damperTable.rows} of ${setup.damperTable.expected} scenarios loaded.`}
           />
-          <SetupRow
-            ok={setup.stripePrice.ready}
-            label="Pro price"
-            detail={
-              setup.stripePrice.ready
-                ? "Stripe price configured. Checkout is available."
-                : "Set STRIPE_GRIP_PRO_PRICE_ID on the server to switch checkout on."
-            }
-          />
+          {setup.pricing === "paid" ? (
+            <SetupRow
+              ok={setup.stripePrice.ready}
+              label="Pro price"
+              detail={
+                setup.stripePrice.ready
+                  ? "Stripe price configured. Checkout is available."
+                  : "Set STRIPE_GRIP_PRO_PRICE_ID on the server to switch checkout on."
+              }
+            />
+          ) : (
+            <SetupRow
+              ok
+              label="Pricing"
+              detail="Free for every account: no calculation limit, damper tool included. Set GRIP_PRICING=paid on the server to bring back Free and Pro plans."
+            />
+          )}
         </div>
       </Card>
 

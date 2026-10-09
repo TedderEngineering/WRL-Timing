@@ -17,6 +17,7 @@ import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
 import {
   getOrCreateGripAccount,
+  gripIsFree,
   hasGripPro,
   serializeGripAccount,
   FREE_CALCULATION_LIMIT,
@@ -120,7 +121,7 @@ const resultLimiter = rateLimit({
 
 /** Public: lets the client decide whether to show the marketing pages to signed-out visitors. */
 gripRouter.get("/status", (_req, res) => {
-  res.json({ open: env.GRIP_ACCESS === "public" });
+  res.json({ open: env.GRIP_ACCESS === "public", free: gripIsFree() });
 });
 
 gripRouter.use(requireAuth, requireGripAccess);
@@ -808,6 +809,13 @@ gripRouter.get(
 gripRouter.post(
   "/billing/checkout",
   wrap(async (req, res) => {
+    if (gripIsFree()) {
+      throw new AppError(
+        409,
+        "Finding Grip is free. There is nothing to buy.",
+        "FREE_FOR_ALL"
+      );
+    }
     const account = await getOrCreateGripAccount(req.user!.userId);
     if (account.plan === "PRO" && hasGripPro(account, "USER")) {
       throw new AppError(409, "You already have Finding Grip Pro", "ALREADY_SUBSCRIBED");
@@ -848,6 +856,7 @@ admin.get(
       counts: { accounts, pro, sessions, calculations, tracks },
       setup: {
         access: env.GRIP_ACCESS,
+        pricing: gripIsFree() ? "free" : "paid",
         testerCount: testerEmails().size,
         calcModel: { ready: !!model, version: model?.version ?? null, problem: error },
         damperTable: {

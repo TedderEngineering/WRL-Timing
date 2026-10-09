@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { gripApi } from "./api";
 
 interface AsyncState<T> {
   data: T | null;
@@ -53,5 +54,27 @@ export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
     ...state,
     reload,
     setData: (data: T) => setState({ data, error: null, loading: false }),
+  };
+}
+
+type GripStatus = { open: boolean; free: boolean };
+let statusRequest: Promise<GripStatus> | null = null;
+
+/**
+ * Public facts about Finding Grip: whether anyone can sign up, and whether it
+ * is free for every account. Fetched once and shared by the public pages.
+ */
+export function useGripStatus() {
+  const state = useLoad<GripStatus>(() => {
+    statusRequest ??= gripApi.status().catch(() => {
+      statusRequest = null;
+      return { open: false, free: true };
+    });
+    return statusRequest;
+  });
+  return {
+    loading: state.loading,
+    open: !!state.data?.open,
+    free: state.data?.free ?? true,
   };
 }

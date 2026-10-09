@@ -6,6 +6,7 @@ import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
 import { cn } from "@/lib/utils";
 import { GripProvider, useGrip } from "./GripContext";
 import { Pill, primaryLinkClass } from "./components";
+import { useGripStatus } from "./hooks";
 
 const APP_NAV = [
   { to: "/grip/dashboard", label: "Dashboard", short: "Home" },
@@ -26,6 +27,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const status = useGripStatus();
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -38,7 +40,9 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
       ]
     : [
         { to: "/grip", label: "Overview", short: "Overview" },
-        { to: "/grip/pricing", label: "Pricing", short: "Pricing" },
+        ...(status.free
+          ? []
+          : [{ to: "/grip/pricing", label: "Pricing", short: "Pricing" }]),
       ];
 
   const handleLogout = async () => {
@@ -224,6 +228,7 @@ function PlanPill() {
   const { account } = useGrip();
   const { user } = useAuth();
   if (user?.role === "ADMIN") return <Pill tone="pro">Admin</Pill>;
+  if (account.freeForAll) return null;
   return (
     <Pill tone={account.isPro ? "pro" : "neutral"}>{account.isPro ? "Pro" : "Free"}</Pill>
   );
