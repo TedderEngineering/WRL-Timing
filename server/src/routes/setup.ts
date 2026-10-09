@@ -279,6 +279,20 @@ async function changeMemberKeepingAnOwner(
 // ─── Me and teams ────────────────────────────────────────────────────────────
 
 /** The caller's teams. Also joins any team that invited their (verified) email. */
+// The track list is Finding Grip's (managed on its admin page), so both
+// tools name tracks the same way. Events store the track's name.
+setupRouter.get(
+  "/tracks",
+  wrap(async (_req, res) => {
+    const tracks = await prisma.gripTrack.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, shortName: true, country: true },
+    });
+    res.json({ tracks });
+  })
+);
+
 setupRouter.get(
   "/me",
   wrap(async (req, res) => {
