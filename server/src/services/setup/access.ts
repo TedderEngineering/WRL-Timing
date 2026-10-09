@@ -45,8 +45,9 @@ export function requireSetupAccess(req: Request, _res: Response, next: NextFunct
   if (!canUseSetup(user)) {
     return next(new AppError(403, "Setup Sheet is in private testing", "SETUP_NOT_AVAILABLE"));
   }
-  // The tester list names email addresses, so only a verified address counts.
-  if (env.SETUP_ACCESS === "testers" && user.role !== "ADMIN") {
+  // Every non-admin needs a verified email, as on Finding Grip. (The tester
+  // list names addresses, and invites only reach verified ones.)
+  if (user.role !== "ADMIN") {
     prisma.user
       .findUnique({ where: { id: user.userId }, select: { emailVerified: true } })
       .then((u) =>
