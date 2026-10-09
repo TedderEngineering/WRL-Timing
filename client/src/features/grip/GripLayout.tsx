@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthContext";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { UserMenu } from "@/components/UserMenu";
 import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
 import { ApiClientError, api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -33,13 +34,9 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
+  const isAdmin = user?.role === "ADMIN";
   const links = signedInApp
-    ? [
-        ...APP_NAV,
-        ...(user?.role === "ADMIN"
-          ? [{ to: gp("/admin"), label: "Admin", short: "Admin" }]
-          : []),
-      ]
+    ? APP_NAV
     : [
         { to: gp(""), label: "Overview", short: "Overview" },
         ...(status.free
@@ -59,7 +56,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
         aria-label="Main"
       >
         <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 md:shrink-0">
             <a
               href="https://tedderengineering.com"
               target="_blank"
@@ -112,19 +109,18 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
             {isAuthenticated ? (
               <>
                 {signedInApp && <PlanPill />}
-                <Link
-                  to={gp("/settings")}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <span className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 flex items-center justify-center text-xs font-bold">
-                    {user?.displayName?.[0]?.toUpperCase() ||
-                      user?.email?.[0]?.toUpperCase() ||
-                      "?"}
-                  </span>
-                  <span className="max-w-[10rem] truncate">
-                    {user?.displayName || user?.email?.split("@")[0]}
-                  </span>
-                </Link>
+                {/* Same profile menu as RaceTrace, with Finding Grip's links. */}
+                <UserMenu
+                  afterLogout={gp("")}
+                  groups={[
+                    [{ label: "Dashboard", to: gp("/dashboard") }],
+                    [
+                      { label: "Settings", to: gp("/settings") },
+                      ...(status.free ? [] : [{ label: "Billing", to: gp("/settings") }]),
+                    ],
+                    isAdmin ? [{ label: "Admin Panel", to: gp("/admin") }] : [],
+                  ]}
+                />
               </>
             ) : (
               <>
@@ -191,6 +187,14 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
                     Settings
                   </Link>
                 )}
+                {signedInApp && isAdmin && (
+                  <Link
+                    to={gp("/admin")}
+                    className="py-2.5 text-gray-700 dark:text-gray-300"
+                  >
+                    Admin Panel
+                  </Link>
+                )}
                 {!IS_GRIP_SITE && (
                   <Link
                     to="/dashboard"
@@ -234,8 +238,9 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
 function PlanPill() {
   const { account } = useGrip();
   const { user } = useAuth();
-  if (user?.role === "ADMIN") return <Pill tone="pro">Admin</Pill>;
-  if (account.freeForAll) return null;
+  // RaceTrace shows no badge beside the profile menu; only show one here when
+  // there are paid plans to tell apart.
+  if (user?.role === "ADMIN" || account.freeForAll) return null;
   return (
     <Pill tone={account.isPro ? "pro" : "neutral"}>{account.isPro ? "Pro" : "Free"}</Pill>
   );
