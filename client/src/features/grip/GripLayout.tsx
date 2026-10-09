@@ -3,9 +3,10 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { useAuth } from "@/features/auth/AuthContext";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
+import { ApiClientError, api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { GripProvider, useGrip } from "./GripContext";
-import { Pill, Spinner, primaryLinkClass } from "./components";
+import { GripButton, Pill, Spinner, primaryLinkClass } from "./components";
 import { useGripStatus } from "./hooks";
 import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
 
@@ -370,6 +371,112 @@ function PrivateTesting() {
   );
 }
 
+/** Shown to a signed-in account whose email address has not been verified yet. */
+function VerifyEmailNotice({ recheck }: { recheck: () => Promise<boolean> }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [resend, setResend] = useState<"idle" | "sending" | "sent" | "wait" | "error">(
+    "idle"
+  );
+  const [checking, setChecking] = useState(false);
+  const [notYet, setNotYet] = useState(false);
+
+  // Most people verify in another tab or on their phone, then come back here.
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState === "visible") recheck();
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [recheck]);
+
+  const sendAgain = async () => {
+    setResend("sending");
+    try {
+      await api.post("/auth/resend-verification");
+      setResend("sent");
+    } catch (err) {
+      if (err instanceof ApiClientError && err.code === "ALREADY_VERIFIED") {
+        await recheck();
+        return;
+      }
+      setResend(err instanceof ApiClientError && err.status === 429 ? "wait" : "error");
+    }
+  };
+
+  const checkNow = async () => {
+    setChecking(true);
+    setNotYet(false);
+    const verified = await recheck();
+    if (!verified) {
+      setNotYet(true);
+      setChecking(false);
+    }
+  };
+
+  const signOut = async () => {
+    await logout();
+    navigate(gp(""));
+  };
+
+  return (
+    <div className="container-page py-16 sm:py-24 max-w-xl text-center">
+      <Pill tone="pro">One more step</Pill>
+      <h1 className="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
+        Verify your email to use Finding Grip
+      </h1>
+      <p className="mt-3 text-gray-600 dark:text-gray-400">
+        We sent a verification link to{" "}
+        <b className="text-gray-900 dark:text-gray-100 break-all">{user?.email}</b>. Open
+        it, then come back to this page. Check your spam folder if it has not arrived.
+      </p>
+
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <GripButton loading={checking} onClick={checkNow}>
+          I've verified, continue
+        </GripButton>
+        <GripButton
+          variant="secondary"
+          loading={resend === "sending"}
+          disabled={resend === "sent" || resend === "wait"}
+          onClick={sendAgain}
+        >
+          {resend === "sent" ? "Email sent" : "Send the email again"}
+        </GripButton>
+      </div>
+
+      <p className="mt-4 min-h-5 text-sm" role="status">
+        {notYet && (
+          <span className="text-amber-700 dark:text-amber-300">
+            That address is not verified yet. Open the link in the email first.
+          </span>
+        )}
+        {!notYet && resend === "wait" && (
+          <span className="text-amber-700 dark:text-amber-300">
+            An email was sent in the last minute. Give it a moment before asking again.
+          </span>
+        )}
+        {!notYet && resend === "error" && (
+          <span className="text-red-600 dark:text-red-400">
+            The email could not be sent. Try again shortly.
+          </span>
+        )}
+      </p>
+
+      <button
+        onClick={signOut}
+        className="mt-4 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
+      >
+        Wrong address? Log out
+      </button>
+    </div>
+  );
+}
+
 /**
  * Once Finding Grip has its own address, its pages on the RaceTrace site
  * forward there (before any login prompt, so people sign in on the right site).
@@ -425,6 +532,15 @@ export function GripAppLayout() {
                 <Footer padForTabBar={false} />
               </>
             }
+            unverified={(recheck) => (
+              <>
+                <Header signedInApp={false} />
+                <main className="flex-1">
+                  <VerifyEmailNotice recheck={recheck} />
+                </main>
+                <Footer padForTabBar={false} />
+              </>
+            )}
           >
             <Header signedInApp />
             <main className="flex-1 py-6 sm:py-8 pb-24 md:pb-10">

@@ -33,30 +33,38 @@ export function useGrip(): GripContextValue {
 type LoadState =
   | { kind: "loading" }
   | { kind: "blocked" }
+  | { kind: "unverified" }
   | { kind: "error"; message: string }
   | { kind: "ready"; me: GripMe };
 
 /**
  * Loads the signed-in user's Finding Grip account. Renders `blocked` when the
- * server says this account is not part of the current test group.
+ * server says this account is not part of the current test group, and
+ * `unverified` (given a function to check again) until the email address has
+ * been verified.
  */
 export function GripProvider({
   children,
   blocked,
+  unverified,
 }: {
   children: ReactNode;
   blocked: ReactNode;
+  unverified: (recheck: () => Promise<boolean>) => ReactNode;
 }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<boolean> => {
     try {
       setState({ kind: "ready", me: await gripApi.me() });
+      return true;
     } catch (err) {
       if (err instanceof ApiClientError && err.code === "GRIP_NOT_AVAILABLE") {
         setState({ kind: "blocked" });
+      } else if (err instanceof ApiClientError && err.code === "EMAIL_NOT_VERIFIED") {
+        setState({ kind: "unverified" });
       } else {
         setState({
           kind: "error",
@@ -64,6 +72,7 @@ export function GripProvider({
         });
       }
     }
+    return false;
   }, []);
 
   useEffect(() => {
@@ -101,6 +110,7 @@ export function GripProvider({
     );
   }
   if (state.kind === "blocked") return <>{blocked}</>;
+  if (state.kind === "unverified") return <>{unverified(load)}</>;
   if (state.kind === "error") {
     return (
       <div className="container-page py-20 text-center">
@@ -130,7 +140,9 @@ export function GripProvider({
         calculatorAvailable: me.calculatorAvailable,
         setAccount,
         setUnits,
-        refresh: load,
+        refresh: async () => {
+          await load();
+        },
         toast,
       }}
     >

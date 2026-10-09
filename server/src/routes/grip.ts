@@ -89,25 +89,24 @@ function requireGripAccess(req: Request, _res: Response, next: NextFunction) {
       new AppError(403, "Finding Grip is in private testing", "GRIP_NOT_AVAILABLE")
     );
   }
-  // The tester list names email addresses, so only a verified address counts;
-  // otherwise anyone could register a listed address that has no account yet.
-  if (env.GRIP_ACCESS === "testers" && user.role !== "ADMIN") {
-    isEmailVerified(user.userId)
-      .then((verified) =>
-        verified
-          ? next()
-          : next(
-              new AppError(
-                403,
-                "Verify your email to use Finding Grip",
-                "EMAIL_NOT_VERIFIED"
-              )
+  // Finding Grip needs a verified email address, in every access mode: the
+  // tester list names addresses, invitations and limits are per account, and
+  // an unverified address could belong to someone else. Admins are exempt so
+  // the owner can never be locked out.
+  if (user.role === "ADMIN") return next();
+  isEmailVerified(user.userId)
+    .then((verified) =>
+      verified
+        ? next()
+        : next(
+            new AppError(
+              403,
+              "Verify your email address to use Finding Grip",
+              "EMAIL_NOT_VERIFIED"
             )
-      )
-      .catch(next);
-    return;
-  }
-  next();
+          )
+    )
+    .catch(next);
 }
 
 /** Per-user limit on the two endpoints that expose proprietary results. */
@@ -455,16 +454,6 @@ gripRouter.post(
 
     const account = await getOrCreateGripAccount(userId);
     const isPro = hasGripPro(account, req.user!.role);
-
-    // The free allowance is per account, so it is only worth something if
-    // accounts are tied to a real address.
-    if (req.user!.role !== "ADMIN" && !(await isEmailVerified(userId))) {
-      throw new AppError(
-        403,
-        "Verify your email address to run calculations",
-        "EMAIL_NOT_VERIFIED"
-      );
-    }
 
     let result;
     try {

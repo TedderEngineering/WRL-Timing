@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../features/auth/AuthContext";
@@ -15,8 +15,13 @@ export function VerifyEmailPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const { refreshUser } = useAuth();
 
+  // A link is single-use, so send each token once only, and never let a
+  // repeat attempt turn a success into "Verification failed".
+  const attempted = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!token) return;
+    if (!token || attempted.current === token) return;
+    attempted.current = token;
 
     api
       .post("/auth/verify-email", { token })
@@ -26,7 +31,7 @@ export function VerifyEmailPage() {
         refreshUser();
       })
       .catch((err) => {
-        setStatus("error");
+        setStatus((current) => (current === "success" ? current : "error"));
         setErrorMsg(
           err?.message || "Verification failed. The link may be expired or invalid."
         );
