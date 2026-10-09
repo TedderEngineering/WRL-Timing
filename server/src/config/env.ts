@@ -27,14 +27,21 @@ const envSchema = z.object({
   // "testers" (admins + GRIP_TESTER_EMAILS) or "public" (every account).
   GRIP_ACCESS: z.enum(["off", "admin", "testers", "public"]).default("admin"),
   GRIP_TESTER_EMAILS: z.string().optional(),
+  // "free" (default): every account gets every tool with no limits.
+  // "paid": Free and Pro plans, with checkout through Stripe.
+  GRIP_PRICING: z.enum(["free", "paid"]).default("free"),
   // Stripe price id(s) for Finding Grip Pro, comma-separated. The first is
   // sold at checkout; all of them are recognised in webhooks. Checkout is
   // unavailable until set.
   STRIPE_GRIP_PRO_PRICE_ID: z
     .string()
-    .regex(/^price_\w+(\s*,\s*price_\w+)*$/, "Expected one or more price_… ids, comma-separated")
+    .regex(
+      /^price_\w+(\s*,\s*price_\w+)*$/,
+      "Expected one or more price_… ids, comma-separated"
+    )
     .optional(),
-  // The proprietary calculation model, as JSON. Read in services/grip/calc.ts.
+  // The proprietary calculation model, as JSON or as base64 of that JSON.
+  // Read in services/grip/calc.ts.
   // Never commit a real value anywhere in this repository.
   GRIP_CALC_MODEL: z.string().optional(),
 
@@ -54,9 +61,7 @@ const envSchema = z.object({
   SENTRY_DSN: z.string().optional(),
 
   // General
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().default(3000),
 });
 

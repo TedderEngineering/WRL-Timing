@@ -15,6 +15,8 @@ export interface GripAccount {
   plan: "FREE" | "PRO";
   status: string;
   isPro: boolean;
+  /** True when Finding Grip is free for every account (no plans, no limits). */
+  freeForAll: boolean;
   units: Units;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -124,6 +126,7 @@ export interface AdminOverview {
   };
   setup: {
     access: "off" | "admin" | "testers" | "public";
+    pricing: "free" | "paid";
     testerCount: number;
     calcModel: {
       ready: boolean;
@@ -136,7 +139,7 @@ export interface AdminOverview {
 }
 
 export const gripApi = {
-  status: () => api.get<{ open: boolean }>("/grip/status"),
+  status: () => api.get<{ open: boolean; free: boolean }>("/grip/status"),
   me: () => api.get<GripMe>("/grip/me"),
   setUnits: (units: Units) => api.put<{ account: GripAccount }>("/grip/me", { units }),
   tracks: () => api.get<{ tracks: Track[] }>("/grip/tracks").then((r) => r.tracks),

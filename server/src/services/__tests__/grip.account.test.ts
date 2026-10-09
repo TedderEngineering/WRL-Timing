@@ -1,14 +1,62 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, it, expect, vi } from "vitest";
 
 vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
 
-import { hasGripPro } from "../grip/account.js";
+import { gripIsFree, hasGripPro, serializeGripAccount } from "../grip/account.js";
 
 const now = new Date("2026-10-09T12:00:00Z");
 const day = 24 * 60 * 60 * 1000;
 const at = (offsetDays: number) => new Date(now.getTime() + offsetDays * day);
 
-describe("hasGripPro", () => {
+describe("free for everyone (the default)", () => {
+  const original = process.env.GRIP_PRICING;
+  afterEach(() => {
+    if (original === undefined) delete process.env.GRIP_PRICING;
+    else process.env.GRIP_PRICING = original;
+  });
+
+  it("is on unless GRIP_PRICING is paid", () => {
+    delete process.env.GRIP_PRICING;
+    expect(gripIsFree()).toBe(true);
+    process.env.GRIP_PRICING = "free";
+    expect(gripIsFree()).toBe(true);
+    process.env.GRIP_PRICING = "paid";
+    expect(gripIsFree()).toBe(false);
+  });
+
+  it("gives a free account full access with no calculation limit", () => {
+    delete process.env.GRIP_PRICING;
+    const account = {
+      userId: "u1",
+      units: "STANDARD",
+      plan: "FREE",
+      status: "ACTIVE",
+      stripeSubscriptionId: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      calcCount: 250,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as Parameters<typeof serializeGripAccount>[0];
+    expect(hasGripPro(account, "USER")).toBe(true);
+    const dto = serializeGripAccount(account, "USER");
+    expect(dto.isPro).toBe(true);
+    expect(dto.freeForAll).toBe(true);
+    expect(dto.freeCalculationsLeft).toBeNull();
+  });
+});
+
+describe("hasGripPro with paid plans switched on", () => {
+  const original = process.env.GRIP_PRICING;
+  beforeAll(() => {
+    process.env.GRIP_PRICING = "paid";
+  });
+  afterAll(() => {
+    if (original === undefined) delete process.env.GRIP_PRICING;
+    else process.env.GRIP_PRICING = original;
+  });
+
   it("is false on the free plan", () => {
     expect(
       hasGripPro({ plan: "FREE", status: "ACTIVE", currentPeriodEnd: null }, "USER", now)

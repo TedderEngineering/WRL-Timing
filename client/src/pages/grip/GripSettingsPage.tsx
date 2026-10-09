@@ -148,36 +148,51 @@ export function GripSettingsPage() {
           </div>
         </Card>
 
-        <Card className="space-y-3">
-          <h2 className="font-bold text-gray-900 dark:text-gray-50">Plan</h2>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-xl font-extrabold text-gray-900 dark:text-gray-50">
-                Finding Grip {isAdmin && !paid ? "Admin" : paid ? "Pro" : "Free"}
+        {account.freeForAll && (
+          <Card className="space-y-1">
+            <h2 className="font-bold text-gray-900 dark:text-gray-50">Plan</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Finding Grip is free. Every tool is included with your account, with no
+                limits.
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">{planLine}</div>
+              <Pill tone="ok">Free</Pill>
             </div>
-            <Pill tone={account.isPro ? "ok" : "neutral"}>
-              {account.isPro ? "Active" : "Free"}
-            </Pill>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {paid ? (
-              <GripButton variant="secondary" loading={portalBusy} onClick={openPortal}>
-                Manage billing
-              </GripButton>
-            ) : (
-              !isAdmin && (
-                <GripButton onClick={() => setUpgrade(true)}>Upgrade to Pro</GripButton>
-              )
-            )}
-          </div>
-          <Note>
-            Payment, invoices and cancellation are handled in the Stripe billing portal,
-            the same one RaceTrace uses. Cancel any time and keep Pro through the end of
-            the billing period. 14-day money-back guarantee on your first purchase.
-          </Note>
-        </Card>
+          </Card>
+        )}
+
+        {!account.freeForAll && (
+          <Card className="space-y-3">
+            <h2 className="font-bold text-gray-900 dark:text-gray-50">Plan</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-xl font-extrabold text-gray-900 dark:text-gray-50">
+                  Finding Grip {isAdmin && !paid ? "Admin" : paid ? "Pro" : "Free"}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">{planLine}</div>
+              </div>
+              <Pill tone={account.isPro ? "ok" : "neutral"}>
+                {account.isPro ? "Active" : "Free"}
+              </Pill>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {paid ? (
+                <GripButton variant="secondary" loading={portalBusy} onClick={openPortal}>
+                  Manage billing
+                </GripButton>
+              ) : (
+                !isAdmin && (
+                  <GripButton onClick={() => setUpgrade(true)}>Upgrade to Pro</GripButton>
+                )
+              )}
+            </div>
+            <Note>
+              Payment, invoices and cancellation are handled in the Stripe billing portal,
+              the same one RaceTrace uses. Cancel any time and keep Pro through the end of
+              the billing period. 14-day money-back guarantee on your first purchase.
+            </Note>
+          </Card>
+        )}
 
         <Card className="space-y-3">
           <h2 className="font-bold text-gray-900 dark:text-gray-50">Your data</h2>
