@@ -4,6 +4,7 @@
  * Roles, highest first:
  *   OWNER    everything, including members, invites and deleting the team
  *   ENGINEER cars, events, sessions and setup values
+ *   CAR_CHIEF the same rights as ENGINEER, under its own title
  *   VIEWER   reads everything and adds notes (drivers, guests)
  */
 import type { Request, Response, NextFunction } from "express";
@@ -61,7 +62,7 @@ export function requireSetupAccess(req: Request, _res: Response, next: NextFunct
 
 // ─── Team roles ──────────────────────────────────────────────────────────────
 
-const RANK: Record<SetupRole, number> = { VIEWER: 0, ENGINEER: 1, OWNER: 2 };
+const RANK: Record<SetupRole, number> = { VIEWER: 0, ENGINEER: 1, CAR_CHIEF: 1, OWNER: 2 };
 
 export function roleAtLeast(role: SetupRole, minimum: SetupRole): boolean {
   return RANK[role] >= RANK[minimum];

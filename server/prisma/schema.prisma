@@ -543,6 +543,7 @@ model GripDamperScenario {
 enum SetupRole {
   OWNER
   ENGINEER
+  CAR_CHIEF
   VIEWER
 }
 

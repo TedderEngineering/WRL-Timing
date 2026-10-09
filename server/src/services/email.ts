@@ -138,14 +138,14 @@ export async function sendSetupInviteEmail(params: {
   to: string;
   teamName: string;
   inviterName: string;
-  role: "OWNER" | "ENGINEER" | "VIEWER";
+  role: "OWNER" | "ENGINEER" | "CAR_CHIEF" | "VIEWER";
   hasAccount: boolean;
   site: Site;
 }): Promise<void> {
   const { to, site } = params;
   const team = escapeHtml(params.teamName);
   const inviter = escapeHtml(params.inviterName);
-  const roleText = { OWNER: "an owner", ENGINEER: "an engineer", VIEWER: "a viewer" }[params.role];
+  const roleText = { OWNER: "an owner", ENGINEER: "an engineer", CAR_CHIEF: "a car chief", VIEWER: "a viewer" }[params.role];
   const url = params.hasAccount ? site.url : `${site.url}/login?mode=signup&email=${encodeURIComponent(to)}`;
   const action = params.hasAccount ? "Open Setup Sheet" : "Create your account";
   const next = params.hasAccount
