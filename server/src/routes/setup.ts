@@ -517,6 +517,18 @@ setupRouter.get(
   })
 );
 
+/** Every setup sheet of a car, for the compare view. */
+setupRouter.get(
+  "/cars/:id/sheets",
+  wrap(async (req, res) => {
+    const car = await prisma.setupCar.findUnique({ where: { id: param(req, "id") } });
+    if (!car) throw notFound();
+    await requireTeamRole(car.teamId, uid(req));
+    const sheets = await prisma.setupSheet.findMany({ where: { session: { carId: car.id } } });
+    res.json({ sheets: sheets.map((s) => serializeSheet(s)) });
+  })
+);
+
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 setupRouter.get(
@@ -972,7 +984,12 @@ setupRouter.delete(
 
 const MAX_IMPORT_SESSIONS = 40;
 
-/** Create (or reuse) a car and an event, then add the workbook's sessions with their sheets. */
+/**
+ * Create (or reuse) a car and an event, then add the workbook's sheets. A
+ * session with the same name for that car in that event is reused. A sheet
+ * that already exists is skipped, or replaced when `replace` is true (the
+ * replacement is recorded in its edit history like any other change).
+ */
 setupRouter.post(
   "/teams/:teamId/import",
   wrap(async (req, res) => {
@@ -982,6 +999,10 @@ setupRouter.post(
       .object({
         car: z.union([z.object({ id: z.string().min(1) }), carInput]),
         event: z.union([z.object({ id: z.string().min(1) }), eventInput]),
+        // Measurement locations etc. from the workbook: used for a new car, or
+        // an existing car that has no reference notes yet.
+        carReference: carReference.optional(),
+        replace: z.boolean().default(false),
         sessions: z
           .array(
             z.object({
@@ -996,19 +1017,30 @@ setupRouter.post(
           .max(MAX_IMPORT_SESSIONS),
       })
       .parse(req.body);
+    const userId = uid(req);
 
     const result = await prisma.$transaction(
       async (tx) => {
+        const reference = cleanValues(body.carReference ?? {});
         let carId: string;
         if ("id" in body.car) {
           const car = await tx.setupCar.findUnique({ where: { id: body.car.id } });
           if (!car || car.teamId !== teamId) throw new AppError(400, "Choose one of this team's cars", "BAD_CAR");
           carId = car.id;
+          if (Object.keys(readValues(car.reference)).length === 0 && Object.keys(reference).length > 0) {
+            await tx.setupCar.update({ where: { id: car.id }, data: { reference } });
+          }
         } else {
           const c = body.car as z.infer<typeof carInput>;
           carId = (
             await tx.setupCar.create({
-              data: { teamId, name: c.name, number: c.number, carClass: c.carClass, reference: cleanValues(c.reference ?? {}) },
+              data: {
+                teamId,
+                name: c.name,
+                number: c.number,
+                carClass: c.carClass,
+                reference: { ...reference, ...cleanValues(c.reference ?? {}) },
+              },
             })
           ).id;
         }
@@ -1034,26 +1066,51 @@ setupRouter.post(
           ).id;
         }
 
-        const last = await tx.setupSession.findFirst({ where: { eventId, carId }, orderBy: { seq: "desc" }, select: { seq: true } });
-        let seq = last?.seq ?? 0;
+        const existing = await tx.setupSession.findMany({ where: { eventId, carId }, include: { sheets: true } });
+        const byName = new Map(existing.map((s) => [s.name.trim().toLowerCase(), s.id]));
+        const sheetsBySession = new Map(existing.map((s) => [s.id, s.sheets]));
+        let seq = Math.max(0, ...existing.map((s) => s.seq));
+        const counts = { created: 0, replaced: 0, skipped: 0 };
         const sessionIds: string[] = [];
+
         for (const s of body.sessions) {
-          const session = await tx.setupSession.create({
-            data: { teamId, eventId, carId, name: s.name, kind: s.kind, seq: ++seq, sessionDate: toDateOnly(s.sessionDate) },
-          });
-          sessionIds.push(session.id);
+          const key = s.name.trim().toLowerCase();
+          let sessionId = byName.get(key);
+          if (!sessionId) {
+            sessionId = (
+              await tx.setupSession.create({
+                data: { teamId, eventId, carId, name: s.name, kind: s.kind, seq: ++seq, sessionDate: toDateOnly(s.sessionDate) },
+              })
+            ).id;
+            byName.set(key, sessionId);
+            sheetsBySession.set(sessionId, []);
+          }
+          if (!sessionIds.includes(sessionId)) sessionIds.push(sessionId);
+
           for (const [kind, sheet] of [["TARGET", s.target], ["ACTUAL", s.actual]] as const) {
             if (!sheet) continue;
-            await createSheetWithRevision(tx, {
-              sessionId: session.id,
-              kind,
-              data: cleanValues(sheet.data),
-              notes: sheet.notes,
-              userId: uid(req),
-            });
+            const data = cleanValues(sheet.data);
+            const prior = sheetsBySession.get(sessionId)!.find((x) => x.kind === kind);
+            if (!prior) {
+              const created = await createSheetWithRevision(tx, { sessionId, kind, data, notes: sheet.notes, userId });
+              sheetsBySession.get(sessionId)!.push(created);
+              counts.created++;
+            } else if (!body.replace) {
+              counts.skipped++;
+            } else {
+              const changes = diffValues(readValues(prior.data), data);
+              const notesChanged = (prior.notes ?? null) !== (sheet.notes ?? null);
+              await tx.setupSheet.update({ where: { id: prior.id }, data: { data, notes: sheet.notes, updatedById: userId } });
+              if (changes.length > 0 || notesChanged) {
+                await tx.setupSheetRevision.create({
+                  data: { sheetId: prior.id, changes: changes as unknown as Prisma.InputJsonValue, notesChanged, changedById: userId },
+                });
+              }
+              counts.replaced++;
+            }
           }
         }
-        return { carId, eventId, sessionIds };
+        return { carId, eventId, sessionIds, ...counts };
       },
       { timeout: 30_000 }
     );
