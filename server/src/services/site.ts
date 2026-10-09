@@ -79,7 +79,7 @@ function hostOf(value: string | undefined): string | null {
 export function setupSite(): Site | null {
   const { url } = readSetupPublicUrl();
   if (!url) return null;
-  return { key: "setup", name: "Setup Sheet", url, accent: "#1f5fbf" };
+  return { key: "setup", name: "Setup Sheet", url, accent: "#059669" };
 }
 
 /** Sites with their own address, besides RaceTrace. */
