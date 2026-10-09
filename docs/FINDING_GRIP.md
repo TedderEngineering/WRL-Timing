@@ -46,8 +46,10 @@ onboarding / auth layout (return visitors to the tool they came from).
 ## Rules the server enforces
 
 - Every query is scoped to the signed-in user.
-- Calculations need a verified email address (admins excepted), and in
-  `testers` mode so does access itself.
+- Every Finding Grip route except `GET /status` needs a verified email address
+  (admins excepted). The check is in `requireGripAccess`; an unverified account
+  gets `403 EMAIL_NOT_VERIFIED` and the client shows a "verify your email"
+  screen with a resend button in place of the app.
 - Free accounts get 3 calculations for life (`grip_accounts.calc_count`;
   deleting a calculation does not give one back). The next returns
   `403 { code: "UPGRADE_REQUIRED", upgrade_required: true }`.
