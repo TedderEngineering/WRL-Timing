@@ -70,7 +70,7 @@ export async function sendVerificationEmail(
 
   await sendEmail({
     // RaceTrace mail keeps the sender exactly as configured.
-    fromName: site.key === "grip" ? site.name : undefined,
+    fromName: site.key === "racetrace" ? undefined : site.name,
     to: email,
     subject: `Verify your email — ${site.name}`,
     html: `
@@ -100,7 +100,7 @@ export async function sendPasswordResetEmail(
 
   await sendEmail({
     // RaceTrace mail keeps the sender exactly as configured.
-    fromName: site.key === "grip" ? site.name : undefined,
+    fromName: site.key === "racetrace" ? undefined : site.name,
     to: email,
     subject: `Reset your password — ${site.name}`,
     html: `
@@ -117,6 +117,57 @@ export async function sendPasswordResetEmail(
         </p>
         <p style="color: #999; font-size: 12px;">
           This link expires in 1 hour. If you didn't request this, you can safely ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
+
+/** Escape text that came from a person (team names, display names) for email HTML. */
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
+  );
+}
+
+/**
+ * Setup Sheet: tell someone they've been invited to a team.
+ * `hasAccount` decides between "open Setup Sheet" and "create an account".
+ */
+export async function sendSetupInviteEmail(params: {
+  to: string;
+  teamName: string;
+  inviterName: string;
+  role: "OWNER" | "ENGINEER" | "VIEWER";
+  hasAccount: boolean;
+  site: Site;
+}): Promise<void> {
+  const { to, site } = params;
+  const team = escapeHtml(params.teamName);
+  const inviter = escapeHtml(params.inviterName);
+  const roleText = { OWNER: "an owner", ENGINEER: "an engineer", VIEWER: "a viewer" }[params.role];
+  const url = params.hasAccount ? site.url : `${site.url}/login?mode=signup&email=${encodeURIComponent(to)}`;
+  const action = params.hasAccount ? "Open Setup Sheet" : "Create your account";
+  const next = params.hasAccount
+    ? "Sign in with this email address to accept or decline."
+    : "Create an account with this email address and verify it, then accept the invite.";
+
+  await sendEmail({
+    fromName: site.name,
+    to,
+    subject: `${params.inviterName} invited you to ${params.teamName} — ${site.name}`.slice(0, 200),
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: ${site.accent};">${site.name}</h2>
+        <p>${inviter} invited you to join <strong>${team}</strong> as ${roleText}.</p>
+        <p>${next} The same login works for RaceTrace and Finding Grip.</p>
+        <a href="${url}"
+           style="display: inline-block; background: ${site.accent}; color: white; padding: 12px 24px;
+                  border-radius: 8px; text-decoration: none; margin: 16px 0;">
+          ${action}
+        </a>
+        <p style="color: #666; font-size: 14px;">
+          Or copy this link: <a href="${url}">${url}</a>
         </p>
       </div>
     `,

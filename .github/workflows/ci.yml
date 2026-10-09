@@ -58,6 +58,14 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://wrl:wrl_test@localhost:5432/wrl_lap_chart_test
+      # schema.prisma reads DIRECT_URL; without it `migrate deploy` stops before running.
+      DIRECT_URL: postgresql://wrl:wrl_test@localhost:5432/wrl_lap_chart_test
+      # Placeholders so config/env.ts validates outside development. Not real keys.
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+      STRIPE_PRO_PRICE_ID: price_ci_pro_placeholder
+      STRIPE_TEAM_PRICE_ID: price_ci_team_placeholder
       JWT_ACCESS_SECRET: test-access-secret-at-least-32-characters-long
       JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-characters-long
       NODE_ENV: test
@@ -83,6 +91,12 @@ jobs:
       - name: Run migrations
         working-directory: server
         run: npx prisma migrate deploy
+
+      # Fails if schema.prisma and the migrations disagree, e.g. a model was
+      # changed without a migration, or a migration was edited by hand.
+      - name: Check schema matches migrations
+        working-directory: server
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
 
       - name: Run server tests
         working-directory: server

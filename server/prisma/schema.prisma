@@ -65,6 +65,13 @@ model User {
   gripReferenceSessions  GripReferenceSession[]
   gripCalculations       GripCalculation[]
 
+  setupMemberships       SetupTeamMember[]
+  setupTeamsCreated      SetupTeam[]          @relation("SetupTeamCreator")
+  setupInvitesSent       SetupInvite[]        @relation("SetupInviteSender")
+  setupSheetsUpdated     SetupSheet[]         @relation("SetupSheetEditor")
+  setupSheetRevisions    SetupSheetRevision[]
+  setupSessionNotes      SetupSessionNote[]
+
   @@map("users")
 }
 
@@ -75,6 +82,9 @@ model RefreshToken {
   expiresAt DateTime  @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
   revokedAt DateTime? @map("revoked_at")
+  /// Set when this token was exchanged for a new one. Honoured for a short
+  /// grace window so concurrent refreshes don't look like token theft.
+  rotatedAt DateTime? @map("rotated_at")
   ipAddress String?   @map("ip_address")
   userAgent String?   @map("user_agent")
 
@@ -517,4 +527,209 @@ model GripDamperScenario {
 
   @@unique([adjustmentType, turnDirection, overUnder, cornerSegment, cornerSpeed], map: "grip_damper_scenarios_inputs_key")
   @@map("grip_damper_scenarios")
+}
+
+// ─── Setup Sheet ──────────────────────────────────────────────────────────────
+// Car setups per session (target vs actual), session notes and change history,
+// shared by a team. Shares users and auth with RaceTrace and Finding Grip;
+// everything else lives in setup_* tables. Served at /api/setup.
+//
+// Sheet values are a JSON object of text keyed by parameter, e.g.
+// { "lf.rebound": "8", "car.brake_bias": "56.5" }. Values are kept as typed so
+// "1 IN" or "Stiff" survive; the client works out numbers and differences.
+// Records are owned by the team, not by a person: deleting an account removes
+// its memberships and leaves the team's setups in place.
+
+enum SetupRole {
+  OWNER
+  ENGINEER
+  VIEWER
+}
+
+enum SetupSessionKind {
+  TEST
+  PRACTICE
+  QUALIFYING
+  RACE
+  OTHER
+}
+
+enum SetupSheetKind {
+  TARGET
+  ACTUAL
+}
+
+enum SetupNoteCategory {
+  DRIVER
+  ENGINEER
+  CHANGE
+  GENERAL
+}
+
+model SetupTeam {
+  id          String   @id @default(cuid())
+  name        String
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy User?             @relation("SetupTeamCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  members   SetupTeamMember[]
+  invites   SetupInvite[]
+  cars      SetupCar[]
+  events    SetupEvent[]
+  sessions  SetupSession[]
+
+  @@index([createdById])
+  @@map("setup_teams")
+}
+
+model SetupTeamMember {
+  teamId    String    @map("team_id")
+  userId    String    @map("user_id")
+  role      SetupRole @default(ENGINEER)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  team SetupTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId])
+  @@map("setup_team_members")
+}
+
+/// Pending invite by email. Accepted only by an account whose email is verified.
+model SetupInvite {
+  id          String    @id @default(cuid())
+  teamId      String    @map("team_id")
+  email       String
+  role        SetupRole @default(ENGINEER)
+  invitedById String?   @map("invited_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  team      SetupTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedBy User?     @relation("SetupInviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, email])
+  @@index([email])
+  @@index([invitedById])
+  @@map("setup_invites")
+}
+
+model SetupCar {
+  id        String   @id @default(cuid())
+  teamId    String   @map("team_id")
+  name      String
+  number    String?
+  carClass  String?  @map("car_class")
+  /// Reference notes: measurement locations, adjuster legends. { key: text }
+  reference Json     @default("{}")
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  team     SetupTeam      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sessions SetupSession[]
+
+  @@index([teamId])
+  @@map("setup_cars")
+}
+
+model SetupEvent {
+  id        String    @id @default(cuid())
+  teamId    String    @map("team_id")
+  name      String
+  track     String?
+  startDate DateTime? @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  team     SetupTeam      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sessions SetupSession[]
+
+  @@index([teamId, startDate(sort: Desc)])
+  @@map("setup_events")
+}
+
+/// One car going out once at an event: P1, Q1, Race 1…
+model SetupSession {
+  id          String           @id @default(cuid())
+  teamId      String           @map("team_id")
+  eventId     String           @map("event_id")
+  carId       String           @map("car_id")
+  name        String
+  kind        SetupSessionKind @default(PRACTICE)
+  seq         Int              @default(0)
+  sessionDate DateTime?        @map("session_date") @db.Date
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  team   SetupTeam          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  event  SetupEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  car    SetupCar           @relation(fields: [carId], references: [id], onDelete: Cascade)
+  sheets SetupSheet[]
+  notes  SetupSessionNote[]
+
+  @@index([eventId, seq])
+  @@index([carId])
+  @@index([teamId])
+  @@map("setup_sessions")
+}
+
+/// The target (plan) or actual (measured) setup for a session.
+model SetupSheet {
+  id          String         @id @default(cuid())
+  sessionId   String         @map("session_id")
+  kind        SetupSheetKind
+  data        Json           @default("{}")
+  notes       String?
+  updatedById String?        @map("updated_by_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  session   SetupSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  updatedBy User?                @relation("SetupSheetEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+  revisions SetupSheetRevision[]
+
+  @@unique([sessionId, kind])
+  @@index([updatedById])
+  @@map("setup_sheets")
+}
+
+/// One save of a sheet: who, when, and each key's old and new value.
+/// changes: [{ "key": "lf.rebound", "from": "6", "to": "8" }]
+model SetupSheetRevision {
+  id           String   @id @default(cuid())
+  sheetId      String   @map("sheet_id")
+  changes      Json
+  notesChanged Boolean  @default(false) @map("notes_changed")
+  changedById  String?  @map("changed_by_id")
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  sheet     SetupSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  changedBy User?      @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([sheetId, changedAt(sort: Desc)])
+  @@index([changedById])
+  @@map("setup_sheet_revisions")
+}
+
+/// Driver feedback, engineer notes and planned changes for a session.
+model SetupSessionNote {
+  id        String            @id @default(cuid())
+  sessionId String            @map("session_id")
+  authorId  String?           @map("author_id")
+  category  SetupNoteCategory @default(GENERAL)
+  body      String
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  session SetupSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  author  User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId, createdAt])
+  @@index([authorId])
+  @@map("setup_session_notes")
 }

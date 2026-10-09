@@ -14,6 +14,7 @@ import { eventsRouter } from "./routes/events.js";
 import { searchRouter } from "./routes/search.js";
 import { qualifyingRouter } from "./routes/qualifying.js";
 import { gripRouter } from "./routes/grip.js";
+import { setupRouter } from "./routes/setup.js";
 import { allowedOrigins } from "./services/site.js";
 
 export function createApp() {
@@ -53,6 +54,12 @@ export function createApp() {
   });
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+
+  // ─── Setup Sheet ─────────────────────────────────────────────────────────
+  // Mounted before the shared per-IP limit: a team on one paddock Wi-Fi shares
+  // an address and open pages poll for changes, so Setup Sheet limits per
+  // person instead (see routes/setup.ts).
+  app.use("/api/setup", setupRouter);
 
   // ─── Rate Limiting ───────────────────────────────────────────────────────
   app.use("/api", apiLimiter);

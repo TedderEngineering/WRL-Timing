@@ -175,7 +175,12 @@ export async function login(
   const limit = getSessionLimit(plan);
 
   const activeSessions = await prisma.refreshToken.findMany({
-    where: { userId: user.id, revokedAt: null, expiresAt: { gt: new Date() } },
+    where: {
+      userId: user.id,
+      revokedAt: null,
+      rotatedAt: null,
+      expiresAt: { gt: new Date() },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -215,7 +220,18 @@ export async function login(
 
 // ─── Refresh Token ────────────────────────────────────────────────────────────
 
-export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
+/**
+ * How long a just-rotated refresh token is still honoured. Two tabs (or two
+ * sites sharing the login cookie) can refresh at the same moment with the same
+ * token; the one that loses the race gets a fresh access token instead of
+ * being treated as a stolen token, which would sign the user out everywhere.
+ */
+export const ROTATION_GRACE_MS = 30 * 1000;
+
+export async function refresh(
+  oldRefreshToken: string,
+  now: Date = new Date()
+): Promise<Omit<AuthResult, "refreshToken"> & { refreshToken: string | null }> {
   let payload;
   try {
     payload = verifyRefreshToken(oldRefreshToken);
@@ -231,16 +247,18 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
     },
   });
 
-  if (!storedToken) {
-    // Possible token reuse — invalidate all tokens for this user
+  if (!storedToken || isReplayAfterGrace(storedToken, now)) {
+    // Token reuse outside the grace window — invalidate all tokens for this user
     await prisma.refreshToken.deleteMany({ where: { userId: payload.userId } });
     throw new AppError(401, "Refresh token has been revoked", "TOKEN_REVOKED");
   }
 
   // Check if this session was displaced by a newer login
   if (storedToken.revokedAt) {
-    // Clean up the revoked token
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Keep the revoked row until it expires (background cleanup removes it):
+    // deleting it here would make a second, concurrent request from the same
+    // displaced browser find no row and take the token-theft path, which signs
+    // out every device, including the one that just signed in.
     throw new AppError(
       401,
       "Your account was signed in from another location. If this wasn't you, change your password immediately.",
@@ -248,8 +266,17 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
     );
   }
 
-  // Delete old token (rotation)
-  await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+  // Rotation: mark the old token used rather than deleting it, so a request
+  // that raced this one can still be answered during the grace window. The
+  // conditional update means only one concurrent request rotates it.
+  const rotated =
+    storedToken.rotatedAt === null &&
+    (
+      await prisma.refreshToken.updateMany({
+        where: { id: storedToken.id, rotatedAt: null },
+        data: { rotatedAt: now },
+      })
+    ).count === 1;
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
@@ -259,11 +286,18 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
     throw new AppError(401, "Account not found or suspended", "INVALID_ACCOUNT");
   }
 
-  const { accessToken, refreshToken } = await createTokenPair(
-    user.id,
-    user.email,
-    user.role
-  );
+  // Lost the race: the winner has already set the new cookie in this browser.
+  // Hand back an access token only and leave the cookie alone.
+  const { accessToken, refreshToken } = rotated
+    ? await createTokenPair(user.id, user.email, user.role)
+    : {
+        accessToken: generateAccessToken({
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+        }),
+        refreshToken: null,
+      };
 
   return {
     accessToken,
@@ -282,11 +316,27 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
   };
 }
 
+/** A token that was already rotated, presented again after the grace window. */
+export function isReplayAfterGrace(
+  token: { rotatedAt: Date | null },
+  now: Date = new Date()
+): boolean {
+  return !!token.rotatedAt && now.getTime() - token.rotatedAt.getTime() > ROTATION_GRACE_MS;
+}
+
 // ─── Logout ───────────────────────────────────────────────────────────────────
 
 export async function logout(refreshTokenValue: string): Promise<void> {
   const tokenHash = hashToken(refreshTokenValue);
   await prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  // Also drop this user's just-rotated tokens, so a token replaced in the last
+  // few seconds can't keep getting access tokens through the grace window.
+  try {
+    const { userId } = verifyRefreshToken(refreshTokenValue);
+    await prisma.refreshToken.deleteMany({ where: { userId, rotatedAt: { not: null } } });
+  } catch {
+    // Expired or malformed: nothing more to clean up.
+  }
 }
 
 export async function logoutAll(userId: string): Promise<void> {
@@ -505,12 +555,19 @@ async function createTokenPair(
     },
   });
 
-  // Clean up expired / revoked refresh tokens for this user (background)
+  // Clean up expired and used-up refresh tokens for this user (background).
+  // Displaced (revoked) sessions are kept until they expire: the displaced
+  // browser must find its row to be told SESSION_DISPLACED. If the row were
+  // gone, its next refresh would look like token theft and sign the user out
+  // of every device, including the one that just signed in.
   prisma.refreshToken
     .deleteMany({
       where: {
         userId,
-        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
+        OR: [
+          { expiresAt: { lt: new Date() } },
+          { rotatedAt: { lt: new Date(Date.now() - ROTATION_GRACE_MS) } },
+        ],
       },
     })
     .catch(() => {});

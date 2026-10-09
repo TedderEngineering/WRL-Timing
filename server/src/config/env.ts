@@ -51,6 +51,27 @@ const envSchema = z.object({
   // Never commit a real value anywhere in this repository.
   GRIP_CALC_MODEL: z.string().optional(),
 
+  // Setup Sheet
+  // Who can use Setup Sheet: "off", "admin", "testers" (admins +
+  // SETUP_TESTER_EMAILS) or "public". Same rules as GRIP_ACCESS.
+  SETUP_ACCESS: z.enum(["off", "admin", "testers", "public"]).default("admin"),
+  SETUP_TESTER_EMAILS: z.string().optional(),
+  // Setup Sheet's address, e.g. https://setup.tedderengineering.com. Allowed
+  // to call the API, and sign-ups made there get Setup Sheet emails and links.
+  // Read leniently in services/site.ts, like GRIP_PUBLIC_URL.
+  SETUP_PUBLIC_URL: z.string().optional(),
+
+  // Shared login
+  // Parent domain for the login cookie, e.g. ".tedderengineering.com". Set it
+  // only once the API answers on a host under that domain (for example
+  // api.tedderengineering.com) and every site calls the API there: the cookie
+  // is then first-party on all sites and one login covers them all. Unset, the
+  // cookie stays on whichever host answered (the original behaviour).
+  COOKIE_DOMAIN: z.string().optional(),
+  // Extra browser origins allowed to call the API, comma-separated, e.g.
+  // http://localhost:3000 for local work on Setup Sheet. Ignored in production.
+  EXTRA_CORS_ORIGINS: z.string().optional(),
+
   // Supabase
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
