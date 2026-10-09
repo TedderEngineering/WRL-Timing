@@ -3,7 +3,7 @@
  *
  * Rules enforced here, never only in the client:
  *  - every record belongs to a team, and every request checks the caller's
- *    role in that team (VIEWER < ENGINEER < OWNER)
+ *    role in that team (VIEWER < ENGINEER = CAR_CHIEF < OWNER)
  *  - a team always keeps at least one owner
  *  - an invite is honoured only for a verified email address
  *  - every change to a sheet's values is recorded as a revision (who, when,
@@ -121,7 +121,7 @@ const optionalText = (max: number) =>
     .nullable()
     .optional()
     .transform((v) => (v ? v : null));
-const roleSchema = z.enum(["OWNER", "ENGINEER", "VIEWER"]);
+const roleSchema = z.enum(["OWNER", "ENGINEER", "CAR_CHIEF", "VIEWER"]);
 const sessionKind = z.enum(["TEST", "PRACTICE", "QUALIFYING", "RACE", "OTHER"]);
 const sheetKind = z.enum(["TARGET", "ACTUAL"]);
 const noteCategory = z.enum(["DRIVER", "ENGINEER", "CHANGE", "GENERAL"]);
