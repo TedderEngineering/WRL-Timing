@@ -198,9 +198,12 @@ export const gripApi = {
 
 /** Download the user's data. Uses fetch directly because the response is a file, not JSON. */
 export async function downloadExport(): Promise<void> {
-  // api.get parses JSON, so fetch the CSV through a small authenticated request instead.
+  // Reading the response as text drops the byte-order mark, so put it back:
+  // Excel needs it to read accented names correctly.
   const text = await api.getText("/grip/export");
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+  const url = URL.createObjectURL(
+    new Blob(["\uFEFF", text], { type: "text/csv;charset=utf-8" })
+  );
   const a = document.createElement("a");
   a.href = url;
   a.download = "finding-grip-export.csv";

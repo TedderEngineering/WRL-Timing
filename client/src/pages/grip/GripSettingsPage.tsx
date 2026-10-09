@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthContext";
 import { downloadExport, gripApi } from "@/features/grip/api";
 import { useGrip } from "@/features/grip/GripContext";
@@ -21,29 +21,46 @@ const UNIT_OPTIONS = [
 ] as const;
 
 export function GripSettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { account, units, setUnits, refresh, toast } = useGrip();
   const [params, setParams] = useSearchParams();
-  const [activated, setActivated] = useState(false);
+  const [returning, setReturning] = useState<null | "waiting" | "done" | "slow">(null);
   const [upgrade, setUpgrade] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
 
-  // Returning from Stripe Checkout
+  // Returning from Stripe Checkout. Stripe confirms the payment to the server
+  // separately, which can land a few seconds after the redirect, so keep
+  // checking for a short while instead of announcing success straight away.
   useEffect(() => {
     if (!params.has("session_id")) return;
-    setActivated(true);
     setParams({}, { replace: true });
-    // The webhook can land a moment after the redirect; check again shortly.
+    setReturning("waiting");
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      refresh();
+      if (tries >= 8) {
+        clearInterval(timer);
+        setReturning((r) => (r === "waiting" ? "slow" : r));
+      }
+    }, 2500);
     refresh();
-    const retry = setTimeout(refresh, 3000);
-    const hide = setTimeout(() => setActivated(false), 10000);
-    return () => {
-      clearTimeout(retry);
-      clearTimeout(hide);
-    };
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (
+      returning !== null &&
+      returning !== "done" &&
+      account.plan === "PRO" &&
+      account.isPro
+    ) {
+      setReturning("done");
+    }
+  }, [returning, account.plan, account.isPro]);
 
   const changeUnits = async (next: Units) => {
     try {
@@ -102,9 +119,17 @@ export function GripSettingsPage() {
     <div className="container-page max-w-3xl">
       <PageHeader title="Settings" />
       <div className="space-y-4">
-        {activated && (
+        {returning === "done" && (
           <Banner tone="ok">
             <b>Subscription activated! Your account has been upgraded.</b>
+          </Banner>
+        )}
+        {returning === "waiting" && <Banner>Finishing up your subscription…</Banner>}
+        {returning === "slow" && (
+          <Banner tone="warn">
+            Your payment went through, but the upgrade hasn't shown up here yet. Reload
+            this page in a minute. If it still says Free, contact us and we'll sort it
+            out.
           </Banner>
         )}
 
@@ -186,6 +211,25 @@ export function GripSettingsPage() {
             >
               Account settings
             </Link>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/dashboard"
+              className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              Open RaceTrace
+            </Link>
+            <GripButton
+              variant="ghost"
+              size="sm"
+              className="text-red-600 dark:text-red-400"
+              onClick={async () => {
+                await logout();
+                navigate("/grip");
+              }}
+            >
+              Log out
+            </GripButton>
           </div>
         </Card>
       </div>

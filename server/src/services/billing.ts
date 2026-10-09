@@ -3,12 +3,7 @@ import { stripe, TIER_PRICE_MAP } from "../lib/stripe.js";
 import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
 import { AppError } from "../middleware/error-handler.js";
-import {
-  isGripSubscription,
-  syncGripSubscription,
-  endGripSubscription,
-  applyGripInvoice,
-} from "./grip/billing.js";
+import { isGripSubscription, syncGripSubscription, applyGripInvoice } from "./grip/billing.js";
 
 // ─── Create Checkout Session ────────────────────────────────────────────────
 
@@ -123,7 +118,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       if (isGripSubscription(sub)) {
-        await endGripSubscription(sub);
+        await syncGripSubscription(sub);
         break;
       }
       const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
@@ -140,7 +135,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "invoice.paid": {
       const invoice = event.data.object as Stripe.Invoice;
-      if (await applyGripInvoice(invoice, "paid")) break;
+      if (await applyGripInvoice(invoice)) break;
       const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
       if (customerId && invoice.lines?.data?.[0]?.period) {
         const period = invoice.lines.data[0].period;
@@ -158,7 +153,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
-      if (await applyGripInvoice(invoice, "payment_failed")) break;
+      if (await applyGripInvoice(invoice)) break;
       const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
       if (customerId) {
         await prisma.subscription.updateMany({

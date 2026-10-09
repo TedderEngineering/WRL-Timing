@@ -70,13 +70,40 @@ export function canUseGrip(user: { email: string; role: "USER" | "ADMIN" }): boo
   }
 }
 
+async function isEmailVerified(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { emailVerified: true },
+  });
+  return !!user?.emailVerified;
+}
+
 function requireGripAccess(req: Request, _res: Response, next: NextFunction) {
   if (!req.user)
     return next(new AppError(401, "Authentication required", "AUTH_REQUIRED"));
-  if (!canUseGrip(req.user)) {
+  const user = req.user;
+  if (!canUseGrip(user)) {
     return next(
       new AppError(403, "Finding Grip is in private testing", "GRIP_NOT_AVAILABLE")
     );
+  }
+  // The tester list names email addresses, so only a verified address counts;
+  // otherwise anyone could register a listed address that has no account yet.
+  if (env.GRIP_ACCESS === "testers" && user.role !== "ADMIN") {
+    isEmailVerified(user.userId)
+      .then((verified) =>
+        verified
+          ? next()
+          : next(
+              new AppError(
+                403,
+                "Verify your email to use Finding Grip",
+                "EMAIL_NOT_VERIFIED"
+              )
+            )
+      )
+      .catch(next);
+    return;
   }
   next();
 }
@@ -100,11 +127,13 @@ gripRouter.use(requireAuth, requireGripAccess);
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
+const PSI_MIN = 5;
+const PSI_MAX = 60;
 const psi = z
   .number()
   .finite()
-  .min(5, "Pressure looks too low for PSI")
-  .max(60, "Pressure looks too high for PSI");
+  .min(PSI_MIN, "Pressure looks too low for PSI")
+  .max(PSI_MAX, "Pressure looks too high for PSI");
 const degF = z
   .number()
   .finite()
@@ -421,6 +450,16 @@ gripRouter.post(
     const account = await getOrCreateGripAccount(userId);
     const isPro = hasGripPro(account, req.user!.role);
 
+    // The free allowance is per account, so it is only worth something if
+    // accounts are tied to a real address.
+    if (req.user!.role !== "ADMIN" && !(await isEmailVerified(userId))) {
+      throw new AppError(
+        403,
+        "Verify your email address to run calculations",
+        "EMAIL_NOT_VERIFIED"
+      );
+    }
+
     let result;
     try {
       result = calculateColdPressures(model, {
@@ -459,6 +498,17 @@ gripRouter.post(
         );
       }
       throw err;
+    }
+
+    // A result outside the range a session can hold means the inputs do not
+    // describe a real run. Say so instead of saving it or using up a free
+    // calculation.
+    if (Object.values(result).some((v) => v < PSI_MIN || v > PSI_MAX)) {
+      throw new AppError(
+        422,
+        "Those inputs give a pressure outside the usable range. Check the temperatures, duration and targets.",
+        "RESULT_OUT_OF_RANGE"
+      );
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -553,8 +603,20 @@ gripRouter.post(
     }
     const input = convertSchema.parse(req.body);
 
-    const [session] = await prisma.$transaction([
-      prisma.gripReferenceSession.create({
+    const session = await prisma.$transaction(async (tx) => {
+      // Claim it first so a double submit cannot create two reference sessions.
+      const claimed = await tx.gripCalculation.updateMany({
+        where: { id: calc.id, userId, convertedToRef: false },
+        data: { convertedToRef: true },
+      });
+      if (claimed.count === 0) {
+        throw new AppError(
+          409,
+          "This calculation has already been converted",
+          "ALREADY_CONVERTED"
+        );
+      }
+      return tx.gripReferenceSession.create({
         data: {
           userId,
           name: input.name,
@@ -580,12 +642,8 @@ gripRouter.post(
           notes: input.notes || null,
         },
         include: { track: true },
-      }),
-      prisma.gripCalculation.update({
-        where: { id: calc.id },
-        data: { convertedToRef: true },
-      }),
-    ]);
+      });
+    });
 
     res.status(201).json({ session: sessionOut(session) });
   })
@@ -740,7 +798,8 @@ gripRouter.get(
       "Content-Disposition",
       'attachment; filename="finding-grip-export.csv"'
     );
-    res.send(rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n");
+    // Leading BOM so Excel reads accented track and session names correctly.
+    res.send("\uFEFF" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n");
   })
 );
 
@@ -817,14 +876,26 @@ admin.post(
     const exists = await prisma.gripTrack.findUnique({ where: { name: input.name } });
     if (exists)
       throw new AppError(409, "A track with that name already exists", "TRACK_EXISTS");
-    const track = await prisma.gripTrack.create({
-      data: {
-        name: input.name,
-        shortName: input.shortName,
-        country: input.country ?? null,
-        logoUrl: input.logoUrl ?? null,
-      },
-    });
+    const track = await prisma.gripTrack
+      .create({
+        data: {
+          name: input.name,
+          shortName: input.shortName,
+          country: input.country ?? null,
+          logoUrl: input.logoUrl ?? null,
+        },
+      })
+      .catch((err: { code?: string }) => {
+        // Two admins adding the same track at once: the unique index decides.
+        if (err?.code === "P2002") {
+          throw new AppError(
+            409,
+            "A track with that name already exists",
+            "TRACK_EXISTS"
+          );
+        }
+        throw err;
+      });
     await prisma.auditLog.create({
       data: {
         adminUserId: req.user!.userId,
@@ -854,8 +925,9 @@ admin.put(
       data: {
         name: input.name,
         shortName: input.shortName,
-        country: input.country ?? null,
-        logoUrl: input.logoUrl ?? null,
+        // Only touch optional fields that were actually sent.
+        ...(input.country === undefined ? {} : { country: input.country }),
+        ...(input.logoUrl === undefined ? {} : { logoUrl: input.logoUrl }),
         ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
       },
     });
@@ -880,13 +952,11 @@ admin.put(
       .parse(req.body);
     const problems = validateDamperTable(scenarios);
     if (problems.length > 0) {
-      res
-        .status(400)
-        .json({
-          error: "The damper table is not complete",
-          code: "DAMPER_TABLE_INVALID",
-          problems,
-        });
+      res.status(400).json({
+        error: "The damper table is not complete",
+        code: "DAMPER_TABLE_INVALID",
+        problems,
+      });
       return;
     }
     await replaceDamperTable(scenarios);

@@ -27,8 +27,13 @@ const envSchema = z.object({
   // "testers" (admins + GRIP_TESTER_EMAILS) or "public" (every account).
   GRIP_ACCESS: z.enum(["off", "admin", "testers", "public"]).default("admin"),
   GRIP_TESTER_EMAILS: z.string().optional(),
-  // Stripe price for Finding Grip Pro. Checkout is unavailable until set.
-  STRIPE_GRIP_PRO_PRICE_ID: z.string().startsWith("price_").optional(),
+  // Stripe price id(s) for Finding Grip Pro, comma-separated. The first is
+  // sold at checkout; all of them are recognised in webhooks. Checkout is
+  // unavailable until set.
+  STRIPE_GRIP_PRO_PRICE_ID: z
+    .string()
+    .regex(/^price_\w+(\s*,\s*price_\w+)*$/, "Expected one or more price_… ids, comma-separated")
+    .optional(),
   // The proprietary calculation model, as JSON. Read in services/grip/calc.ts.
   // Never commit a real value anywhere in this repository.
   GRIP_CALC_MODEL: z.string().optional(),

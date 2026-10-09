@@ -83,3 +83,36 @@ export const emptyCorners = (): Corners<string> => ({ lf: "", rf: "", lr: "", rr
 export function mapCorners<A, B>(c: Corners<A>, fn: (v: A) => B): Corners<B> {
   return { lf: fn(c.lf), rf: fn(c.rf), lr: fn(c.lr), rr: fn(c.rr) };
 }
+
+/**
+ * Fields are shown rounded (bar to 2 places, °C to 1), so converting the text
+ * back would nudge a stored value that the user never touched. Where the text
+ * is still exactly what was loaded, keep the stored value instead.
+ */
+export function keepUnchanged(
+  checked: Checked,
+  text: string,
+  loadedText: string | undefined,
+  stored: number | null | undefined
+): Checked {
+  return loadedText !== undefined &&
+    text === loadedText &&
+    stored !== null &&
+    stored !== undefined
+    ? { value: stored }
+    : checked;
+}
+
+export function keepUnchangedCorners(
+  values: Corners<number | null>,
+  texts: Corners<string>,
+  loadedTexts: Corners<string> | undefined,
+  stored: Corners<number | null> | undefined
+): Corners<number | null> {
+  if (!loadedTexts || !stored) return values;
+  const out = { ...values };
+  for (const c of CORNER_KEYS) {
+    if (texts[c] === loadedTexts[c] && stored[c] !== null) out[c] = stored[c];
+  }
+  return out;
+}

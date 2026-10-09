@@ -15,10 +15,10 @@ const TEST_MODEL = JSON.stringify({
   base: "refCold",
   terms: [
     { weight: 0.5, plus: "targetHot", minus: "refHot" },
-    { weight: 0.1, plus: "refTrackTemp", minus: "trackTemp" },
-    { weight: 0.2, plus: "duration", minus: "refDuration" },
+    { weight: 0.15, plus: "refAmbientTemp", minus: "ambientTemp" },
+    { weight: 0.2, plus: "refDuration", minus: "duration" },
   ],
-  durationCap: 60,
+  durationCap: 45,
   wetBlend: 0.25,
   wetToward: "targetHot",
   decimals: 1,
@@ -74,7 +74,7 @@ describe("parseCalcModel", () => {
     const bad = JSON.stringify({
       base: "refCold",
       terms: [{ weight: 1, plus: "targetHot", minus: "refHot" }],
-      wetBlend: 0.5,
+      wetBlend: 0.3,
     });
     expect(() => parseCalcModel(bad)).toThrow("wetToward");
   });
@@ -84,22 +84,22 @@ describe("evaluateCorner", () => {
   const model = parseCalcModel(TEST_MODEL);
 
   it("adds each weighted difference to the base", () => {
-    // 20 + 0.5*(28-26) + 0.1*(100-80) + 0.2*(40-30) = 20 + 1 + 2 + 2
-    expect(evaluateCorner(model, inputs, false)).toBe(25);
+    // 20 + 0.5*(28-26) + 0.15*(80-70) + 0.2*(30-40) = 20 + 1 + 1.5 - 2
+    expect(evaluateCorner(model, inputs, false)).toBe(20.5);
   });
 
   it("blends toward the wet target when wet", () => {
-    // 25 + 0.25*(28-25)
-    expect(evaluateCorner(model, inputs, true)).toBe(25.8);
+    // 20.5 + 0.25*(28-20.5) = 22.375
+    expect(evaluateCorner(model, inputs, true)).toBe(22.4);
   });
 
   it("caps both durations", () => {
-    // duration 90 -> 60, refDuration 75 -> 60, so the duration term is zero
+    // duration 90 -> 45, refDuration 75 -> 45, so the duration term is zero
     expect(
       evaluateCorner(model, { ...inputs, duration: 90, refDuration: 75 }, false)
-    ).toBe(23);
-    // only the new session is over the cap: 0.2*(60-30) = 6
-    expect(evaluateCorner(model, { ...inputs, duration: 600 }, false)).toBe(29);
+    ).toBe(22.5);
+    // only the new session is over the cap: 0.2*(30-45) = -3
+    expect(evaluateCorner(model, { ...inputs, duration: 600 }, false)).toBe(19.5);
   });
 
   it("rounds to the configured number of decimals", () => {
@@ -147,16 +147,17 @@ describe("calculateColdPressures", () => {
 
   it("evaluates each corner from that corner's own reference values", () => {
     expect(calculateColdPressures(model, request)).toEqual({
-      Lf: 25, // 20   + 0.5*(28-26) + 4
-      Rf: 25, // 20.5 + 0.5*(28-27) + 4
-      Lr: 24, // 19   + 0.5*(27-25) + 4
-      Rr: 24.5, // 19 + 0.5*(27-24) + 4
+      // shared part: 0.15*(80-70) + 0.2*(30-40) = -0.5
+      Lf: 20.5, // 20   + 0.5*(28-26) - 0.5
+      Rf: 20.5, // 20.5 + 0.5*(28-27) - 0.5
+      Lr: 19.5, // 19   + 0.5*(27-25) - 0.5
+      Rr: 20, // 19 + 0.5*(27-24) - 0.5
     });
   });
 
   it("applies wet to every corner", () => {
     const wet = calculateColdPressures(model, { ...request, wet: true });
-    expect(wet.Lf).toBe(25.8);
-    expect(wet.Rr).toBe(25.1); // 24.5 + 0.25*(27-24.5) = 25.125
+    expect(wet.Lf).toBe(22.4); // 20.5 + 0.25*(28-20.5) = 22.375
+    expect(wet.Rr).toBe(21.8); // 20 + 0.25*(27-20) = 21.75
   });
 });

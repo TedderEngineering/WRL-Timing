@@ -44,6 +44,7 @@ import {
   checkPressure,
   checkTemp,
   emptyCorners,
+  keepUnchangedCorners,
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
@@ -168,7 +169,14 @@ export function GripCalculatorPage() {
         ambientTemp: ambientTemp.value!,
         durationMin: duration.value!,
         wheel: wheel.values as Corners,
-        target: target.values as Corners,
+        // A target left as prefilled is exactly the reference's hot pressure,
+        // not the rounded text converted back.
+        target: keepUnchangedCorners(
+          target.values,
+          form.target,
+          mapCorners(reference.hot, (v) => pressureInput(v, units)),
+          reference.hot
+        ) as Corners,
       });
       setResult(res.calculation);
       setAccount(res.account);

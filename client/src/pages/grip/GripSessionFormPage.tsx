@@ -30,6 +30,8 @@ import {
   checkPressure,
   checkTemp,
   emptyCorners,
+  keepUnchanged,
+  keepUnchangedCorners,
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
@@ -88,12 +90,14 @@ export function GripSessionFormPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   // Entering LF fills the other three wheel temperatures until one of them is edited by hand.
+  // The form text exactly as loaded from an existing session, to tell touched fields from untouched.
+  const [loaded, setLoaded] = useState<FormState | null>(null);
   const [wheelTouched, setWheelTouched] = useState(false);
 
   useEffect(() => {
     const s = existing.data;
     if (!s) return;
-    setForm({
+    const loadedForm: FormState = {
       name: s.name,
       trackId: s.track.id,
       weather: s.weather,
@@ -104,7 +108,9 @@ export function GripSessionFormPage() {
       cold: mapCorners(s.cold, (v) => pressureInput(v, units)),
       hot: mapCorners(s.hot, (v) => pressureInput(v, units)),
       notes: s.notes ?? "",
-    });
+    };
+    setForm(loadedForm);
+    setLoaded(loadedForm);
     setWheelTouched(true);
     // Only when the record loads; a later units change is handled by the user re-opening the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,8 +145,20 @@ export function GripSessionFormPage() {
     const next: Errors = {};
     if (!form.name.trim()) next.name = "Required";
     if (!form.trackId) next.trackId = "Choose a track";
-    const trackTemp = checkTemp(form.trackTemp, units, true);
-    const ambientTemp = checkTemp(form.ambientTemp, units, true);
+    // Untouched fields keep their stored value exactly (see keepUnchanged).
+    const stored = existing.data;
+    const trackTemp = keepUnchanged(
+      checkTemp(form.trackTemp, units, true),
+      form.trackTemp,
+      loaded?.trackTemp,
+      stored?.trackTemp
+    );
+    const ambientTemp = keepUnchanged(
+      checkTemp(form.ambientTemp, units, true),
+      form.ambientTemp,
+      loaded?.ambientTemp,
+      stored?.ambientTemp
+    );
     const duration = checkDuration(form.duration);
     if (trackTemp.error) next.trackTemp = trackTemp.error;
     if (ambientTemp.error) next.ambientTemp = ambientTemp.error;
@@ -164,9 +182,19 @@ export function GripSessionFormPage() {
       trackTemp: trackTemp.value!,
       ambientTemp: ambientTemp.value!,
       durationMin: duration.value!,
-      wheel: wheel.values as Corners,
-      cold: cold.values as Corners,
-      hot: hot.values,
+      wheel: keepUnchangedCorners(
+        wheel.values,
+        form.wheel,
+        loaded?.wheel,
+        stored?.wheel
+      ) as Corners,
+      cold: keepUnchangedCorners(
+        cold.values,
+        form.cold,
+        loaded?.cold,
+        stored?.cold
+      ) as Corners,
+      hot: keepUnchangedCorners(hot.values, form.hot, loaded?.hot, stored?.hot),
       notes: form.notes.trim() || null,
     };
 

@@ -13,7 +13,8 @@ class ApiClient {
   private async request<T>(
     path: string,
     options: RequestInit = {},
-    retry = true
+    retry = true,
+    asText = false
   ): Promise<T> {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
@@ -45,7 +46,7 @@ class ApiClient {
         try {
           await this.attemptRefresh();
           // Retry the original request with new token
-          return this.request<T>(path, options, false);
+          return this.request<T>(path, options, false, asText);
         } catch {
           // Refresh failed — propagate the 401
         }
@@ -64,9 +65,7 @@ class ApiClient {
       return undefined as T;
     }
 
-    // Non-JSON responses (e.g. CSV exports) are returned as text
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) {
+    if (asText) {
       return (await response.text()) as T;
     }
 
@@ -110,7 +109,7 @@ class ApiClient {
 
   /** GET a text response (CSV etc.) with the same auth and refresh handling. */
   getText(path: string) {
-    return this.request<string>(path);
+    return this.request<string>(path, {}, true, true);
   }
 
   post<T>(path: string, body?: unknown) {

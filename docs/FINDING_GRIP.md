@@ -46,6 +46,8 @@ onboarding / auth layout (return visitors to the tool they came from).
 ## Rules the server enforces
 
 - Every query is scoped to the signed-in user.
+- Calculations need a verified email address (admins excepted), and in
+  `testers` mode so does access itself.
 - Free accounts get 3 calculations for life (`grip_accounts.calc_count`;
   deleting a calculation does not give one back). The next returns
   `403 { code: "UPGRADE_REQUIRED", upgrade_required: true }`.
@@ -56,8 +58,9 @@ onboarding / auth layout (return visitors to the tool they came from).
   converts for display.
 - A RaceTrace subscription does not unlock Finding Grip and the reverse.
   Finding Grip's plan is stored in `grip_accounts`; RaceTrace's stays in
-  `subscriptions`. Stripe webhooks are routed by price / metadata
-  (`services/__tests__/grip.billing.test.ts`).
+  `subscriptions`. Stripe webhooks are routed by price / metadata, and
+  Finding Grip state is always re-read from Stripe rather than taken from one
+  event (`services/__tests__/grip.billing.test.ts`).
 
 ## Settings
 
@@ -66,7 +69,7 @@ onboarding / auth layout (return visitors to the tool they came from).
 | `GRIP_ACCESS` | `off`, `admin`, `testers` or `public` | `admin` |
 | `GRIP_TESTER_EMAILS` | Comma-separated emails for `testers` mode | empty |
 | `GRIP_CALC_MODEL` | Calculation model JSON (confidential) | unset: calculator returns 503 |
-| `STRIPE_GRIP_PRO_PRICE_ID` | Stripe price for Pro | unset: checkout returns 503 |
+| `STRIPE_GRIP_PRO_PRICE_ID` | Stripe price id(s) for Pro, comma-separated; the first is sold | unset: checkout returns 503 |
 
 ### Calculation model shape
 
@@ -77,7 +80,7 @@ onboarding / auth layout (return visitors to the tool they came from).
   "terms": [                       // each adds weight × (plus − minus)
     { "weight": 0, "plus": "targetHot", "minus": "refHot" }
   ],
-  "durationCap": 60,               // optional: cap both durations (minutes)
+  "durationCap": 45,               // optional: cap both durations (minutes)
   "wetBlend": 0,                   // optional: wet = dry + wetBlend × (wetToward − dry)
   "wetToward": "targetHot",
   "decimals": 1
@@ -101,15 +104,27 @@ Available inputs, per corner: `refCold`, `refHot`, `targetHot`, `refTrackTemp`,
 
 ## Turning it on
 
-1. Deploy this branch (server and client).
-2. Apply the migration: `cd server && npx prisma migrate deploy`. It only adds
-   new enums and `grip_*` tables and seeds a starter track list.
+1. Apply the migration **first**: `cd server && npx prisma migrate deploy`.
+   It only adds new enums and `grip_*` tables and seeds a starter track list,
+   so it is safe to run while the current version is live. Deploying the code
+   before the tables exist would make Stripe invoice webhooks fail until the
+   migration runs (they now look in `grip_accounts`).
+2. Deploy this branch (server and client).
 3. On the server host set `GRIP_CALC_MODEL`. Leave `GRIP_ACCESS` unset to
    keep it admin-only.
 4. Sign in as an admin, open `/grip/admin`, and load the damper table file.
    The Setup panel shows what is still missing.
 5. When ready to sell Pro: create the product and annual price in Stripe and
-   set `STRIPE_GRIP_PRO_PRICE_ID`. The existing webhook endpoint handles it.
+   set `STRIPE_GRIP_PRO_PRICE_ID` **before anyone can buy at that price**. A
+   subscription at a price the server does not recognise is treated as
+   RaceTrace Pro by the existing RaceTrace code. For the same reason:
+   - sell Finding Grip only through the app's checkout (it tags the
+     subscription with `product: FINDING_GRIP`), not Payment Links;
+   - if a second price is added later, list both ids, comma-separated;
+   - in the Stripe customer portal settings, do not allow switching between
+     RaceTrace and Finding Grip products.
+   The existing webhook endpoint handles the events. Keep its API version at
+   or below the SDK's pinned version (`server/src/lib/stripe.ts`).
 6. Open it up with `GRIP_ACCESS=testers` (plus `GRIP_TESTER_EMAILS`) and later
    `public`.
 
