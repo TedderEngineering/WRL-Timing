@@ -21,5 +21,13 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    rollupOptions: {
+      // Two HTML shells for one app: index.html (RaceTrace) and grip.html
+      // (Finding Grip, with its own title, icon and link-preview tags).
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        grip: path.resolve(__dirname, "grip.html"),
+      },
+    },
   },
 });

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { peekPostAuthRedirect } from "../../lib/postAuthRedirect";
+import { IS_GRIP_SITE, gp } from "../../lib/site";
 
 interface AuthLayoutProps {
   title: string;
@@ -12,13 +13,13 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   const location = useLocation();
   const destination =
     (location.state as { from?: { pathname: string } } | null)?.from?.pathname || peekPostAuthRedirect() || "";
-  const forGrip = destination.startsWith("/grip");
+  const forGrip = IS_GRIP_SITE || destination.startsWith("/grip");
 
   return (
     <div className="container-page flex items-center justify-center min-h-[80vh] py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to={forGrip ? "/grip" : "/"} className="inline-flex flex-col items-center gap-2">
+          <Link to={forGrip ? gp("") : "/"} className="inline-flex flex-col items-center gap-2">
             <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-10 dark:hidden" />
             <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-10 hidden dark:block" />
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{forGrip ? "Finding Grip" : "RaceTrace"}</span>

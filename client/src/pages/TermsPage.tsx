@@ -1,3 +1,4 @@
+import { IS_GRIP_SITE, SITE_NAME } from "../lib/site";
 export function TermsPage() {
   return (
     <div className="container-page py-16 lg:py-24">
@@ -14,7 +15,7 @@ export function TermsPage() {
             1. Acceptance of Terms
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            By accessing or using the RaceTrace service ("Service"), you agree to be
+            By accessing or using the {SITE_NAME} service ("Service"), you agree to be
             bound by these Terms of Service ("Terms"). If you do not agree to these Terms,
             you may not use the Service. We reserve the right to update these Terms at any
             time. Continued use of the Service after changes constitutes acceptance of the
@@ -25,10 +26,9 @@ export function TermsPage() {
             2. Description of Service
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            RaceTrace provides interactive race analysis tools including lap charts,
-            position traces, and timing data visualization for World Racing League events.
-            The Service is available via web application and may include free and paid
-            subscription tiers with varying levels of access and features.
+            {IS_GRIP_SITE
+              ? "Finding Grip provides tire pressure calculation and damper tuning tools for race and track day cars. Its results are estimates intended to support your own judgment; always confirm pressures with a gauge. The Service is available via web application."
+              : "RaceTrace provides interactive race analysis tools including lap charts, position traces, and timing data visualization for World Racing League events. The Service is available via web application and may include free and paid subscription tiers with varying levels of access and features."}
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
@@ -68,7 +68,7 @@ export function TermsPage() {
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             All content, design, and technology comprising the Service are the property of
-            RaceTrace or its licensors. Race timing data is provided for informational
+            {SITE_NAME} or its licensors. Race timing data is provided for informational
             purposes and may be subject to third-party licenses. You retain ownership of
             any content you create or upload.
           </p>

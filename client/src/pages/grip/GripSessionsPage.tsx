@@ -19,6 +19,7 @@ import {
 } from "@/features/grip/components";
 import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 type Sort = "date" | "track" | "name";
 const SORTS = [
@@ -75,7 +76,7 @@ export function GripSessionsPage() {
         subtitle="The baselines your calculations are built from."
         actions={
           <Link
-            to="/grip/sessions/new"
+            to={gp("/sessions/new")}
             className={cn(primaryLinkClass, "px-4 py-2.5 text-sm")}
           >
             + New reference session
@@ -137,14 +138,14 @@ export function GripSessionsPage() {
                   {s.ready ? (
                     <GripButton
                       size="sm"
-                      onClick={() => navigate(`/grip/calculate?ref=${s.id}`)}
+                      onClick={() => navigate(gp(`/calculate?ref=${s.id}`))}
                     >
                       Calculate
                     </GripButton>
                   ) : (
                     <GripButton
                       size="sm"
-                      onClick={() => navigate(`/grip/sessions/${s.id}/edit`)}
+                      onClick={() => navigate(gp(`/sessions/${s.id}/edit`))}
                     >
                       Add hot pressures
                     </GripButton>
@@ -152,7 +153,7 @@ export function GripSessionsPage() {
                   <GripButton
                     size="sm"
                     variant="secondary"
-                    onClick={() => navigate(`/grip/sessions/${s.id}/edit`)}
+                    onClick={() => navigate(gp(`/sessions/${s.id}/edit`))}
                   >
                     Edit
                   </GripButton>

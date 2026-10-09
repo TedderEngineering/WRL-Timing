@@ -48,6 +48,7 @@ import {
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 const WEATHER = [
   ["DRY", "Dry"],
@@ -209,7 +210,7 @@ export function GripCalculatorPage() {
             Create one first. Calculations are built from it.
           </p>
           <Link
-            to="/grip/sessions/new"
+            to={gp("/sessions/new")}
             className={cn(primaryLinkClass, "mt-5 px-5 py-2.5 text-sm")}
           >
             + New reference session
@@ -275,7 +276,7 @@ export function GripCalculatorPage() {
                 tone="warn"
                 action={
                   <Link
-                    to={`/grip/sessions/${reference.id}/edit`}
+                    to={gp(`/sessions/${reference.id}/edit`)}
                     className="text-sm font-semibold text-grip-700 dark:text-grip-300 hover:underline"
                   >
                     Add hot pressures
@@ -426,7 +427,7 @@ export function GripCalculatorPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-gray-500">Saved to your dashboard.</span>
                   <Link
-                    to={`/grip/calculations/${result.id}/convert`}
+                    to={gp(`/calculations/${result.id}/convert`)}
                     className="text-sm font-semibold text-grip-600 dark:text-grip-400 hover:underline"
                   >
                     Convert to reference →

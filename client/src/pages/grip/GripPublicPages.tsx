@@ -15,6 +15,7 @@ import {
 } from "@/features/grip/components";
 import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 /**
  * Annual price shown on the pricing cards, e.g. "$120". Leave null until the
@@ -24,7 +25,7 @@ const PRO_PRICE_PER_YEAR: string | null = null;
 
 const signUpProps = {
   to: "/signup",
-  onClick: () => rememberPostAuthRedirect("/grip/dashboard"),
+  onClick: () => rememberPostAuthRedirect(gp("/dashboard")),
 };
 
 /** While Finding Grip is limited to testers, signed-out visitors see this instead of the marketing pages. */
@@ -41,7 +42,7 @@ function PrivateNotice() {
       </p>
       <Link
         to="/login"
-        state={{ from: { pathname: "/grip/dashboard" } }}
+        state={{ from: { pathname: gp("/dashboard") } }}
         className={cn(secondaryLinkClass, "mt-6 px-5 py-2.5 text-sm")}
       >
         Tester log in
@@ -152,7 +153,7 @@ function PlanCards() {
           </ul>
           {isAuthenticated ? (
             <Link
-              to="/grip/dashboard"
+              to={gp("/dashboard")}
               className={cn(secondaryLinkClass, "px-4 py-2.5 text-sm")}
             >
               Open Finding Grip
@@ -229,7 +230,7 @@ function PlanCards() {
 export function GripHomePage() {
   const { isAuthenticated } = useAuth();
   const { loading, show, free } = useOpenToPublic();
-  if (isAuthenticated) return <Navigate to="/grip/dashboard" replace />;
+  if (isAuthenticated) return <Navigate to={gp("/dashboard")} replace />;
   if (loading) return <Spinner />;
   if (!show) return <PrivateNotice />;
 
@@ -258,14 +259,14 @@ export function GripHomePage() {
               {free ? (
                 <Link
                   to="/login"
-                  state={{ from: { pathname: "/grip/dashboard" } }}
+                  state={{ from: { pathname: gp("/dashboard") } }}
                   className={cn(secondaryLinkClass, "px-7 py-3 text-base")}
                 >
                   Log in
                 </Link>
               ) : (
                 <Link
-                  to="/grip/pricing"
+                  to={gp("/pricing")}
                   className={cn(secondaryLinkClass, "px-7 py-3 text-base")}
                 >
                   View Pricing
@@ -399,7 +400,7 @@ export function GripPricingPage() {
   const [params] = useSearchParams();
   if (loading) return <Spinner />;
   if (!show) return <PrivateNotice />;
-  if (free) return <Navigate to="/grip" replace />;
+  if (free) return <Navigate to={gp("")} replace />;
 
   return (
     <div className="container-page py-12 lg:py-16">

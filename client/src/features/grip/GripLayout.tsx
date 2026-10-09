@@ -5,15 +5,16 @@ import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
 import { cn } from "@/lib/utils";
 import { GripProvider, useGrip } from "./GripContext";
-import { Pill, primaryLinkClass } from "./components";
+import { Pill, Spinner, primaryLinkClass } from "./components";
 import { useGripStatus } from "./hooks";
+import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
 
 const APP_NAV = [
-  { to: "/grip/dashboard", label: "Dashboard", short: "Home" },
-  { to: "/grip/sessions", label: "Sessions", short: "Sessions" },
-  { to: "/grip/calculate", label: "Calculator", short: "Calculate" },
-  { to: "/grip/damper", label: "Damper", short: "Damper" },
-  { to: "/grip/guide", label: "Guide", short: "Guide" },
+  { to: gp("/dashboard"), label: "Dashboard", short: "Home" },
+  { to: gp("/sessions"), label: "Sessions", short: "Sessions" },
+  { to: gp("/calculate"), label: "Calculator", short: "Calculate" },
+  { to: gp("/damper"), label: "Damper", short: "Damper" },
+  { to: gp("/guide"), label: "Guide", short: "Guide" },
 ];
 
 function GripMark({ className }: { className?: string }) {
@@ -35,19 +36,19 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
     ? [
         ...APP_NAV,
         ...(user?.role === "ADMIN"
-          ? [{ to: "/grip/admin", label: "Admin", short: "Admin" }]
+          ? [{ to: gp("/admin"), label: "Admin", short: "Admin" }]
           : []),
       ]
     : [
-        { to: "/grip", label: "Overview", short: "Overview" },
+        { to: gp(""), label: "Overview", short: "Overview" },
         ...(status.free
           ? []
-          : [{ to: "/grip/pricing", label: "Pricing", short: "Pricing" }]),
+          : [{ to: gp("/pricing"), label: "Pricing", short: "Pricing" }]),
       ];
 
   const handleLogout = async () => {
     await logout();
-    navigate("/grip");
+    navigate(gp(""));
   };
 
   return (
@@ -76,7 +77,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               />
             </a>
             <Link
-              to={isAuthenticated ? "/grip/dashboard" : "/grip"}
+              to={isAuthenticated ? gp("/dashboard") : gp("")}
               className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-700 pl-3 text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
             >
               <GripMark className="h-6 w-6 shrink-0" />
@@ -89,7 +90,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <NavLink
                 key={l.to}
                 to={l.to}
-                end={l.to === "/grip"}
+                end={l.to === gp("")}
                 className={({ isActive }) =>
                   cn(
                     "px-2.5 py-1.5 text-sm transition-colors border-b-2",
@@ -111,7 +112,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <>
                 {signedInApp && <PlanPill />}
                 <Link
-                  to="/grip/settings"
+                  to={gp("/settings")}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
                   <span className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 flex items-center justify-center text-xs font-bold">
@@ -128,14 +129,14 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <>
                 <Link
                   to="/login"
-                  state={{ from: { pathname: "/grip/dashboard" } }}
+                  state={{ from: { pathname: gp("/dashboard") } }}
                   className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
                 >
                   Log in
                 </Link>
                 <Link
                   to="/signup"
-                  onClick={() => rememberPostAuthRedirect("/grip/dashboard")}
+                  onClick={() => rememberPostAuthRedirect(gp("/dashboard"))}
                   className={cn(primaryLinkClass, "px-3 py-1.5 text-sm")}
                 >
                   Sign up
@@ -183,15 +184,20 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <>
                 {signedInApp && (
                   <Link
-                    to="/grip/settings"
+                    to={gp("/settings")}
                     className="py-2.5 text-gray-700 dark:text-gray-300"
                   >
                     Settings
                   </Link>
                 )}
-                <Link to="/dashboard" className="py-2.5 text-gray-700 dark:text-gray-300">
-                  RaceTrace
-                </Link>
+                {!IS_GRIP_SITE && (
+                  <Link
+                    to="/dashboard"
+                    className="py-2.5 text-gray-700 dark:text-gray-300"
+                  >
+                    RaceTrace
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="py-2.5 text-left text-red-600 dark:text-red-400"
@@ -203,14 +209,14 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <>
                 <Link
                   to="/login"
-                  state={{ from: { pathname: "/grip/dashboard" } }}
+                  state={{ from: { pathname: gp("/dashboard") } }}
                   className="py-2.5 text-gray-700 dark:text-gray-300"
                 >
                   Log in
                 </Link>
                 <Link
                   to="/signup"
-                  onClick={() => rememberPostAuthRedirect("/grip/dashboard")}
+                  onClick={() => rememberPostAuthRedirect(gp("/dashboard"))}
                   className="py-2.5 font-medium text-grip-600 dark:text-grip-400"
                 >
                   Sign up
@@ -268,16 +274,25 @@ function Footer({ padForTabBar }: { padForTabBar: boolean }) {
             <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
               Tools
             </span>
-            <Link to="/" className="hover:text-gray-700 dark:hover:text-gray-300">
-              RaceTrace
-            </Link>
+            {IS_GRIP_SITE ? (
+              <a
+                href={RACETRACE_URL}
+                className="hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                RaceTrace
+              </a>
+            ) : (
+              <Link to="/" className="hover:text-gray-700 dark:hover:text-gray-300">
+                RaceTrace
+              </Link>
+            )}
             <a
               href="https://converter.tedderengineering.com"
               className="hover:text-gray-700 dark:hover:text-gray-300"
             >
               VBOX to MoTeC Converter
             </a>
-            <Link to="/grip" className="hover:text-gray-700 dark:hover:text-gray-300">
+            <Link to={gp("")} className="hover:text-gray-700 dark:hover:text-gray-300">
               Finding Grip
             </Link>
           </div>
@@ -305,7 +320,7 @@ function Footer({ padForTabBar }: { padForTabBar: boolean }) {
 }
 
 function TabBar() {
-  const tabs = APP_NAV.filter((t) => t.to !== "/grip/guide");
+  const tabs = APP_NAV.filter((t) => t.to !== gp("/guide"));
   return (
     <nav
       aria-label="App"
@@ -343,53 +358,98 @@ function PrivateTesting() {
         Your account isn't part of the test group yet. Tire pressure and damper tools from
         Tedder Engineering are on the way.
       </p>
-      <Link
-        to="/dashboard"
-        className="mt-6 inline-block text-grip-600 dark:text-grip-400 font-medium hover:underline"
-      >
-        Back to RaceTrace
-      </Link>
+      {!IS_GRIP_SITE && (
+        <Link
+          to="/dashboard"
+          className="mt-6 inline-block text-grip-600 dark:text-grip-400 font-medium hover:underline"
+        >
+          Back to RaceTrace
+        </Link>
+      )}
     </div>
   );
+}
+
+/**
+ * Once Finding Grip has its own address, its pages on the RaceTrace site
+ * forward there (before any login prompt, so people sign in on the right site).
+ */
+function GripSiteGate({ children }: { children: React.ReactNode }) {
+  const status = useGripStatus();
+  const location = useLocation();
+
+  let target: string | null = null;
+  if (!IS_GRIP_SITE && status.siteUrl) {
+    try {
+      const site = new URL(status.siteUrl);
+      if (site.origin !== window.location.origin) {
+        target =
+          site.origin +
+          stripGripPrefix(location.pathname) +
+          location.search +
+          location.hash;
+      }
+    } catch {
+      // Misconfigured address: stay here.
+    }
+  }
+
+  useEffect(() => {
+    if (target) window.location.replace(target);
+  }, [target]);
+
+  if (IS_GRIP_SITE) return <>{children}</>;
+  if (status.loading || target) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
 /** Shell for the signed-in app pages: requires login, then loads the Finding Grip account. */
 export function GripAppLayout() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <ProtectedRoute>
-        <GripProvider
-          blocked={
-            <>
-              <Header signedInApp={false} />
-              <main className="flex-1">
-                <PrivateTesting />
-              </main>
-              <Footer padForTabBar={false} />
-            </>
-          }
-        >
-          <Header signedInApp />
-          <main className="flex-1 py-6 sm:py-8 pb-24 md:pb-10">
-            <Outlet />
-          </main>
-          <Footer padForTabBar />
-          <TabBar />
-        </GripProvider>
-      </ProtectedRoute>
-    </div>
+    <GripSiteGate>
+      <div className="min-h-screen flex flex-col">
+        <ProtectedRoute>
+          <GripProvider
+            blocked={
+              <>
+                <Header signedInApp={false} />
+                <main className="flex-1">
+                  <PrivateTesting />
+                </main>
+                <Footer padForTabBar={false} />
+              </>
+            }
+          >
+            <Header signedInApp />
+            <main className="flex-1 py-6 sm:py-8 pb-24 md:pb-10">
+              <Outlet />
+            </main>
+            <Footer padForTabBar />
+            <TabBar />
+          </GripProvider>
+        </ProtectedRoute>
+      </div>
+    </GripSiteGate>
   );
 }
 
 /** Shell for the public pages (overview, pricing). */
 export function GripPublicLayout() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header signedInApp={false} />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-      <Footer padForTabBar={false} />
-    </div>
+    <GripSiteGate>
+      <div className="min-h-screen flex flex-col">
+        <Header signedInApp={false} />
+        <main className="flex-1">
+          <Outlet />
+        </main>
+        <Footer padForTabBar={false} />
+      </div>
+    </GripSiteGate>
   );
 }

@@ -127,6 +127,7 @@ export interface AdminOverview {
   setup: {
     access: "off" | "admin" | "testers" | "public";
     pricing: "free" | "paid";
+    ownAddress: { url: string | null; problem: string | null };
     testerCount: number;
     calcModel: {
       ready: boolean;
@@ -139,7 +140,8 @@ export interface AdminOverview {
 }
 
 export const gripApi = {
-  status: () => api.get<{ open: boolean; free: boolean }>("/grip/status"),
+  status: () =>
+    api.get<{ open: boolean; free: boolean; siteUrl?: string | null }>("/grip/status"),
   me: () => api.get<GripMe>("/grip/me"),
   setUnits: (units: Units) => api.put<{ account: GripAccount }>("/grip/me", { units }),
   tracks: () => api.get<{ tracks: Track[] }>("/grip/tracks").then((r) => r.tracks),

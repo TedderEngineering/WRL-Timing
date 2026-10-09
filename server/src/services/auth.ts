@@ -13,6 +13,7 @@ import {
   getRefreshTokenExpiry,
 } from "../utils/tokens.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email.js";
+import type { Site } from "./site.js";
 import { getSessionLimit } from "../config/sessionLimits.js";
 
 export interface AuthResult {
@@ -36,10 +37,27 @@ export interface AuthResult {
   };
 }
 
-function formatSubscription(sub: { plan: string; status: string; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean } | null) {
+function formatSubscription(
+  sub: {
+    plan: string;
+    status: string;
+    currentPeriodEnd: Date | null;
+    cancelAtPeriodEnd: boolean;
+  } | null
+) {
   return sub
-    ? { plan: sub.plan, status: sub.status, currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null, cancelAtPeriodEnd: sub.cancelAtPeriodEnd }
-    : { plan: "FREE" as const, status: "ACTIVE" as const, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+    ? {
+        plan: sub.plan,
+        status: sub.status,
+        currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      }
+    : {
+        plan: "FREE" as const,
+        status: "ACTIVE" as const,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+      };
 }
 
 // ─── Register ─────────────────────────────────────────────────────────────────
@@ -48,7 +66,8 @@ export async function register(
   email: string,
   password: string,
   displayName?: string,
-  meta: SessionMeta = {}
+  meta: SessionMeta = {},
+  site?: Site
 ): Promise<AuthResult> {
   // Check if email already exists
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -92,12 +111,17 @@ export async function register(
   });
 
   // Send verification email (async, don't block registration)
-  sendVerificationEmail(user.email, verifyToken).catch((err) =>
+  sendVerificationEmail(user.email, verifyToken, site).catch((err) =>
     console.error("Failed to send verification email:", err)
   );
 
   // Generate tokens
-  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role, meta);
+  const { accessToken, refreshToken } = await createTokenPair(
+    user.id,
+    user.email,
+    user.role,
+    meta
+  );
 
   return {
     accessToken,
@@ -123,7 +147,10 @@ export async function login(
   password: string,
   meta: SessionMeta = {}
 ): Promise<AuthResult> {
-  const user = await prisma.user.findUnique({ where: { email }, include: { subscription: true } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { subscription: true },
+  });
   if (!user) {
     throw new AppError(401, "Invalid email or password", "INVALID_CREDENTIALS");
   }
@@ -162,7 +189,12 @@ export async function login(
     });
   }
 
-  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role, meta);
+  const { accessToken, refreshToken } = await createTokenPair(
+    user.id,
+    user.email,
+    user.role,
+    meta
+  );
 
   return {
     accessToken,
@@ -219,12 +251,19 @@ export async function refresh(oldRefreshToken: string): Promise<AuthResult> {
   // Delete old token (rotation)
   await prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
-  const user = await prisma.user.findUnique({ where: { id: payload.userId }, include: { subscription: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    include: { subscription: true },
+  });
   if (!user || user.suspendedAt) {
     throw new AppError(401, "Account not found or suspended", "INVALID_ACCOUNT");
   }
 
-  const { accessToken, refreshToken } = await createTokenPair(user.id, user.email, user.role);
+  const { accessToken, refreshToken } = await createTokenPair(
+    user.id,
+    user.email,
+    user.role
+  );
 
   return {
     accessToken,
@@ -256,7 +295,7 @@ export async function logoutAll(userId: string): Promise<void> {
 
 // ─── Forgot Password ─────────────────────────────────────────────────────────
 
-export async function forgotPassword(email: string): Promise<void> {
+export async function forgotPassword(email: string, site?: Site): Promise<void> {
   const user = await prisma.user.findUnique({ where: { email } });
   // Always succeed to prevent email enumeration
   if (!user) return;
@@ -276,15 +315,12 @@ export async function forgotPassword(email: string): Promise<void> {
     },
   });
 
-  await sendPasswordResetEmail(user.email, token);
+  await sendPasswordResetEmail(user.email, token, site);
 }
 
 // ─── Reset Password ──────────────────────────────────────────────────────────
 
-export async function resetPassword(
-  token: string,
-  newPassword: string
-): Promise<void> {
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
   const tokenHash = hashToken(token);
 
   const resetToken = await prisma.passwordResetToken.findFirst({
@@ -333,7 +369,11 @@ export async function verifyEmail(token: string): Promise<void> {
   });
 
   if (!verifyToken) {
-    throw new AppError(400, "Invalid or expired verification link", "INVALID_VERIFY_TOKEN");
+    throw new AppError(
+      400,
+      "Invalid or expired verification link",
+      "INVALID_VERIFY_TOKEN"
+    );
   }
 
   await prisma.$transaction(async (tx) => {
@@ -351,7 +391,7 @@ export async function verifyEmail(token: string): Promise<void> {
 
 // ─── Resend Verification ─────────────────────────────────────────────────────
 
-export async function resendVerification(userId: string): Promise<void> {
+export async function resendVerification(userId: string, site?: Site): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     throw new AppError(404, "User not found", "USER_NOT_FOUND");
@@ -370,7 +410,11 @@ export async function resendVerification(userId: string): Promise<void> {
   });
 
   if (recentToken) {
-    throw new AppError(429, "Please wait before requesting another email", "RATE_LIMITED");
+    throw new AppError(
+      429,
+      "Please wait before requesting another email",
+      "RATE_LIMITED"
+    );
   }
 
   const { token, hash } = generateSecureToken();
@@ -382,7 +426,7 @@ export async function resendVerification(userId: string): Promise<void> {
     },
   });
 
-  await sendVerificationEmail(user.email, token);
+  await sendVerificationEmail(user.email, token, site);
 }
 
 // ─── Get Current User ────────────────────────────────────────────────────────
@@ -412,10 +456,7 @@ export async function getCurrentUser(userId: string) {
 
 // ─── Complete Onboarding ──────────────────────────────────────────────────────
 
-export async function completeOnboarding(
-  userId: string,
-  theme?: string
-): Promise<void> {
+export async function completeOnboarding(userId: string, theme?: string): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: userId },
@@ -469,10 +510,7 @@ async function createTokenPair(
     .deleteMany({
       where: {
         userId,
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { revokedAt: { not: null } },
-        ],
+        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
       },
     })
     .catch(() => {});
