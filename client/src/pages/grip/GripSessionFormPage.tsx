@@ -35,6 +35,7 @@ import {
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 const WEATHER = [
   ["DRY", "Dry"],
@@ -203,7 +204,7 @@ export function GripSessionFormPage() {
       if (id) await gripApi.updateSession(id, input);
       else await gripApi.createSession(input);
       toast(editing ? "Reference session updated" : "Reference session saved");
-      navigate("/grip/sessions");
+      navigate(gp("/sessions"));
     } catch (err) {
       setErrors({ form: err instanceof Error ? err.message : "Could not save" });
       setSaving(false);
@@ -231,7 +232,7 @@ export function GripSessionFormPage() {
       <PageHeader
         back={
           <Link
-            to="/grip/sessions"
+            to={gp("/sessions")}
             className="text-sm font-medium text-grip-600 dark:text-grip-400 hover:underline"
           >
             ← Reference sessions
@@ -407,7 +408,7 @@ export function GripSessionFormPage() {
               {editing ? "Save changes" : "Save reference session"}
             </GripButton>
             <Link
-              to="/grip/sessions"
+              to={gp("/sessions")}
               className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
             >
               Cancel

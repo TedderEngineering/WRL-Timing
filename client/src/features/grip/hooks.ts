@@ -57,7 +57,7 @@ export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   };
 }
 
-type GripStatus = { open: boolean; free: boolean };
+type GripStatus = { open: boolean; free: boolean; siteUrl?: string | null };
 let statusRequest: Promise<GripStatus> | null = null;
 
 /**
@@ -76,5 +76,7 @@ export function useGripStatus() {
     loading: state.loading,
     open: !!state.data?.open,
     free: state.data?.free ?? true,
+    /** Address of the Finding Grip site once it has one of its own. */
+    siteUrl: state.data?.siteUrl ?? null,
   };
 }

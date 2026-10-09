@@ -13,6 +13,7 @@ import { stripe } from "../../lib/stripe.js";
 import { prisma } from "../../models/prisma.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error-handler.js";
+import { gripPageUrl } from "../site.js";
 
 export const GRIP_PRODUCT = "FINDING_GRIP";
 
@@ -264,8 +265,8 @@ export async function createGripCheckoutSession(userId: string): Promise<string>
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${env.FRONTEND_URL}/grip/settings?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${env.FRONTEND_URL}/grip/pricing?canceled=true`,
+    success_url: `${gripPageUrl("/settings")}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${gripPageUrl("/pricing")}?canceled=true`,
     metadata: { userId, product: GRIP_PRODUCT },
     subscription_data: { metadata: { userId, product: GRIP_PRODUCT } },
   });
@@ -283,7 +284,7 @@ export async function createGripPortalSession(userId: string): Promise<string> {
   }
   const session = await stripe.billingPortal.sessions.create({
     customer: subscription.stripeCustomerId,
-    return_url: `${env.FRONTEND_URL}/grip/settings`,
+    return_url: gripPageUrl("/settings"),
   });
   return session.url;
 }

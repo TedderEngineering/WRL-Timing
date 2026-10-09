@@ -27,6 +27,12 @@ const envSchema = z.object({
   // "testers" (admins + GRIP_TESTER_EMAILS) or "public" (every account).
   GRIP_ACCESS: z.enum(["off", "admin", "testers", "public"]).default("admin"),
   GRIP_TESTER_EMAILS: z.string().optional(),
+  // Finding Grip's own address, e.g. https://findinggrip.tedderengineering.com.
+  // When set: /grip on the RaceTrace site forwards there, and sign-ups made
+  // there get Finding Grip emails and links. Leave unset until the domain works.
+  // Read leniently in services/site.ts: a mistyped value is ignored (and shown
+  // on the Finding Grip admin page) instead of stopping the server.
+  GRIP_PUBLIC_URL: z.string().optional(),
   // "free" (default): every account gets every tool with no limits.
   // "paid": Free and Pro plans, with checkout through Stripe.
   GRIP_PRICING: z.enum(["free", "paid"]).default("free"),

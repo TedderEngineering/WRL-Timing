@@ -159,6 +159,15 @@ export function GripAdminPage() {
             detail={`${ACCESS_TEXT[setup.access]}${setup.access === "testers" ? ` ${setup.testerCount} tester email(s) listed.` : ""} Set with GRIP_ACCESS on the server.`}
           />
           <SetupRow
+            ok={!!setup.ownAddress.url}
+            label="Own address"
+            detail={
+              setup.ownAddress.url
+                ? `${setup.ownAddress.url}. The /grip pages on RaceTrace forward there, and sign-up emails use it.`
+                : `${setup.ownAddress.problem ?? "Not set"}. Finding Grip is served under /grip on RaceTrace. Set GRIP_PUBLIC_URL on the server once the new address works.`
+            }
+          />
+          <SetupRow
             ok={setup.calcModel.ready}
             label="Calculation model"
             detail={

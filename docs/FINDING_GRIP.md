@@ -68,6 +68,7 @@ onboarding / auth layout (return visitors to the tool they came from).
 |---|---|---|
 | `GRIP_ACCESS` | `off`, `admin`, `testers` or `public` | `admin` |
 | `GRIP_TESTER_EMAILS` | Comma-separated emails for `testers` mode | empty |
+| `GRIP_PUBLIC_URL` | Finding Grip's own address, e.g. `https://findinggrip.tedderengineering.com`. When set, `/grip` on RaceTrace forwards there and account emails sent from that site carry the Finding Grip name and links. A mistyped value is ignored and reported on `/grip/admin`, never fatal | unset: served under `/grip` on RaceTrace |
 | `GRIP_PRICING` | `free`: every account gets every tool with no limits, and the pricing and upgrade screens are hidden. `paid`: Free and Pro plans with Stripe checkout | `free` |
 | `GRIP_CALC_MODEL` | Calculation model (confidential): the JSON itself, or base64 of it if the host mangles quotes | unset: calculator returns 503 |
 | `STRIPE_GRIP_PRO_PRICE_ID` | Stripe price id(s) for Pro (only used when `GRIP_PRICING=paid`), comma-separated; the first is sold | unset: checkout returns 503 |
@@ -136,3 +137,29 @@ Available inputs, per corner: `refCold`, `refHot`, `targetHot`, `refTrackTemp`,
   `client/src/pages/grip/GripPublicPages.tsx`).
 - A `findinggrip.tedderengineering.com` domain pointing at `/grip`.
 - Track logos (tracks show their short code until `logoUrl` is set).
+
+## Its own address
+
+The same build serves both sites. `client/src/lib/site.ts` decides which one
+from the hostname: anything starting with `findinggrip.` is the Finding Grip
+site (use `http://findinggrip.localhost:5173` in development).
+
+- On the Finding Grip site the app mounts only Finding Grip, at clean paths
+  (`/dashboard`, `/sessions`, ...), plus the shared account pages (`/login`,
+  `/signup`, `/forgot-password`, `/reset-password`, `/verify-email`, `/account`,
+  `/terms`, `/privacy`) inside the Finding Grip shell. RaceTrace pages do not
+  exist there. Links inside Finding Grip are written with `gp("/dashboard")`
+  so they work on either site.
+- The accent colour (`brand-*` in Tailwind) is a set of CSS variables in
+  `styles/globals.css`; `html.grip-site` swaps RaceTrace blue for Finding Grip
+  orange, so the shared forms match the site they are on.
+- `client/grip.html` is a second HTML shell with Finding Grip's title, icon and
+  link-preview tags. `vercel.json` serves it for the Finding Grip hostname and
+  `racetrace.html` (the built `index.html`, renamed by the build command so the
+  host rule can apply to `/`) for everything else.
+- Sessions are per address: the refresh cookie is host-only, so someone signed
+  in on RaceTrace signs in once more on the Finding Grip site with the same
+  account.
+
+To put it on a new address: add the domain to the Vercel project, point DNS at
+Vercel, confirm the site loads there, then set `GRIP_PUBLIC_URL` on the server.

@@ -23,14 +23,15 @@ import {
 } from "@/features/grip/components";
 import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
     <Link
       to={
         session.ready
-          ? `/grip/calculate?ref=${session.id}`
-          : `/grip/sessions/${session.id}/edit`
+          ? gp(`/calculate?ref=${session.id}`)
+          : gp(`/sessions/${session.id}/edit`)
       }
       className="flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 min-w-0 hover:border-gray-300 dark:hover:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
     >
@@ -103,13 +104,13 @@ export function GripDashboardPage() {
         actions={
           <>
             <Link
-              to="/grip/guide"
+              to={gp("/guide")}
               className={cn(secondaryLinkClass, "px-4 py-2.5 text-sm")}
             >
               Demo and how-to videos
             </Link>
             <Link
-              to="/grip/sessions/new"
+              to={gp("/sessions/new")}
               className={cn(primaryLinkClass, "px-4 py-2.5 text-sm")}
             >
               + New reference session
@@ -150,7 +151,7 @@ export function GripDashboardPage() {
             pressures. Every calculation is built from it.
           </p>
           <Link
-            to="/grip/sessions/new"
+            to={gp("/sessions/new")}
             className={cn(primaryLinkClass, "mt-5 px-5 py-2.5 text-sm")}
           >
             + New reference session
@@ -162,7 +163,7 @@ export function GripDashboardPage() {
             <div className="flex items-center justify-between">
               <Eyebrow>Recent reference sessions</Eyebrow>
               <Link
-                to="/grip/sessions"
+                to={gp("/sessions")}
                 className="text-sm font-medium text-grip-600 dark:text-grip-400 hover:underline"
               >
                 All sessions →
@@ -233,7 +234,7 @@ export function GripDashboardPage() {
                     <GripButton
                       size="sm"
                       variant="secondary"
-                      onClick={() => navigate(`/grip/calculations/${c.id}/convert`)}
+                      onClick={() => navigate(gp(`/calculations/${c.id}/convert`))}
                     >
                       Convert to reference
                     </GripButton>

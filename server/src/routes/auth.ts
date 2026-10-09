@@ -1,6 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
-import { loginLimiter, registerLimiter, passwordResetLimiter } from "../middleware/rate-limit.js";
+import {
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+} from "../middleware/rate-limit.js";
 import { prisma } from "../models/prisma.js";
 import {
   registerSchema,
@@ -11,6 +15,7 @@ import {
 } from "../utils/validators.js";
 import * as authService from "../services/auth.js";
 import { REFRESH_COOKIE_OPTIONS } from "../utils/tokens.js";
+import { siteForRequest } from "../services/site.js";
 
 export const authRouter = Router();
 
@@ -22,10 +27,13 @@ authRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email, password, displayName } = registerSchema.parse(req.body);
-      const result = await authService.register(email, password, displayName, {
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
-      });
+      const result = await authService.register(
+        email,
+        password,
+        displayName,
+        { ipAddress: req.ip, userAgent: req.headers["user-agent"] },
+        siteForRequest(req)
+      );
 
       // Set refresh token as httpOnly cookie
       res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -67,52 +75,46 @@ authRouter.post(
 
 // ─── POST /api/auth/refresh ──────────────────────────────────────────────────
 
-authRouter.post(
-  "/refresh",
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const oldToken = req.cookies?.refresh_token;
-      if (!oldToken) {
-        res.status(401).json({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
-        return;
-      }
-
-      const result = await authService.refresh(oldToken);
-
-      res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
-
-      res.json({
-        accessToken: result.accessToken,
-        user: result.user,
-      });
-    } catch (err) {
-      // Clear invalid cookie
-      res.clearCookie("refresh_token", { path: "/api/auth" });
-      next(err);
+authRouter.post("/refresh", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const oldToken = req.cookies?.refresh_token;
+    if (!oldToken) {
+      res.status(401).json({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
+      return;
     }
+
+    const result = await authService.refresh(oldToken);
+
+    res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
+
+    res.json({
+      accessToken: result.accessToken,
+      user: result.user,
+    });
+  } catch (err) {
+    // Clear invalid cookie
+    res.clearCookie("refresh_token", { path: "/api/auth" });
+    next(err);
   }
-);
+});
 
 // ─── POST /api/auth/logout ───────────────────────────────────────────────────
 
-authRouter.post(
-  "/logout",
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const refreshToken = req.cookies?.refresh_token;
-      if (refreshToken) {
-        await authService.logout(refreshToken);
-      }
-
-      res.clearCookie("refresh_token", { path: "/api/auth" });
-      res.status(204).send();
-    } catch (err) {
-      // Still clear cookie even on error
-      res.clearCookie("refresh_token", { path: "/api/auth" });
-      next(err);
+authRouter.post("/logout", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const refreshToken = req.cookies?.refresh_token;
+    if (refreshToken) {
+      await authService.logout(refreshToken);
     }
+
+    res.clearCookie("refresh_token", { path: "/api/auth" });
+    res.status(204).send();
+  } catch (err) {
+    // Still clear cookie even on error
+    res.clearCookie("refresh_token", { path: "/api/auth" });
+    next(err);
   }
-);
+});
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────
 
@@ -122,10 +124,12 @@ authRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
-      await authService.forgotPassword(email);
+      await authService.forgotPassword(email, siteForRequest(req));
 
       // Always return 200 to prevent email enumeration
-      res.json({ message: "If an account with that email exists, we sent a reset link." });
+      res.json({
+        message: "If an account with that email exists, we sent a reset link.",
+      });
     } catch (err) {
       next(err);
     }
@@ -142,7 +146,9 @@ authRouter.post(
       const { token, password } = resetPasswordSchema.parse(req.body);
       await authService.resetPassword(token, password);
 
-      res.json({ message: "Password has been reset. Please log in with your new password." });
+      res.json({
+        message: "Password has been reset. Please log in with your new password.",
+      });
     } catch (err) {
       next(err);
     }
@@ -172,7 +178,7 @@ authRouter.post(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await authService.resendVerification(req.user!.userId);
+      await authService.resendVerification(req.user!.userId, siteForRequest(req));
       res.json({ message: "Verification email sent." });
     } catch (err) {
       next(err);

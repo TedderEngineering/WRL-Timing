@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { IS_GRIP_SITE, gp, stripGripPrefix } from "./lib/site";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./features/auth";
 
@@ -39,7 +40,7 @@ import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAuditLogPage } from "./pages/admin/AdminAuditLogPage";
 import { AdminQualifyingUploadPage } from "./pages/admin/AdminQualifyingUploadPage";
 
-// Finding Grip (tire pressure & damper tools) — its own shell under /grip
+// Finding Grip (tire pressure & damper tools) — its own shell, and its own site
 import { GripAppLayout, GripPublicLayout } from "./features/grip/GripLayout";
 import { GripHomePage, GripPricingPage } from "./pages/grip/GripPublicPages";
 import { GripDashboardPage } from "./pages/grip/GripDashboardPage";
@@ -52,28 +53,29 @@ import { GripGuidePage } from "./pages/grip/GripGuidePage";
 import { GripSettingsPage } from "./pages/grip/GripSettingsPage";
 import { GripAdminPage } from "./pages/grip/GripAdminPage";
 
-export function App() {
+/** Finding Grip pages. At /grip/... on RaceTrace; at the root of the Finding Grip site. */
+function gripRoutes() {
   return (
-    <Routes>
-      {/* Finding Grip — public pages */}
+    <>
+      {/* Public pages */}
       <Route element={<GripPublicLayout />}>
-        <Route path="/grip" element={<GripHomePage />} />
-        <Route path="/grip/pricing" element={<GripPricingPage />} />
+        <Route path={gp("")} element={<GripHomePage />} />
+        <Route path={gp("/pricing")} element={<GripPricingPage />} />
       </Route>
 
-      {/* Finding Grip — signed-in app (login and access are checked in the layout) */}
+      {/* Signed-in app (login and access are checked in the layout) */}
       <Route element={<GripAppLayout />}>
-        <Route path="/grip/dashboard" element={<GripDashboardPage />} />
-        <Route path="/grip/sessions" element={<GripSessionsPage />} />
-        <Route path="/grip/sessions/new" element={<GripSessionFormPage />} />
-        <Route path="/grip/sessions/:id/edit" element={<GripSessionFormPage />} />
-        <Route path="/grip/calculate" element={<GripCalculatorPage />} />
-        <Route path="/grip/calculations/:id/convert" element={<GripConvertPage />} />
-        <Route path="/grip/damper" element={<GripDamperPage />} />
-        <Route path="/grip/guide" element={<GripGuidePage />} />
-        <Route path="/grip/settings" element={<GripSettingsPage />} />
+        <Route path={gp("/dashboard")} element={<GripDashboardPage />} />
+        <Route path={gp("/sessions")} element={<GripSessionsPage />} />
+        <Route path={gp("/sessions/new")} element={<GripSessionFormPage />} />
+        <Route path={gp("/sessions/:id/edit")} element={<GripSessionFormPage />} />
+        <Route path={gp("/calculate")} element={<GripCalculatorPage />} />
+        <Route path={gp("/calculations/:id/convert")} element={<GripConvertPage />} />
+        <Route path={gp("/damper")} element={<GripDamperPage />} />
+        <Route path={gp("/guide")} element={<GripGuidePage />} />
+        <Route path={gp("/settings")} element={<GripSettingsPage />} />
         <Route
-          path="/grip/admin"
+          path={gp("/admin")}
           element={
             <ProtectedRoute requireAdmin>
               <GripAdminPage />
@@ -81,6 +83,65 @@ export function App() {
           }
         />
       </Route>
+    </>
+  );
+}
+
+/** Old /grip/... links opened on the Finding Grip site go to the same page without the prefix. */
+function StripGripPrefix() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: stripGripPrefix(location.pathname), search: location.search }}
+      replace
+    />
+  );
+}
+
+/**
+ * The Finding Grip site: only Finding Grip, with the shared account pages
+ * (log in, sign up, password reset, terms) shown in its own shell.
+ */
+function GripSite() {
+  return (
+    <Routes>
+      {gripRoutes()}
+
+      <Route element={<GripPublicLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        {/* RaceTrace's welcome tour does not apply here. */}
+        <Route path="/onboarding" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/grip/*" element={<StripGripPrefix />} />
+        <Route path="/grip" element={<StripGripPrefix />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+
+      <Route element={<GripAppLayout />}>
+        <Route
+          path="/account"
+          element={
+            <div className="container-page max-w-3xl">
+              <AccountSettingsPage />
+            </div>
+          }
+        />
+      </Route>
+    </Routes>
+  );
+}
+
+export function App() {
+  if (IS_GRIP_SITE) return <GripSite />;
+
+  return (
+    <Routes>
+      {gripRoutes()}
 
       <Route element={<Layout />}>
         {/* Public routes */}

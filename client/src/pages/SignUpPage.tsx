@@ -6,6 +6,7 @@ import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { cn } from "../lib/utils";
+import { IS_GRIP_SITE } from "../lib/site";
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -57,13 +58,17 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+const SIGNUP_SUBTITLE = IS_GRIP_SITE
+  ? "Free tire pressure and damper tools"
+  : "Start analyzing race data for free";
+
 export function SignUpPage() {
   const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
   if (isLoading) {
     return (
-      <AuthLayout title="Create your account" subtitle="Start analyzing race data for free">
+      <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -98,12 +103,13 @@ export function SignUpPage() {
       },
       onSubmit: async (vals) => {
         await register(vals.email, vals.password, vals.displayName || undefined);
-        navigate("/onboarding", { replace: true });
+        // RaceTrace has a welcome tour; Finding Grip goes straight to the app.
+        navigate(IS_GRIP_SITE ? "/dashboard" : "/onboarding", { replace: true });
       },
     });
 
   return (
-    <AuthLayout title="Create your account" subtitle="Start analyzing race data for free">
+    <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
       <form onSubmit={handleSubmit} className="space-y-5">
         {globalError && <Alert variant="error">{globalError}</Alert>}
 

@@ -14,6 +14,7 @@ import {
   Pill,
 } from "@/features/grip/components";
 import type { Units } from "@/features/grip/units";
+import { IS_GRIP_SITE, gp } from "@/lib/site";
 
 const UNIT_OPTIONS = [
   ["STANDARD", "PSI · °F"],
@@ -217,30 +218,34 @@ export function GripSettingsPage() {
           </h2>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-gray-600 dark:text-gray-400 break-all">
-              Signed in as {user?.email}. Name, password and RaceTrace billing are managed
-              in your account settings.
+              Signed in as {user?.email}.{" "}
+              {IS_GRIP_SITE
+                ? "Your name and password are managed in your account settings."
+                : "Name, password and RaceTrace billing are managed in your account settings."}
             </span>
             <Link
-              to="/settings/account"
+              to={IS_GRIP_SITE ? "/account" : "/settings/account"}
               className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
             >
               Account settings
             </Link>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              to="/dashboard"
-              className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
-            >
-              Open RaceTrace
-            </Link>
+            {!IS_GRIP_SITE && (
+              <Link
+                to="/dashboard"
+                className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Open RaceTrace
+              </Link>
+            )}
             <GripButton
               variant="ghost"
               size="sm"
               className="text-red-600 dark:text-red-400"
               onClick={async () => {
                 await logout();
-                navigate("/grip");
+                navigate(gp(""));
               }}
             >
               Log out

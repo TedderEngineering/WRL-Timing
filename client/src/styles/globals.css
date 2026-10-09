@@ -104,3 +104,33 @@
     color: #666;
   }
 }
+
+/* Site accent colour (Tailwind `brand-*`). RaceTrace blue by default. */
+:root {
+  --brand-50: 240 244 255; /* #f0f4ff */
+  --brand-100: 219 228 255; /* #dbe4ff */
+  --brand-200: 186 200 255; /* #bac8ff */
+  --brand-300: 145 167 255; /* #91a7ff */
+  --brand-400: 116 143 252; /* #748ffc */
+  --brand-500: 92 124 250; /* #5c7cfa */
+  --brand-600: 76 110 245; /* #4c6ef5 */
+  --brand-700: 66 99 235; /* #4263eb */
+  --brand-800: 59 91 219; /* #3b5bdb */
+  --brand-900: 54 79 199; /* #364fc7 */
+  --brand-950: 43 62 160; /* #2b3ea0 */
+}
+
+/* On the Finding Grip site the accent is Finding Grip orange. */
+html.grip-site {
+  --brand-50: 255 244 235;
+  --brand-100: 255 228 204;
+  --brand-200: 255 201 153;
+  --brand-300: 255 166 102;
+  --brand-400: 255 133 51;
+  --brand-500: 255 106 0;
+  --brand-600: 224 90 0;
+  --brand-700: 184 71 0;
+  --brand-800: 147 58 5;
+  --brand-900: 120 47 7;
+  --brand-950: 67 22 2;
+}

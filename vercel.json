@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd client && npm ci && npx vite build",
+  "buildCommand": "cd client && npm ci && npx vite build && mv dist/index.html dist/racetrace.html",
   "outputDirectory": "client/dist",
   "installCommand": "echo 'skip'",
   "framework": null,
@@ -10,7 +10,17 @@
     },
     {
       "source": "/((?!assets/).*)",
-      "destination": "/index.html"
+      "has": [
+        {
+          "type": "host",
+          "value": "findinggrip.tedderengineering.com"
+        }
+      ],
+      "destination": "/grip.html"
+    },
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/racetrace.html"
     }
   ]
 }

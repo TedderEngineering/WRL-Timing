@@ -26,6 +26,7 @@ import {
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
+import { gp } from "@/lib/site";
 
 export function GripConvertPage() {
   const { id = "" } = useParams();
@@ -79,7 +80,7 @@ export function GripConvertPage() {
         notes: notes.trim() || null,
       });
       toast("Calculation Session Converted");
-      navigate("/grip/sessions");
+      navigate(gp("/sessions"));
     } catch (err) {
       setErrors({ form: err instanceof Error ? err.message : "Could not convert" });
       setBusy(false);
@@ -100,7 +101,7 @@ export function GripConvertPage() {
       <PageHeader
         back={
           <Link
-            to="/grip/dashboard"
+            to={gp("/dashboard")}
             className="text-sm font-medium text-grip-600 dark:text-grip-400 hover:underline"
           >
             ← Dashboard
@@ -114,7 +115,7 @@ export function GripConvertPage() {
         <Card className="text-sm text-gray-600 dark:text-gray-400">
           This calculation has already been converted.{" "}
           <Link
-            to="/grip/sessions"
+            to={gp("/sessions")}
             className="font-medium text-grip-600 dark:text-grip-400 hover:underline"
           >
             See your reference sessions
@@ -204,7 +205,7 @@ export function GripConvertPage() {
                 Convert to reference session
               </GripButton>
               <Link
-                to="/grip/dashboard"
+                to={gp("/dashboard")}
                 className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
               >
                 Cancel

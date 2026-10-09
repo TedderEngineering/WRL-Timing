@@ -14,6 +14,7 @@ import { eventsRouter } from "./routes/events.js";
 import { searchRouter } from "./routes/search.js";
 import { qualifyingRouter } from "./routes/qualifying.js";
 import { gripRouter } from "./routes/grip.js";
+import { allowedOrigins } from "./services/site.js";
 
 export function createApp() {
   const app = express();
@@ -37,7 +38,7 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: env.FRONTEND_URL,
+      origin: allowedOrigins(),
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
       allowedHeaders: ["Content-Type", "Authorization"],

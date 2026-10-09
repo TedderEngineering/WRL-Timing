@@ -39,6 +39,7 @@ import {
   createGripCheckoutSession,
   createGripPortalSession,
 } from "../services/grip/billing.js";
+import { gripSite, readGripPublicUrl } from "../services/site.js";
 
 export const gripRouter = Router();
 
@@ -121,7 +122,11 @@ const resultLimiter = rateLimit({
 
 /** Public: lets the client decide whether to show the marketing pages to signed-out visitors. */
 gripRouter.get("/status", (_req, res) => {
-  res.json({ open: env.GRIP_ACCESS === "public", free: gripIsFree() });
+  res.json({
+    open: env.GRIP_ACCESS === "public",
+    free: gripIsFree(),
+    siteUrl: gripSite()?.url ?? null,
+  });
 });
 
 gripRouter.use(requireAuth, requireGripAccess);
@@ -857,6 +862,7 @@ admin.get(
       setup: {
         access: env.GRIP_ACCESS,
         pricing: gripIsFree() ? "free" : "paid",
+        ownAddress: readGripPublicUrl(),
         testerCount: testerEmails().size,
         calcModel: { ready: !!model, version: model?.version ?? null, problem: error },
         damperTable: {
