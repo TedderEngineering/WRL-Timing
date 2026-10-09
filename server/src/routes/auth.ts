@@ -14,7 +14,7 @@ import {
   verifyEmailSchema,
 } from "../utils/validators.js";
 import * as authService from "../services/auth.js";
-import { REFRESH_COOKIE_OPTIONS } from "../utils/tokens.js";
+import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from "../utils/tokens.js";
 import { siteForRequest } from "../services/site.js";
 
 export const authRouter = Router();
@@ -36,7 +36,7 @@ authRouter.post(
       );
 
       // Set refresh token as httpOnly cookie
-      res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
+      setRefreshCookie(res, result.refreshToken);
 
       res.status(201).json({
         accessToken: result.accessToken,
@@ -61,7 +61,7 @@ authRouter.post(
         userAgent: req.headers["user-agent"],
       });
 
-      res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
+      setRefreshCookie(res, result.refreshToken);
 
       res.json({
         accessToken: result.accessToken,
@@ -77,7 +77,7 @@ authRouter.post(
 
 authRouter.post("/refresh", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const oldToken = req.cookies?.refresh_token;
+    const oldToken = readRefreshCookie(req);
     if (!oldToken) {
       res.status(401).json({ error: "No refresh token", code: "NO_REFRESH_TOKEN" });
       return;
@@ -85,7 +85,9 @@ authRouter.post("/refresh", async (req: Request, res: Response, next: NextFuncti
 
     const result = await authService.refresh(oldToken);
 
-    res.cookie("refresh_token", result.refreshToken, REFRESH_COOKIE_OPTIONS);
+    // A refresh inside the rotation grace window returns only an access token:
+    // the browser already holds the newer cookie from the request that won.
+    if (result.refreshToken) setRefreshCookie(res, result.refreshToken);
 
     res.json({
       accessToken: result.accessToken,
@@ -93,7 +95,7 @@ authRouter.post("/refresh", async (req: Request, res: Response, next: NextFuncti
     });
   } catch (err) {
     // Clear invalid cookie
-    res.clearCookie("refresh_token", { path: "/api/auth" });
+    clearRefreshCookie(res);
     next(err);
   }
 });
@@ -102,16 +104,16 @@ authRouter.post("/refresh", async (req: Request, res: Response, next: NextFuncti
 
 authRouter.post("/logout", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const refreshToken = req.cookies?.refresh_token;
+    const refreshToken = readRefreshCookie(req);
     if (refreshToken) {
       await authService.logout(refreshToken);
     }
 
-    res.clearCookie("refresh_token", { path: "/api/auth" });
+    clearRefreshCookie(res);
     res.status(204).send();
   } catch (err) {
     // Still clear cookie even on error
-    res.clearCookie("refresh_token", { path: "/api/auth" });
+    clearRefreshCookie(res);
     next(err);
   }
 });
