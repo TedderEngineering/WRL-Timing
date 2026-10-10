@@ -10,7 +10,12 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import type { GripCalculation, GripReferenceSession, GripTrack } from "@prisma/client";
+import type {
+  GripCalculation,
+  GripReferenceSession,
+  GripTrack,
+  Prisma,
+} from "@prisma/client";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { AppError } from "../middleware/error-handler.js";
 import { prisma } from "../models/prisma.js";
@@ -421,105 +426,163 @@ gripRouter.get(
   })
 );
 
-gripRouter.post(
-  "/calculations",
-  resultLimiter,
-  wrap(async (req, res) => {
-    const userId = req.user!.userId;
-    const input = calculationSchema.parse(req.body);
-    const ref = await ownSession(userId, input.referenceSessionId);
+/**
+ * Check the reference, run the model and return the result with the row data
+ * to store. Shared by "calculate" and "update a saved calculation".
+ */
+async function runCalculation(userId: string, input: z.infer<typeof calculationSchema>) {
+  const ref = await ownSession(userId, input.referenceSessionId);
 
-    if (
-      ref.hotLf === null ||
-      ref.hotRf === null ||
-      ref.hotLr === null ||
-      ref.hotRr === null
-    ) {
-      throw new AppError(
-        422,
-        "Add all four hot pressures to this reference session before calculating from it",
-        "REFERENCE_INCOMPLETE"
-      );
-    }
+  if (
+    ref.hotLf === null ||
+    ref.hotRf === null ||
+    ref.hotLr === null ||
+    ref.hotRr === null
+  ) {
+    throw new AppError(
+      422,
+      "Add all four hot pressures to this reference session before calculating from it",
+      "REFERENCE_INCOMPLETE"
+    );
+  }
 
-    const { model, error } = getDeployedModel();
-    if (!model) {
-      console.error(`Finding Grip calculation unavailable: ${error}`);
+  const { model, error } = getDeployedModel();
+  if (!model) {
+    console.error(`Finding Grip calculation unavailable: ${error}`);
+    throw new AppError(
+      503,
+      "The calculator is not available yet",
+      "CALCULATOR_UNAVAILABLE"
+    );
+  }
+
+  let result;
+  try {
+    result = calculateColdPressures(model, {
+      wet: input.weather === "WET",
+      trackTemp: input.trackTemp,
+      ambientTemp: input.ambientTemp,
+      duration: input.durationMin,
+      wheel: {
+        Lf: input.wheel.lf,
+        Rf: input.wheel.rf,
+        Lr: input.wheel.lr,
+        Rr: input.wheel.rr,
+      },
+      target: {
+        Lf: input.target.lf,
+        Rf: input.target.rf,
+        Lr: input.target.lr,
+        Rr: input.target.rr,
+      },
+      reference: {
+        trackTemp: ref.trackTemp,
+        ambientTemp: ref.ambientTemp,
+        duration: ref.durationMin,
+        cold: { Lf: ref.coldLf, Rf: ref.coldRf, Lr: ref.coldLr, Rr: ref.coldRr },
+        hot: { Lf: ref.hotLf, Rf: ref.hotRf, Lr: ref.hotLr, Rr: ref.hotRr },
+        wheel: { Lf: ref.wheelLf, Rf: ref.wheelRf, Lr: ref.wheelLr, Rr: ref.wheelRr },
+      },
+    });
+  } catch (err) {
+    if (err instanceof CalcModelError) {
+      console.error(`Finding Grip calculation failed: ${err.message}`);
       throw new AppError(
         503,
         "The calculator is not available yet",
         "CALCULATOR_UNAVAILABLE"
       );
     }
+    throw err;
+  }
+
+  // A result outside the range a session can hold means the inputs do not
+  // describe a real run. Say so instead of saving it or using up a free
+  // calculation.
+  if (Object.values(result).some((v) => v < PSI_MIN || v > PSI_MAX)) {
+    throw new AppError(
+      422,
+      "Those inputs give a pressure outside the usable range. Check the temperatures, duration and targets.",
+      "RESULT_OUT_OF_RANGE"
+    );
+  }
+
+  return {
+    ref,
+    data: {
+      referenceSessionId: ref.id,
+      referenceName: ref.name,
+      trackId: ref.trackId,
+      name: input.name,
+      weather: input.weather,
+      trackTemp: input.trackTemp,
+      ambientTemp: input.ambientTemp,
+      durationMin: input.durationMin,
+      wheelLf: input.wheel.lf,
+      wheelRf: input.wheel.rf,
+      wheelLr: input.wheel.lr,
+      wheelRr: input.wheel.rr,
+      targetLf: input.target.lf,
+      targetRf: input.target.rf,
+      targetLr: input.target.lr,
+      targetRr: input.target.rr,
+      resultLf: result.Lf,
+      resultRf: result.Rf,
+      resultLr: result.Lr,
+      resultRr: result.Rr,
+      refColdLf: ref.coldLf,
+      refColdRf: ref.coldRf,
+      refColdLr: ref.coldLr,
+      refColdRr: ref.coldRr,
+    },
+  };
+}
+
+/**
+ * Count one calculation against the account. Returns false when a free
+ * account has none left (only possible with paid plans switched on).
+ */
+async function claimCalculation(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  isPro: boolean
+): Promise<boolean> {
+  if (isPro) {
+    await tx.gripAccount.update({
+      where: { userId },
+      data: { calcCount: { increment: 1 } },
+    });
+    return true;
+  }
+  // Conditional increment so two simultaneous requests cannot both take the last free one.
+  const claimed = await tx.gripAccount.updateMany({
+    where: { userId, calcCount: { lt: FREE_CALCULATION_LIMIT } },
+    data: { calcCount: { increment: 1 } },
+  });
+  return claimed.count > 0;
+}
+
+function sendUpgradeRequired(res: Response) {
+  res.status(403).json({
+    error: `You've used your ${FREE_CALCULATION_LIMIT} free calculations. Upgrade to Pro for unlimited calculations.`,
+    code: "UPGRADE_REQUIRED",
+    upgrade_required: true,
+  });
+}
+
+gripRouter.post(
+  "/calculations",
+  resultLimiter,
+  wrap(async (req, res) => {
+    const userId = req.user!.userId;
+    const input = calculationSchema.parse(req.body);
+    const { ref, data } = await runCalculation(userId, input);
 
     const account = await getOrCreateGripAccount(userId);
     const isPro = hasGripPro(account, req.user!.role);
 
-    let result;
-    try {
-      result = calculateColdPressures(model, {
-        wet: input.weather === "WET",
-        trackTemp: input.trackTemp,
-        ambientTemp: input.ambientTemp,
-        duration: input.durationMin,
-        wheel: {
-          Lf: input.wheel.lf,
-          Rf: input.wheel.rf,
-          Lr: input.wheel.lr,
-          Rr: input.wheel.rr,
-        },
-        target: {
-          Lf: input.target.lf,
-          Rf: input.target.rf,
-          Lr: input.target.lr,
-          Rr: input.target.rr,
-        },
-        reference: {
-          trackTemp: ref.trackTemp,
-          ambientTemp: ref.ambientTemp,
-          duration: ref.durationMin,
-          cold: { Lf: ref.coldLf, Rf: ref.coldRf, Lr: ref.coldLr, Rr: ref.coldRr },
-          hot: { Lf: ref.hotLf, Rf: ref.hotRf, Lr: ref.hotLr, Rr: ref.hotRr },
-          wheel: { Lf: ref.wheelLf, Rf: ref.wheelRf, Lr: ref.wheelLr, Rr: ref.wheelRr },
-        },
-      });
-    } catch (err) {
-      if (err instanceof CalcModelError) {
-        console.error(`Finding Grip calculation failed: ${err.message}`);
-        throw new AppError(
-          503,
-          "The calculator is not available yet",
-          "CALCULATOR_UNAVAILABLE"
-        );
-      }
-      throw err;
-    }
-
-    // A result outside the range a session can hold means the inputs do not
-    // describe a real run. Say so instead of saving it or using up a free
-    // calculation.
-    if (Object.values(result).some((v) => v < PSI_MIN || v > PSI_MAX)) {
-      throw new AppError(
-        422,
-        "Those inputs give a pressure outside the usable range. Check the temperatures, duration and targets.",
-        "RESULT_OUT_OF_RANGE"
-      );
-    }
-
     const created = await prisma.$transaction(async (tx) => {
-      if (isPro) {
-        await tx.gripAccount.update({
-          where: { userId },
-          data: { calcCount: { increment: 1 } },
-        });
-      } else {
-        // Conditional increment so two simultaneous requests cannot both take the last free one.
-        const claimed = await tx.gripAccount.updateMany({
-          where: { userId, calcCount: { lt: FREE_CALCULATION_LIMIT } },
-          data: { calcCount: { increment: 1 } },
-        });
-        if (claimed.count === 0) return null;
-      }
+      if (!(await claimCalculation(tx, userId, isPro))) return null;
 
       await tx.gripReferenceSession.update({
         where: { id: ref.id },
@@ -527,49 +590,72 @@ gripRouter.post(
       });
 
       return tx.gripCalculation.create({
-        data: {
-          userId,
-          referenceSessionId: ref.id,
-          referenceName: ref.name,
-          trackId: ref.trackId,
-          name: input.name,
-          weather: input.weather,
-          trackTemp: input.trackTemp,
-          ambientTemp: input.ambientTemp,
-          durationMin: input.durationMin,
-          wheelLf: input.wheel.lf,
-          wheelRf: input.wheel.rf,
-          wheelLr: input.wheel.lr,
-          wheelRr: input.wheel.rr,
-          targetLf: input.target.lf,
-          targetRf: input.target.rf,
-          targetLr: input.target.lr,
-          targetRr: input.target.rr,
-          resultLf: result.Lf,
-          resultRf: result.Rf,
-          resultLr: result.Lr,
-          resultRr: result.Rr,
-          refColdLf: ref.coldLf,
-          refColdRf: ref.coldRf,
-          refColdLr: ref.coldLr,
-          refColdRr: ref.coldRr,
-        },
+        data: { userId, ...data },
         include: { track: true },
       });
     });
 
     if (!created) {
-      res.status(403).json({
-        error: `You've used your ${FREE_CALCULATION_LIMIT} free calculations. Upgrade to Pro for unlimited calculations.`,
-        code: "UPGRADE_REQUIRED",
-        upgrade_required: true,
-      });
+      sendUpgradeRequired(res);
       return;
     }
 
     const updatedAccount = await getOrCreateGripAccount(userId);
     res.status(201).json({
       calculation: calculationOut(created),
+      account: serializeGripAccount(updatedAccount, req.user!.role),
+    });
+  })
+);
+
+/**
+ * Re-run a saved calculation with changed inputs and store the new result in
+ * its place. It is a fresh run of the model, so it is limited and counted
+ * exactly like a new calculation.
+ */
+gripRouter.put(
+  "/calculations/:id",
+  resultLimiter,
+  wrap(async (req, res) => {
+    const userId = req.user!.userId;
+    const existing = await ownCalculation(userId, idParam(req));
+    const input = calculationSchema.parse(req.body);
+    const { ref, data } = await runCalculation(userId, input);
+
+    const account = await getOrCreateGripAccount(userId);
+    const isPro = hasGripPro(account, req.user!.role);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (!(await claimCalculation(tx, userId, isPro))) return null;
+
+      if (existing.referenceSessionId !== ref.id) {
+        await tx.gripReferenceSession.update({
+          where: { id: ref.id },
+          data: { useCount: { increment: 1 } },
+        });
+      }
+
+      // Scoped to the owner again so the write cannot touch another account's row.
+      const changed = await tx.gripCalculation.updateMany({
+        where: { id: existing.id, userId },
+        data,
+      });
+      if (changed.count === 0)
+        throw new AppError(404, "Calculation not found", "NOT_FOUND");
+      return tx.gripCalculation.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { track: true },
+      });
+    });
+
+    if (!updated) {
+      sendUpgradeRequired(res);
+      return;
+    }
+
+    const updatedAccount = await getOrCreateGripAccount(userId);
+    res.json({
+      calculation: calculationOut(updated),
       account: serializeGripAccount(updatedAccount, req.user!.role),
     });
   })

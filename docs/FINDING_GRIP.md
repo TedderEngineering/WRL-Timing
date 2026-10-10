@@ -46,6 +46,9 @@ onboarding / auth layout (return visitors to the tool they came from).
 ## Rules the server enforces
 
 - Every query is scoped to the signed-in user.
+- A saved calculation can be reopened (`/calculate?calc=<id>` on the client) and
+  re-run in place with `PUT /api/grip/calculations/:id`. That is a fresh run of
+  the model, so it is rate-limited and counted like a new calculation.
 - Every Finding Grip route except `GET /status` needs a verified email address
   (admins excepted). The check is in `requireGripAccess`; an unverified account
   gets `403 EMAIL_NOT_VERIFIED` and the client shows a "verify your email"

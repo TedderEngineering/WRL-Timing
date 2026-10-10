@@ -208,11 +208,15 @@ export function GripDashboardPage() {
                 key={c.id}
                 className="p-4 flex flex-col gap-3 md:flex-row md:items-center"
               >
-                <div className="flex items-center gap-3 min-w-0 md:flex-1">
+                <Link
+                  to={gp(`/calculate?calc=${c.id}`)}
+                  title="Open this calculation"
+                  className="group flex items-center gap-3 min-w-0 md:flex-1 rounded-lg -m-1 p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-grip-500"
+                >
                   <TrackBadge track={c.track} />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100 break-words">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100 break-words group-hover:text-grip-600 dark:group-hover:text-grip-400">
                         {c.name}
                       </span>
                       <WeatherPill weather={c.weather} />
@@ -222,7 +226,7 @@ export function GripDashboardPage() {
                       {formatDate(c.sessionDate)} · from {c.referenceName}
                     </div>
                   </div>
-                </div>
+                </Link>
                 <div className="text-sm tabular-nums text-gray-600 dark:text-gray-300 md:text-right">
                   {(["lf", "rf", "lr", "rr"] as const)
                     .map((k) => formatPressure(c.result[k], units))
@@ -230,6 +234,13 @@ export function GripDashboardPage() {
                   <span className="text-xs text-gray-500">{pressureUnit(units)}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <GripButton
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => navigate(gp(`/calculate?calc=${c.id}`))}
+                  >
+                    Open
+                  </GripButton>
                   {!c.convertedToRef && (
                     <GripButton
                       size="sm"

@@ -36,6 +36,7 @@ import {
   formatTemp,
   pressureInput,
   pressureUnit,
+  tempInput,
   tempUnit,
 } from "@/features/grip/units";
 import {
@@ -44,6 +45,7 @@ import {
   checkPressure,
   checkTemp,
   emptyCorners,
+  keepUnchanged,
   keepUnchangedCorners,
   mapCorners,
 } from "@/features/grip/validate";
@@ -93,23 +95,111 @@ export function GripCalculatorPage() {
   const [result, setResult] = useState<Calculation | null>(null);
   const [upgrade, setUpgrade] = useState(false);
 
+  // A saved calculation opened from the dashboard (?calc=<id>), or the one
+  // just calculated. While one is open, calculating again updates it in place.
+  const calcId = params.get("calc");
+  const [editing, setEditing] = useState<Calculation | null>(null);
+  /** The form as it was when `editing` was loaded or last saved, to tell when inputs have changed since. */
+  const [savedForm, setSavedForm] = useState<string | null>(null);
+  /** Stored values behind prefilled fields, so an untouched field is sent back exactly. */
+  const loaded = useRef<{
+    trackTemp?: { text: string; value: number };
+    ambientTemp?: { text: string; value: number };
+    wheel?: { texts: Corners<string>; values: Corners<number | null> };
+    target?: { texts: Corners<string>; values: Corners<number | null> };
+  }>({});
+  const filledFrom = useRef<string | null>(null);
+  const lastReferenceId = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!calcId) {
+      setEditing(null);
+      return;
+    }
+    if (editing?.id === calcId) return;
+    let cancelled = false;
+    gripApi
+      .calculation(calcId)
+      .then((c) => {
+        if (!cancelled) setEditing(c);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast("That saved calculation no longer exists");
+        setParams({}, { replace: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calcId]);
+
   const all = sessions.data ?? [];
   const refId = params.get("ref");
+  const openCalc = calcId && editing?.id === calcId ? editing : null;
   const reference: ReferenceSession | undefined = useMemo(() => {
     if (all.length === 0) return undefined;
     return (
       all.find((s) => s.id === refId) ??
+      (openCalc ? all.find((s) => s.id === openCalc.referenceSessionId) : undefined) ??
       [...all].filter((s) => s.ready).sort((a, b) => b.useCount - a.useCount)[0] ??
       all[0]
     );
-  }, [all, refId]);
+  }, [all, refId, openCalc]);
 
-  // New reference: start a fresh calculation, carrying the hot pressures over as the starting targets.
+  const formFromCalculation = (c: Calculation): FormState => ({
+    name: c.name,
+    weather: c.weather,
+    trackTemp: tempInput(c.trackTemp, units),
+    ambientTemp: tempInput(c.ambientTemp, units),
+    duration: String(c.durationMin),
+    wheel: mapCorners(c.wheel, (v) => tempInput(v, units)),
+    target: mapCorners(c.target, (v) => pressureInput(v, units)),
+  });
+
+  /** Remember what the form holds for calculation `c`, so later edits can be told apart from it. */
+  const rememberSaved = (c: Calculation, shown: FormState) => {
+    loaded.current = {
+      trackTemp: { text: shown.trackTemp, value: c.trackTemp },
+      ambientTemp: { text: shown.ambientTemp, value: c.ambientTemp },
+      wheel: { texts: shown.wheel, values: c.wheel },
+      target: { texts: shown.target, values: c.target },
+    };
+    filledFrom.current = c.id;
+    setSavedForm(JSON.stringify(shown));
+  };
+
+  // Fill the form: from the saved calculation when one is open, otherwise a
+  // fresh one for the chosen reference with its hot pressures as the targets.
   useEffect(() => {
     if (!reference) return;
+    const referenceChanged =
+      lastReferenceId.current !== undefined && lastReferenceId.current !== reference.id;
+    lastReferenceId.current = reference.id;
+
+    if (calcId) {
+      if (!openCalc) return; // still loading
+      if (filledFrom.current !== openCalc.id) {
+        const shown = formFromCalculation(openCalc);
+        setForm(shown);
+        setErrors({});
+        setWheelTouched(true);
+        setResult(openCalc);
+        rememberSaved(openCalc, shown);
+      } else if (referenceChanged) {
+        // Same inputs, different baseline: the saved result no longer applies.
+        setErrors({});
+      }
+      return;
+    }
+
+    filledFrom.current = null;
+    setSavedForm(null);
     setResult(null);
     setErrors({});
     setWheelTouched(false);
+    const target = mapCorners(reference.hot, (v) => pressureInput(v, units));
+    loaded.current = { target: { texts: target, values: reference.hot } };
     setForm({
       name: `${reference.name} Calc`,
       weather: "DRY",
@@ -117,10 +207,16 @@ export function GripCalculatorPage() {
       ambientTemp: "",
       duration: "",
       wheel: emptyCorners(),
-      target: mapCorners(reference.hot, (v) => pressureInput(v, units)),
+      target,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reference?.id]);
+  }, [reference?.id, openCalc?.id, calcId]);
+
+  /** True when the result on screen was calculated from different inputs than the form now holds. */
+  const stale =
+    !!openCalc &&
+    !!reference &&
+    (savedForm !== JSON.stringify(form) || openCalc.referenceSessionId !== reference.id);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -140,8 +236,13 @@ export function GripCalculatorPage() {
     }));
   };
 
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
+    run(false);
+  };
+
+  /** Calculate. Updates the open saved calculation unless `asNew` (or none is open). */
+  const run = async (asNew: boolean) => {
     if (!reference) return;
     const next: Errors = {};
     if (!form.name.trim()) next.name = "Required";
@@ -162,26 +263,50 @@ export function GripCalculatorPage() {
 
     setBusy(true);
     try {
-      const res = await gripApi.calculate({
+      const input = {
         referenceSessionId: reference.id,
         name: form.name.trim(),
         weather: form.weather,
-        trackTemp: trackTemp.value!,
-        ambientTemp: ambientTemp.value!,
-        durationMin: duration.value!,
-        wheel: wheel.values as Corners,
-        // A target left as prefilled is exactly the reference's hot pressure,
+        // A field left as prefilled is sent back as the exact stored value,
         // not the rounded text converted back.
+        trackTemp: keepUnchanged(
+          trackTemp,
+          form.trackTemp,
+          loaded.current.trackTemp?.text,
+          loaded.current.trackTemp?.value
+        ).value!,
+        ambientTemp: keepUnchanged(
+          ambientTemp,
+          form.ambientTemp,
+          loaded.current.ambientTemp?.text,
+          loaded.current.ambientTemp?.value
+        ).value!,
+        durationMin: duration.value!,
+        wheel: keepUnchangedCorners(
+          wheel.values,
+          form.wheel,
+          loaded.current.wheel?.texts,
+          loaded.current.wheel?.values
+        ) as Corners,
         target: keepUnchangedCorners(
           target.values,
           form.target,
-          mapCorners(reference.hot, (v) => pressureInput(v, units)),
-          reference.hot
+          loaded.current.target?.texts,
+          loaded.current.target?.values
         ) as Corners,
-      });
+      };
+      const updating = !!openCalc && !asNew;
+      const res = updating
+        ? await gripApi.updateCalculation(openCalc.id, input)
+        : await gripApi.calculate(input);
       setResult(res.calculation);
       setAccount(res.account);
-      toast("Calculated and saved");
+      // Keep this calculation open, so the next change updates it instead of
+      // leaving a trail of near-identical copies on the dashboard.
+      setEditing(res.calculation);
+      rememberSaved(res.calculation, form);
+      setParams({ calc: res.calculation.id }, { replace: true });
+      toast(updating ? "Calculation updated" : "Calculated and saved");
       // On a phone the result is below the form; bring it into view.
       requestAnimationFrame(() => {
         if (window.innerWidth < 1024)
@@ -197,7 +322,7 @@ export function GripCalculatorPage() {
     }
   };
 
-  if (sessions.loading) return <Spinner />;
+  if (sessions.loading || (calcId && !openCalc)) return <Spinner />;
   if (!reference) {
     return (
       <div className="container-page">
@@ -229,14 +354,28 @@ export function GripCalculatorPage() {
     <div className="container-page">
       <PageHeader
         title="Tire pressure calculator"
-        subtitle="Enter today's conditions and your hot targets. Get the cold pressure to set."
+        subtitle={
+          openCalc
+            ? `Saved calculation from ${formatDate(openCalc.sessionDate)}. Change anything and update it.`
+            : "Enter today's conditions and your hot targets. Get the cold pressure to set."
+        }
         actions={
-          !account.isPro && (
-            <Pill>
-              {account.freeCalculationsLeft} of {account.freeCalculationLimit} free
-              calculations left
-            </Pill>
-          )
+          <>
+            {!account.isPro && (
+              <Pill>
+                {account.freeCalculationsLeft} of {account.freeCalculationLimit} free
+                calculations left
+              </Pill>
+            )}
+            {openCalc && (
+              <Link
+                to={gp(`/calculate?ref=${reference.id}`)}
+                className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                New calculation
+              </Link>
+            )}
+          </>
         }
       />
 
@@ -261,7 +400,14 @@ export function GripCalculatorPage() {
             <select
               id="calc-reference"
               value={reference.id}
-              onChange={(e) => setParams({ ref: e.target.value }, { replace: true })}
+              onChange={(e) =>
+                setParams(
+                  calcId
+                    ? { calc: calcId, ref: e.target.value }
+                    : { ref: e.target.value },
+                  { replace: true }
+                )
+              }
               className={fieldClass}
             >
               {all.map((s) => (
@@ -271,6 +417,12 @@ export function GripCalculatorPage() {
                 </option>
               ))}
             </select>
+            {openCalc && !openCalc.referenceSessionId && (
+              <Banner tone="warn">
+                The reference session this was calculated from ({openCalc.referenceName})
+                has been deleted. Updating will recalculate from the one selected here.
+              </Banner>
+            )}
             {!reference.ready && (
               <Banner
                 tone="warn"
@@ -391,15 +543,29 @@ export function GripCalculatorPage() {
               Upgrade to calculate
             </GripButton>
           ) : (
-            <GripButton
-              type="submit"
-              size="lg"
-              className="w-full"
-              loading={busy}
-              disabled={!reference.ready || !calculatorAvailable}
-            >
-              Calculate cold tire pressure
-            </GripButton>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <GripButton
+                type="submit"
+                size="lg"
+                className="w-full"
+                loading={busy}
+                disabled={!reference.ready || !calculatorAvailable}
+              >
+                {openCalc ? "Update calculation" : "Calculate cold tire pressure"}
+              </GripButton>
+              {openCalc && (
+                <GripButton
+                  type="button"
+                  size="lg"
+                  variant="secondary"
+                  className="w-full sm:w-auto sm:shrink-0"
+                  disabled={busy || !reference.ready || !calculatorAvailable}
+                  onClick={() => run(true)}
+                >
+                  Save as new
+                </GripButton>
+              )}
+            </div>
           )}
         </form>
 
@@ -424,6 +590,15 @@ export function GripCalculatorPage() {
                     rr: `${formatPressureDelta(result.result.rr - result.referenceCold.rr, units)} vs ref`,
                   }}
                 />
+                {stale && (
+                  <p
+                    className="rounded-lg border border-amber-400/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+                    role="status"
+                  >
+                    These pressures are for the saved inputs. Update the calculation to
+                    see them for what you have entered now.
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-gray-500">Saved to your dashboard.</span>
                   <Link
