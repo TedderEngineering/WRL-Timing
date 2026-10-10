@@ -1014,14 +1014,24 @@ setupRouter.delete(
 
 // ─── Sheets ──────────────────────────────────────────────────────────────────
 
-/** Start a session's target or actual, blank or copied from another of the team's sheets. */
+/**
+ * Start a session's target, actual or tech inspection sheet: blank, copied from
+ * another of the team's sheets, or from the car model's factory baseline.
+ */
 setupRouter.post(
   "/sessions/:id/sheets",
   wrap(async (req, res) => {
     const { session } = await sessionFor(req, param(req, "id"), "ENGINEER");
-    const body = z.object({ kind: sheetKind, fromSheetId: z.string().min(1).nullable().optional() }).parse(req.body);
+    const body = z
+      .object({ kind: sheetKind, fromSheetId: z.string().min(1).nullable().optional(), fromBaseline: z.boolean().optional() })
+      .parse(req.body);
     let data: SheetValues = {};
-    if (body.fromSheetId) {
+    if (body.fromBaseline) {
+      const car = await prisma.setupCar.findUnique({ where: { id: session.carId }, include: { model: true } });
+      const baseline = car?.model ? baselineValues(car.model.spec) : null;
+      if (!baseline) throw new AppError(400, "This car has no factory baseline to start from", "NO_BASELINE");
+      data = baseline;
+    } else if (body.fromSheetId) {
       const source = await prisma.setupSheet.findUnique({
         where: { id: body.fromSheetId },
         include: { session: { select: { teamId: true } } },
