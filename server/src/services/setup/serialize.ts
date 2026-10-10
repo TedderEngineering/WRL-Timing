@@ -4,6 +4,7 @@
  */
 import type {
   SetupCar,
+  SetupCarModel,
   SetupEvent,
   SetupSession,
   SetupSessionNote,
@@ -28,7 +29,19 @@ export const serializeCar = (c: SetupCar) => ({
   carClass: c.carClass,
   reference: readValues(c.reference),
   archived: c.archived,
+  modelId: c.modelId,
   createdAt: c.createdAt,
+});
+
+export const serializeModel = (m: SetupCarModel) => ({
+  id: m.id,
+  slug: m.slug,
+  make: m.make,
+  model: m.model,
+  series: m.series,
+  status: m.status,
+  spec: m.spec,
+  updatedAt: m.updatedAt,
 });
 
 export const serializeEvent = (e: SetupEvent) => ({

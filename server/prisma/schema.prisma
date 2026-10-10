@@ -558,6 +558,12 @@ enum SetupSessionKind {
 enum SetupSheetKind {
   TARGET
   ACTUAL
+  TECH
+}
+
+enum SetupModelStatus {
+  DRAFT
+  PUBLISHED
 }
 
 enum SetupNoteCategory {
@@ -626,14 +632,37 @@ model SetupCar {
   /// Reference notes: measurement locations, adjuster legends. { key: text }
   reference Json     @default("{}")
   archived  Boolean  @default(false)
+  /// The library model this car is, if any; its spec shapes the setup sheet.
+  modelId   String?  @map("model_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   team     SetupTeam      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  model    SetupCarModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
   sessions SetupSession[]
 
   @@index([teamId])
+  @@index([modelId])
   @@map("setup_cars")
+}
+
+/// A car in the shared library, built from its owner's manual: the setup
+/// sheet's fields, choices, limits, baseline and reference, as one JSON spec.
+/// Shared by every team; only Tedder Engineering admins change it.
+model SetupCarModel {
+  id        String           @id @default(cuid())
+  slug      String           @unique
+  make      String
+  model     String
+  series    String?
+  status    SetupModelStatus @default(DRAFT)
+  spec      Json
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  cars SetupCar[]
+
+  @@map("setup_car_models")
 }
 
 model SetupEvent {
