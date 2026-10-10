@@ -94,6 +94,8 @@ export function GripCalculatorPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Calculation | null>(null);
   const [upgrade, setUpgrade] = useState(false);
+  /** Phone only: the reference session's full details start folded away. */
+  const [referenceOpen, setReferenceOpen] = useState(false);
 
   // A saved calculation opened from the dashboard (?calc=<id>), or the one
   // just calculated. While one is open, calculating again updates it in place.
@@ -311,6 +313,7 @@ export function GripCalculatorPage() {
       requestAnimationFrame(() => {
         if (window.innerWidth < 1024)
           resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        // (On a phone the result card sits above the form once there is a result.)
       });
     } catch (err) {
       if (err instanceof ApiClientError && err.code === "UPGRADE_REQUIRED")
@@ -569,8 +572,11 @@ export function GripCalculatorPage() {
           )}
         </form>
 
-        <aside className="space-y-4 lg:sticky lg:top-20">
-          <Card className="space-y-3">
+        {/* On a phone the side panel's cards join the page's single column, so a
+            result can sit above the form (it is what you came for) and the
+            reference details below it. On desktop it is a sticky side panel. */}
+        <aside className="contents lg:block lg:space-y-4 lg:sticky lg:top-20">
+          <Card className={cn("space-y-3", result && "order-first lg:order-none")}>
             <div ref={resultRef} className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900 dark:text-gray-50">
                 Cold tire pressure
@@ -633,29 +639,39 @@ export function GripCalculatorPage() {
               </div>
               <WeatherPill weather={reference.weather} />
             </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-gray-500">Track / ambient</dt>
-              <dd className="text-right tabular-nums whitespace-nowrap">
-                {formatTemp(reference.trackTemp, units)} /{" "}
-                {formatTemp(reference.ambientTemp, units)} {tu}
-              </dd>
-              <dt className="text-gray-500">Session duration</dt>
-              <dd className="text-right tabular-nums">{reference.durationMin} min</dd>
-            </dl>
-            <Eyebrow>Cold wheel temperature</Eyebrow>
-            <CornerGrid
-              unit={tu}
-              values={mapCorners(reference.wheel, (v) => formatTemp(v, units))}
-            />
-            <Eyebrow>Cold pressure</Eyebrow>
-            <CornerGrid unit={pu} values={p(reference.cold)} />
-            <Eyebrow>Hot pressure</Eyebrow>
-            <CornerGrid unit={pu} values={p(reference.hot)} />
-            {reference.notes && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
-                {reference.notes}
-              </p>
-            )}
+            <button
+              type="button"
+              className="lg:hidden text-sm font-semibold text-grip-600 dark:text-grip-400"
+              aria-expanded={referenceOpen}
+              onClick={() => setReferenceOpen((open) => !open)}
+            >
+              {referenceOpen ? "Hide reference details" : "Show reference details"}
+            </button>
+            <div className={cn("space-y-3", !referenceOpen && "hidden lg:block")}>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="text-gray-500">Track / ambient</dt>
+                <dd className="text-right tabular-nums whitespace-nowrap">
+                  {formatTemp(reference.trackTemp, units)} /{" "}
+                  {formatTemp(reference.ambientTemp, units)} {tu}
+                </dd>
+                <dt className="text-gray-500">Session duration</dt>
+                <dd className="text-right tabular-nums">{reference.durationMin} min</dd>
+              </dl>
+              <Eyebrow>Cold wheel temperature</Eyebrow>
+              <CornerGrid
+                unit={tu}
+                values={mapCorners(reference.wheel, (v) => formatTemp(v, units))}
+              />
+              <Eyebrow>Cold pressure</Eyebrow>
+              <CornerGrid unit={pu} values={p(reference.cold)} />
+              <Eyebrow>Hot pressure</Eyebrow>
+              <CornerGrid unit={pu} values={p(reference.hot)} />
+              {reference.notes && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
+                  {reference.notes}
+                </p>
+              )}
+            </div>
           </Card>
           <Note>
             The calculation runs on Tedder Engineering's servers. Results are guidance;

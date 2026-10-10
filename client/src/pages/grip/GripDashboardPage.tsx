@@ -227,7 +227,23 @@ export function GripDashboardPage() {
                     </div>
                   </div>
                 </Link>
-                <div className="text-sm tabular-nums text-gray-600 dark:text-gray-300 md:text-right">
+                {/* Phone: each corner labelled, so nobody has to remember the order. */}
+                <dl className="grid grid-cols-4 gap-2 md:hidden">
+                  {(["lf", "rf", "lr", "rr"] as const).map((k) => (
+                    <div
+                      key={k}
+                      className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-2 py-1.5 text-center"
+                    >
+                      <dt className="text-[10px] font-bold tracking-widest text-gray-500">
+                        {k.toUpperCase()}
+                      </dt>
+                      <dd className="text-base font-bold tabular-nums text-gray-900 dark:text-gray-100">
+                        {formatPressure(c.result[k], units)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="hidden md:block text-sm tabular-nums text-gray-600 dark:text-gray-300 md:text-right">
                   {(["lf", "rf", "lr", "rr"] as const)
                     .map((k) => formatPressure(c.result[k], units))
                     .join(" / ")}{" "}
