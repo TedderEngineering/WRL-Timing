@@ -40,8 +40,10 @@ import {
   cleanValues,
   type SheetValues,
 } from "../services/setup/values.js";
+import { baselineValues, modelSlug, parseSpec } from "../services/setup/spec.js";
 import {
   serializeCar,
+  serializeModel,
   serializeEvent,
   serializeNote,
   serializeRevision,
@@ -58,6 +60,16 @@ const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) 
 const param = (req: Request, name: string) => String(req.params[name]);
 const uid = (req: Request) => req.user!.userId;
 const notFound = () => new AppError(404, "Not found", "NOT_FOUND");
+const isAdmin = (req: Request) => req.user?.role === "ADMIN";
+
+/** A library model a car may use: published, or any model for an admin. */
+async function usableModelId(req: Request, modelId: string): Promise<string> {
+  const model = await prisma.setupCarModel.findUnique({ where: { id: modelId }, select: { id: true, status: true } });
+  if (!model || (model.status !== "PUBLISHED" && !isAdmin(req))) {
+    throw new AppError(400, "Choose a car from the library", "BAD_MODEL");
+  }
+  return model.id;
+}
 
 // ─── Rate limits ─────────────────────────────────────────────────────────────
 // Mounted ahead of the shared per-IP API limit (see app.ts): a crew on one
@@ -123,7 +135,8 @@ const optionalText = (max: number) =>
     .transform((v) => (v ? v : null));
 const roleSchema = z.enum(["OWNER", "ENGINEER", "CAR_CHIEF", "VIEWER"]);
 const sessionKind = z.enum(["TEST", "PRACTICE", "QUALIFYING", "RACE", "OTHER"]);
-const sheetKind = z.enum(["TARGET", "ACTUAL"]);
+const sheetKind = z.enum(["TARGET", "ACTUAL", "TECH"]);
+const SHEET_NAME = { TARGET: "a target", ACTUAL: "an actual", TECH: "a tech inspection" } as const;
 const noteCategory = z.enum(["DRIVER", "ENGINEER", "CHANGE", "GENERAL"]);
 
 const carReference = z
@@ -136,6 +149,8 @@ const carInput = z.object({
   carClass: optionalText(60),
   reference: carReference.optional(),
   archived: z.boolean().optional(),
+  /** A car library model, or null for a car without a spec. */
+  modelId: z.string().min(1).max(40).nullable().optional(),
 });
 
 const eventInput = z.object({
@@ -226,7 +241,7 @@ function bestSheet(sheets: Pick<SetupSheet, "kind" | "data">[]): SheetValues | n
 /** Create a sheet and record its starting values as the first revision. */
 async function createSheetWithRevision(
   tx: Prisma.TransactionClient,
-  input: { sessionId: string; kind: "TARGET" | "ACTUAL"; data: SheetValues; notes: string | null; userId: string }
+  input: { sessionId: string; kind: SetupSheet["kind"]; data: SheetValues; notes: string | null; userId: string }
 ) {
   const sheet = await tx.setupSheet.create({
     data: {
@@ -290,6 +305,51 @@ setupRouter.get(
       select: { id: true, name: true, shortName: true, country: true },
     });
     res.json({ tracks });
+  })
+);
+
+// ─── Car library ─────────────────────────────────────────────────────────────
+// One spec per car model, shared by every team. Teams see published models;
+// Tedder Engineering admins also see drafts and are the only ones who change them.
+
+setupRouter.get(
+  "/models",
+  wrap(async (req, res) => {
+    const models = await prisma.setupCarModel.findMany({
+      where: isAdmin(req) ? {} : { status: "PUBLISHED" },
+      orderBy: [{ make: "asc" }, { model: "asc" }],
+    });
+    res.json({ models: models.map(serializeModel), canEdit: isAdmin(req) });
+  })
+);
+
+setupRouter.get(
+  "/models/:id",
+  wrap(async (req, res) => {
+    const id = param(req, "id");
+    const model = await prisma.setupCarModel.findFirst({ where: { OR: [{ id }, { slug: id }] } });
+    if (!model || (model.status !== "PUBLISHED" && !isAdmin(req))) throw notFound();
+    res.json({ model: serializeModel(model) });
+  })
+);
+
+/** Add or replace a model's spec (admins only). The slug names it in links. */
+setupRouter.put(
+  "/models/:slug",
+  wrap(async (req, res) => {
+    if (!isAdmin(req)) throw new AppError(403, "Only Tedder Engineering admins can change the car library", "FORBIDDEN");
+    const slug = modelSlug.parse(param(req, "slug"));
+    const body = z.object({ status: z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"), spec: z.unknown() }).parse(req.body);
+    const spec = parseSpec(body.spec);
+    const data = {
+      make: spec.make,
+      model: spec.model,
+      series: spec.series ?? null,
+      status: body.status,
+      spec: spec as Prisma.InputJsonValue,
+    };
+    const model = await prisma.setupCarModel.upsert({ where: { slug }, create: { slug, ...data }, update: data });
+    res.json({ model: serializeModel(model) });
   })
 );
 
@@ -571,6 +631,7 @@ setupRouter.post(
         carClass: body.carClass,
         reference: cleanValues(body.reference ?? {}),
         archived: body.archived ?? false,
+        modelId: body.modelId ? await usableModelId(req, body.modelId) : null,
       },
     });
     res.status(201).json({ car: serializeCar(car) });
@@ -589,6 +650,11 @@ setupRouter.patch(
       data: {
         ...body,
         reference: body.reference === undefined ? undefined : cleanValues(body.reference),
+        // Keeping the model a car already has is always allowed, even if it was since unpublished.
+        modelId:
+          body.modelId === undefined || body.modelId === existing.modelId
+            ? undefined
+            : body.modelId && (await usableModelId(req, body.modelId)),
       },
     });
     res.json({ car: serializeCar(car) });
@@ -784,7 +850,7 @@ setupRouter.post(
         name,
         kind: sessionKind,
         sessionDate: dateOnlySchema,
-        startFrom: z.union([z.literal("latest"), z.literal("blank"), z.string().min(1)]).default("latest"),
+        startFrom: z.union([z.literal("latest"), z.literal("blank"), z.literal("baseline"), z.string().min(1)]).default("latest"),
       })
       .parse(req.body);
 
@@ -792,7 +858,12 @@ setupRouter.post(
     if (!car || car.teamId !== event.teamId) throw new AppError(400, "Choose one of this team's cars", "BAD_CAR");
 
     let sourceId: string | null = null;
-    if (body.startFrom === "latest") {
+    let baseline: SheetValues | null = null;
+    if (body.startFrom === "baseline") {
+      const model = car.modelId ? await prisma.setupCarModel.findUnique({ where: { id: car.modelId } }) : null;
+      baseline = model ? baselineValues(model.spec) : null;
+      if (!baseline) throw new AppError(400, "This car has no factory baseline to start from", "NO_BASELINE");
+    } else if (body.startFrom === "latest") {
       const history = await carHistory(car.id);
       sourceId = history.at(-1)?.id ?? null;
     } else if (body.startFrom !== "blank") {
@@ -800,7 +871,7 @@ setupRouter.post(
       if (!source || source.teamId !== event.teamId) throw new AppError(400, "Choose one of this team's sessions", "BAD_SOURCE");
       sourceId = source.id;
     }
-    const sourceValues = sourceId ? bestSheet(await prisma.setupSheet.findMany({ where: { sessionId: sourceId } })) : null;
+    const sourceValues = baseline ?? (sourceId ? bestSheet(await prisma.setupSheet.findMany({ where: { sessionId: sourceId } })) : null);
 
     const last = await prisma.setupSession.findFirst({
       where: { eventId: event.id, carId: car.id },
@@ -823,7 +894,7 @@ setupRouter.post(
       await createSheetWithRevision(tx, {
         sessionId: created.id,
         kind: "TARGET",
-        data: sourceValues ? carryForward(sourceValues) : {},
+        data: baseline ?? (sourceValues ? carryForward(sourceValues) : {}),
         notes: null,
         userId: uid(req),
       });
@@ -959,7 +1030,7 @@ setupRouter.post(
       data = carryForward(readValues(source.data));
     }
     const exists = await prisma.setupSheet.findUnique({ where: { sessionId_kind: { sessionId: session.id, kind: body.kind } } });
-    if (exists) throw new AppError(409, `This session already has ${body.kind === "TARGET" ? "a target" : "an actual"} sheet`, "SHEET_EXISTS");
+    if (exists) throw new AppError(409, `This session already has ${SHEET_NAME[body.kind]} sheet`, "SHEET_EXISTS");
     const sheet = await prisma
       .$transaction((tx) =>
         createSheetWithRevision(tx, { sessionId: session.id, kind: body.kind, data, notes: null, userId: uid(req) })
