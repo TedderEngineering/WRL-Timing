@@ -173,6 +173,12 @@ export const gripApi = {
       "/grip/calculations",
       input
     ),
+  /** Re-run a saved calculation with changed inputs and store the new result in its place. */
+  updateCalculation: (id: string, input: CalculationInput) =>
+    api.put<{ calculation: Calculation; account: GripAccount }>(
+      `/grip/calculations/${id}`,
+      input
+    ),
   deleteCalculation: (id: string) => api.delete<void>(`/grip/calculations/${id}`),
   convert: (id: string, input: { name: string; hot: Corners; notes?: string | null }) =>
     api
