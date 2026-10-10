@@ -217,8 +217,8 @@ export function GripSettingsPage() {
             Tedder Engineering account
           </h2>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm text-gray-600 dark:text-gray-400 break-all">
-              Signed in as {user?.email}.{" "}
+            <span className="min-w-0 flex-1 basis-64 text-sm text-gray-600 dark:text-gray-400">
+              Signed in as <span className="break-all">{user?.email}</span>.{" "}
               {IS_GRIP_SITE
                 ? "Your name and password are managed in your account settings."
                 : "Name, password and RaceTrace billing are managed in your account settings."}
