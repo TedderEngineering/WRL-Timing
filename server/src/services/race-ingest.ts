@@ -283,7 +283,7 @@ export function mapSeriesToSanctioningBody(series: string): string {
  * Find an existing event or create a new one for this race's metadata.
  * Groups by: same sanctioning body, matching track name, dates within 3 days.
  */
-async function findOrCreateEvent(
+export async function findOrCreateEvent(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   metadata: RaceMetadata
 ): Promise<string> {

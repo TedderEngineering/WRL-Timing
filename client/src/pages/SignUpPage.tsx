@@ -66,20 +66,6 @@ export function SignUpPage() {
   const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  if (isLoading) {
-    return (
-      <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AuthLayout>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({
       initialValues: { displayName: "", email: "", password: "", confirmPassword: "" },
@@ -107,6 +93,20 @@ export function SignUpPage() {
         navigate(IS_GRIP_SITE ? "/dashboard" : "/onboarding", { replace: true });
       },
     });
+
+  if (isLoading) {
+    return (
+      <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>

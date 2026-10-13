@@ -5,6 +5,9 @@ import { prisma } from "../models/prisma.js";
 import * as raceSvc from "../services/races.js";
 import { AppError } from "../middleware/error-handler.js";
 import { normalizeTrackName } from "../services/pitStopAnalysis.service.js";
+import { assertRaceAccess, resolveViewer } from "../services/race-access.js";
+import { getRacePackage } from "./packages.js";
+import { packagesFlagOn } from "../packages/flags.js";
 
 export const racesRouter = Router();
 
@@ -81,10 +84,17 @@ racesRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const race = await raceSvc.getRaceDetail(req.params.id as string, req.user?.userId);
+      const { packageAdmin, ...race } = await raceSvc.getRaceDetail(
+        req.params.id as string,
+        req.user?.userId
+      );
       // Non-admin can't see drafts
       if (race.status === "DRAFT" && req.user?.role !== "ADMIN") {
         res.status(404).json({ error: "Race not found", code: "RACE_NOT_FOUND" });
+        return;
+      }
+      if (req.user?.role === "ADMIN") {
+        res.json({ ...race, packageAdmin: { ...packageAdmin, flag: packagesFlagOn() ? "on" : "off" } });
         return;
       }
       res.json(race);
@@ -110,27 +120,8 @@ racesRouter.get(
       });
 
       if (race) {
-        // Determine user's plan
-        let userPlan: string | null = null;
-        const userRole = req.user?.role ?? null;
-
-        if (req.user && userRole !== "ADMIN") {
-          const sub = await prisma.subscription.findUnique({
-            where: { userId: req.user.userId },
-          });
-          userPlan = sub?.plan ?? "FREE";
-        }
-
-        const access = await raceSvc.canUserAccessRace(race, userPlan, userRole);
-        if (!access.accessible) {
-          if (!req.user) {
-            throw new AppError(403, "Sign in to access this race.", "AUTH_REQUIRED");
-          }
-          if (access.reason === "available_soon") {
-            throw new AppError(403, "This race will be available to free members shortly. Pro members get instant access.", "AVAILABLE_SOON");
-          }
-          throw new AppError(403, "Upgrade to Pro or Team to access this race.", "SUBSCRIPTION_REQUIRED");
-        }
+        // Same gating as /package (services/race-access.ts)
+        await assertRaceAccess(await resolveViewer(req.user), race);
       }
 
       const chartData = await raceSvc.getChartData(raceId);
@@ -148,6 +139,11 @@ racesRouter.get(
     }
   }
 );
+
+// ─── GET /api/races/:id/package — Race Analysis Package (RaceTrace 2.0) ─────
+// Same gating as /chart-data. gzip + ETag (sha256). ?version=N is admin-only.
+
+racesRouter.get("/:id/package", optionalAuth, getRacePackage);
 
 // ─── GET /api/races/:id/entries — Entry list for a race ─────────────────────
 

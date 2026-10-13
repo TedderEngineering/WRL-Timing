@@ -1,0 +1,207 @@
+{
+ "p1": {
+  "lapCount": 3,
+  "participantInfo": {
+   "name": "Synthetic Alpha",
+   "startNr": "60",
+   "class": "GTU",
+   "fieldFinishPos": 1,
+   "classFinishPos": 1
+  },
+  "laps": [
+   {
+    "lapNr": 1,
+    "timeOfDay": "2026-02-28T09:01:35.1",
+    "lapTime": "1:35.100",
+    "diffWithLastLap": null,
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [
+     {
+      "time": "30.000"
+     },
+     {
+      "time": "65.100"
+     }
+    ],
+    "inPit": false,
+    "status": [
+     "GREEN"
+    ],
+    "fieldComparison": {
+     "position": 1,
+     "leaderLap": 1,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   },
+   {
+    "lapNr": 2,
+    "timeOfDay": "2026-02-28T09:03:06.3",
+    "lapTime": "1:31.200",
+    "diffWithLastLap": "0.500",
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [],
+    "inPit": false,
+    "status": [
+     "YELLOW"
+    ],
+    "fieldComparison": {
+     "position": 1,
+     "leaderLap": 2,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   },
+   {
+    "lapNr": 3,
+    "timeOfDay": "2026-02-28T09:05:17.2",
+    "lapTime": "2:10.900",
+    "diffWithLastLap": "0.500",
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [],
+    "inPit": true,
+    "status": [
+     "GREEN"
+    ],
+    "fieldComparison": {
+     "position": 1,
+     "leaderLap": 3,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   }
+  ]
+ },
+ "p2_page1": {
+  "lapCount": 3,
+  "participantInfo": {
+   "name": "Synthetic, Bravo \"Q\"",
+   "startNr": "007",
+   "class": "GTO",
+   "fieldFinishPos": 2,
+   "classFinishPos": 1
+  },
+  "laps": [
+   {
+    "lapNr": 1,
+    "timeOfDay": "2026-02-28T09:01:36.0",
+    "lapTime": "1:36.000",
+    "diffWithLastLap": null,
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [],
+    "inPit": false,
+    "status": [
+     "GREEN"
+    ],
+    "fieldComparison": {
+     "position": 2,
+     "leaderLap": 1,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   },
+   {
+    "lapNr": 2,
+    "timeOfDay": "2026-02-28T09:03:08.0",
+    "lapTime": "1:32.000",
+    "diffWithLastLap": "0.500",
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [],
+    "inPit": false,
+    "status": [
+     "GREEN"
+    ],
+    "fieldComparison": {
+     "position": 2,
+     "leaderLap": 2,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   }
+  ]
+ },
+ "p2_page2": {
+  "lapCount": 3,
+  "participantInfo": {
+   "name": "Synthetic, Bravo \"Q\"",
+   "startNr": "007",
+   "class": "GTO",
+   "fieldFinishPos": 2,
+   "classFinishPos": 1
+  },
+  "laps": [
+   {
+    "lapNr": 3,
+    "timeOfDay": "2026-02-28T09:04:41.0",
+    "lapTime": "1:33.000",
+    "diffWithLastLap": "0.500",
+    "diffWithBestLap": "1.000",
+    "speed": 82.057,
+    "sectionTimes": [],
+    "inPit": false,
+    "status": [
+     "GREEN"
+    ],
+    "fieldComparison": {
+     "position": 2,
+     "leaderLap": 3,
+     "diff": {
+      "time": "0.000",
+      "laps": 0
+     },
+     "gapAhead": {
+      "time": "0.000"
+     },
+     "gapBehind": {
+      "time": "-1.200"
+     }
+    }
+   }
+  ]
+ }
+}

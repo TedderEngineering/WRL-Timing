@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/admin/qualifying/new", label: "Upload Qualifying", icon: "⏱️", end: true },
   { to: "/admin/users", label: "Users", icon: "👥", end: false },
   { to: "/admin/audit-log", label: "Audit Log", icon: "📋", end: false },
+  { to: "/admin/api-tokens", label: "API Tokens", icon: "🔑", end: false },
 ];
 
 export function AdminLayout() {

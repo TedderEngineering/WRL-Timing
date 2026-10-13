@@ -41,8 +41,14 @@ redisdata/
 .vercel
 .env.vercel
 
-# Claude Code
-.claude/
+# Claude Code (local settings and worktrees stay private; project skills are shared)
+.claude/*
+!.claude/skills/
+
+# Race intake (G4): work folders, analysis runs, intake credentials
+intake-work/
+analysis-runs/
+.env.intake
 
 # Vite cache & TS build info
 client/.vite/

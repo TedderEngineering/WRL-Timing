@@ -1,0 +1,43 @@
+{
+  "description": "Every fixture mismatch the engine does not fix, with its reason. The acceptance test requires the mismatch list to equal this list exactly (no silent tolerance changes). Explained in ../KNOWN_GAPS.md.",
+  "passages": {
+    "cota_sat": {
+      "58:L46 cycleMembers": "G1",
+      "60:L46 cycleMembers": "G1",
+      "908:L45 cycleMembers": "G1",
+      "1:L41 cycleMembers": "G1",
+      "1:L41 afterLap": "G1",
+      "1:L41 overallPosAfter": "G1",
+      "21:L74 overallPosAfter": "G2",
+      "60:L1 timeLost.method": "G3",
+      "85:L1 timeLost.method": "G3"
+    }
+  },
+  "raceLevel": {
+    "cota_sat": {
+      "class:GP2 medianCleanGreenLapS": "G4",
+      "class:GTO medianCleanGreenLapS": "G4"
+    },
+    "sunday7": {
+      "class:GTU medianCleanGreenLapS": "G5"
+    },
+    "mpc_road_atlanta": {
+      "drive:12:1 driveTimeS": "G7",
+      "drive:23:1 driveTimeS": "G6",
+      "drive:52:2 driveTimeS": "G6",
+      "drive:53:1 driveTimeS": "G6",
+      "drive:57:2 driveTimeS": "G6",
+      "drive:59:2 driveTimeS": "G6",
+      "drive:77:1 driveTimeS": "G6"
+    },
+    "gt4_indy_r1": {
+      "drive:19:2 driveTimeS": "G6",
+      "drive:72:1 driveTimeS": "G6"
+    },
+    "gt4_indy_r2": {
+      "drive:38:2 driveTimeS": "G6",
+      "drive:028:2 driveTimeS": "G6",
+      "drive:131:2 driveTimeS": "G6"
+    }
+  }
+}

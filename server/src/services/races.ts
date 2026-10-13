@@ -1,6 +1,7 @@
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { Prisma } from "@prisma/client";
+import { packagesEnabledFor } from "../packages/flags.js";
 
 interface RaceListParams {
   page: number;
@@ -222,6 +223,10 @@ export async function getRaceDetail(raceId: string, userId?: string) {
       maxLap: true,
       totalCars: true,
       createdAt: true,
+      packagesDisabled: true,
+      currentPackage: {
+        select: { id: true, version: true, resultsStatus: true, dataQualityGrade: true, publishedAt: true },
+      },
       entries: {
         select: {
           carNumber: true,
@@ -264,6 +269,39 @@ export async function getRaceDetail(raceId: string, userId?: string) {
     isFavorited: userId ? (race as any).favorites?.length > 0 : false,
     createdAt: race.createdAt.toISOString(),
     entries: race.entries,
+    ...packageFields(race),
+  };
+}
+
+interface CurrentPackageInfo {
+  id: string;
+  version: number;
+  resultsStatus: "OFFICIAL" | "PROVISIONAL" | null;
+  dataQualityGrade: string | null;
+  publishedAt: Date | null;
+}
+
+/**
+ * Race Analysis Package fields for the race page (RaceTrace 2.0, G5).
+ * `hasPackage` is true only when viewers are served the package: a published
+ * one exists and RACETRACE_PACKAGES / the per-race override allow it.
+ * Otherwise the client uses the legacy /chart-data path.
+ */
+function packageFields(race: { packagesDisabled?: boolean; currentPackage?: CurrentPackageInfo | null }) {
+  const pkg = race.currentPackage ?? null;
+  const served = !!pkg && packagesEnabledFor(race);
+  return {
+    hasPackage: served,
+    packageVersion: served ? pkg!.version : null,
+    resultsStatus: served && pkg!.resultsStatus ? (pkg!.resultsStatus.toLowerCase() as "official" | "provisional") : null,
+    dataQualityGrade: served ? pkg!.dataQualityGrade : null,
+    packagePublishedAt: served && pkg!.publishedAt ? pkg!.publishedAt.toISOString() : null,
+    /** Stripped by routes/races.ts for non-admins. */
+    packageAdmin: {
+      currentPackageId: pkg?.id ?? null,
+      currentVersion: pkg?.version ?? null,
+      raceDisabled: race.packagesDisabled === true,
+    },
   };
 }
 

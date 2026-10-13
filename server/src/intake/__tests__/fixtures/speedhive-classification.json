@@ -1,0 +1,35 @@
+{
+ "rows": [
+  {
+   "position": 1,
+   "startNumber": "60",
+   "name": "Synthetic Alpha",
+   "resultClass": "GTU",
+   "positionInClass": 1,
+   "status": "Normal",
+   "additionalFields": [
+    {
+     "name": "Best Lap",
+     "value": "1:30.100"
+    }
+   ]
+  },
+  {
+   "position": 2,
+   "startNumber": "007",
+   "name": "Synthetic, Bravo \"Q\"",
+   "resultClass": "GTO",
+   "positionInClass": 1,
+   "status": "Normal",
+   "additionalFields": []
+  },
+  {
+   "position": 3,
+   "startNumber": "7",
+   "name": "Synthetic Charlie",
+   "resultClass": "GTO",
+   "positionInClass": 2,
+   "status": "DNS"
+  }
+ ]
+}

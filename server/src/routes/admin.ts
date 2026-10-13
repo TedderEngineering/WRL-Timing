@@ -13,11 +13,15 @@ import { archiveRaceFiles } from "../lib/race-archive.js";
 import { env } from "../config/env.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
+import { adminPackagesRouter } from "./packages.js";
 
 export const adminRouter = Router();
 
 // All admin routes require auth + admin role
 adminRouter.use(requireAuth, requireAdmin);
+
+// Race Analysis Packages (RaceTrace 2.0, G5): upload, list, publish, rollback, reject
+adminRouter.use("/races/:id/packages", adminPackagesRouter);
 
 // ─── GET /api/admin/formats — List available data format parsers ─────────────
 

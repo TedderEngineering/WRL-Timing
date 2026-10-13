@@ -39,6 +39,7 @@ import { AdminUploadPage } from "./pages/admin/AdminUploadPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminAuditLogPage } from "./pages/admin/AdminAuditLogPage";
 import { AdminQualifyingUploadPage } from "./pages/admin/AdminQualifyingUploadPage";
+import { AdminApiTokensPage } from "./pages/admin/AdminApiTokensPage";
 
 // Finding Grip (tire pressure & damper tools) — its own shell, and its own site
 import { GripAppLayout, GripPublicLayout } from "./features/grip/GripLayout";
@@ -217,6 +218,7 @@ export function App() {
           <Route path="qualifying/new" element={<AdminQualifyingUploadPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="audit-log" element={<AdminAuditLogPage />} />
+          <Route path="api-tokens" element={<AdminApiTokensPage />} />
         </Route>
 
         {/* 404 */}

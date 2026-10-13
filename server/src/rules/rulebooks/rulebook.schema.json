@@ -1,0 +1,652 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://racetrace.tedderengineering.com/schemas/racetrace-rulebook-0.1.json",
+  "title": "RaceTrace rulebook (one series, one season)",
+  "description": "See RULEBOOK_FORMAT.md. Checks JSON Schema cannot express (quote <= 25 words, doc references resolve, override targets exist, TBD values have a tbd question, severity overrides only lower) are in tools/validate_rulebooks.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "series",
+    "season",
+    "status",
+    "documents",
+    "classes",
+    "rules"
+  ],
+  "properties": {
+    "schema": {
+      "const": "racetrace-rulebook/0.1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+-[0-9]{4}$"
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "timing_formats"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "timing_formats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/format"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "season": {
+      "type": "integer",
+      "minimum": 2020,
+      "maximum": 2100
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "owner_reviewed",
+        "approved"
+      ]
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/document"
+      },
+      "minItems": 1
+    },
+    "classes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "class_overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/override"
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "who": {
+            "type": "string"
+          },
+          "where_to_get_it": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tbd": {
+      "const": "TBD"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "format": {
+      "enum": [
+        "alkamel_imsa",
+        "alkamel_sro",
+        "alkamel_grcup",
+        "speedhive",
+        "wrl_website",
+        "wrl_redmist"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "possible",
+        "likely"
+      ]
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "version",
+        "date",
+        "issuer",
+        "obtained"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "date": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/date"
+            },
+            {
+              "$ref": "#/$defs/tbd"
+            }
+          ]
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "local_path": {
+          "type": "string"
+        },
+        "retrieved": {
+          "$ref": "#/$defs/date"
+        },
+        "obtained": {
+          "enum": [
+            "yes",
+            "no",
+            "partial"
+          ]
+        },
+        "season_of_document": {
+          "type": "integer"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "source_one": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "doc",
+        "section",
+        "page"
+      ],
+      "properties": {
+        "doc": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string"
+        },
+        "page": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "field": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/source_one"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source_one"
+          }
+        }
+      ]
+    },
+    "tbd_list": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "question"
+        ],
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "checkable_with": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/format"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "applies_to": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "classes": {
+          "oneOf": [
+            {
+              "const": "all"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "driver_count": {
+          "type": "integer"
+        },
+        "stop": {
+          "enum": [
+            "mandatory",
+            "any",
+            "refuel"
+          ]
+        }
+      }
+    },
+    "penalty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "drive_through",
+            "stop_and_go",
+            "stop_plus_s",
+            "time_at_next_stop",
+            "post_race_time",
+            "lap_deduction",
+            "reposition",
+            "warning",
+            "stop_and_hold_laps",
+            "back_of_class",
+            "TBD"
+          ]
+        },
+        "value_s": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/tbd"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "rule_type": {
+      "enum": [
+        "pit_window",
+        "mandatory_stops",
+        "min_pit_time",
+        "min_drive_time_per_driver",
+        "max_drive_time_per_driver",
+        "max_stint",
+        "driver_change",
+        "refuel_tyre",
+        "fcy_pit_procedure",
+        "wave_by",
+        "penalty_service",
+        "penalty_catalogue",
+        "classification",
+        "min_pace",
+        "advisory"
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "title",
+        "params",
+        "source",
+        "quote",
+        "verified",
+        "checkable_with",
+        "check",
+        "severity"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(\\.[a-z0-9_]+)+$"
+        },
+        "type": {
+          "$ref": "#/$defs/rule_type"
+        },
+        "title": {
+          "type": "string"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/applies_to"
+        },
+        "params": {
+          "type": "object"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 3
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": "string"
+        },
+        "verified_on": {
+          "$ref": "#/$defs/date"
+        },
+        "checkable_with": {
+          "$ref": "#/$defs/checkable_with"
+        },
+        "check": {
+          "type": "string",
+          "minLength": 10
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "penalty": {
+          "$ref": "#/$defs/penalty"
+        },
+        "timing_signature": {
+          "type": "string"
+        },
+        "tbd": {
+          "$ref": "#/$defs/tbd_list"
+        },
+        "season_confirmed": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "override": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "source",
+        "quote",
+        "verified"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/rule_type"
+        },
+        "title": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/applies_to"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 3
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "verified_by": {
+          "type": "string"
+        },
+        "verified_on": {
+          "$ref": "#/$defs/date"
+        },
+        "checkable_with": {
+          "$ref": "#/$defs/checkable_with"
+        },
+        "check": {
+          "type": "string"
+        },
+        "tbd": {
+          "$ref": "#/$defs/tbd_list"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "track",
+        "dates",
+        "sessions",
+        "overrides"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "track": {
+          "type": "string"
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/date"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "sessions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "date"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "date": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/date"
+                  },
+                  {
+                    "$ref": "#/$defs/tbd"
+                  }
+                ]
+              },
+              "scheduled_start": {
+                "type": "string"
+              },
+              "duration_s": {
+                "oneOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "$ref": "#/$defs/tbd"
+                  }
+                ]
+              },
+              "laps": {
+                "type": "integer"
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "track": {
+              "type": "string"
+            },
+            "date_range": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/date"
+              }
+            },
+            "event_name_contains": {
+              "type": "string"
+            }
+          }
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document"
+          }
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/override"
+          }
+        },
+        "class_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/override"
+            }
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,285 @@
+/**
+ * Unit tests for the fact engine on synthetic races, one or more per scenario in the Stage 1
+ * catalogues (ACCURACY_ALKAMEL.md §4, ACCURACY_WRL.md §4).
+ */
+import { describe, expect, it } from "vitest";
+import { buildFacts } from "../buildFacts.js";
+import { validatePackage } from "../validate-package.js";
+import { AdapterBlocker } from "../adapters/index.js";
+import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
+import { fcyRace, greenRace, OPTS } from "./scenarios.js";
+import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
+
+const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
+const fcy = buildFacts({ format: "alkamel-imsa", files: synthImsa(fcyRace()), options: OPTS });
+const pass = (pkg: RaceAnalysisPackage, id: string): PitPassage => {
+  const p = pkg.events.pitPassages.find((x) => x.id === id);
+  if (!p) throw new Error(`no ${id}`);
+  return p;
+};
+
+describe("synthetic green race", () => {
+  it("is a schema-valid draft with empty prose sections", () => {
+    const r = validatePackage(green);
+    expect(r.errors).toEqual([]);
+    expect(green.status).toBe("draft");
+    expect(green.carStories).toEqual([]);
+    expect(green.raceSummary).toBeNull();
+    expect(green.schemaVersion).toBe("1.1.0");
+  });
+
+  it("D-CAR: '7', '07' and '007' are three cars with their own passages (AS1)", () => {
+    const cars = green.entries.map((e) => e.car);
+    expect(cars).toEqual(expect.arrayContaining(["7", "07", "007"]));
+    expect(pass(green, "pit:7:1").inLap).toBe(10);
+    expect(pass(green, "pit:07:1").officialPitLaneTimeS).toBe(63);
+    expect(pass(green, "pit:007:1").inLap).toBe(11);
+    expect(green.entries.find((e) => e.car === "007")!.make).toBe("Aston Martin");
+    expect(Object.keys(green.laps.cars)).toEqual(expect.arrayContaining(["7", "07", "007"]));
+    expect(green.dataQuality.some((d) => d.code === "CAR-ID-LEADING-ZERO")).toBe(true);
+  });
+
+  it("drive-through: RC penalty + passage within 1.15 x transit (AS2, AS2b)", () => {
+    const p = pass(green, "pit:11:1");
+    expect(p.kind).toBe("drive_through");
+    expect(p.kindBasis).toContain("rc_penalty_match");
+    expect(p.stopNumber).toBeNull();
+    expect(p.cycleId).toBeNull();
+    expect(p.penaltiesServed).toEqual(["pen:11:1"]);
+    expect(green.events.penalties.find((x) => x.id === "pen:11:1")!.status).toBe("served");
+    expect(pass(green, "pit:11:2").stopNumber).toBe(1);
+  });
+
+  it("stop-and-go: matched to its penalty at any duration", () => {
+    const p = pass(green, "pit:12:1");
+    expect(p.kind).toBe("stop_and_go");
+    expect(p.penaltiesServed).toEqual(["pen:12:1"]);
+    expect(p.positionEffect).toBeDefined();
+  });
+
+  it("garage: rejoined with pit-lane time over 600 s; not a cycle member (AS9b)", () => {
+    const p = pass(green, "pit:10:2");
+    expect(p.kind).toBe("garage");
+    expect(p.officialPitLaneTimeS).toBe(700);
+    expect(p.cycleId).toBeNull();
+    expect(p.timeLost.valueS).toBeGreaterThan(600);
+  });
+
+  it("retirement in the pits: no out-lap, no pit-out, no time lost (AS9, WS7)", () => {
+    const p = pass(green, "pit:24:2");
+    expect(p.kind).toBe("retirement");
+    expect(p.outcome).toBe("retired");
+    expect(p.outLap).toBeNull();
+    expect(p.pitOut).toBeNull();
+    expect(p.officialPitLaneTimeS).toBeNull();
+    expect(p.timeLost).toEqual({ valueS: null, method: "none" });
+    const r = green.events.retirements.find((x) => x.car === "24")!;
+    expect(r.where).toBe("pit_lane");
+    expect(r.passageId).toBe("pit:24:2");
+  });
+
+  it("pit-lane start: not a stop, no time lost, no cycle (AS10)", () => {
+    const p = pass(green, "pit:25:1");
+    expect(p.kind).toBe("pit_lane_start");
+    expect(p.stopNumber).toBeNull();
+    expect(p.timeLost.method).toBe("none");
+    expect(pass(green, "pit:25:2").stopNumber).toBe(1);
+  });
+
+  it("missing time card: passage from the B flag, pit-lane time null, medium (AO1)", () => {
+    const p = pass(green, "pit:23:2");
+    expect(p.kind).toBe("stop");
+    expect(p.pitIn).toBeNull();
+    expect(p.officialPitLaneTimeS).toBeNull();
+    expect(p.confidenceNotes).toContain("no_time_card");
+    expect(p.confidence).toBe("medium");
+  });
+
+  it("lap down in a stop: lapsDown rises through the stop (D-LAPDOWN)", () => {
+    const p = pass(green, "pit:22:1");
+    expect(p.lapDown).toBe(true);
+    const cr = green.cycleResults.find((r) => r.passageId === "pit:22:1")!;
+    expect(cr.lapsDownAfter! - cr.lapsDownBefore!).toBeGreaterThanOrEqual(1);
+  });
+
+  it("cross-class cycle separation: same moment, one cycle per class (AS7, WS14)", () => {
+    const gs = green.pitCycles.find((c) => c.id === "cycle:GS:1")!;
+    const tcr = green.pitCycles.find((c) => c.members.some((m) => m.car === "20"))!;
+    expect(gs.members.map((m) => m.car).sort()).toEqual(["007", "07", "10", "11", "12", "7"]);
+    expect(tcr.class).toBe("TCR");
+    expect(tcr.members.every((m) => ["20", "21", "23", "24", "25"].includes(m.car))).toBe(true);
+    for (const r of green.cycleResults) {
+      const cls = green.entries.find((e) => e.car === r.car)!.class;
+      for (const cp of [...r.gainedOn, ...r.lostTo]) expect(green.entries.find((e) => e.car === cp.car)!.class).toBe(cls);
+    }
+  });
+
+  it("post-race penalty in the official results: positions before and after (AS17, D-FINISH)", () => {
+    const e = green.entries.find((x) => x.car === "21")!;
+    expect(e.result!.postRacePenaltyS).toBe(39);
+    // Pre-penalty rank: same laps, its own total minus the penalty, every other car unchanged.
+    const classified = green.entries.filter((x) => x.result?.status === "classified");
+    const key = (x: (typeof classified)[number]) => [-(x.result!.laps), x.result!.totalTimeS! - (x === e ? 39 : 0)];
+    const order = [...classified].sort((a, b) => key(a)[0] - key(b)[0] || key(a)[1] - key(b)[1]);
+    expect(e.result!.prePenaltyPositionOverall).toBe(order.indexOf(e) + 1);
+    expect(e.result!.prePenaltyPositionOverall!).toBeLessThanOrEqual(e.result!.positionOverall!);
+    const pens = green.events.penalties.filter((p) => p.car === "21");
+    expect(pens.map((p) => [p.penaltyType, p.status])).toEqual([
+      ["drive_through", "converted_post_race"],
+      ["post_race_time", "applied_post_race"],
+    ]);
+    expect(pens[1].convertedFromId).toBe("pen:21:1");
+    expect(pens[1].resultsEffectS).toBe(39);
+  });
+
+  it("green time lost = lap sum - n x reference (D-LOSS-GREEN)", () => {
+    const p = pass(green, "pit:7:1");
+    expect(p.timeLost.method).toBe("green_reference");
+    expect(p.timeLost.nLaps).toBe(2);
+    expect(p.timeLost.valueS).toBeCloseTo(p.timeLost.lapSumS! - 2 * p.timeLost.refLapS!, 3);
+    expect(p.timeLost.refWindowLaps).toBe(5);
+  });
+
+  it("pits_open flags are events with a class scope", () => {
+    const f = green.events.flags.find((x) => x.type === "pits_open")!;
+    expect(f.classes).toEqual([]);
+    expect(f.message).toBe("PITS OPEN ALL CARS");
+  });
+
+  it("drive time per driver excludes penalty pit-lane time (D-DRIVETIME)", () => {
+    const st = green.stints.filter((s) => s.car === "11");
+    expect(st[0].penaltyPassageIds).toEqual(["pit:11:1"]);
+    const raw = st[0].end.raceTimeS - st[0].start.raceTimeS;
+    expect(st[0].driveTimeS).toBeCloseTo(raw - 35, 3);
+    expect(green.driveTimes.some((d) => d.car === "7" && d.driver === 2)).toBe(true);
+  });
+
+  it("is deterministic (T12)", () => {
+    const again = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
+    expect(JSON.stringify(again)).toBe(JSON.stringify(green));
+  });
+});
+
+describe("synthetic FCY race", () => {
+  it("FCY stop: pit-in under the flags-file FCY uses neighbours, never green reference (AS4, WS4)", () => {
+    const p = pass(fcy, "pit:30:1");
+    expect(p.fcyContext).toBe("fcy");
+    expect(p.fcyPeriodIds).toEqual(["fcy:1"]);
+    expect(p.timeLost.method).toBe("fcy_neighbours");
+    expect(p.timeLost.neighbourCars!.length).toBeGreaterThanOrEqual(2);
+    expect(p.timeLost.greenReferenceValueS).not.toBeNull();
+    expect(fcy.fcyPeriods[0].source.kind).toBe("official");
+    const c = fcy.pitCycles.find((x) => x.id === "cycle:GS:1")!;
+    expect(c.trigger).toBe("fcy");
+  });
+
+  it("D-FCY-LAP: laps are 0/1/2 by overlap, never by the flag at the line", () => {
+    const cols = fcy.laps.cars["34"];
+    expect(cols.fcy.some((x) => x === 2)).toBe(true);
+    expect(cols.fcy.some((x) => x === 1)).toBe(true);
+    expect(cols.clean.every((c, i) => !c || cols.fcy[i] === 0)).toBe(true);
+  });
+});
+
+describe("adapters and import blockers", () => {
+  it("duplicate lap number is an import blocker (LAP-DUPLICATE)", () => {
+    const files = synthImsa(greenRace());
+    const lines = files[0].text!.split("\n");
+    files[0] = textFile(files[0].name, "laps", [...lines.slice(0, 3), lines[2], ...lines.slice(3)].join("\n"));
+    expect(() => buildFacts({ format: "alkamel-imsa", files, options: OPTS })).toThrow(AdapterBlocker);
+  });
+
+  it("missing header is an import blocker", () => {
+    const f = textFile("23_Time Cards_Race.CSV", "laps", "NUMBER;LAP_NUMBER\n1;1\n");
+    expect(() => buildFacts({ format: "alkamel-imsa", files: [f], options: OPTS })).toThrow(/ADAPTER-HEADER-MISSING/);
+  });
+});
+
+describe("WRL website export", () => {
+  // 4 cars, class GTU; car 40 has a lap-0 row; car 30 has a blank Lap_Time (WS20) and a span row (WN1);
+  // car 31 has a slow lap 1 with no In_Pit flag (WS19); car 32 has Last_In_Pit without In_Pit (WN3).
+  const rows: [string, string, number, string, string, boolean, boolean, string][] = [];
+  const add = (car: string, lap: number, lt: number | null, trt: number, ip = false, lip = false) =>
+    rows.push([car, "GTU", lap, lt === null ? "" : `00:${String(Math.floor(lt / 60)).padStart(2, "0")}:${(lt % 60).toFixed(3).padStart(6, "0")}`, `${String(Math.floor(trt / 3600)).padStart(2, "0")}:${String(Math.floor((trt % 3600) / 60)).padStart(2, "0")}:${(trt % 60).toFixed(3).padStart(6, "0")}`, ip, lip, "Green"]);
+  for (const [car, off] of [["30", 0], ["31", 1], ["32", 2], ["40", 3]] as const) {
+    let t = 10 + off;
+    for (let L = 1; L <= 12; L++) {
+      let lt = 140 + off * 0.2 + (L === 1 ? 10 : 0) + (car === "31" && L === 1 ? 60 : 0);
+      let ip = false;
+      let lip = false;
+      if (car === "32" && L === 6) lt += 40;
+      if (car === "32" && L === 7) {
+        lt += 60;
+        lip = true;
+      }
+      if (car === "30" && L === 8) ip = true;
+      if (car === "30" && L === 9) lt += 70;
+      if (car === "30" && L === 4) continue; // span: lap 5 row covers laps 4-5
+      t += lt * (car === "30" && L === 5 ? 2 : 1);
+      add(car, L, car === "30" && L === 3 ? null : lt, t, ip, lip);
+    }
+  }
+  rows.unshift(["40", "GTU", 0, "", "", false, false, "Green"]);
+  const pkg = buildFacts({
+    format: "wrl-website",
+    files: synthWrlWebsite(rows, [["30", 1, 1, 12], ["31", 2, 2, 12], ["32", 3, 3, 12], ["40", 4, 4, 12]]),
+    options: { ...OPTS, rulebook: { pitCycleModel: "windows" }, raceDate: "2025-12-06" },
+  });
+  it("validates", () => expect(validatePackage(pkg).errors).toEqual([]));
+  it("blank Lap_Time is null and not clean (WS20, WN2)", () => {
+    const c = pkg.laps.cars["30"];
+    const i = c.lap.indexOf(3);
+    expect(c.lapTimeS[i]).toBeNull();
+    expect(c.clean[i]).toBe(0);
+  });
+  it("skipped lap numbers give a span row (WN1)", () => {
+    const c = pkg.laps.cars["30"];
+    expect(c.lap.includes(4)).toBe(false);
+    expect(c.span![c.lap.indexOf(5)]).toBe(2);
+  });
+  it("lap-0 row dropped with a note (WN4)", () => {
+    expect(pkg.laps.cars["40"].lap[0]).toBe(1);
+    expect(pkg.dataQuality.some((d) => d.code === "LAP-ZERO-DROPPED")).toBe(true);
+  });
+  it("slow lap 1 without a pit flag is not a passage (WS19)", () => {
+    expect(pkg.events.pitPassages.filter((p) => p.car === "31")).toEqual([]);
+  });
+  it("In_Pit run: in-lap = first flagged lap, out-lap = next row (WS1)", () => {
+    const p = pkg.events.pitPassages.find((x) => x.car === "30")!;
+    expect([p.inLap, p.outLap, p.pitIn, p.officialPitLaneTimeS]).toEqual([8, 9, null, null]);
+  });
+  it("Last_In_Pit without In_Pit is a passage with in-lap = previous row (WN3)", () => {
+    const p = pkg.events.pitPassages.find((x) => x.car === "32")!;
+    expect([p.inLap, p.outLap]).toEqual([6, 7]);
+    expect(p.confidenceNotes).toContain("last_in_pit_inferred");
+  });
+  it("time axis has no wall clock; date is the owner's", () => {
+    expect(pkg.metadata.raceDate).toBe("2025-12-06");
+    expect(pkg.metadata.timeOriginSource).toBe("manual");
+    expect(pkg.fcyPeriods.every((f) => f.start.clock === undefined)).toBe(true);
+  });
+});
+
+describe("Speedhive export", () => {
+  it("date from Time of Day; passages from In Pit; reconstructed FCY by time (D-FCY-RECON)", () => {
+    const rows: [string, string, number, string, string, boolean, string][] = [];
+    for (const [car, off] of [["5", 0], ["6", 0.5], ["8", 1]] as const) {
+      let t = 9 * 3600 + 30 + off;
+      for (let L = 1; L <= 10; L++) {
+        const lt = 100 + (L === 4 || L === 5 ? 30 : 0) + (car === "6" && L === 7 ? 40 : 0) + (car === "6" && L === 8 ? 50 : 0);
+        t += lt;
+        const h = Math.floor(t / 3600);
+        const m = Math.floor((t % 3600) / 60);
+        rows.push([car, "GP1", L, `1:${(lt - 60).toFixed(3).padStart(6, "0")}`.replace(/^1:(\d)/, "1:$1"), `2026-02-28T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${(t % 60).toFixed(3).padStart(6, "0")}`, car === "6" && L === 7, L === 4 || L === 5 ? "YELLOW" : "GREEN"]);
+      }
+    }
+    const pkg = buildFacts({ format: "speedhive", files: synthSpeedhive(rows, [["5", 1, "GP1", 1, "Normal"], ["6", 3, "GP1", 3, "Normal"], ["8", 2, "GP1", 2, "Normal"]]), options: { ...OPTS, rulebook: { pitCycleModel: "windows" }, raceDate: undefined } });
+    expect(validatePackage(pkg).errors).toEqual([]);
+    expect(pkg.metadata.raceDate).toBe("2026-02-28");
+    expect(pkg.fcyPeriods.length).toBe(1);
+    expect(pkg.fcyPeriods[0].source.kind).toBe("reconstructed");
+    const p = pkg.events.pitPassages.find((x) => x.car === "6")!;
+    expect([p.inLap, p.outLap, p.kind]).toEqual([7, 8, "stop"]);
+    expect(pkg.entries.every((e) => e.result?.status === "classified")).toBe(true);
+  });
+});

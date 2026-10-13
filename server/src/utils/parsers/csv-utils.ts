@@ -621,8 +621,6 @@ export function parseControlLogCSV(
     let type: ControlLogEvent["type"] = "other";
     if (PENALTY_ACTIONS.has(actionLower)) {
       type = "penalty";
-    } else if (descLower.includes("contact") && actionLower !== "no penalty" && PENALTY_ACTIONS.has(actionLower)) {
-      type = "penalty";
     } else if (descLower.includes("stopped") && actionLower === "no action needed") {
       type = "garage_context";
     }
