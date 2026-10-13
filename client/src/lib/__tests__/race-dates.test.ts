@@ -13,6 +13,9 @@ import {
   toDateInputValue,
 } from "../race-dates";
 
+// The client tsconfig has no Node types; vitest runs in Node, so declare the one global used.
+declare const process: { env: Record<string, string | undefined> };
+
 const ORIGINAL_TZ = process.env.TZ;
 
 // UTC-4: the zone in which the original bug was observed.

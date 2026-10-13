@@ -37,6 +37,7 @@ export function EventCard({
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC", // a race date is a calendar day (F5)
   });
 
   // Auto-expand when search matched a race-level field

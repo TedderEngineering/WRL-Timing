@@ -114,6 +114,7 @@ export function QualifyingDetailPage() {
     month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC", // a race date is a calendar day (F5)
   });
 
   const tabs = [

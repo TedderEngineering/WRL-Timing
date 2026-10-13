@@ -159,6 +159,7 @@ export default function EventSidebar({
                 const dateStr = d.toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
+                  timeZone: "UTC", // calendar day (F5)
                 });
                 const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
 
@@ -318,6 +319,7 @@ export default function EventSidebar({
                       const dateStr = d.toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
+                        timeZone: "UTC", // calendar day (F5)
                       });
                       const raceUrl = `/chart?race=${race.id}${selectedEventId ? `&event=${selectedEventId}` : ""}`;
 
@@ -378,16 +380,21 @@ export default function EventSidebar({
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+// Event dates are calendar days stored as UTC midnight: read UTC parts (F5).
 function formatDateRange(start: string, end: string): string {
   const s = new Date(start);
   const e = new Date(end);
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: "UTC" };
+  const sameDay =
+    s.getUTCFullYear() === e.getUTCFullYear() &&
+    s.getUTCMonth() === e.getUTCMonth() &&
+    s.getUTCDate() === e.getUTCDate();
 
-  if (s.toDateString() === e.toDateString()) {
+  if (sameDay) {
     return s.toLocaleDateString("en-US", { ...opts, year: "numeric" });
   }
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${e.getDate()}, ${s.getFullYear()}`;
+  if (s.getUTCMonth() === e.getUTCMonth() && s.getUTCFullYear() === e.getUTCFullYear()) {
+    return `${s.toLocaleDateString("en-US", opts)}–${e.getUTCDate()}, ${s.getUTCFullYear()}`;
   }
-  return `${s.toLocaleDateString("en-US", opts)}–${e.toLocaleDateString("en-US", opts)}, ${s.getFullYear()}`;
+  return `${s.toLocaleDateString("en-US", opts)}–${e.toLocaleDateString("en-US", opts)}, ${s.getUTCFullYear()}`;
 }
