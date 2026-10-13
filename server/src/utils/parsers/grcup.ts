@@ -14,6 +14,7 @@ import type { PitMarker } from "./position-analysis.js";
 import { generateAnnotations, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
 import { parseGRCupResults } from "../parseGRCupResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
+import { findCarNumberCollisions, carNumberCollisionWarnings } from "../carNumberCollisions.js";
 
 export const grcupParser: RaceDataParser = {
   id: "grcup",
@@ -70,6 +71,18 @@ export const grcupParser: RaceDataParser = {
       lapsByCar.get(lap.carNumber)!.push(lap);
       if (lap.lapNumber > maxLap) maxLap = lap.lapNumber;
     }
+
+    // Leading zeros are lost when cars are keyed by parseInt below, so distinct
+    // entries such as "007", "07" and "7" collapse onto one another. Report it
+    // rather than under-reporting the field without explanation.
+    warnings.push(
+      ...carNumberCollisionWarnings(
+        findCarNumberCollisions(
+          lapsByCar.keys(),
+          new Map(Array.from(lapsByCar, ([car, laps]) => [car, laps.length]))
+        )
+      )
+    );
 
     for (const [carNum, carLaps] of lapsByCar) {
       carLaps.sort((a, b) => a.lapNumber - b.lapNumber);

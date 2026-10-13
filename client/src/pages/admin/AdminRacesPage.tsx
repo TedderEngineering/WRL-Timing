@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 
+import { formatRaceDate, formatRaceDateLong, toDateInputValue } from "../../lib/race-dates";
+
 interface AdminRace {
   id: string;
   name: string;
@@ -95,6 +97,9 @@ export function AdminRacesPage() {
     try {
       await api.put(`/admin/races/${editRace.id}`, {
         name: editRace.name,
+        // The endpoint has always accepted date; the form simply never sent it,
+        // so a wrong race date could not be corrected anywhere in the UI.
+        date: editRace.date,
         track: editRace.track,
         series: editRace.series,
         season: editRace.season,
@@ -211,7 +216,7 @@ export function AdminRacesPage() {
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900 dark:text-gray-100">{race.name}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {race.series} · {race.season} · {new Date(race.date).toLocaleDateString()}
+                          {race.series} · {race.season} · {formatRaceDate(race.date)}
                           {race.premium && <span className="ml-1 text-yellow-600">★ PRO</span>}
                         </div>
                       </td>
@@ -297,7 +302,7 @@ export function AdminRacesPage() {
             <div className="font-semibold text-gray-900 dark:text-gray-100">{deleteConfirm.name}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{deleteConfirm.track}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              {new Date(deleteConfirm.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              {formatRaceDateLong(deleteConfirm.date)}
             </div>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -329,6 +334,21 @@ export function AdminRacesPage() {
           <div className="space-y-3">
             <Field label="Name" value={editRace.name} onChange={(v) => setEditRace({ ...editRace, name: v })} />
             <Field label="Track" value={editRace.track} onChange={(v) => setEditRace({ ...editRace, track: v })} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+              <input
+                type="date"
+                value={toDateInputValue(editRace.date)}
+                onChange={(e) =>
+                  setEditRace({
+                    ...editRace,
+                    // Keep it a UTC-midnight instant, matching how the API stores it.
+                    date: e.target.value ? `${e.target.value}T00:00:00.000Z` : editRace.date,
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-sm"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Series" value={editRace.series} onChange={(v) => setEditRace({ ...editRace, series: v })} />
               <Field label="Season" value={String(editRace.season)} onChange={(v) => setEditRace({ ...editRace, season: Number(v) || editRace.season })} />
