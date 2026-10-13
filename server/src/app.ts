@@ -17,6 +17,8 @@ import { gripRouter } from "./routes/grip.js";
 import { setupRouter } from "./routes/setup.js";
 import { allowedOrigins } from "./services/site.js";
 
+const PACKAGE_UPLOAD_PATH = /^\/api\/admin\/races\/[^/]+\/packages\/?$/;
+
 export function createApp() {
   const app = express();
 
@@ -42,14 +44,24 @@ export function createApp() {
       origin: allowedOrigins(),
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "Authorization", "If-None-Match"],
+      exposedHeaders: [
+        "ETag",
+        "X-RaceTrace-Package-Version",
+        "X-RaceTrace-Package-Status",
+        "X-RaceTrace-Published-At",
+        "X-RaceTrace-Rule-Flags",
+      ],
     })
   );
 
   // ─── Body Parsing ──────────────────────────────────────────────────────────
-  // Stripe webhook needs raw body — skip JSON parsing for that route
+  // Stripe webhook needs raw body — skip JSON parsing for that route.
+  // Race Analysis Package uploads read the raw bytes too (plain or gzip JSON,
+  // hashed exactly as sent; see routes/packages.ts).
   app.use((req, res, next) => {
     if (req.path === "/api/billing/webhook") return next();
+    if (req.method === "POST" && PACKAGE_UPLOAD_PATH.test(req.path)) return next();
     express.json({ limit: "50mb" })(req, res, next);
   });
   app.use(express.urlencoded({ extended: true }));
