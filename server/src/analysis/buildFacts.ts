@@ -185,6 +185,8 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
     if (p.outIdx !== null) {
       rows[p.outIdx].pit |= 2;
       for (let i = p.inIdx + 1; i < p.outIdx; i++) rows[i].pit |= 4;
+    } else if (p.lastIdx !== undefined) {
+      for (let i = p.inIdx + 1; i <= p.lastIdx; i++) rows[i].pit |= 4;
     }
   }
   for (const p of passages) {
@@ -254,7 +256,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
     if (x.files?.length) n.files = x.files;
     return n;
   });
-  const metadataClasses = classes.map((c) => ({ id: c.id, name: c.name, order: c.order, medianCleanGreenLapS: rd(medians[c.id] ?? null) }));
+  const metadataClasses = classes.map((c) => ({ id: c.id, name: c.name, order: c.order, medianCleanGreenLapS: rd(medians[c.id] ?? null, 4) }));
   const season = opts.season ?? Number(axis.raceDate.slice(0, 4));
   const pkg: RaceAnalysisPackage = {
     schemaVersion: "1.0.0",

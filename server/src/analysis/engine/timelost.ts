@@ -10,6 +10,8 @@ import { lossLapTime, type Ctx, type LapRow } from "./context.js";
 import { passageRows, type Passage } from "./passages.js";
 
 export const REF_WINDOWS = [5, 10, 15, 20] as const;
+/** Lap time vs elapsed-difference tolerance for a clean lap. */
+export const ELAPSED_TOL_S = 1.0;
 
 /** laps.clean (D-REF-PACE). */
 export function markClean(ctx: Ctx, passages: Passage[]): void {
@@ -21,7 +23,12 @@ export function markClean(ctx: Ctx, passages: Passage[]): void {
   }
   for (const [car, rows] of Object.entries(ctx.laps)) {
     const own = inPassage.get(car) ?? new Set<number>();
-    for (const r of rows) r.clean = r.lap > 1 && r.fcy === 0 && r.lapTimeS !== null && r.span === 1 && !own.has(r.idx) ? 1 : 0;
+    for (const r of rows) {
+      // A row whose elapsed duration disagrees with its lap time by more than 1 s (WRL website export:
+      // repeated or shifted Total_Race_Time) is not a trustworthy green lap (spec §5 lap cell, medium).
+      const consistent = r.lapTimeS !== null && Math.abs(r.durationS - r.lapTimeS) <= ELAPSED_TOL_S;
+      r.clean = r.lap > 1 && r.fcy === 0 && r.lapTimeS !== null && r.span === 1 && consistent && !own.has(r.idx) ? 1 : 0;
+    }
   }
 }
 
@@ -61,7 +68,7 @@ function greenLoss(ctx: Ctx, s: Span): TimeLost {
   if (ref === null) {
     return { valueS: null, method: "none", nLaps: n, lapSumS: rd(lapSum), refLapS: null, refLapCount: 0 };
   }
-  return { valueS: rd(lapSum - n * ref), method: "green_reference", nLaps: n, lapSumS: rd(lapSum), refLapS: rd(ref), refLapCount: nref, refWindowLaps: w! };
+  return { valueS: rd(lapSum - n * ref), method: "green_reference", nLaps: n, lapSumS: rd(lapSum), refLapS: rd(ref, 4), refLapCount: nref, refWindowLaps: w! };
 }
 
 interface FcyLoss {

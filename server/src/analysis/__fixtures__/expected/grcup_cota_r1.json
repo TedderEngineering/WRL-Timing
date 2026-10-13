@@ -1,0 +1,437 @@
+{
+ "race": "grcup_cota_r1",
+ "family": "alkamel",
+ "derivedFrom": [
+  "audit1c/alkamel/fixtures/grcup_cota_r1.json",
+  "stage2/core/fixture_deltas.json"
+ ],
+ "fcyIntervalsClockS": [
+  [
+   57390.841,
+   57661.977
+  ],
+  [
+   59006.853,
+   59440.998
+  ]
+ ],
+ "fcyReconstructed": true,
+ "fcyLeaderLaps": null,
+ "classMedianCleanGreenLapS": {
+  "Am": 151.1
+ },
+ "transitEstimateS": 37.433,
+ "groups": [],
+ "cycles": [
+  {
+   "id": "cycle:Am:1",
+   "members": [
+    "15"
+   ],
+   "opensClockS": 57494.494,
+   "closesClockS": 57743.808,
+   "nMembers": 1
+  },
+  {
+   "id": "cycle:Am:2",
+   "members": [
+    "31"
+   ],
+   "opensClockS": 57827.831,
+   "closesClockS": 57931.678,
+   "nMembers": 1
+  },
+  {
+   "id": "cycle:Am:3",
+   "members": [
+    "89"
+   ],
+   "opensClockS": 57967.618,
+   "closesClockS": 58040.046,
+   "nMembers": 1
+  },
+  {
+   "id": "cycle:Am:4",
+   "members": [
+    "51"
+   ],
+   "opensClockS": 59447.446,
+   "closesClockS": 59529.676,
+   "nMembers": 1
+  }
+ ],
+ "passages": [
+  {
+   "car": "2",
+   "pitInClockS": 57511.651,
+   "pitOutClockS": null,
+   "inLap": 1,
+   "inLapCompleted": true,
+   "outLap": null,
+   "kind": "retirement",
+   "outcome": "retired",
+   "fcyContext": "fcy",
+   "officialPitLaneTimeS": null,
+   "pitLaneTimeReliable": null,
+   "timeLost": {
+    "method": "none",
+    "valueS": null
+   },
+   "cycle": null
+  },
+  {
+   "car": "15",
+   "pitInClockS": 57494.494,
+   "pitOutClockS": 57743.808,
+   "inLap": 1,
+   "inLapCompleted": true,
+   "outLap": 2,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "fcyContext": "fcy",
+   "officialPitLaneTimeS": 249.314,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 224.251
+   },
+   "lapDown": null,
+   "cycle": {
+    "id": "cycle:Am:1",
+    "members": [
+     "15"
+    ]
+   }
+  },
+  {
+   "car": "15",
+   "pitInClockS": 58508.144,
+   "pitOutClockS": null,
+   "inLap": 6,
+   "inLapCompleted": true,
+   "outLap": null,
+   "kind": "retirement",
+   "outcome": "retired",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": null,
+   "pitLaneTimeReliable": null,
+   "timeLost": {
+    "method": "none",
+    "valueS": null
+   },
+   "cycle": null
+  },
+  {
+   "car": "31",
+   "pitInClockS": 57827.831,
+   "pitOutClockS": 57931.678,
+   "inLap": 3,
+   "inLapCompleted": true,
+   "outLap": 4,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": 103.847,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 109.681,
+    "refLapS": 150.868,
+    "refWindowLaps": 10,
+    "refLapCount": 4
+   },
+   "position": {
+    "beforeLap": 2,
+    "afterLap": 4,
+    "classPosBefore": 21,
+    "classPosAfter": 29,
+    "netClass": -8,
+    "overallPosBefore": 21,
+    "overallPosAfter": 29,
+    "netOverall": -8,
+    "gainedOn": [],
+    "lostTo": [
+     "8",
+     "03",
+     "18",
+     "51",
+     "57",
+     "73",
+     "80",
+     "86"
+    ]
+   },
+   "lapDown": false,
+   "cycle": {
+    "id": "cycle:Am:2",
+    "members": [
+     "31"
+    ]
+   }
+  },
+  {
+   "car": "31",
+   "pitInClockS": 58239.345,
+   "pitOutClockS": 58842.323,
+   "inLap": 5,
+   "inLapCompleted": true,
+   "outLap": 6,
+   "kind": "garage",
+   "outcome": "rejoined",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": 602.978,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 603.684,
+    "refLapS": 150.868,
+    "refWindowLaps": 10,
+    "refLapCount": 4
+   },
+   "position": {
+    "beforeLap": 4,
+    "afterLap": 6,
+    "classPosBefore": 29,
+    "classPosAfter": 30,
+    "netClass": -1,
+    "overallPosBefore": 29,
+    "overallPosAfter": 30,
+    "netOverall": -1,
+    "gainedOn": [],
+    "lostTo": [
+     "15"
+    ]
+   },
+   "lapDown": true,
+   "cycle": null
+  },
+  {
+   "car": "51",
+   "pitInClockS": 59447.446,
+   "pitOutClockS": 59529.676,
+   "inLap": 13,
+   "inLapCompleted": true,
+   "outLap": 14,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "fcyContext": "mixed",
+   "officialPitLaneTimeS": 82.23,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 95.29
+   },
+   "position": {
+    "beforeLap": 12,
+    "afterLap": 14,
+    "classPosBefore": 21,
+    "classPosAfter": 27,
+    "netClass": -6,
+    "overallPosBefore": 21,
+    "overallPosAfter": 27,
+    "netOverall": -6,
+    "gainedOn": [],
+    "lostTo": [
+     "8",
+     "18",
+     "57",
+     "80",
+     "86",
+     "89"
+    ]
+   },
+   "lapDown": false,
+   "cycle": {
+    "id": "cycle:Am:4",
+    "members": [
+     "51"
+    ]
+   }
+  },
+  {
+   "car": "51",
+   "pitInClockS": 59693.823,
+   "pitOutClockS": null,
+   "inLap": 14,
+   "inLapCompleted": true,
+   "outLap": null,
+   "kind": "retirement",
+   "outcome": "retired",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": null,
+   "pitLaneTimeReliable": null,
+   "timeLost": {
+    "method": "none",
+    "valueS": null
+   },
+   "cycle": null
+  },
+  {
+   "car": "71",
+   "pitInClockS": 57280.239,
+   "pitOutClockS": 57307.713,
+   "inLap": 1,
+   "inLapCompleted": true,
+   "outLap": 1,
+   "kind": "pit_lane_start",
+   "outcome": "rejoined",
+   "fcyContext": "mixed",
+   "officialPitLaneTimeS": 27.474,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "none",
+    "valueS": null
+   },
+   "cycle": null
+  },
+  {
+   "car": "80",
+   "pitInClockS": 58291.51,
+   "pitOutClockS": 58328.943,
+   "inLap": 6,
+   "inLapCompleted": true,
+   "outLap": 7,
+   "kind": "drive_through",
+   "outcome": "rejoined",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": 37.433,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 31.85,
+    "refLapS": 154.544,
+    "refWindowLaps": 5,
+    "refLapCount": 6
+   },
+   "position": {
+    "beforeLap": 5,
+    "afterLap": 7,
+    "classPosBefore": 22,
+    "classPosAfter": 27,
+    "netClass": -5,
+    "overallPosBefore": 22,
+    "overallPosAfter": 27,
+    "netOverall": -5,
+    "gainedOn": [],
+    "lostTo": [
+     "8",
+     "03",
+     "18",
+     "57",
+     "86"
+    ]
+   },
+   "lapDown": false,
+   "cycle": null
+  },
+  {
+   "car": "89",
+   "pitInClockS": 57967.618,
+   "pitOutClockS": 58040.046,
+   "inLap": 4,
+   "inLapCompleted": true,
+   "outLap": 5,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": 72.428,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 71.959,
+    "refLapS": 149.891,
+    "refWindowLaps": 5,
+    "refLapCount": 6
+   },
+   "position": {
+    "beforeLap": 3,
+    "afterLap": 5,
+    "classPosBefore": 5,
+    "classPosAfter": 28,
+    "netClass": -23,
+    "overallPosBefore": 5,
+    "overallPosAfter": 28,
+    "netOverall": -23,
+    "gainedOn": [],
+    "lostTo": [
+     "3",
+     "5",
+     "8",
+     "03",
+     "11",
+     "14",
+     "18",
+     "21",
+     "41",
+     "47",
+     "51",
+     "55",
+     "57",
+     "71",
+     "72",
+     "73",
+     "78",
+     "80",
+     "86",
+     "88",
+     "93",
+     "98",
+     "113"
+    ]
+   },
+   "lapDown": false,
+   "cycle": {
+    "id": "cycle:Am:3",
+    "members": [
+     "89"
+    ]
+   }
+  },
+  {
+   "car": "113",
+   "pitInClockS": 59745.082,
+   "pitOutClockS": 59782.719,
+   "inLap": 15,
+   "inLapCompleted": true,
+   "outLap": 16,
+   "kind": "drive_through",
+   "outcome": "rejoined",
+   "fcyContext": "green",
+   "officialPitLaneTimeS": 37.637,
+   "pitLaneTimeReliable": true,
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 31.0,
+    "refLapS": 151.454,
+    "refWindowLaps": 5,
+    "refLapCount": 3
+   },
+   "position": {
+    "beforeLap": 14,
+    "afterLap": 16,
+    "classPosBefore": 15,
+    "classPosAfter": 26,
+    "netClass": -11,
+    "overallPosBefore": 15,
+    "overallPosAfter": 26,
+    "netOverall": -11,
+    "gainedOn": [],
+    "lostTo": [
+     "3",
+     "5",
+     "8",
+     "03",
+     "18",
+     "57",
+     "73",
+     "80",
+     "86",
+     "89",
+     "93"
+    ]
+   },
+   "lapDown": false,
+   "cycle": null
+  }
+ ]
+}

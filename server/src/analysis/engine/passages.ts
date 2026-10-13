@@ -30,6 +30,8 @@ export interface Passage {
   outLap: number | null;
   inIdx: number | null;
   outIdx: number | null;
+  /** Last row inside the passage when it never rejoined (WRL: every flagged row of a run that reaches the end). */
+  lastIdx?: number;
   bOnly: boolean;
   pitType: "NORMAL" | "PENALTY" | null;
   inDriverNumber: number | null;
@@ -79,7 +81,7 @@ export interface PenaltyDraft {
 /** Rows of a passage (in-lap … out-lap; a retirement covers its in-lap only). */
 export function passageRows(rows: LapRow[], p: Passage): LapRow[] {
   if (p.inIdx === null) return [];
-  const hi = p.outIdx ?? p.inIdx;
+  const hi = p.outIdx ?? p.lastIdx ?? p.inIdx;
   return rows.slice(p.inIdx, hi + 1);
 }
 
@@ -150,10 +152,10 @@ function wrlPassages(ctx: Ctx, car: CarId): Passage[] {
   const rows = ctx.laps[car] ?? [];
   const ww = ctx.race.format === "wrl-website";
   const out: Passage[] = [];
-  const mk = (i0: number, i1: number | null, inferred: boolean): Passage => {
+  const mk = (i0: number, i1: number | null, inferred: boolean, last?: number): Passage => {
     const inRow = rows[i0];
     const outRow = i1 === null ? null : rows[i1];
-    const refs = rows.slice(i0, (i1 ?? i0) + 1).map((r) => `${r.fileId}:L${r.row}`);
+    const refs = rows.slice(i0, (i1 ?? last ?? i0) + 1).map((r) => `${r.fileId}:L${r.row}`);
     const p: Passage = {
       ...blank(car),
       source: inferred ? "pit_column_inferred" : "pit_column",
@@ -169,6 +171,7 @@ function wrlPassages(ctx: Ctx, car: CarId): Passage[] {
       outLap: outRow ? outRow.lap : null,
       inIdx: i0,
       outIdx: i1,
+      ...(i1 === null && last !== undefined ? { lastIdx: last } : {}),
     };
     p.reliable = false;
     p.notes.push("No pit-lane timestamps in this format; pit-in/pit-out are unknown and the official pit-lane time is null (D-PITLANE).");
@@ -190,7 +193,7 @@ function wrlPassages(ctx: Ctx, car: CarId): Passage[] {
       let j = k;
       while (j + 1 < rows.length && rows[j + 1].inPit) j++;
       const outI = j + 1 < rows.length ? j + 1 : null;
-      out.push(mk(k, outI, false));
+      out.push(mk(k, outI, false, j));
       k = outI !== null ? outI + 1 : j + 1;
       continue;
     }
@@ -482,7 +485,6 @@ export function isPitLaneStart(p: Passage, laps: Ctx["laps"]): boolean {
 /* ------------------------------------------------------------------ M9 + M10 (Alkamel kinds and penalty links) */
 
 export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraft[], transit: Transit, garageS: number, serveWindowS: number): void {
-  const hasPenaltyRecords = pens.length > 0 || ctx.race.driveStints.some((d) => d.type === "PIT");
   const T = transit.valueS;
   const sorted = [...passages].sort((a, b) => a.sortT - b.sortT || carOrder(a.car, b.car));
   for (const p of sorted) {
@@ -530,7 +532,10 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       link(sp);
     } else if (p.pitType === "PENALTY" && pl !== null && T !== null && pl > 1.15 * T) {
       set("penalty_served", ["drive_time_pit_type"]);
-    } else if (!hasPenaltyRecords && transit.valid && short) {
+    } else if (!cand.length && p.pitType !== "PENALTY" && transit.valid && short) {
+      // Rule 6, read per passage: no penalty record explains this passage (no matched RC penalty and no
+      // Drive Time PENALTY type). DEFINITIONS.md says "no penalty record exists for the race"; read
+      // literally, MPC #59 L62 (37.1 s, transit 35.1 s) would become a 37-second "stop".
       set("drive_through", ["duration_only", "transit_time"]);
       p.confNotes.push("drive_through_by_duration");
     } else if (pl !== null && pl > garageS) {
