@@ -259,7 +259,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   const metadataClasses = classes.map((c) => ({ id: c.id, name: c.name, order: c.order, medianCleanGreenLapS: rd(medians[c.id] ?? null, 4) }));
   const season = opts.season ?? Number(axis.raceDate.slice(0, 4));
   const pkg: RaceAnalysisPackage = {
-    schemaVersion: "1.0.0",
+    schemaVersion: "1.1.0",
     packageId: opts.packageId ?? slug(`${series}-${axis.raceDate}-${session}`),
     status: "draft",
     completeness: {

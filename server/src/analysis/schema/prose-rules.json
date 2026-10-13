@@ -1,0 +1,99 @@
+{
+  "version": "1.0.0",
+  "description": "Shared prose rules for the /analyze-race validator (CLAUDE_ANALYSIS_DESIGN.md §5). Read by tools/check_analysis.py today and by server/src/analysis/validate-package.ts in Stage 3. Patterns are case-insensitive and run on the authored template text after removing {n} placeholders, entity tokens and metadata.lexicon terms. Text quoted from facts travels in refs with unit 'text' and is never scanned.",
+  "tokenRegex": "\\{(?:(\\d+)|car:([0-9A-Za-z]{1,8})|class:([A-Za-z0-9][A-Za-z0-9+_-]{0,31})|driver:([0-9A-Za-z]{1,8}):(\\d+))\\}",
+  "bareDigitRegex": "[0-9]",
+  "numberWordRegex": "\\b(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|dozens?|twice|thrice|double|triple|half|halves|quarter|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|twentieth)\\b",
+  "formatRegexes": {
+    "unit-after-time-placeholder": "\\{\\d+\\}\\s*(?:s|sec|secs|seconds?|mins?|minutes?)\\b",
+    "P-before-position-placeholder": "\\bP\\s?\\{\\d+\\}",
+    "hash-before-car-token": "#\\s?\\{car:",
+    "markup": "[<>*_`#\\[\\]|]|https?://",
+    "clock-time": "\\b\\d{1,2}:\\d{2}"
+  },
+  "banned": {
+    "counterfactual": [
+      "\\bwould\\b", "\\bwould've\\b", "\\bcould(?:'ve| have)\\b", "\\bmight(?:'ve| have)\\b", "\\bshould(?:'ve| have)\\b",
+      "\\bif (?:it|he|she|they|the team|the car|\\{car:[^}]+\\}) (?:had|hadn't)\\b", "\\bhad (?:it|he|she|they) not\\b",
+      "\\bbut for\\b", "\\bif not for\\b", "\\bwhat if\\b", "\\botherwise\\b", "\\bon course for\\b",
+      "\\bset to (?:finish|win|take|claim)\\b", "\\bheading for\\b", "\\bexpected to\\b",
+      "\\bcost (?:it|them|him|her|the car|the team) (?:the|a) (?:win|victory|podium|lead|title|race)\\b",
+      "\\b(?:denied|robbed|deprived)\\b", "\\bpotential(?:ly)?\\b", "\\bin contention for\\b"
+    ],
+    "blame": [
+      "\\bfault\\b", "\\bto blame\\b", "\\bblam(?:e|ed|es|ing)\\b", "\\bmistakes?\\b", "\\berrors?\\b", "\\bbotch",
+      "\\bblunder", "\\bcareless", "\\breckless", "\\bclumsy\\b", "\\bdirty\\b", "\\bpunt(?:ed|s)?\\b", "\\btook out\\b",
+      "\\btaken out\\b", "\\bcrash(?:ed|es)? into\\b", "\\brammed\\b", "\\bdive-?bomb", "\\bresponsible for\\b",
+      "\\bcaused (?:the|an|a) (?:incident|crash|collision|contact)\\b"
+    ],
+    "intent": [
+      "\\bdeliberate(?:ly)?\\b", "\\bintentional(?:ly)?\\b", "\\bon purpose\\b", "\\bpurposely\\b", "\\btr(?:y|ied|ying) to\\b",
+      "\\bwant(?:ed|ing)? to\\b", "\\bchose to\\b", "\\bdecided to\\b", "\\bopted to\\b", "\\belected to\\b", "\\bin order to\\b",
+      "\\bso as to\\b", "\\baim(?:ed|ing)? to\\b", "\\bhop(?:ed|ing) to\\b", "\\bgambl(?:e|ed|ing)\\b", "\\bsandbag",
+      "\\bstrateg(?:y|ic|ically)\\b", "\\btactic", "\\bplann?(?:ed|ing)?\\b", "\\bto avoid\\b", "\\bto protect\\b",
+      "\\bto cover\\b", "\\bundercut\\b", "\\bovercut\\b", "\\bcalculated\\b"
+    ],
+    "cause-speculation": [
+      "\\bmechanical\\b", "\\bengine\\b", "\\bgearbox\\b", "\\bbrakes?\\b", "\\btyres?\\b", "\\btires?\\b", "\\bfuel\\b",
+      "\\belectrical\\b", "\\bsuspension\\b", "\\bdamaged?\\b", "\\bpuncture", "\\bcrash(?:ed)?\\b", "\\baccident\\b",
+      "\\bspun\\b", "\\bspin\\b", "\\bwent off\\b", "\\boff-track\\b", "\\bcontact\\b", "\\bcollision\\b", "\\bincident\\b",
+      "\\bproblems?\\b", "\\bissues?\\b", "\\bfailure\\b", "\\bbecause of\\b", "\\bdue to\\b", "\\bthanks to\\b"
+    ],
+    "rule-strength": [
+      "\\bviolat(?:e|ed|es|ing|ion|ions)\\b", "\\binfring", "\\binfraction", "\\bbreach(?:ed|es)?\\b", "\\billegal(?:ly)?\\b",
+      "\\bunlawful", "\\bcheat", "\\bguilty\\b", "\\bbroke (?:a|the) rules?\\b", "\\bagainst the rules\\b",
+      "\\bnon-?compliant\\b", "\\boffen[cs]es?\\b", "\\bescaped (?:a )?penalt", "\\bgot away with\\b", "\\bdeserv",
+      "\\bclearly\\b", "\\bdefinitely\\b", "\\bcertainly\\b", "\\bundoubtedly\\b", "\\bobviously\\b", "\\bprobabl(?:e|y)\\b",
+      "\\blikely\\b", "\\bproves?\\b", "\\bproven\\b", "\\bconfirm(?:s|ed)? (?:that|a|the) (?:breach|short)"
+    ],
+    "tone": [
+      "\\bunfortunate(?:ly)?\\b", "\\bsadly\\b", "\\bluck(?:y|ily)?\\b", "\\bunlucky\\b", "\\bmisfortune\\b", "\\bdisast",
+      "\\bnightmare\\b", "\\bheroic", "\\bbrilliant", "\\bstunning\\b", "\\bdominan", "\\bdominat", "\\bmasterclass\\b",
+      "\\bterrible\\b", "\\bawful\\b", "\\bpoor(?:ly)?\\b", "\\bsloppy\\b", "\\bfumbl", "\\bcostly\\b", "\\bsuperb\\b",
+      "\\bimpressive\\b", "\\bamazing\\b", "\\bincredibl", "\\bdramatic", "\\bit seems\\b", "\\bperhaps\\b", "\\bmaybe\\b",
+      "!"
+    ],
+    "terminology": [
+      "\\bpit loss\\b", "\\bpit time\\b", "\\bpit road\\b", "\\bpit duration\\b", "\\bservice time\\b", "\\bpit %",
+      "\\bsettled\\b", "\\bavg\\b", "\\baverage pace\\b", "\\binsights?\\b", "\\bdeleted\\b", "\\bpit lap\\b",
+      "\\bunofficial\\b", "\\bpreliminary\\b", "\\bpenalty lap\\b", "\\bcode 35\\b"
+    ]
+  },
+  "bannedExceptions": {
+    "fastestLapTerm": { "pattern": "\\bfastest lap\\b", "allowedIn": ["summary"] },
+    "pitWindowTerm": { "pattern": "\\bpit window\\b", "allowedIn": ["finding"] }
+  },
+  "units": {
+    "s": { "fields": "S$|SumS$", "display": "duration" },
+    "pos": { "fields": "^(?:cpos|pos|positionClass|positionOverall|classPosBefore|classPosAfter|overallPosBefore|overallPosAfter|prePenaltyPositionClass|prePenaltyPositionOverall|classPosAtRetirement|startPosition)$", "display": "P" },
+    "lap": { "fields": "^(?:lap|inLap|outLap|beforeLap|afterLap|bestLapNumber|lastCompletedLap|startLap|endLap|issuedLeaderLap|leaderLaps\\[[01]\\]|laps\\[[01]\\])$", "display": "int" },
+    "laps": { "fields": "^(?:laps|lapsDown|lapsDownBefore|lapsDownAfter)$", "display": "int" },
+    "places": { "fields": "^(?:netClass|netOverall)$", "display": "int" },
+    "count": { "fields": "^(?:stats\\.nMembers|timeLostRank|ordinal|stopNumber|driver|.*\\.length)$", "display": "int" },
+    "text": { "fields": "^(?:reason|rawText|message|gapFirst|status|kind|penaltyType|where)$", "display": "verbatim" }
+  },
+  "scopeWords": {
+    "overall": { "fields": "^(?:pos|positionOverall|overallPosBefore|overallPosAfter|prePenaltyPositionOverall|netOverall)$", "sentenceMustMatch": "\\boverall\\b" },
+    "class": { "fields": "^(?:cpos|positionClass|classPosBefore|classPosAfter|prePenaltyPositionClass|classPosAtRetirement|netClass)$", "sentenceMustMatch": "\\bclass\\b|\\{class:" }
+  },
+  "limits": {
+    "sprintMaxDurationS": 7200,
+    "story.headline": { "sentences": [1, 2], "words": 35, "chars": 220 },
+    "story.paragraph": { "sentences": [1, 4], "words": 90 },
+    "story.paragraphs.count": { "sprint": [1, 4], "endurance": [1, 6], "dns": [1, 1] },
+    "story.totalWords": { "sprint": 260, "endurance": 420, "dns": 60 },
+    "story.judgement": { "sentences": [1, 2], "words": 50 },
+    "story.keyFactIds": [1, 16],
+    "finding.statement": { "sentences": [1, 2], "words": 60 },
+    "finding.judgement": { "sentences": [1, 2], "words": 50 },
+    "summary.headline": { "sentences": [1, 1], "words": 30, "chars": 200 },
+    "summary.paragraphs.count": [1, 2],
+    "summary.paragraphs.sentences": [2, 4],
+    "summary.paragraphs.words": 110,
+    "summary.class": { "sentences": [1, 2], "words": 50 },
+    "keyMoments.count": { "sprint": [4, 6], "endurance": [4, 8] },
+    "keyMoment.title": { "words": 12, "chars": 70, "noFinalStop": true },
+    "keyMoment.text": { "sentences": [1, 1], "words": 35 }
+  },
+  "judgementNoteRegex": "^judgement_[a-z0-9_]+$"
+}

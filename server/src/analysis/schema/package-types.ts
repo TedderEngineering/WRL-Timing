@@ -1,5 +1,6 @@
 /**
- * RaceTrace Race Analysis Package, schema v1.0.0: TypeScript types.
+ * RaceTrace Race Analysis Package, schema v1.1.0: TypeScript types.
+ * 1.1.0 adds raceSummary.keyMoments, carStories[].events (engine-built skeleton) and ruleFindings[].severity.
  * Mirrors schema/race-analysis-package.schema.json (JSON Schema draft 2020-12), which is authoritative.
  * Definitions of every quantity: stage2/core/DEFINITIONS.md. Design notes: SCHEMA_NOTES.md.
  *
@@ -65,13 +66,19 @@ export type RefUnit = 's' | 'laps' | 'lap' | 'pos' | 'places' | 'count' | 'pct' 
 
 /** A number stated in prose and the fact it comes from. */
 export interface FactRef {
-  /** The value as written (numbers rounded to the shown precision). */
+  /**
+   * The value as written. Numbers equal the fact exactly after `transform`: seconds at full millisecond
+   * precision (never rounded), other units equal. Text equals the fact verbatim.
+   */
   value: number | string;
   factId: FactId;
   /** Dotted path in the fact ('timeLost.valueS', 'stats.nMembers'); for lap facts a laps column name. */
   field: string;
   unit?: RefUnit;
-  /** Rendering, e.g. 'P3' or '1:50.554'. */
+  /**
+   * GUI rendering of value. Required for unit 's': [h:]m:ss.sss to 3 decimals, no rounding, no trailing ' s'
+   * (e.g. '1:50.554', '0:47.123'). 'P3' for unit 'pos'.
+   */
   display?: string;
   /** Prose may state |x| or -x. */
   transform?: 'abs' | 'neg';
@@ -89,7 +96,7 @@ export interface Prose {
 // ─── package ───────────────────────────────────────────────────────────────
 
 export interface RaceAnalysisPackage {
-  schemaVersion: '1.0.0';
+  schemaVersion: '1.1.0';
   packageId: string;
   status: 'draft' | 'review' | 'published';
   completeness: Completeness;
@@ -604,12 +611,17 @@ export interface RuleCheck extends Provenance {
   officialAction?: FactId[];
 }
 
+export type FindingSeverity = 'info' | 'possible' | 'likely';
+
 export interface RuleFinding {
   /** 'finding:<n>' */
   id: FactId;
   ruleCheckIds: FactId[];
   car?: CarId;
   assessment: 'compliant' | 'penalised_consistent' | 'possible_unpenalised' | 'data_insufficient' | 'not_assessable';
+  /** Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7). */
+  severity: FindingSeverity;
+  /** The finding wording shown by the GUI. */
   statement: Prose;
   /** Required when any cited fact is low confidence (validator V7). */
   judgementOnLowConfidence?: Prose;
@@ -623,6 +635,32 @@ export interface CarStory {
   paragraphs: Prose[];
   keyFactIds: FactId[];
   lowConfidenceJudgements?: { factId: FactId; judgement: Prose }[];
+  /** Timeline cards: skeleton built by the engine (buildStoryEvents); Claude fills title and text. */
+  events?: StoryEvent[];
+}
+
+export type EventCause = 'pit_cycle' | 'on_track_pass' | 'rival_pit' | 'penalty' | 'fcy' | 'retirement';
+
+export interface StoryEvent {
+  /** 'event:<car>:<n>', n in race order. */
+  id: string;
+  lap: number;
+  lapEnd?: number;
+  at: TimePoint;
+  causes: EventCause[];
+  outcome: {
+    result: 'gained' | 'lost' | 'held' | 'lap_down' | 'retired' | 'penalty_applied' | 'none';
+    classPosBefore?: number | null;
+    classPosAfter?: number | null;
+    netClass?: number | null;
+    lapDown?: boolean | null;
+  };
+  evidence: FactId[];
+  confidence: Confidence;
+  confidenceNotes?: ConfidenceNotes;
+  /** Written by Claude. */
+  title?: Prose;
+  text?: Prose;
 }
 
 export interface RaceSummary {
@@ -630,6 +668,21 @@ export interface RaceSummary {
   headline: Prose;
   paragraphs: Prose[];
   classSummaries?: { class: ClassId; text: Prose }[];
+  keyMoments?: KeyMoment[];
+}
+
+/** Overview "Key moments" (schema 1.1.0). */
+export interface KeyMoment {
+  /** 'moment:<n>' in lap order. */
+  id: string;
+  /** Lap of the moment (unit 'lap'). */
+  lap: FactRef;
+  lapEnd?: FactRef;
+  causes: ('pit_cycle' | 'on_track' | 'rival_pit' | 'penalty' | 'fcy' | 'retirement')[];
+  title: Prose;
+  text: Prose;
+  cars: CarId[];
+  factIds: FactId[];
 }
 
 export interface DataQualityNote {
