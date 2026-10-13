@@ -2,12 +2,13 @@
  * Minimum and maximum drive time per driver. Drivers are keyed by (car, driver NUMBER), never by name:
  * abbreviated names collide (IMSA MPC Road Atlanta 2026 #55: two nominated drivers are both "E. Gou").
  */
-import type { CarId, DriveTime } from "../package-types.js";
+import type { CarId, DriveTime } from "../../analysis/schema/package-types.js";
 import type { ResolvedRule, Severity } from "../rulebook-types.js";
 import type { CheckHandler, CheckInput, CheckOutput, NotCheckableOut } from "./common.js";
 import {
   emptyOutput,
   ev,
+  passOf,
   minConf,
   num,
   param,
@@ -104,11 +105,21 @@ export const minDriveTimeHandler: CheckHandler = {
       const carFrac = dur ? carTotal / dur : null;
       const result = ctx.entries.get(car)?.result ?? null;
       for (const n of driverNumbers(ctx, car, times)) {
-        out.evaluated++;
         const dt = times.get(n);
         const t = dt?.driveTimeS ?? 0;
         if (t >= min - 1e-9) {
-          out.passed++;
+          out.results.push(
+            passOf({
+              car,
+              measured: r3(t),
+              limit: min,
+              margin: r3(t - min),
+              unit: "s",
+              evidence: evidenceFor(car, dt, result?.id),
+              confidence: minConf(dt?.confidence ?? "medium"),
+              notes: [`driver_number_${n}`],
+            })
+          );
           continue;
         }
         let { severity, notes: sevNotes } = toleranceSeverity(
@@ -123,9 +134,8 @@ export const minDriveTimeHandler: CheckHandler = {
           sevNotes = [...sevNotes, "car_below_race_time_fraction_exempt"];
           notes.push(`car_race_time_fraction_${r3(carFrac)}`);
         }
-        out.findings.push({
+        out.results.push({
           car,
-          class: ctx.classOf(car),
           severity,
           severityNotes: sevNotes,
           lap: null,
@@ -133,8 +143,8 @@ export const minDriveTimeHandler: CheckHandler = {
           raceTimeS: null,
           measured: r3(t),
           measuredRange: null,
-          threshold: min,
-          marginS: r3(t - min),
+          limit: min,
+          margin: r3(t - min),
           unit: "s",
           evidence: evidenceFor(car, dt, result?.id),
           raceControl: raceControlFor(ctx, car, DRIVE_TIME_PENALTY),
@@ -172,12 +182,23 @@ export const maxDriveTimeHandler: CheckHandler = {
       }
       const times = driverTimes(ctx, car);
       const result = ctx.entries.get(car)?.result ?? null;
+      const limitNote = typeof byN === "number" ? [`limit_for_${nominated}_driver_car`] : [];
       for (const n of driverNumbers(ctx, car, times)) {
-        out.evaluated++;
         const dt = times.get(n);
         const t = dt?.driveTimeS ?? 0;
         if (t <= limit + 1e-9) {
-          out.passed++;
+          out.results.push(
+            passOf({
+              car,
+              measured: r3(t),
+              limit,
+              margin: r3(limit - t),
+              unit: "s",
+              evidence: evidenceFor(car, dt, result?.id),
+              confidence: minConf(dt?.confidence ?? "medium"),
+              notes: [`driver_number_${n}`, ...limitNote],
+            })
+          );
           continue;
         }
         const { severity, notes: sevNotes } = toleranceSeverity(
@@ -185,9 +206,8 @@ export const maxDriveTimeHandler: CheckHandler = {
           t - limit,
           tol
         );
-        out.findings.push({
+        out.results.push({
           car,
-          class: ctx.classOf(car),
           severity,
           severityNotes: sevNotes,
           lap: null,
@@ -195,16 +215,13 @@ export const maxDriveTimeHandler: CheckHandler = {
           raceTimeS: null,
           measured: r3(t),
           measuredRange: null,
-          threshold: limit,
-          marginS: r3(t - limit),
+          limit,
+          margin: r3(limit - t),
           unit: "s",
           evidence: evidenceFor(car, dt, result?.id),
           raceControl: raceControlFor(ctx, car, DRIVE_TIME_PENALTY),
           confidence: minConf(dt?.confidence ?? "medium"),
-          notes: [
-            `driver_number_${n}`,
-            ...(typeof byN === "number" ? [`limit_for_${nominated}_driver_car`] : []),
-          ],
+          notes: [`driver_number_${n}`, ...limitNote],
         });
       }
     }

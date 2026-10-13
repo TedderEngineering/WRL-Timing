@@ -2,10 +2,10 @@
  * Penalty served within N green crossings (penalty_service with max_green_crossings), and classification
  * (minimum distance, order by laps, incomplete race).
  */
-import type { CarId, Penalty } from "../package-types.js";
+import type { CarId, Penalty } from "../../analysis/schema/package-types.js";
 import type { Severity } from "../rulebook-types.js";
 import type { CheckHandler } from "./common.js";
-import { emptyOutput, ev, minConf, num, param } from "./common.js";
+import { emptyOutput, ev, minConf, num, param, passOf } from "./common.js";
 import { carOrder, r3 } from "./context.js";
 
 const SERVABLE = new Set<Penalty["penaltyType"]>([
@@ -44,7 +44,6 @@ export const greenCrossingsHandler: CheckHandler = {
         out.notEvaluated.push({ car: p.car, factId: p.id, reason: "no_lap_crossings" });
         continue;
       }
-      out.evaluated++;
       const until =
         served?.pitIn?.raceTimeS ??
         (laps.length
@@ -53,8 +52,26 @@ export const greenCrossingsHandler: CheckHandler = {
       const green = laps.filter(
         (l) => l.endS > issued && l.endS < until && ctx.isGreenAt(l.endS)
       );
+      const crossingEv = green.map((l) => ({
+        label: "green_crossing",
+        factId: `lap:${p.car}:${l.lap}`,
+      }));
       if (served && green.length <= max) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            car: p.car,
+            lap: served.inLap,
+            clock: served.pitIn?.clock ?? null,
+            raceTimeS: served.pitIn?.raceTimeS ?? null,
+            measured: green.length,
+            limit: max,
+            margin: max - green.length,
+            unit: "count",
+            evidence: [...ev("penalty", p.id), ...ev("serving_passage", served.id), ...crossingEv],
+            confidence: minConf(p.confidence, served.confidence),
+            notes: [`penalty_status_${p.status}`],
+          })
+        );
         continue;
       }
       const unserved = !served;
@@ -65,28 +82,22 @@ export const greenCrossingsHandler: CheckHandler = {
           : unserved
             ? "unserved"
             : "served";
-      out.findings.push({
+      const measured = unserved && !laps.length ? null : green.length;
+      out.results.push({
         car: p.car,
-        class: ctx.classOf(p.car),
         severity,
         severityNotes:
           unserved && rule.severity !== "info" ? ["penalty_not_served_on_track"] : [],
         lap: served?.inLap ?? null,
         clock: served?.pitIn?.clock ?? p.issued?.clock ?? null,
         raceTimeS: served?.pitIn?.raceTimeS ?? issued,
-        measured: unserved && !laps.length ? null : green.length,
+        measured,
         measuredRange: null,
-        threshold: max,
-        marginS: null,
+        limit: max,
+        // unserved: the crossings counted run to the finish, so they do not measure a margin
+        margin: unserved || measured === null ? null : max - measured,
         unit: "count",
-        evidence: [
-          ...ev("penalty", p.id),
-          ...ev("serving_passage", served?.id),
-          ...green.map((l) => ({
-            label: "green_crossing",
-            factId: `lap:${p.car}:${l.lap}`,
-          })),
-        ],
+        evidence: [...ev("penalty", p.id), ...ev("serving_passage", served?.id), ...crossingEv],
         raceControl: { status: rcStatus, penaltyIds: [p.id] },
         confidence: minConf(p.confidence, served?.confidence),
         notes: unserved
@@ -150,19 +161,32 @@ export const minDistanceHandler: CheckHandler = {
         out.notEvaluated.push({ car, factId: res.id, reason: "no_leader_laps" });
         continue;
       }
-      out.evaluated++;
       const frac = res.laps / leader.laps;
+      const evidence = [
+        ...ev("result", res.id),
+        ...ev("leader_result", ctx.entries.get(leader.car)?.result?.id),
+      ];
       if (frac >= value) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            car,
+            measured: r3(frac),
+            limit: value,
+            margin: r3(frac - value),
+            unit: "fraction",
+            evidence,
+            confidence: minConf(res.confidence),
+            notes: [`results_status_${res.status}`],
+          })
+        );
         continue;
       }
       const notes = [`results_status_${res.status}`];
       if (res.status === "classified")
         notes.push("listed_classified_below_minimum_distance");
       if (res.resultsStatus) notes.push(`results_${res.resultsStatus}`);
-      out.findings.push({
+      out.results.push({
         car,
-        class: ctx.classOf(car),
         severity: rule.severity,
         severityNotes: [],
         lap: null,
@@ -170,13 +194,10 @@ export const minDistanceHandler: CheckHandler = {
         raceTimeS: null,
         measured: r3(frac),
         measuredRange: null,
-        threshold: value,
-        marginS: null,
+        limit: value,
+        margin: r3(frac - value),
         unit: "fraction",
-        evidence: [
-          ...ev("result", res.id),
-          ...ev("leader_result", ctx.entries.get(leader.car)?.result?.id),
-        ],
+        evidence,
         raceControl: {
           status: ctx.hasRaceControl ? "none_found" : "not_available",
           penaltyIds: [],
@@ -212,14 +233,23 @@ export const resultsOrderHandler: CheckHandler = {
       const a = rows[i - 1];
       const b = rows[i];
       if (!inScope.has(a.car)) continue;
-      out.evaluated++;
+      const evidence = [...ev("result", a.res!.id), ...ev("next_result", b.res!.id)];
       if (a.res!.laps >= b.res!.laps) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            car: a.car,
+            measured: a.res!.laps,
+            limit: b.res!.laps,
+            margin: a.res!.laps - b.res!.laps,
+            unit: "laps",
+            evidence,
+            confidence: minConf(a.res!.confidence, b.res!.confidence),
+          })
+        );
         continue;
       }
-      out.findings.push({
+      out.results.push({
         car: a.car,
-        class: ctx.classOf(a.car),
         severity: rule.severity,
         severityNotes: [],
         lap: null,
@@ -227,10 +257,10 @@ export const resultsOrderHandler: CheckHandler = {
         raceTimeS: null,
         measured: a.res!.laps,
         measuredRange: null,
-        threshold: b.res!.laps,
-        marginS: null,
+        limit: b.res!.laps,
+        margin: a.res!.laps - b.res!.laps,
         unit: "laps",
-        evidence: [...ev("result", a.res!.id), ...ev("next_result", b.res!.id)],
+        evidence,
         raceControl: {
           status: ctx.hasRaceControl ? "none_found" : "not_available",
           penaltyIds: [],
@@ -255,16 +285,35 @@ export const incompleteRaceHandler: CheckHandler = {
       return {
         notCheckable: { reason: "data_missing", detail: "published_duration_unknown" },
       };
-    out.evaluated = 1;
     const red = ctx.fcy.find((f) => f.type === "red" && f.endsAtFinish);
     const elapsed = Number.isFinite(ctx.chequeredS) ? ctx.chequeredS : null;
-    if (!red || elapsed === null || elapsed >= value * dur) {
-      out.passed = 1;
+    // race-level: the subject is the red flag that ended the race; without one there is nothing to check
+    if (!red) {
+      out.notes.push("no_red_flag_at_finish");
       return out;
     }
-    out.findings.push({
+    if (elapsed === null) {
+      out.notEvaluated.push({ car: null, factId: red.id, reason: "chequered_time_unknown" });
+      return out;
+    }
+    if (elapsed >= value * dur) {
+      out.results.push(
+        passOf({
+          car: null,
+          clock: ctx.clock(red.start.raceTimeS),
+          raceTimeS: red.start.raceTimeS,
+          measured: r3(elapsed / dur),
+          limit: value,
+          margin: r3(elapsed / dur - value),
+          unit: "fraction",
+          evidence: ev("fcy_period", red.id),
+          confidence: red.confidence,
+        })
+      );
+      return out;
+    }
+    out.results.push({
       car: null,
-      class: null,
       severity: rule.severity,
       severityNotes: [],
       lap: null,
@@ -272,8 +321,8 @@ export const incompleteRaceHandler: CheckHandler = {
       raceTimeS: red.start.raceTimeS,
       measured: r3(elapsed / dur),
       measuredRange: null,
-      threshold: value,
-      marginS: null,
+      limit: value,
+      margin: r3(elapsed / dur - value),
       unit: "fraction",
       evidence: ev("fcy_period", red.id),
       raceControl: {

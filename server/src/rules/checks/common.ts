@@ -1,33 +1,31 @@
 /**
  * Shared pieces of the rule checks: handler interface, severity capping, citations, race-control links.
  */
-import type { CarId, Confidence, FactId } from "../package-types.js";
+import type { CarId, Confidence, FactId } from "../../analysis/schema/package-types.js";
 import type { ResolvedRule, Severity, TbdEntry } from "../rulebook-types.js";
 import { getPath, SEVERITY_RANK } from "../load-rulebook.js";
 import type {
   Citation,
   CitationLayer,
-  EngineRuleFinding,
   EvidenceRef,
   NotCheckableReason,
-  NotEvaluatedSubject,
   RaceControlLink,
+  SubjectDraft,
 } from "../types.js";
 import type { RaceCtx } from "./context.js";
 
-export type FindingDraft = Omit<
-  EngineRuleFinding,
-  | "id"
-  | "ruleId"
-  | "ruleType"
-  | "title"
-  | "citation"
-  | "provenance"
-  | "verified"
-  | "seasonConfirmed"
-  | "statement"
-  | "class"
-> & { class?: string | null };
+/** A non-pass outcome (status derived by the runner unless set). */
+export type FindingDraft = SubjectDraft;
+
+/** A pass: only the subject, evidence and confidence are required. */
+export type PassDraft = Partial<SubjectDraft> &
+  Pick<SubjectDraft, "car" | "evidence" | "confidence">;
+
+export interface NotEvaluatedSubject {
+  car: CarId | null;
+  factId?: FactId;
+  reason: string;
+}
 
 export interface MarkerDraft {
   car: CarId;
@@ -47,9 +45,9 @@ export interface CheckInput {
 }
 
 export interface CheckOutput {
-  evaluated: number;
-  passed: number;
-  findings: FindingDraft[];
+  /** Every subject evaluated, passes included, in race order per car. */
+  results: SubjectDraft[];
+  /** Subjects in scope the check could not evaluate. */
   notEvaluated: NotEvaluatedSubject[];
   notes: string[];
   markers?: MarkerDraft[];
@@ -67,7 +65,27 @@ export interface CheckHandler {
 }
 
 export function emptyOutput(): CheckOutput {
-  return { evaluated: 0, passed: 0, findings: [], notEvaluated: [], notes: [] };
+  return { results: [], notEvaluated: [], notes: [] };
+}
+
+/** A passing subject (status pass, severity info). */
+export function passOf(d: PassDraft): SubjectDraft {
+  return {
+    status: "pass",
+    severity: "info",
+    severityNotes: [],
+    lap: null,
+    clock: null,
+    raceTimeS: null,
+    measured: null,
+    measuredRange: null,
+    limit: null,
+    margin: null,
+    unit: null,
+    raceControl: null,
+    notes: [],
+    ...d,
+  };
 }
 
 export function isTbd(v: unknown): boolean {
@@ -114,7 +132,7 @@ export function minConf(...c: (Confidence | undefined | null)[]): Confidence {
  */
 export function capSeverity(
   rule: ResolvedRule,
-  draft: FindingDraft
+  draft: Pick<SubjectDraft, "severity" | "severityNotes" | "confidence">
 ): { severity: Severity; notes: string[] } {
   const notes = [...draft.severityNotes];
   let sev = minSev(draft.severity, rule.severity);

@@ -11,7 +11,7 @@ import type {
   PitPassage,
   RaceAnalysisPackage,
   Stint,
-} from "../package-types.js";
+} from "../../analysis/schema/package-types.js";
 import type { Rulebook, TimingFormatKey } from "../rulebook-types.js";
 import { rulebookClassFor } from "../load-rulebook.js";
 

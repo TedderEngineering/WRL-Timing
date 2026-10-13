@@ -8,10 +8,10 @@
  *   median clean green lap so a garage lap does not add hours.
  * Alkamel formats have pit-in / pit-out times, so lower = upper.
  */
-import type { CarId, Stint } from "../package-types.js";
+import type { CarId, Stint } from "../../analysis/schema/package-types.js";
 import type { ResolvedRule, Severity } from "../rulebook-types.js";
 import type { CheckHandler, FindingDraft } from "./common.js";
-import { emptyOutput, ev, minConf, num, param, raceControlFor } from "./common.js";
+import { emptyOutput, ev, minConf, num, param, passOf, raceControlFor } from "./common.js";
 import type { RaceCtx } from "./context.js";
 import { r3 } from "./context.js";
 
@@ -136,7 +136,6 @@ function stintFinding(
   const exact = parts.every((p) => p.exact);
   return {
     car,
-    class: ctx.classOf(car),
     severity,
     severityNotes: sevNotes,
     lap,
@@ -144,8 +143,8 @@ function stintFinding(
     raceTimeS: r3(at),
     measured: r3(lowerSum),
     measuredRange: exact ? null : [r3(lowerSum), r3(upperSum)],
-    threshold: limit,
-    marginS: r3(lowerSum - limit),
+    limit,
+    margin: r3(limit - lowerSum),
     unit: "s",
     evidence: boundaryEvidence(ctx, car, parts),
     raceControl: raceControlFor(ctx, car, STINT_PENALTY),
@@ -199,8 +198,26 @@ export const maxStintHandler: CheckHandler = {
     for (const car of cars) {
       const list = carBounds(ctx, car, out);
       // 1. each car stint (between service stops) is a lower bound on one driver's stint
+      const stintPass = (b: StintBounds, measured: number, limit: number, unit: "s" | "laps") =>
+        passOf({
+          car,
+          lap: b.laps[1],
+          clock: ctx.clock(b.endLow),
+          raceTimeS: r3(b.endLow),
+          measured,
+          measuredRange: unit === "s" && !b.exact ? [b.lower, b.upper] : null,
+          limit,
+          margin: r3(limit - (unit === "s" && !b.exact ? b.upper : measured)),
+          unit,
+          evidence: boundaryEvidence(ctx, car, [b]),
+          confidence: minConf(b.stint.confidence),
+          notes: [
+            "car_stint_without_service_stop",
+            ...(b.exact ? [] : ["lap_crossing_bounds"]),
+            `laps_${b.laps[0]}_${b.laps[1]}`,
+          ],
+        });
       for (const b of list) {
-        out.evaluated++;
         if (valueLaps !== null) {
           if (b.stint.laps > valueLaps) {
             const f = stintFinding(
@@ -217,16 +234,16 @@ export const maxStintHandler: CheckHandler = {
             );
             f.measured = b.stint.laps;
             f.measuredRange = null;
-            f.threshold = valueLaps;
-            f.marginS = null;
+            f.limit = valueLaps;
+            f.margin = valueLaps - b.stint.laps;
             f.unit = "laps";
-            out.findings.push(f);
-          } else out.passed++;
+            out.results.push(f);
+          } else out.results.push(stintPass(b, b.stint.laps, valueLaps, "laps"));
           continue;
         }
         const limit = limitFor(rule, b.stint)!;
         if (b.lower > limit)
-          out.findings.push(
+          out.results.push(
             stintFinding(
               ctx,
               rule,
@@ -241,7 +258,7 @@ export const maxStintHandler: CheckHandler = {
             )
           );
         else if (b.upper > limit)
-          out.findings.push(
+          out.results.push(
             stintFinding(
               ctx,
               rule,
@@ -255,7 +272,7 @@ export const maxStintHandler: CheckHandler = {
               ["car_stint_without_service_stop"]
             )
           );
-        else out.passed++;
+        else out.results.push(stintPass(b, b.lower, limit, "s"));
       }
       // 2. per driver: a driver who stays in through a stop continues the same driving run
       if (perDriver && valueLaps === null) {
@@ -266,7 +283,7 @@ export const maxStintHandler: CheckHandler = {
           const limit = limitFor(rule, run[0].stint)!;
           if (lowerSum <= limit) continue;
           const reliable = run.every((b) => reliableDriver(b.stint));
-          out.findings.push(
+          out.results.push(
             stintFinding(
               ctx,
               rule,
@@ -312,13 +329,37 @@ export const minBreakHandler: CheckHandler = {
         );
         if (j < 0) continue;
         const b = runs[j];
-        out.evaluated++;
         const aEnd = a[a.length - 1];
         const bStart = b[0];
         const gapLow = r3(bStart.startUp - aEnd.endUp);
         const gapUp = r3(bStart.startLow - aEnd.endLow);
+        const exact = aEnd.exact && bStart.exact;
+        const evidence = [
+          ...boundaryEvidence(ctx, car, [aEnd]),
+          ...boundaryEvidence(ctx, car, [bStart]),
+        ];
+        const notes = [
+          `driver_number_${a[0].stint.driver}`,
+          `back_from_lap_${bStart.laps[0]}`,
+          ...(exact ? [] : ["lap_crossing_bounds"]),
+        ];
         if (gapLow >= min) {
-          out.passed++;
+          out.results.push(
+            passOf({
+              car,
+              lap: bStart.laps[0],
+              clock: ctx.clock(bStart.startLow),
+              raceTimeS: r3(bStart.startLow),
+              measured: gapLow,
+              measuredRange: exact ? null : [gapLow, gapUp],
+              limit: min,
+              margin: r3(gapLow - min),
+              unit: "s",
+              evidence,
+              confidence: minConf(aEnd.stint.confidence, bStart.stint.confidence),
+              notes,
+            })
+          );
           continue;
         }
         const reliable = [...a, ...b].every((x) => reliableDriver(x.stint));
@@ -331,10 +372,8 @@ export const minBreakHandler: CheckHandler = {
                   : "driver_attribution_low_confidence",
               ]
             : [];
-        const exact = aEnd.exact && bStart.exact;
-        out.findings.push({
+        out.results.push({
           car,
-          class: ctx.classOf(car),
           severity: sev,
           severityNotes: sevNotes,
           lap: bStart.laps[0],
@@ -342,20 +381,13 @@ export const minBreakHandler: CheckHandler = {
           raceTimeS: r3(bStart.startLow),
           measured: gapLow,
           measuredRange: exact ? null : [gapLow, gapUp],
-          threshold: min,
-          marginS: r3(gapLow - min),
+          limit: min,
+          margin: r3(gapLow - min),
           unit: "s",
-          evidence: [
-            ...boundaryEvidence(ctx, car, [aEnd]),
-            ...boundaryEvidence(ctx, car, [bStart]),
-          ],
+          evidence,
           raceControl: raceControlFor(ctx, car, STINT_PENALTY),
           confidence: minConf(aEnd.stint.confidence, bStart.stint.confidence),
-          notes: [
-            `driver_number_${a[0].stint.driver}`,
-            `back_from_lap_${bStart.laps[0]}`,
-            ...(exact ? [] : ["lap_crossing_bounds"]),
-          ],
+          notes,
         });
       }
     }

@@ -1,15 +1,24 @@
 /**
- * runRuleChecks(factsPackage, rulebook) -> { ruleFindings[], ruleMarkers[], checksRun[], notCheckable[] }
+ * runRuleChecks(factsPackage, rulebook) -> { ruleChecks[], ruleMarkers[], ruleCoverage, rulebook }
  *
  * Code computes facts, the rulebook states the rules (stage2/rules/RULEBOOK_FORMAT.md), and this module runs
- * every rule the rulebook defines a check for against the facts. Findings carry numbers, evidence fact ids,
- * citations and severities, never prose: the Claude pass writes `statement` later.
+ * every rule the rulebook defines a check for against the facts. It writes one `RuleCheck` (schema 1.1.0) per
+ * rule and subject evaluated, passes included: numbers, subject fact ids, the citation, the severity ceiling and
+ * the race-control linkage, never prose. `ruleFindings[]` are written later by the Claude pass from these checks.
  *
- * Every rule is either run (`checksRun`) or listed in `notCheckable` with the reason (TBD value, data the
- * timing format does not carry, context-only rule, or not implemented in v1). Nothing is evaluated against a
- * guessed value (R4).
+ * Every rule is either run (`ruleCoverage.run`) or listed in `ruleCoverage.notCheckable` with the reason (TBD
+ * value, data the timing format does not carry, context-only rule, or not implemented in v1). Nothing is evaluated
+ * against a guessed value (R4).
  */
-import type { CarId, RaceAnalysisPackage } from "./package-types.js";
+import type {
+  CarId,
+  FactId,
+  RaceAnalysisPackage,
+  RuleCheck,
+  RuleCoverageRun,
+  RuleMarker,
+  RuleNotCheckable,
+} from "../analysis/schema/package-types.js";
 import type { ResolvedRule, Rulebook } from "./rulebook-types.js";
 import {
   resolveRulebook,
@@ -17,13 +26,7 @@ import {
   selectEvent,
   selectSession,
 } from "./load-rulebook.js";
-import type {
-  CheckRun,
-  EngineRuleFinding,
-  NotCheckable,
-  RuleCheckResult,
-  RuleMarker,
-} from "./types.js";
+import type { CheckStatus, Citation, RuleCheckResult, SubjectDraft } from "./types.js";
 import type {
   CheckHandler,
   CheckInput,
@@ -105,9 +108,32 @@ function handlerFor(rule: ResolvedRule): CheckHandler | null {
   }
 }
 
+/** Severity notes that leave the outcome in doubt (measurement bounds, unknown rule value or attribution). */
+const UNKNOWN_CODES = new Set([
+  "only_upper_bound_exceeds",
+  "only_lower_bound_below_minimum",
+  "within_measurement_tolerance",
+  "pit_closure_start_unknown",
+  "fcy_effect_on_window_unknown",
+  "driver_attribution_low_confidence",
+]);
+/** Severity notes that say the rule does not bind this subject. */
+const NOT_APPLICABLE_CODES = new Set([
+  "car_below_race_time_fraction_exempt",
+  "car_did_not_rejoin",
+]);
+
+/** Status of a subject: pass, or for a non-pass outcome fail / unknown / not_applicable from its severity notes. */
+export function statusOf(d: Pick<SubjectDraft, "status" | "severityNotes">): CheckStatus {
+  if (d.status) return d.status;
+  if (d.severityNotes.some((n) => NOT_APPLICABLE_CODES.has(n))) return "not_applicable";
+  if (d.severityNotes.some((n) => UNKNOWN_CODES.has(n))) return "unknown";
+  return "fail";
+}
+
 /** Why a rule with no handler is not checked, read from the rule's own check text. */
 function noHandlerReason(rule: ResolvedRule): {
-  reason: NotCheckable["reason"];
+  reason: RuleNotCheckable["reason"];
   detail: string;
 } {
   const c = rule.check.trim();
@@ -241,22 +267,44 @@ export function runRuleChecks(
     carsByClass.set(rb, [...(carsByClass.get(rb) ?? []), car]);
   }
 
-  const findings: (EngineRuleFinding & { _order: number })[] = [];
-  const markerDrafts: {
+  const drafts: {
     ruleId: string;
     rule: ResolvedRule;
+    handler: string;
+    order: number;
+    group: number;
+    citation: Citation;
+    field: string;
+    draft: SubjectDraft;
+  }[] = [];
+  const markerDrafts: {
+    ruleId: string;
     car: CarId;
     lap: number | null;
     raceTimeS: number;
   }[] = [];
-  const checksRun: CheckRun[] = [];
-  const notCheckable: NotCheckable[] = [];
+  const run: (RuleCoverageRun & { _group: number })[] = [];
+  const notCheckable: RuleNotCheckable[] = [];
   const ruleIds = [
     ...new Set([
       ...rulebook.rules.map((r) => r.id),
       ...[...classRules.values()].flatMap((m) => [...m.keys()]),
     ]),
   ];
+  const nc0 = (
+    ruleId: string,
+    classes: string[],
+    reason: RuleNotCheckable["reason"],
+    detail: string,
+    tbd: { field: string; question: string }[]
+  ) =>
+    notCheckable.push({
+      ruleId,
+      reason,
+      detail,
+      ...(classes.length ? { classes } : {}),
+      ...(tbd.length ? { tbd: tbd.map((x) => ({ field: x.field, question: x.question })) } : {}),
+    });
 
   ruleIds.forEach((ruleId, ruleOrder) => {
     // class groups with an identical resolved rule
@@ -279,30 +327,15 @@ export function runRuleChecks(
       groups.set(key, g);
     }
     if (!groups.size) {
-      const r = rulebook.rules.find((x) => x.id === ruleId);
-      if (r)
-        notCheckable.push({
-          ruleId,
-          ruleType: r.type,
-          classes: [],
-          reason: "no_cars_in_scope",
-          detail: "no_cars_in_race",
-          tbd: [],
-        });
+      if (rulebook.rules.some((x) => x.id === ruleId))
+        nc0(ruleId, [], "no_cars_in_scope", "no_cars_in_race", []);
       return;
     }
     for (const g of groups.values()) {
       const { rule } = g;
       g.cars.sort(carOrder);
-      const nc = (reason: NotCheckable["reason"], detail: string, tbd = rule.tbd) =>
-        notCheckable.push({
-          ruleId,
-          ruleType: rule.type,
-          classes: g.classes,
-          reason,
-          detail,
-          tbd,
-        });
+      const nc = (reason: RuleNotCheckable["reason"], detail: string, tbd = rule.tbd) =>
+        nc0(ruleId, g.classes, reason, detail, tbd);
       if (rule.disabled) {
         nc("disabled", "disabled_by_override", []);
         continue;
@@ -369,85 +402,140 @@ export function runRuleChecks(
         nc(res.notCheckable.reason, res.notCheckable.detail, res.notCheckable.tbd ?? []);
         continue;
       }
-      const { citation, provenance } = citations(ctx, rule, docs);
-      for (const d of res.findings) {
-        const { severity, notes } = capSeverity(rule, d);
-        findings.push({
-          id: "",
-          ruleId,
-          ruleType: rule.type,
-          title: rule.title,
-          car: d.car,
-          class: d.class ?? (d.car ? ctx.classOf(d.car) : null),
-          severity,
-          severityNotes: notes,
-          lap: d.lap,
-          clock: d.clock,
-          raceTimeS: d.raceTimeS,
-          measured: d.measured,
-          measuredRange: d.measuredRange,
-          threshold: d.threshold,
-          marginS: d.marginS,
-          unit: d.unit,
-          evidence: d.evidence,
-          citation,
-          provenance,
-          verified: rule.verified,
-          seasonConfirmed: rule.seasonConfirmed,
-          raceControl: d.raceControl,
-          confidence: d.confidence,
-          notes: d.notes,
-          statement: null,
-          _order: ruleOrder,
-        });
-      }
-      for (const m of res.markers ?? []) markerDrafts.push({ ruleId, rule, ...m });
-      checksRun.push({
+      const { citation } = citations(ctx, rule, docs);
+      const reqPaths = Array.isArray(req) ? req : req.anyOf.filter((p) => param(rule, p) !== undefined);
+      const field = `rules[${ruleId}]${reqPaths.length ? `.params.${reqPaths[0]}` : ""}`;
+      const group = run.length;
+      for (const d of res.results)
+        drafts.push({ ruleId, rule, handler: h.name, order: ruleOrder, group, citation, field, draft: d });
+      for (const m of res.markers ?? []) markerDrafts.push({ ruleId, ...m });
+      run.push({
         ruleId,
-        ruleType: rule.type,
+        checks: 0,
         classes: g.classes,
-        evaluated: res.evaluated,
-        passed: res.passed,
-        findings: res.findings.length,
-        notEvaluated: res.notEvaluated,
         verified: rule.verified,
-        notes: res.notes,
+        ...(res.notEvaluated.length
+          ? {
+              notEvaluated: res.notEvaluated.map((n) => ({
+                car: n.car,
+                ...(n.factId ? { factId: n.factId } : {}),
+                reason: n.reason,
+              })),
+            }
+          : {}),
+        ...(res.notes.length ? { notes: res.notes } : {}),
+        _group: group,
       });
     }
   });
 
-  findings.sort(
-    (a, b) =>
-      a._order - b._order ||
-      carOrder(a.car ?? "", b.car ?? "") ||
-      (a.raceTimeS ?? 0) - (b.raceTimeS ?? 0)
-  );
-  const ruleFindings: EngineRuleFinding[] = findings.map(({ _order, ...f }, i) => ({
-    ...f,
-    id: `finding:${i + 1}`,
-  }));
+  // ── checks: rule order, then car order; emission (race) order inside a car ──────────────────────
+  const sorted = drafts
+    .map((d, i) => ({ ...d, i }))
+    .sort(
+      (a, b) => a.order - b.order || carOrder(a.draft.car ?? "", b.draft.car ?? "") || a.i - b.i
+    );
+  const seq = new Map<string, number>();
+  const ruleChecks: RuleCheck[] = [];
+  for (const x of sorted) {
+    const d = x.draft;
+    const status = statusOf(d);
+    const carKey = d.car ?? "_race";
+    const subjects = [...new Set(d.evidence.map((e) => e.factId))];
+    if (!subjects.length && d.car && ctx.entries.has(d.car)) subjects.push(`car:${d.car}`);
+    if (!subjects.length) {
+      run[x.group].notEvaluated = [
+        ...(run[x.group].notEvaluated ?? []),
+        { car: d.car, reason: "no_subject_fact" },
+      ];
+      continue;
+    }
+    const n = (seq.get(`${x.ruleId}|${carKey}`) ?? 0) + 1;
+    seq.set(`${x.ruleId}|${carKey}`, n);
+    // ceiling: the rule's severity after overrides, doubt and the unverified / other-season cap; info when
+    // the subject passed or the rule does not bind it
+    const sev = capSeverity(x.rule, d);
+    const ceiling = status === "pass" || status === "not_applicable" ? "info" : sev.severity;
+    const severityNotes = status === "pass" ? [] : sev.notes;
+    const official: FactId[] = d.raceControl?.penaltyIds ?? [];
+    const notes = [
+      ...d.notes,
+      ...(d.raceControl ? [`race_control_${d.raceControl.status}`] : []),
+      ...(status !== "pass" && !x.rule.seasonConfirmed ? ["rule_season_not_confirmed"] : []),
+    ];
+    const c = x.citation;
+    const check: RuleCheck = {
+      id: `rule:${x.ruleId}:${carKey}:${n}`,
+      ruleKey: x.ruleId,
+      rulebookRef: {
+        field: x.field,
+        section: String(c.section),
+        ...(c.eventKey && (c.layer === "event" || c.layer === "event-class")
+          ? { eventOverride: c.eventKey }
+          : {}),
+        doc: c.doc,
+        page: c.page,
+        quote: c.quote,
+      },
+      car: d.car,
+      subjectFactIds: subjects,
+      status,
+      measured: d.measured,
+      ...(d.measuredRange ? { measuredRange: d.measuredRange } : {}),
+      limit: d.limit,
+      ...(d.unit ? { unit: d.unit } : {}),
+      margin: d.margin,
+      ...(official.length ? { officialAction: official } : {}),
+      lap: d.lap,
+      ...(d.raceTimeS !== null
+        ? { at: { raceTimeS: d.raceTimeS, ...(d.clock ? { clock: d.clock } : {}) } }
+        : {}),
+      verified: x.rule.verified,
+      severityCeiling: ceiling,
+      ...(severityNotes.length ? { severityNotes } : {}),
+      ...(notes.length ? { notes } : {}),
+      source: { kind: "derived", method: `rule-check:${x.handler}` },
+      confidence: d.confidence,
+    };
+    ruleChecks.push(check);
+    run[x.group].checks++;
+  }
 
+  // ── markers: earliest legal pit per car, linked to the car's check of the same rule ────────────
+  const perCar = new Map<string, number>();
   const ruleMarkers: RuleMarker[] = markerDrafts
-    .sort((a, b) => carOrder(a.car, b.car))
-    .map((m) => ({
-      car: m.car,
-      kind: "earliest_legal_pit",
-      lap: m.lap,
-      clock: ctx.clock(m.raceTimeS),
-      raceTimeS: m.raceTimeS,
-      ruleId: m.ruleId,
-      findingId:
-        ruleFindings.find((f) => f.ruleId === m.ruleId && f.car === m.car)?.id ?? null,
-      citation: citations(ctx, m.rule, docs).citation,
-    }));
+    .map((m, i) => ({ ...m, i }))
+    .sort((a, b) => carOrder(a.car, b.car) || a.i - b.i)
+    .map((m) => {
+      const n = (perCar.get(m.car) ?? 0) + 1;
+      perCar.set(m.car, n);
+      const mine = ruleChecks.filter((c) => c.ruleKey === m.ruleId && c.car === m.car);
+      const link = mine.find((c) => c.status !== "pass") ?? mine[0] ?? null;
+      return {
+        id: `marker:${m.car}:${n}`,
+        kind: "earliest_legal_pit" as const,
+        car: m.car,
+        lap: m.lap,
+        clock: ctx.clock(m.raceTimeS),
+        raceTimeS: m.raceTimeS,
+        ruleCheckId: link?.id ?? null,
+        ruleKey: m.ruleId,
+      };
+    });
 
   const all = [...classRules.values()].flatMap((m) => [...m.values()]);
   const ids = new Map(all.map((r) => [r.id, r.verified]));
   return {
-    ruleFindings,
+    ruleChecks,
     ruleMarkers,
-    checksRun,
-    notCheckable,
+    ruleCoverage: {
+      rulebookId: rulebook.id,
+      rulebookHash: resolved.hash,
+      event: eventKey,
+      session: session?.key ?? null,
+      run: run.map(({ _group, ...r }) => r),
+      notCheckable,
+    },
     rulebook: {
       id: rulebook.id,
       status: rulebook.status,

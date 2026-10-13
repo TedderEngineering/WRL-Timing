@@ -4,12 +4,13 @@
  *   npx tsx scripts/run-rule-checks.ts <package.json> --series <id|name> --season <yyyy> [--event <key>]
  *        [--session <key>] [--no-event] [--rulebook-dir <dir>] [--out <file>]
  *
- * Writes (schema 1.1 decisions, 12 Oct 2026):
- *   ruleFindings[]      engine findings, `statement: null` (the Claude pass writes it)
- *   ruleMarkers[]       kind = earliest_legal_pit, per car
- *   ruleChecksRun[]     every rule evaluated, with pass / finding counts
- *   rulesNotCheckable[] every rule not evaluated, with the reason (TBD value, data, context-only ...)
+ * Writes (schema 1.1.0 rule-check contract):
+ *   ruleChecks[]   one check per rule × subject (car, stop, stint, driver) evaluated, passes included, with the
+ *                  citation, severityCeiling and race-control linkage (officialAction)
+ *   ruleMarkers[]  kind = earliest_legal_pit, per car
+ *   ruleCoverage   rules run (with check counts) and rules not checkable (with the reason and open questions)
  *   rulebook, rulebookVersion, completeness.ruleChecks
+ * It never writes ruleFindings[]: the Claude pass (/analyze-race) writes them from the checks.
  * The package is written back in place unless --out is given. No database access.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -20,11 +21,8 @@ import {
   selectRulebook,
 } from "../src/rules/load-rulebook.js";
 import { runRuleChecks } from "../src/rules/run-rule-checks.js";
-import {
-  markRuleChecksAbsent,
-  mergeRuleChecks,
-  type PackageWithRuleChecks,
-} from "../src/rules/merge-rule-checks.js";
+import { markRuleChecksAbsent, mergeRuleChecks } from "../src/rules/merge-rule-checks.js";
+import type { RaceAnalysisPackage } from "../src/analysis/schema/package-types.js";
 
 function usage(msg?: string): never {
   if (msg) console.error(`error: ${msg}`);
@@ -62,7 +60,7 @@ function parseArgs(argv: string[]) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const path = resolve(args.file);
-  const pkg = JSON.parse(readFileSync(path, "utf8")) as PackageWithRuleChecks;
+  const pkg = JSON.parse(readFileSync(path, "utf8")) as RaceAnalysisPackage;
   const series = args.series ?? pkg.metadata?.seriesId ?? pkg.metadata?.series;
   const season = Number(args.season ?? pkg.metadata?.season);
   if (!series) usage("--series is required (no metadata.seriesId in the package)");
@@ -84,22 +82,32 @@ function main() {
   });
   writeFileSync(outPath, `${JSON.stringify(mergeRuleChecks(pkg, res, rb), null, 1)}\n`);
 
-  const sev = (s: string) => res.ruleFindings.filter((f) => f.severity === s).length;
+  const checks = res.ruleChecks;
+  const count = (f: (c: (typeof checks)[number]) => boolean) => checks.filter(f).length;
+  const cov = res.ruleCoverage;
   console.log(
     `${rb.id} event=${res.rulebook.eventKey ?? "none"} session=${res.rulebook.sessionKey ?? "none"} hash=${res.rulebook.sha256.slice(0, 12)}\n` +
-      `rules run: ${res.checksRun.length}, not checkable: ${res.notCheckable.length}\n` +
-      `findings: ${res.ruleFindings.length} (likely ${sev("likely")}, possible ${sev("possible")}, info ${sev("info")}); markers: ${res.ruleMarkers.length}`
+      `rules run: ${new Set(cov.run.map((r) => r.ruleId)).size}, not checkable: ${cov.notCheckable.length}\n` +
+      `checks: ${checks.length} (pass ${count((c) => c.status === "pass")}, fail ${count((c) => c.status === "fail")}, ` +
+      `unknown ${count((c) => c.status === "unknown")}, not_applicable ${count((c) => c.status === "not_applicable")}); ` +
+      `ceiling of non-pass: likely ${count((c) => c.status !== "pass" && c.severityCeiling === "likely")}, ` +
+      `possible ${count((c) => c.status !== "pass" && c.severityCeiling === "possible")}, ` +
+      `info ${count((c) => c.status !== "pass" && c.severityCeiling === "info")}; markers: ${res.ruleMarkers.length}`
   );
-  for (const f of res.ruleFindings.filter((x) => x.severity !== "info")) {
+  for (const c of checks.filter((x) => x.status !== "pass" && x.severityCeiling !== "info")) {
     console.log(
-      `  ${f.id} ${f.ruleId} car ${f.car} ${f.severity}: measured ${JSON.stringify(f.measured)} vs ${JSON.stringify(f.threshold)} (race control: ${f.raceControl.status})`
+      `  ${c.id} ${c.status} ceiling ${c.severityCeiling}: measured ${c.measured} vs ${c.limit} (official action: ${(c.officialAction ?? []).join(",") || "none"})`
     );
   }
-  for (const n of res.notCheckable.filter(
+  for (const n of cov.notCheckable.filter(
     (x) => x.reason === "tbd_value" || x.reason === "unsourced_value"
   )) {
     console.log(`  not checkable ${n.ruleId}: ${n.reason} ${n.detail}`);
   }
+  if (pkg.ruleFindings?.length)
+    console.log(
+      `  note: the package already has ${pkg.ruleFindings.length} ruleFindings; they are left as they are (rewrite them with /analyze-race)`
+    );
 }
 
 try {

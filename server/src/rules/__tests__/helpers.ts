@@ -14,7 +14,7 @@ import type {
   RaceAnalysisPackage,
   SourceFormat,
   Stint,
-} from "../package-types.js";
+} from "../../analysis/schema/package-types.js";
 import type { RuleDef, Rulebook, Severity, TimingFormatKey } from "../rulebook-types.js";
 import { validateRulebook } from "../load-rulebook.js";
 
