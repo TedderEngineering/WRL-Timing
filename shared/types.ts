@@ -1,3 +1,5 @@
+import type { RacePackageFields } from "./race-analysis-package/api";
+
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 export type UserRole = "USER" | "ADMIN";
@@ -127,7 +129,7 @@ export interface RaceEntry {
   carColor?: string | null;
 }
 
-export interface RaceDetail extends RaceSummary {
+export interface RaceDetail extends RaceSummary, Partial<RacePackageFields> {
   entries: RaceEntry[];
 }
 
