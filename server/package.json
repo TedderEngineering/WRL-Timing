@@ -24,7 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "download:alkamel": "tsx scripts/alkamel-download.ts",
-    "download:imsa": "tsx scripts/imsa-download.ts"
+    "download:imsa": "tsx scripts/imsa-download.ts",
+    "intake": "tsx scripts/intake.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.0",
