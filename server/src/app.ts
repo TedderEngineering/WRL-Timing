@@ -10,6 +10,7 @@ import { authRouter } from "./routes/auth.js";
 import { racesRouter } from "./routes/races.js";
 import { adminRouter } from "./routes/admin.js";
 import { intakeRouter, apiTokensRouter } from "./routes/intake.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 import { billingRouter } from "./routes/billing.js";
 import { eventsRouter } from "./routes/events.js";
 import { searchRouter } from "./routes/search.js";
@@ -82,6 +83,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/races", racesRouter);
   app.use("/api/events", eventsRouter);
+  app.use("/api/dashboard", dashboardRouter);
   app.use("/api/search", searchRouter);
   // Machine intake and API tokens (G4). Mounted before the general admin
   // router so its auth runs once; both routers require an admin.

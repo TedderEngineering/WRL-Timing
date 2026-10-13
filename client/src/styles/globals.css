@@ -134,3 +134,44 @@ html.grip-site {
   --brand-900: 120 47 7;
   --brand-950: 67 22 2;
 }
+
+/* RaceTrace 2.0 colour tokens (GUI_SYSTEM_SPEC §5.4). Used by the new
+   dashboard first; the race pages move to them in the G6 rebuild. */
+:root {
+  --rt-bg: #fcfcfb;
+  --rt-surface: #ffffff;
+  --rt-surface-2: #f4f4f7;
+  --rt-border: #e3e3ea;
+  --rt-rule: #ececf1;
+  --rt-text: #0b0b0b;
+  --rt-text-secondary: #52514e;
+  --rt-text-muted: #6b6b78;
+  --rt-accent: #b35a12;
+  --rt-on-accent: #ffffff;
+  --rt-accent-soft: rgba(179, 90, 18, 0.1);
+  --rt-critical: #d03b3b;
+  --rt-warning: #b07800;
+  --rt-warning-soft: rgba(176, 120, 0, 0.16);
+  --rt-good: #0a7f0a;
+  --rt-info: #2a78d6;
+  --rt-info-soft: rgba(42, 120, 214, 0.14);
+}
+.dark {
+  --rt-bg: #0b0b18;
+  --rt-surface: #12122a;
+  --rt-surface-2: #0f0f22;
+  --rt-border: #1e1e38;
+  --rt-rule: #17172e;
+  --rt-text: #e0e0e8;
+  --rt-text-secondary: #cbd5e1;
+  --rt-text-muted: #9a9ab4;
+  --rt-accent: #f48c34;
+  --rt-on-accent: #0b0b18;
+  --rt-accent-soft: rgba(244, 140, 52, 0.14);
+  --rt-critical: #e66767;
+  --rt-warning: #fab219;
+  --rt-warning-soft: rgba(250, 178, 25, 0.22);
+  --rt-good: #4ade80;
+  --rt-info: #7aa2ff;
+  --rt-info-soft: rgba(120, 160, 255, 0.18);
+}
