@@ -14,10 +14,11 @@ export const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
 
 export function sampleFacts(): RaceAnalysisPackage {
   const pkg = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
+  // rule-check contract (schema 1.1.0): what run-rule-checks writes; Claude writes the finding from it
   const check: RuleCheck = {
     id: "rule:min-pit-lane-time:11:1",
     ruleKey: "min-pit-lane-time",
-    rulebookRef: { field: "pitStop.minimumPitLaneTimeS", section: "TBD" },
+    rulebookRef: { field: "pitStop.minimumPitLaneTimeS", section: "TBD", doc: "TBD", quote: "TBD" },
     car: "11",
     subjectFactIds: ["pit:11:2"],
     status: "unknown",
@@ -26,11 +27,25 @@ export function sampleFacts(): RaceAnalysisPackage {
     unit: "s",
     margin: null,
     officialAction: ["pen:11:1"],
+    lap: 10,
+    verified: false,
+    severityCeiling: "info",
+    severityNotes: ["rule_unverified"],
+    notes: ["race_control_penalised"],
     source: { kind: "derived" },
     confidence: "low",
     confidenceNotes: ["rulebook_value_missing"],
   };
   pkg.ruleChecks = [check];
+  pkg.ruleMarkers = [];
+  pkg.ruleCoverage = {
+    rulebookId: "sample-2026",
+    rulebookHash: "0".repeat(64),
+    event: null,
+    session: null,
+    run: [{ ruleId: "min-pit-lane-time", checks: 1 }],
+    notCheckable: [{ ruleId: "max-stint", reason: "tbd_value", detail: "params.value_s", tbd: [{ field: "params.value_s", question: "Maximum stint?" }] }],
+  };
   return pkg;
 }
 

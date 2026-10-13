@@ -1,6 +1,7 @@
 /**
  * RaceTrace Race Analysis Package, schema v1.1.0: TypeScript types.
- * 1.1.0 adds raceSummary.keyMoments, carStories[].events (engine-built skeleton) and ruleFindings[].severity.
+ * 1.1.0 adds raceSummary.keyMoments, carStories[].events (engine-built skeleton), ruleFindings[].severity, the
+ * rule-check contract (ruleChecks[] citation / severityCeiling / evidence fields) and optional ruleMarkers, ruleCoverage.
  * Mirrors schema/race-analysis-package.schema.json (JSON Schema draft 2020-12), which is authoritative.
  * Definitions of every quantity: stage2/core/DEFINITIONS.md. Design notes: SCHEMA_NOTES.md.
  *
@@ -117,8 +118,14 @@ export interface RaceAnalysisPackage {
   pitCycles: PitCycle[];
   cycleResults: CycleResult[];
   positionChanges: PositionChangeTable;
+  /** Machine results of the rule checks (run-rule-checks), passes included. */
   ruleChecks: RuleCheck[];
+  /** Written by the Claude pass from ruleChecks, never by the engine (severity <= cited severityCeiling, A21). */
   ruleFindings: RuleFinding[];
+  /** Chart markers computed by the rule checks (optional; absent in a facts-only draft). */
+  ruleMarkers?: RuleMarker[];
+  /** Rules run and rules not checkable (optional; absent when no rule checks ran). */
+  ruleCoverage?: RuleCoverage;
   carStories: CarStory[];
   raceSummary: RaceSummary | null;
   dataQuality: DataQualityNote[];
@@ -595,23 +602,105 @@ export interface PositionChangeTable {
 
 // ─── rules, prose ──────────────────────────────────────────────────────────
 
+/** Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7), ordered info < possible < likely. */
+export type FindingSeverity = 'info' | 'possible' | 'likely';
+
+/** One rule evaluated against one subject (car, stop, stint, driver), passes included. Written by the rule checks. */
 export interface RuleCheck extends Provenance {
-  /** 'rule:<ruleKey>:<car>:<n>' */
+  /** 'rule:<ruleKey>:<car>:<n>' (n per rule and car in race order; car '_race' for a race-level check). */
   id: FactId;
+  /** Rulebook rule id, e.g. 'gt4.pit.min_stop_time'. */
   ruleKey: string;
-  rulebookRef: { field: string; section: string; eventOverride?: string };
-  car: CarId;
+  /** Citation of the rulebook layer that set the value the check used. */
+  rulebookRef: {
+    field: string;
+    section: string;
+    eventOverride?: string;
+    doc?: string;
+    page?: string | number;
+    /** Verbatim (<= 25 words), or 'TBD' when the document was not obtained. */
+    quote?: string;
+  };
+  /** null for a race-level check. */
+  car: CarId | null;
   subjectFactIds: FactId[];
   status: 'pass' | 'fail' | 'not_applicable' | 'unknown';
+  /** With measuredRange, the lower bound. */
   measured?: number | null;
+  /** [lower, upper] when the data only bounds the quantity (lap-crossing bounds). */
+  measuredRange?: [number, number];
   limit?: number | null;
-  unit?: 's' | 'laps' | 'count' | 'lap';
-  /** measured - limit, signed so negative = violation. */
+  unit?: 's' | 'laps' | 'count' | 'lap' | 'fraction';
+  /** Signed distance to the limit: negative = violation (below a minimum, above a maximum, outside a window). */
   margin?: number | null;
+  /** Penalties race control issued for the same subject and matter. */
   officialAction?: FactId[];
+  lap?: number | null;
+  at?: TimePoint;
+  /** true when the owner has verified every rulebook layer of the rule. */
+  verified?: boolean;
+  /** The most a finding citing this check may claim (A21); capped at 'possible' while unverified. */
+  severityCeiling?: FindingSeverity;
+  /** Machine codes for every step that lowered severityCeiling below the rule's severity. */
+  severityNotes?: string[];
+  /** Machine-readable notes (snake_case codes), never prose. */
+  notes?: string[];
 }
 
-export type FindingSeverity = 'info' | 'possible' | 'likely';
+/** A chart marker computed by the rule checks. */
+export interface RuleMarker {
+  /** 'marker:<car>:<n>' */
+  id: FactId;
+  kind: 'earliest_legal_pit';
+  car: CarId;
+  lap: number | null;
+  clock: IsoDateTime | null;
+  raceTimeS: Seconds;
+  /** The car's check for the rule that defines the marker (its citation); null when the car had no check. */
+  ruleCheckId: FactId | null;
+  ruleKey?: string;
+}
+
+export type NotCheckableReason =
+  | 'tbd_value'
+  | 'unsourced_value'
+  | 'format_not_checkable'
+  | 'data_missing'
+  | 'context_only'
+  | 'evaluated_by_other_rule'
+  | 'not_implemented'
+  | 'disabled'
+  | 'no_cars_in_scope';
+
+export interface RuleCoverageRun {
+  ruleId: string;
+  /** ruleChecks[] written for this rule (and class group). */
+  checks: number;
+  classes?: string[];
+  verified?: boolean;
+  notEvaluated?: { car: CarId | null; factId?: FactId; reason: string }[];
+  notes?: string[];
+}
+
+export interface RuleNotCheckable {
+  ruleId: string;
+  reason: NotCheckableReason;
+  /** Machine-readable detail, e.g. 'params.value_s'. */
+  detail: string;
+  classes?: string[];
+  /** Open questions whose answers would make the rule checkable. */
+  tbd?: { field: string; question: string }[];
+}
+
+/** Every rule of the rulebook is either run or not checkable, with the reason. */
+export interface RuleCoverage {
+  rulebookId: string;
+  rulebookHash: Sha256;
+  event: string | null;
+  session: string | null;
+  run: RuleCoverageRun[];
+  notCheckable: RuleNotCheckable[];
+}
 
 export interface RuleFinding {
   /** 'finding:<n>' */
@@ -619,7 +708,7 @@ export interface RuleFinding {
   ruleCheckIds: FactId[];
   car?: CarId;
   assessment: 'compliant' | 'penalised_consistent' | 'possible_unpenalised' | 'data_insufficient' | 'not_assessable';
-  /** Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7). */
+  /** Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7); never above a cited check's severityCeiling (A21). */
   severity: FindingSeverity;
   /** The finding wording shown by the GUI. */
   statement: Prose;

@@ -29,7 +29,7 @@ export function ruleFlagsStage(): RuleFlagsStage {
 }
 
 /**
- * Whether a viewer may see `ruleChecks` and `ruleFindings`.
+ * Whether a viewer may see `ruleChecks`, `ruleFindings`, `ruleMarkers` and `ruleCoverage`.
  * R0: admins only. R1: admins and the Team plan. R2: every signed-in user.
  */
 export function canSeeRuleFlags(

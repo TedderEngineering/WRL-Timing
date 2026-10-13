@@ -116,7 +116,8 @@ export type PackageVariant = "full" | "norules";
 
 /**
  * The gzipped body to serve for a stored package. "norules" has `ruleChecks`
- * and `ruleFindings` emptied for viewers below the Rule Flags stage.
+ * and `ruleFindings` emptied, and `ruleMarkers` / `ruleCoverage` removed, for
+ * viewers below the Rule Flags stage.
  */
 export async function getServedGzip(
   row: { storagePath: string; sha256: string },
@@ -143,7 +144,13 @@ export async function getServedGzip(
   return stripped;
 }
 
-/** Remove Rule Flags content (stage R0 = admins only). */
+/**
+ * Remove Rule Flags content (stage R0 = admins only): the rule checks, the findings
+ * written from them, and the rule-check sections (markers, coverage), which are optional.
+ */
 export function stripRuleFlags<T extends Record<string, unknown>>(pkg: T): T {
-  return { ...pkg, ruleChecks: [], ruleFindings: [] };
+  const { ruleMarkers: _m, ruleCoverage: _c, ...rest } = pkg;
+  void _m;
+  void _c;
+  return { ...rest, ruleChecks: [], ruleFindings: [] } as unknown as T;
 }

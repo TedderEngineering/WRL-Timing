@@ -431,7 +431,7 @@ describe("GET /api/races/:id/package", () => {
     expect(current.body.code).toBe("NO_PACKAGE");
   });
 
-  it("strips ruleChecks and ruleFindings for viewers below the Rule Flags stage", async () => {
+  it("strips ruleChecks, ruleFindings, ruleMarkers and ruleCoverage for viewers below the Rule Flags stage", async () => {
     await uploadAndPublish("pkg-one");
 
     const user = await get("", bearer(users.pro));
@@ -439,12 +439,16 @@ describe("GET /api/races/:id/package", () => {
     expect(user.headers["x-racetrace-rule-flags"]).toBe("hidden");
     expect(user.body.ruleFindings).toEqual([]);
     expect(user.body.ruleChecks).toEqual([]);
+    expect(user.body).not.toHaveProperty("ruleMarkers");
+    expect(user.body).not.toHaveProperty("ruleCoverage");
     expect(user.body.entries.map((e: { car: string }) => e.car)).toEqual(expect.arrayContaining(["007", "07", "7"])); // identity stays a string
 
     const admin = await get("", bearer(users.admin));
     expect(admin.headers["x-racetrace-rule-flags"]).toBe("included");
     expect(admin.body.ruleFindings).toHaveLength(1);
     expect(admin.body.ruleChecks).toHaveLength(1);
+    expect(admin.body.ruleMarkers).toEqual([]);
+    expect(admin.body.ruleCoverage.run).toEqual([{ ruleId: "min-pit-lane-time", checks: 1 }]);
     expect(admin.headers.etag).not.toBe(user.headers.etag);
 
     // R1: the Team plan sees them too; Pro still does not.
