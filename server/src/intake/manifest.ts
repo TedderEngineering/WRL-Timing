@@ -179,7 +179,7 @@ export async function downloadAlkamelSession(
       }
       if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
       if (res.body.length === 0) throw new Error("empty file");
-      if (name.toLowerCase().endsWith(".json")) JSON.parse(res.body.toString("utf-8").replace(/^﻿/, ""));
+      if (name.toLowerCase().endsWith(".json")) JSON.parse(res.body.toString("utf-8").replace(/^\uFEFF/, ""));
       const digest = sha256(res.body);
       const entry: ManifestFile = {
         ...base,
@@ -237,7 +237,7 @@ export function addManualFiles(dir: string, m: Manifest, now: Date): string[] {
   for (const name of readdirSync(dir)) {
     if (!name.toLowerCase().endsWith(".csv") || known.has(name.toLowerCase())) continue;
     const buf = readFileSync(join(dir, name));
-    const header = buf.toString("utf-8").replace(/^﻿/, "").split(/\r?\n/, 1)[0].toLowerCase();
+    const header = buf.toString("utf-8").replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0].toLowerCase();
     const cols = header.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
     const sig = MANUAL_SIGNATURES.find((s) => s.headers.every((h) => cols.includes(h)));
     if (!sig || m.files.some((f) => f.key === sig.key)) continue;

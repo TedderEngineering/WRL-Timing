@@ -51,7 +51,7 @@ export function fileContentForKey(key: string, buf: Buffer): string {
   if (/pdf/i.test(key) || buf.subarray(0, 5).toString("latin1") === "%PDF-") {
     return `data:application/pdf;base64,${buf.toString("base64")}`;
   }
-  return buf.toString("utf-8").replace(/^﻿/, "");
+  return buf.toString("utf-8").replace(/^\uFEFF/, "");
 }
 
 export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions = {}): { body: IntakePushBody; skipped: string[] } {

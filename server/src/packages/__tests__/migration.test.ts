@@ -164,11 +164,15 @@ describe(`migration ${MIGRATION_DIR}`, () => {
     expect(statements).not.toMatch(/ALTER COLUMN|\bINSERT\b/i);
   });
 
-  it("sorts after every existing migration", () => {
+  it("sorts after every migration that existed before RaceTrace 2.0", () => {
     const dirs = fs
       .readdirSync(new URL("../../../prisma/migrations/", import.meta.url))
       .filter((d) => /^\d/.test(d))
       .sort();
-    expect(dirs.at(-1)).toBe(MIGRATION_DIR);
+    // Stage 3 migrations (G4 intake, ...) may follow it; nothing older than it may.
+    const before = dirs.slice(0, dirs.indexOf(MIGRATION_DIR));
+    expect(dirs).toContain(MIGRATION_DIR);
+    expect(before.every((d) => d < "20261013000000")).toBe(true);
+    expect(dirs.indexOf("20261013000100_add_intake_source_key_api_tokens")).toBeGreaterThan(dirs.indexOf(MIGRATION_DIR));
   });
 });

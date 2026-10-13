@@ -49,7 +49,7 @@ export function parseApacheIndex(html: string): IndexEntry[] {
     const name = decoded.replace(/\/+$/, "");
     if (!name || name.includes("/") || seen.has(name)) continue;
     seen.add(name);
-    const tail = decodeEntities(m[3].replace(/<[^>]*>/g, " ")).replace(/ /g, " ");
+    const tail = decodeEntities(m[3].replace(/<[^>]*>/g, " ")).replace(/\u00A0/g, " ");
     const dm = tail.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?|\d{2}-[A-Za-z]{3}-\d{4}\s+\d{2}:\d{2})/);
     const entry: IndexEntry = { name, href, isDir };
     if (dm) {
