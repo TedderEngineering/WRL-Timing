@@ -1,0 +1,80 @@
+{
+  "season": 2026,
+  "note": "Published 2026 calendars used by the dashboard season view. Dates are event days (local). A race on RaceTrace matches a round when its series matches and its date falls between start - 3 days and end + 1 day at a track named in `tracks`. Refresh from the sources below when a series changes its calendar.",
+  "series": [
+    {
+      "id": "wrl",
+      "label": "WRL",
+      "shortLabel": "WRL",
+      "badge": "WRL",
+      "match": { "series": ["WRL"] },
+      "source": {
+        "title": "WRL 2026 Schedule Announcement",
+        "url": "https://myemail.constantcontact.com/WRL-2026-Schedule-Announcement.html?soid=1117863363437&aid=38j3lyR6eck",
+        "checked": "2026-10-13"
+      },
+      "rounds": [
+        { "round": 1, "name": "Eagles Canyon", "track": "Eagles Canyon Raceway", "tracks": ["eagles canyon", "eagle's canyon"], "start": "2026-02-06", "end": "2026-02-08" },
+        { "round": 2, "name": "Barber", "track": "Barber Motorsports Park", "tracks": ["barber"], "start": "2026-02-27", "end": "2026-03-01" },
+        { "round": 3, "name": "Thunderhill", "track": "Thunderhill Raceway Park", "tracks": ["thunderhill"], "start": "2026-04-03", "end": "2026-04-05" },
+        { "round": 4, "name": "Road America", "track": "Road America", "tracks": ["road america"], "start": "2026-04-24", "end": "2026-04-26" },
+        { "round": 5, "name": "Daytona", "track": "Daytona International Speedway", "tracks": ["daytona"], "start": "2026-06-05", "end": "2026-06-06", "note": "14 hours" },
+        { "round": 6, "name": "Road Atlanta", "track": "Michelin Raceway Road Atlanta", "tracks": ["road atlanta"], "start": "2026-07-24", "end": "2026-07-26" },
+        { "round": 7, "name": "Watkins Glen", "track": "Watkins Glen International", "tracks": ["watkins glen"], "start": "2026-08-28", "end": "2026-08-30" },
+        { "round": 8, "name": "Utah (UMC)", "track": "Burt Brothers Motorpark (Utah Motorsports Campus)", "tracks": ["utah", "umc", "burt brothers"], "start": "2026-09-25", "end": "2026-09-27", "note": "Western finale" },
+        { "round": 9, "name": "Sebring", "track": "Sebring International Raceway", "tracks": ["sebring"], "start": "2026-10-16", "end": "2026-10-18", "note": "Eastern finale" },
+        { "round": 10, "name": "COTA", "track": "Circuit of the Americas", "tracks": ["cota", "circuit of the americas"], "start": "2026-12-04", "end": "2026-12-06", "note": "National finale" }
+      ]
+    },
+    {
+      "id": "imsa-mpc",
+      "label": "IMSA Michelin Pilot Challenge",
+      "shortLabel": "IMSA MPC",
+      "badge": "IMSA",
+      "match": {
+        "series": ["IMSA"],
+        "subSeries": "Pilot Challenge",
+        "nameIncludes": "\\bMPC\\b|pilot challenge|\\b120\\b|\\b4 hours\\b|bmw m endurance|racing lovers|fox factory",
+        "nameExcludes": "^imsa weathertech|vprc|vp racing|mx-?5|\\blst\\b|mustang|airbnb|carrera|super trofeo|\\bhsr\\b"
+      },
+      "source": {
+        "title": "IMSA reveals 2026 WeatherTech Championship, Michelin Pilot Challenge schedules",
+        "url": "https://www.imsa.com/news/2025/03/13/imsa-reveals-2026-weathertech-championship-michelin-pilot-challenge-schedules/",
+        "checked": "2026-10-13"
+      },
+      "rounds": [
+        { "round": 1, "name": "Daytona", "track": "Daytona International Speedway", "tracks": ["daytona"], "start": "2026-01-21", "end": "2026-01-25", "note": "4 hours" },
+        { "round": 2, "name": "Sebring", "track": "Sebring International Raceway", "tracks": ["sebring"], "start": "2026-03-18", "end": "2026-03-21" },
+        { "round": 3, "name": "Laguna Seca", "track": "WeatherTech Raceway Laguna Seca", "tracks": ["laguna seca"], "start": "2026-05-01", "end": "2026-05-03" },
+        { "round": 4, "name": "Mid-Ohio", "track": "Mid-Ohio Sports Car Course", "tracks": ["mid-ohio", "mid ohio"], "start": "2026-06-05", "end": "2026-06-07", "note": "4 hours" },
+        { "round": 5, "name": "Watkins Glen", "track": "Watkins Glen International", "tracks": ["watkins glen"], "start": "2026-06-25", "end": "2026-06-28" },
+        { "round": 6, "name": "CTMP", "track": "Canadian Tire Motorsport Park", "tracks": ["canadian tire", "ctmp", "mosport"], "start": "2026-07-10", "end": "2026-07-12" },
+        { "round": 7, "name": "Road America", "track": "Road America", "tracks": ["road america"], "start": "2026-07-30", "end": "2026-08-02" },
+        { "round": 8, "name": "VIR", "track": "VIRginia International Raceway", "tracks": ["virginia"], "start": "2026-08-21", "end": "2026-08-23" },
+        { "round": 9, "name": "Indianapolis", "track": "Indianapolis Motor Speedway", "tracks": ["indianapolis"], "start": "2026-09-18", "end": "2026-09-20" },
+        { "round": 10, "name": "Road Atlanta", "track": "Michelin Raceway Road Atlanta", "tracks": ["road atlanta", "michelin raceway"], "start": "2026-09-30", "end": "2026-10-03" }
+      ]
+    },
+    {
+      "id": "sro-gt4",
+      "label": "Pirelli GT4 America",
+      "shortLabel": "GT4 America",
+      "badge": "SRO",
+      "match": { "series": ["SRO"], "nameIncludes": "gt4" },
+      "source": {
+        "title": "2026 GT4 America Series (Wikipedia)",
+        "url": "https://en.wikipedia.org/wiki/2026_GT4_America_Series",
+        "checked": "2026-10-13"
+      },
+      "rounds": [
+        { "round": 1, "name": "Sonoma", "track": "Sonoma Raceway", "tracks": ["sonoma"], "start": "2026-03-27", "end": "2026-03-29" },
+        { "round": 2, "name": "COTA", "track": "Circuit of the Americas", "tracks": ["cota", "circuit of the americas"], "start": "2026-04-24", "end": "2026-04-26" },
+        { "round": 3, "name": "Sebring", "track": "Sebring International Raceway", "tracks": ["sebring"], "start": "2026-05-07", "end": "2026-05-09" },
+        { "round": 4, "name": "Road Atlanta", "track": "Michelin Raceway Road Atlanta", "tracks": ["road atlanta"], "start": "2026-06-12", "end": "2026-06-14" },
+        { "round": 5, "name": "Road America", "track": "Road America", "tracks": ["road america"], "start": "2026-08-28", "end": "2026-08-30" },
+        { "round": 6, "name": "Barber", "track": "Barber Motorsports Park", "tracks": ["barber"], "start": "2026-09-25", "end": "2026-09-27" },
+        { "round": 7, "name": "Indianapolis", "track": "Indianapolis Motor Speedway", "tracks": ["indianapolis"], "start": "2026-10-08", "end": "2026-10-11" }
+      ]
+    }
+  ]
+}

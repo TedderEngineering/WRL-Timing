@@ -38,7 +38,11 @@ export function RaceDetailPage() {
   // Derive event ID from URL param or from the loaded race metadata
   const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
-  const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy" | "pitanalysis">("position");
+  // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis).
+  const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy" | "pitanalysis">(() => {
+    const t = searchParams.get("tab");
+    return t === "laptimes" || t === "strategy" || t === "pitanalysis" ? t : "position";
+  });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
 
   // ── Auto-load most recent event + first race when no URL params ──
