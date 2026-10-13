@@ -8,7 +8,9 @@ import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
 import { extractPdfText } from "../utils/pdf-extract.js";
 import { suggestRaceDate } from "../utils/suggestRaceDate.js";
-import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
+import { downloadRaceFiles, supabase, STORAGE_BUCKET } from "../lib/supabase.js";
+import { archiveRaceFiles } from "../lib/race-archive.js";
+import { env } from "../config/env.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
 
@@ -74,6 +76,15 @@ adminRouter.post(
   }
 );
 
+
+/** Archive raw files before any DB write (G1 / F7). Throws ARCHIVE_FAILED on any upload failure. */
+function archive(files: Record<string, unknown>) {
+  return archiveRaceFiles(files, {
+    bucket: supabase ? supabase.storage.from(STORAGE_BUCKET) : null,
+    nodeEnv: env.NODE_ENV,
+  });
+}
+
 // ─── POST /api/admin/races/import — Upload race from any supported format ────
 
 adminRouter.post(
@@ -111,6 +122,10 @@ adminRouter.post(
       // Parse through format-specific parser
       const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
 
+      // Archive raw files BEFORE any DB write: a failed archive stops the import (F7)
+      const archived = await archive(files);
+      parseWarnings.push(...archived.warnings);
+
       // Ingest through existing pipeline
       const result = await raceIngest.ingestRaceData(
         parsedMeta,
@@ -119,12 +134,10 @@ adminRouter.post(
         req.user!.userId
       );
 
-      // Archive raw files to Supabase Storage
-      const storagePaths = await uploadRaceFiles(result.raceId, files, format);
-      if (Object.keys(storagePaths).length > 0) {
+      if (Object.keys(archived.paths).length > 0) {
         await prisma.race.update({
           where: { id: result.raceId },
-          data: { sourceFiles: storagePaths },
+          data: { sourceFiles: archived.paths },
         });
       }
 
@@ -377,6 +390,10 @@ adminRouter.post(
           const parsedMeta = raceMetadataSchema.parse(metadata);
           const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
 
+          // Archive raw files BEFORE any DB write: a failed archive fails this race (F7)
+          const archived = await archive(files);
+          parseWarnings.push(...archived.warnings);
+
           const result = await raceIngest.ingestRaceData(
             parsedMeta,
             data,
@@ -384,12 +401,10 @@ adminRouter.post(
             req.user!.userId
           );
 
-          // Archive raw files
-          const storagePaths = await uploadRaceFiles(result.raceId, files, format);
-          if (Object.keys(storagePaths).length > 0) {
+          if (Object.keys(archived.paths).length > 0) {
             await prisma.race.update({
               where: { id: result.raceId },
-              data: { sourceFiles: storagePaths },
+              data: { sourceFiles: archived.paths },
             });
           }
 
