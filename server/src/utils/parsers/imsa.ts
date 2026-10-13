@@ -290,7 +290,7 @@ export const imsaParser: RaceDataParser = {
     },
     {
       key: "resultsCsv",
-      label: "Results CSV (optional)",
+      label: "Results CSV (strongly recommended)",
       description:
         "IMSA results export (e.g. 03_Results_Race_Provisional.csv) — official classification, status, vehicle and full driver names. Overrides finishing positions derived from lap data.",
       required: false,
@@ -462,6 +462,13 @@ export const imsaParser: RaceDataParser = {
       } catch (e: any) {
         warnings.push(`Could not parse Results CSV: ${e.message}. Finishing positions derived from lap data.`);
       }
+    } else {
+      // G1: lap-derived order ignores post-race penalties. At MPC Road Atlanta 2026 it put
+      // 20 of 45 cars in the wrong place (#12, #18 and #61 each had 39 s added post-race).
+      warnings.push(
+        "No Results CSV — finishing positions are derived from lap data and do NOT include post-race " +
+          "penalties. Add 03_Results_Race_Official.CSV (or _Provisional) for the official classification."
+      );
     }
 
     // ── Build pit time cards for v3 pipeline (optional) ──────────
