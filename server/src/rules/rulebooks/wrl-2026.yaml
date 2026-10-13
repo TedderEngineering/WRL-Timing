@@ -1,0 +1,311 @@
+# RaceTrace rulebook: World Racing League, 2026 season. DRAFT, nothing verified.
+# The 2026 WRL rulebook could NOT be obtained: https://www.racewrl.com/rules disallows automated fetching and the
+# event supplemental rules are Google Drive files that need a browser. The only full rulebook reachable is
+# "2022 Rules Version: 2022.2.1"; the only supplemental rules reachable are Road Atlanta, February 2023.
+# Every rule carried from those documents is `season_confirmed: false` (findings cap at "possible").
+# NOTE: the COTA races in the reference set (Dec 2025) may fall under the 2025 rulebook; see open question Q-WRL-4.
+schema: racetrace-rulebook/0.1
+id: wrl-2026
+series:
+  id: wrl
+  name: World Racing League
+  timing_formats: [speedhive, wrl_website, wrl_redmist]
+season: 2026
+status: draft
+
+documents:
+  - id: WRL-RULES-2026
+    title: "World Racing League 2026 Rules (rulebook)"
+    version: TBD
+    date: TBD
+    issuer: World Racing League
+    url: "https://www.racewrl.com/rules"
+    obtained: "no"
+    notes: "NOT OBTAINED (robots.txt disallows fetching; the PDF link was not discoverable). Owner to download from racewrl.com/rules."
+  - id: WRL-RULES-2022
+    title: "World Racing League Rulebook"
+    version: "2022 Rules Version: 2022.2.1"
+    date: TBD
+    issuer: World Racing League
+    url: "https://static1.squarespace.com/static/611fe48f61d6702c42301722/t/624778f387bf2c0dcdff5442/1648851187807/WRL-RULES-2022.2.1.docx.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    season_of_document: 2022
+    notes: "Read through WebFetch (short verbatim quotes; page numbers from page footers, may differ from print). Superseded; used only until the 2026 rulebook is supplied."
+  - id: WRL-SUPP-RA-2023
+    title: "WRL | Road Atlanta 9+7h supplemental notes and driver meeting (2nd round, 2023 championship)"
+    version: "Google Doc export, no version"
+    date: TBD
+    issuer: World Racing League
+    url: "https://docs.google.com/document/d/1YWzTDoO_Y3WseOryi3vA-4-bhD2YJv8W/export?format=pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    season_of_document: 2023
+    notes: "Event of February 10-12, 2023. No page numbers; sections cited."
+  - id: WRL-SUPP-SEB-2026
+    title: "Sebring 26 Supplemental Rules (provisional)"
+    version: "Provisional"
+    date: TBD
+    issuer: World Racing League
+    url: "https://drive.google.com/file/d/1KpFpIOAITLMJdIpYxRB8oS96brLQmvDV/view (linked from https://www.racewrl.com/sebring26)"
+    obtained: "no"
+    notes: "NOT OBTAINED (Google Drive needs a browser). Event Nov 6-9, 2026. Shows the 2026 supplemental format the owner should collect per event."
+  - id: OWNER-WRL-METHOD
+    title: "WRL Pit Stop Analysis: Methodology & Implementation Specification (RaceTrace, Tedder Engineering)"
+    version: "2026"
+    date: TBD
+    issuer: Tedder Engineering (owner)
+    local_path: "/mnt/user-data/uploads/WRL Data/wrl-lap-chart/resources/WRL_Pit_Stop_Methodology.docx"
+    obtained: "yes"
+    notes: "Owner's analysis document, not a regulation. Records 'WRL speed limit 35 mph ... WRL regulations' and Code 35 = whole field at 35 mph. Contains no WRL minimum pit time or maximum drive time."
+
+classes:
+  - {id: GP1}
+  - {id: GP2}
+  - {id: GTO}
+  - {id: GTU}
+
+defaults:
+  tolerances:
+    lap_boundary: "WRL files have no pit-lane times; a stint or break is bounded by lap crossings, so every duration is an interval [lower, upper]."
+
+rules:
+  - id: wrl.drive.max_stint
+    type: max_stint
+    title: A driver's continuous stint is at most 4 hours
+    params: {per: driver, value_s: 14400, fcy_extension_s: 0}
+    source: {doc: WRL-RULES-2022, section: "D.2.k", page: 5}
+    quote: "Driving Stints: 4 hours maximum."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: ["laps.In Pit", "laps.Time of Day", "laps.Lap Time"]
+      wrl_website: ["laps.In_Pit", "laps.Last_In_Pit", "laps.Total_Race_Time", "laps.Driver_Name"]
+    check: |
+      # A car stint with no pit visit is one driver's stint, so it is a lower bound on that driver's stint.
+      for car: for each run between consecutive pit_events (and race start / last lap):
+        lower = in_lap.start - prev_out_lap.end ; upper = min(in_lap.end - prev_out_lap.start, lower + 4 × slowest class median lap)
+        if lower > P.value_s: EMIT(car, measured=[lower, upper], threshold=P.value_s, evidence=[pit_event ids, lap ids], severity=possible)
+        elif upper > P.value_s: EMIT(car, ..., severity=info)
+      # wrl_website only: join car stints whose majority Driver_Name is the same driver
+      for car in wrl_website: runs = consecutive car stints with the same majority Driver_Name
+        reliable = majority share ≥ 0.9 and run ends by lap 80
+        if Σ lower > P.value_s: EMIT(car, ..., severity=possible if reliable else info)
+    severity: possible
+    timing_signature: "No In Pit lap for more than 4 h of race time."
+    notes: "SpeedHive has no driver column, so a driver who stays in for several fuel stops cannot be followed."
+
+  - id: wrl.drive.min_break_between_stints
+    type: max_stint
+    title: At least 1 hour out of the car between a driver's stints
+    params: {per: driver, min_break_s: 3600}
+    source: {doc: WRL-RULES-2022, section: "D.2.k", page: 5}
+    quote: "Minimum 1 hour break between stints."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: []
+      wrl_website: ["laps.Driver_Name", "laps.In_Pit", "laps.Total_Race_Time"]
+    check: |
+      REQUIRE driver identity per lap (wrl_website Driver_Name) else not_evaluated("no driver data")
+      for consecutive runs a, b of the same driver (runs as in wrl.drive.max_stint):
+        lower = b.first_lap.start - a.last_lap.end ; upper = b.first_lap.end - a.last_lap.start
+        if upper < P.min_break_s and both runs reliable: EMIT(car, measured=[lower, upper], threshold=P.min_break_s, severity=possible)
+        elif lower < P.min_break_s: EMIT(car, ..., severity=info)
+    severity: possible
+
+  - id: wrl.pit.min_stop_time
+    type: min_pit_time
+    title: Minimum pit stop time (none in 2023; 2026 unknown)
+    params: {value_s: TBD, measure: TBD, last_known: "none (Road Atlanta, Feb 2023)"}
+    source: {doc: WRL-SUPP-RA-2023, section: "7.e.xvii", page: TBD}
+    quote: "There is no minimum time on pit road."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: ["laps.In Pit", "laps.Lap Time"]
+      wrl_website: ["laps.In_Pit", "laps.Last_In_Pit", "laps.Lap_Time"]
+    check: |
+      REQUIRE P.value_s != TBD else not_evaluated("no 2026 minimum pit time known")
+      REQUIRE P.measure in {in_lap_to_out_lap} else not_evaluated("WRL files have no pit-lane entry/exit times; only lap-based measures are checkable")
+      for e in pit_events where kind == stop:
+        t = in_lap.lap_time + out_lap.lap_time - 2 × local green reference   # time lost, not pit-lane time
+        if t < P.value_s - transit adjustment: EMIT(e.car, ..., severity=possible, note="lap-based estimate; ±1 lap ambiguity")
+    severity: possible
+    tbd:
+      - {field: params.value_s, question: "Does the 2026 WRL rulebook or event supplement set a minimum pit stop time? (The brief expects one; the 2023 supplement says none.)"}
+      - {field: params.measure, question: "How would WRL measure it (pit-in to pit-out, stationary)?"}
+      - {field: source.page, question: "Page in the 2023 supplement (no page numbers in the export)."}
+
+  - id: wrl.pit.speed_limit
+    type: penalty_service
+    title: Pit lane speed limit 35 mph
+    params: {limit_mph: 35}
+    source: {doc: WRL-SUPP-RA-2023, section: "7.a.v", page: TBD}
+    quote: "Pit Lane Speed Limit – 35mph - marked with sets of cones on both ends of pit road."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: []
+      wrl_website: []
+    check: |
+      not_evaluated("no pit-lane entry/exit timestamps or speeds in WRL files"). Used by the fact engine for transit-time
+      estimates only (owner methodology: pit-road length from the SRO drive-through bulletin ÷ 35 mph).
+    severity: info
+    tbd:
+      - {field: source.page, question: "Page (export has none); confirm 35 mph still applies in 2026."}
+
+  - id: wrl.fcy.code35
+    type: fcy_pit_procedure
+    title: Code 35 procedure (field at 35 mph); whether pits are open under Code 35
+    params: {field_speed_mph: TBD, pits_open_under_code35: TBD}
+    source: {doc: WRL-RULES-2026, section: TBD, page: TBD}
+    quote: "TBD"
+    verified: false
+    checkable_with:
+      speedhive: ["laps.Status"]
+      wrl_website: ["laps.Flag_Status"]
+      wrl_redmist: ["flags.*", "control_log.*"]
+    check: |
+      REQUIRE P.pits_open_under_code35 != TBD else not_evaluated("Code 35 pit rule unknown")
+      if P.pits_open_under_code35 == false:
+        for e in pit_events where e.in_lap overlaps an fcy_period (reconstructed by time from Status):
+          EMIT(e.car, severity=possible, note="FCY periods are reconstructed from per-lap Status; boundaries ±1 lap")
+    severity: possible
+    tbd:
+      - {field: quote, question: "Fetch the 2026 WRL rulebook and quote the Code 35 article."}
+      - {field: params.field_speed_mph, question: "Code 35 speed (owner methodology uses 35 mph)."}
+      - {field: params.pits_open_under_code35, question: "Are pits open during Code 35? Barber/COTA/Sunday data: 185 / 215 / 250 stops were under FCY, so pits appear open."}
+      - {field: source.section, question: "Article."}
+      - {field: source.page, question: "Page."}
+
+  - id: wrl.fcy.pit_exit_closes_with_pace_car
+    type: fcy_pit_procedure
+    title: Under a pace-car caution, pit exit closes when the pace car passes pit out
+    params: {}
+    source: {doc: WRL-SUPP-RA-2023, section: "7.c", page: TBD}
+    quote: "Pit exit will close as soon as the pace car crosses the plane of the speed cones at pit out."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: []
+      wrl_website: []
+    check: |
+      not_evaluated("pace-car position and pit-exit times are not in WRL files")
+    severity: info
+    tbd:
+      - {field: source.page, question: "Page (export has none); is this still the 2026 procedure?"}
+
+  - id: wrl.refuel.pit_road_only
+    type: refuel_tyre
+    title: Fuelling only on pit road during hot track
+    params: {refuel_only_when_stopped: true}
+    source: {doc: WRL-RULES-2022, section: "D.3", page: 5}
+    quote: "Fueling will take place on Pit Road only during hot track."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: []
+      wrl_website: []
+    check: |
+      not_evaluated("fuelling is not in timing data"). Context: every fuel stop is an In Pit visit.
+    severity: info
+
+  - id: wrl.penalty.lap_deduction
+    type: penalty_catalogue
+    title: Penalties are mostly laps deducted in timing
+    params:
+      kinds:
+        - {kind: lap_deduction, timing_signature: "results lap count < laps in the lap file; WRL-website 'Penalties' column"}
+        - {kind: stop_and_hold_laps, timing_signature: "long In Pit visit with no service reason"}
+    source: {doc: WRL-RULES-2022, section: "D.7 (notes)", page: 6}
+    quote: "Lap penalties will be assessed in the Timing system by deducting the penalty lap(s) from the team’s count."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: ["summary.Laps"]
+      wrl_website: ["laps.Penalties", "summary.Penalties", "summary.Laps_Completed"]
+    check: |
+      for car: d = max lap number in lap file - results laps
+        if d > 0: record penalty fact (kind=lap_deduction, value=d); EMIT(car, measured=d, severity=info)
+      Finishing order always from the results/summary file, never re-derived from laps.
+    severity: info
+    notes: "COTA Saturday summary 'Penalties' values: 1 (11 cars), 2 (9), 3 (2), 5 (1), 7 (1); meaning (laps or count) TBD. The 2023 Road Atlanta notes say the Chief Steward prefers lap penalties to stop-and-go/stop-and-hold (7.h.i)."
+
+  - id: wrl.classification.official_finish
+    type: classification
+    title: An official finish needs at least 50% of the class leader's laps
+    params: {min_fraction: {of: class_leader, measure: laps, value: 0.5}, results_source: official_results_file}
+    source: {doc: WRL-RULES-2022, section: "D.10.b", page: 7}
+    quote: "To score an official finish, a car must have completed at least 50% of the class leader’s lap count."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: ["summary.Status", "laps.Lap Number", "laps.Class"]
+      wrl_website: ["summary.Laps_Completed", "laps.Lap_Number", "laps.Class"]
+    check: |
+      for car: frac = results[car].laps / max(results[c].laps for c in class)
+        if frac < P.min_fraction.value: EMIT(car, measured=frac, threshold=0.5, severity=info,
+             note="no official finish; compare with summary Status (DNF/Normal)")
+    severity: info
+
+  - id: wrl.classification.chequered_at_time
+    type: classification
+    title: Race ends when time expires and the overall leader takes the chequered flag
+    params: {ends: overall_leader_after_time_expires}
+    source: {doc: WRL-RULES-2022, section: "D.10.a", page: 7}
+    quote: "The checkered flag will be shown to the overall leader once time expires."
+    verified: false
+    season_confirmed: false
+    checkable_with:
+      speedhive: ["laps.Time of Day", "laps.Status"]
+      wrl_website: ["laps.Total_Race_Time", "laps.Flag_Status"]
+    check: |
+      Context: defines race.chequered_time (first crossing of the overall leader after published time; WRL-website 'Checkered' flag status). No finding.
+    severity: info
+
+class_overrides: {}
+
+events:
+  barber-2026-02:
+    name: "WRL Barber Motorsports Park, Saturday 8 Hour"
+    track: barber
+    dates: [2026-02-25, 2026-02-28]
+    sessions:
+      - {key: sat-8h, date: 2026-02-28, duration_s: 28800, notes: "Lap file Time of Day starts 2026-02-28T09:0x; file name carries 20260225 (event start?). Confirm."}
+    match: {track: barber, date_range: [2026-02-25, 2026-03-01], event_name_contains: "Barber"}
+    overrides:
+      - rule: wrl.pit.min_stop_time
+        params: {value_s: TBD}
+        source: {doc: WRL-RULES-2026, section: "Barber 2026 supplemental rules", page: TBD}
+        quote: "TBD"
+        verified: false
+        tbd:
+          - {field: quote, question: "Supply the Barber 2026 supplemental rules (racewrl.com event page → Google Drive)."}
+          - {field: params.value_s, question: "Minimum pit time at Barber 2026, if any."}
+          - {field: source.page, question: "Page."}
+    notes: "No supplemental rules obtained for this event."
+
+open_questions:
+  - id: Q-WRL-1
+    question: "Supply the 2026 WRL rulebook PDF (and 2025 if the COTA December 2025 races fall under it)."
+    blocks: [wrl.drive.max_stint, wrl.drive.min_break_between_stints, wrl.fcy.code35, wrl.classification.official_finish]
+    who: owner
+    where_to_get_it: "https://www.racewrl.com/rules (download in a browser)."
+  - id: Q-WRL-2
+    question: "Supply the supplemental rules for Barber (Feb 2026) and COTA (Dec 2025): minimum pit time, max drive time, Code 35 pit rule, pit speed."
+    blocks: [wrl.pit.min_stop_time, wrl.fcy.code35]
+    who: owner
+    where_to_get_it: "Event pages on racewrl.com (e.g. racewrl.com/sebring26) link Google Drive PDFs."
+  - id: Q-WRL-3
+    question: "The brief says WRL commonly has a minimum pit stop time and a driver maximum drive time. The 2022 rulebook has a 4 h stint maximum and 1 h break but no minimum pit time; the 2023 Road Atlanta notes say 'There is no minimum time on pit road.' Which applies in 2026?"
+    blocks: [wrl.pit.min_stop_time, wrl.drive.max_stint]
+    who: owner
+  - id: Q-WRL-4
+    question: "Which rulebook season covers the December 2025 COTA races (wrl-2025 vs wrl-2026)?"
+    blocks: []
+    who: owner
+  - id: Q-WRL-5
+    question: "Can WRL supply the Redmist flags / control-log CSVs (penalties, Code 35 times) going forward?"
+    blocks: [wrl.fcy.code35, wrl.penalty.lap_deduction]
+    who: owner

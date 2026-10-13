@@ -1,0 +1,385 @@
+# RaceTrace rulebook: Pirelli GT4 America (SRO Motorsports America), 2026 season. DRAFT, nothing verified.
+# The 2026 SRO America Sporting Regulations were NOT obtainable (not on gt4-america.com/about/regulations, which
+# reads "2024 Information Pending"; the documents sit behind https://teams.sroamerica.com/teams-login).
+# Values below come only from event stewards' bulletins and decisions that were reachable, plus official
+# Race Control messages in the timing files. Article numbers of the sporting regulations are therefore TBD.
+schema: racetrace-rulebook/0.1
+id: sro-gt4-america-2026
+series:
+  id: sro-gt4-america
+  name: Pirelli GT4 America
+  timing_formats: [alkamel_sro]
+season: 2026
+status: draft
+
+documents:
+  - id: SRO-SR-2026
+    title: "2026 SRO Motorsports America Sporting Regulations (with any Pirelli GT4 America appendix)"
+    version: TBD
+    date: TBD
+    issuer: SRO Motorsports America
+    url: "https://teams.sroamerica.com/teams-login (competitor portal; not public)"
+    obtained: "no"
+    notes: "NOT OBTAINED. gt4-america.com/about/regulations and gt-world-challenge-america.com/about/regulations list no documents. Owner to download from the SRO America team portal or request from SRO America."
+  - id: GT4A-EXPLAINER-2026
+    title: "Series Explainer: Pirelli GT4 America (gt4-america.com news 1220)"
+    version: "web article"
+    date: TBD
+    issuer: SRO Motorsports America (press)
+    url: "https://www.gt4-america.com/news/1220/series-explainer-pirelli-gt4-america"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Secondary source. Describes 'two 60-minute races', two drivers, 'mandatory mid-race pit stops and driver changes'. Not a regulation."
+  - id: SRO-BUL-SON-2026-02
+    title: "SRO Bulletin no. 2: Drive Thru Penalty Equivalent, Minimum Pit Stop Times (Sonoma Raceway, March 27-29)"
+    version: "Doc No. 2, 24 March 2026 17:45"
+    date: 2026-03-24
+    issuer: SRO America Stewards
+    url: "https://www.gt4-america.com/documents/notice/1854/002_Doc+2+-+SRO+Bulletin+no.+2+-+Drive+Thru+Penalty+Equivalent%2C+Minimum+Pit+Stop+Times.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Read through WebFetch (short verbatim quotes); owner to save the PDF."
+  - id: SRO-BUL-RA-2026-03A
+    title: "SRO Bulletin No 3: Drive Through Penalty Equivalent, Minimum Pit Stop Times AMENDED (Road Atlanta, June 11-14)"
+    version: "Doc No. 7, 13 June 2026 08:58 (posted 13:59)"
+    date: 2026-06-13
+    issuer: SRO America Stewards
+    url: "https://www.gt4-america.com/documents/notice/1911/4a4c0d2284ebcafe6b1948f339fef7.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Notice-board page labels the meeting 'Road America 2026' (meeting_id=101) but the bulletin itself says Road Atlanta, June 11-14."
+  - id: GT4-DEC-RA-2026-03
+    title: "GT4 Decision No. 3 - Pit Stop (Road Atlanta, Race 1, Car #40)"
+    version: "Doc No. 5"
+    date: 2026-06-12
+    issuer: SRO America Stewards
+    url: "https://www.gt4-america.com/documents/notice/1908/3303a4a13d573ccec6b9f474618898.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Short by 0.965 s -> 9.650 s time penalty. Cites no article."
+  - id: SRO-BUL-INDY-2026
+    title: "Indianapolis 2026 SRO stewards' bulletin: Drive Through Penalty Equivalent, Minimum Pit Stop Times"
+    version: TBD
+    date: TBD
+    issuer: SRO America Stewards
+    url: "https://www.gt4-america.com/noticeboard?meeting_id=103 (list loads by JavaScript; empty when fetched 2026-10-13)"
+    obtained: "no"
+    notes: "NOT OBTAINED. Also try the GTWC America notice board for the shared event (meeting_id=117), equally empty without JavaScript."
+  - id: GT4-RC-INDY-R1
+    title: "Pirelli GT4 America Indianapolis Race 1: Flags Analysis with RC Messages (Alkamel 25)"
+    version: "timing file"
+    date: 2026-10-10
+    issuer: SRO America Timing
+    local_path: "/home/claude/racedata/gt4_indy_2026/GT4_Indy_2026_25_FlagsAnalysisWithRCMessages_Race 1.CSV"
+    obtained: "yes"
+    notes: "Official Race Control messages; used as the source of what Race Control actually applied."
+  - id: GT4-RC-INDY-R2
+    title: "Pirelli GT4 America Indianapolis Race 2: Flags Analysis with RC Messages (Alkamel 25)"
+    version: "timing file"
+    date: 2026-10-11
+    issuer: SRO America Timing
+    local_path: "/home/claude/racedata/gt4_indy_2026/GT4_Indy_2026_25_FlagsAnalysisWithRCMessages_Race 2.CSV"
+    obtained: "yes"
+
+classes:
+  - {id: Silver, name: Silver Cup}
+  - {id: Pro-Am, name: Pro-Am Cup}
+  - {id: Am, name: Am Cup}
+
+defaults:
+  tolerances:
+    pit_clock_s: 0.5     # pit-card PDF vs Drive Time PIT stints agree within 1.5 s (ACCURACY_ALKAMEL §1); card vs PIT_TIME to the ms
+
+rules:
+  - id: gt4.pit.mandatory_stop_count
+    type: mandatory_stops
+    title: Each car makes the mandatory mid-race pit stop
+    params:
+      count: TBD
+      counts_if: {kinds: [stop], in_window: TBD, with_driver_change: TBD}
+    source: {doc: GT4A-EXPLAINER-2026, section: "Race format", page: 1}
+    quote: "mandatory mid-race pit stops and driver changes"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["pit_cards_pdf.in_time", "pit_cards_pdf.pit_time", "drive_time_csv.STINT_TYPE=PIT", "results_csv.STATUS", "results_csv.LAPS"]
+    check: |
+      REQUIRE P.count != TBD else not_evaluated("mandatory stop count: SRO-SR-2026 not obtained")
+      for car in results where status == Classified:
+        n = count pit_events[car] where kind == stop and (not P.counts_if.in_window or in pit_window)
+        if n < P.count:
+          sev = possible if results[car].laps ≥ laps of the last car that stopped inside the window else info  # retired early
+          EMIT(car, measured=n, threshold=P.count, evidence=[results id, pit_event ids], severity=sev)
+    severity: possible
+    penalty: {kind: TBD}
+    tbd:
+      - {field: params.count, question: "Number of mandatory stops per 60-minute race (SRO-SR-2026). Indianapolis data: every running car made exactly one normal stop; R2 #71 made two."}
+      - {field: params.counts_if.in_window, question: "Must the mandatory stop be inside the pit window?"}
+      - {field: params.counts_if.with_driver_change, question: "Does the mandatory stop require the driver change?"}
+
+  - id: gt4.pit.window
+    type: pit_window
+    title: The mandatory stop is made inside the pit window
+    params:
+      open: {by: time, value: TBD, from: TBD}
+      close: {by: time, value: TBD, from: TBD}
+      applies_to_stop: mandatory
+      boundary: TBD
+      fcy_effect: TBD
+    source: {doc: SRO-SR-2026, section: TBD, page: TBD}
+    quote: "TBD"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["pit_cards_pdf.in_time", "pit_cards_pdf.out_time", "flags.GF", "flags.FCY"]
+    check: |
+      REQUIRE P.open.value != TBD and P.close.value != TBD else not_evaluated("pit window not known")
+      t0 = race.start_time if P.open.from == green_flag else race.official_start
+      for e in pit_events where e.kind == stop and e is the car's mandatory stop:
+        t = e.in_time if P.boundary == pit_in else e.out_time
+        if not (t0 + P.open.value ≤ t ≤ t0 + P.close.value):
+          EMIT(e.car, measured=t - t0, threshold=[P.open.value, P.close.value], evidence=[e.id], severity=possible)
+    severity: possible
+    tbd:
+      - {field: quote, question: "Fetch SRO-SR-2026 and quote the pit-window article."}
+      - {field: source.section, question: "Article number of the pit window in SRO-SR-2026."}
+      - {field: source.page, question: "Page of that article."}
+      - {field: params.open.value, question: "Window opening (s after start). Indianapolis data only: first normal pit-in 1421.1 s (R1) / 1463.4 s (R2) after the green flag."}
+      - {field: params.open.from, question: "Is the window measured from the green flag, the start signal, or the scheduled start?"}
+      - {field: params.close.value, question: "Window closing. Indianapolis data: last mandatory pit-in 2073.7 s (R1) / 2097.2 s (R2) after the green flag (R2 #71's second stop at 2359.5 s excluded)."}
+      - {field: params.close.from, question: "As for open.from."}
+      - {field: params.boundary, question: "Must pit-in or pit-out fall inside the window?"}
+      - {field: params.fcy_effect, question: "Does an FCY open/extend/freeze the window?"}
+
+  - id: gt4.pit.min_stop_time
+    type: min_pit_time
+    title: Mandatory stop not shorter than the event's minimum pit stop time, loop to loop
+    params:
+      value_s: TBD
+      measure: pit_lane_loop_to_loop
+      applies_to_stop: mandatory
+      add_pending_time_penalties: true
+      variants: TBD
+    source:
+      - {doc: SRO-BUL-RA-2026-03A, section: "Minimum Pit Stop Time", page: 1}
+      - {doc: SRO-SR-2026, section: TBD, page: TBD, field: value_s}
+    quote: "measured loop to loop (pit-in timing line to pit-out timing line)"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["pit_cards_pdf.pit_time", "drive_time_csv.TIME(STINT_TYPE=PIT)", "analysis_csv.PIT_TIME", "flags.RCMessage(\"Short Pit Stop Time\"|\"Time Penalty at next eligible stop\")"]
+    check: |
+      REQUIRE P.value_s != TBD else not_evaluated("event minimum pit stop time not supplied (stewards' bulletin)")
+      for e in pit_events where e.kind == stop and e is the car's mandatory stop:
+        REQUIRE e.pit_lane_time_source in {pit_card, drive_time} else not_evaluated("no official pit-lane time")
+        pending = Σ p.value_s for p in penalties[e.car] where p.kind == time_at_next_stop and p.announced < e.in_time and not yet applied
+        req = (variant value if a variant applies, e.g. single-driver entry) or P.value_s
+        req = req + pending
+        if e.pit_lane_time_s < req - tol(pit_clock_s):
+          EMIT(e.car, measured=e.pit_lane_time_s, threshold=req, margin_s=e.pit_lane_time_s - req,
+               evidence=[e.id] + pending penalty ids, severity=possible,
+               note="RC short-stop penalty present" if an RC 'Short Pit Stop Time' message names e.car else "no RC penalty found")
+    severity: possible
+    penalty: {kind: TBD, text: "Observed: time penalty of 10 x the shortfall (GT4 Decision No. 3, Road Atlanta) or a drive-through (Indianapolis R1 #11). The governing article was not obtained."}
+    timing_signature: "Pit card PIT_TIME below the minimum; RC 'Penalty - Short Pit Stop Time - …' follows within minutes."
+    tbd:
+      - {field: params.value_s, question: "Per event, from the stewards' bulletin. Sonoma 90 s and Road Atlanta 83 s are in the event overrides; Indianapolis is TBD."}
+      - {field: params.variants, question: "Do single-driver entries or other cases have a different minimum (McLaren Trophy has one for single-driver cars)?"}
+      - {field: source.section, question: "Article of SRO-SR-2026 that creates the minimum pit stop time."}
+      - {field: source.page, question: "Page of that article."}
+
+  - id: gt4.penalty.time_at_next_stop
+    type: penalty_service
+    title: Time penalties announced for 'the next eligible stop' are added to that stop
+    params: {serve_at: next_eligible_stop, unserved: post_race_time}
+    source: {doc: GT4-RC-INDY-R1, section: "RC message, file line 10", page: 1}
+    quote: "Car 92: Penalty - Incident Responsibility - 10 sec Time Penalty at next eligible stop"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["flags.RCMessage", "pit_cards_pdf.pit_time"]
+    check: |
+      Feeds gt4.pit.min_stop_time (pending penalties). Additionally:
+      for p in penalties where kind == time_at_next_stop and no stop of p.car after p.announced:
+        EMIT(p.car, measured="no eligible stop after the penalty", evidence=[p.id], severity=info,
+             note="expected to appear as post-race time in official results")
+    severity: info
+    notes: "Indianapolis: R1 #92 and #24 (+10 s) and R2 #33 (+10 s total) stops all at or above 108.0 + 10 s; R2 #5's 10 s came after its only stop."
+
+  - id: gt4.penalty.drive_through_equivalent
+    type: penalty_service
+    title: Drive-through penalty equivalent (time added when a drive-through is converted)
+    params: {unserved_drive_through_equivalent_s: TBD}
+    source: {doc: SRO-BUL-RA-2026-03A, section: "Drive Thru Penalty Equivalent", page: 1}
+    quote: "The Drive Thru Penalty Equivalent Time for the GTWC, GT4, GTA, and GR Cup is: 43 seconds"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["flags.RCMessage(\"Drive Through\"|\"Penalty Served\")", "pit_cards_pdf.pit_time", "drive_time_csv.PIT_TYPE=PENALTY"]
+    check: |
+      for p in penalties where p.kind == drive_through:
+        e = first unused pit_event of p.car after p.announced with kind == drive_through
+        if not e: EMIT(p.car, measured="no drive-through passage", evidence=[p.id], severity=possible,
+                       note="may have been converted to P.unserved_drive_through_equivalent_s post-race")
+    severity: possible
+    timing_signature: "Indianapolis drive-throughs are 61.9-63.9 s pit-lane passages, Drive Time PIT_TYPE=PENALTY, RC 'Penalty Served'."
+    tbd:
+      - {field: params.unserved_drive_through_equivalent_s, question: "Per event (bulletin). Sonoma 50 s, Road Atlanta 43 s; Indianapolis TBD."}
+
+  - id: gt4.driver.change_at_mandatory_stop
+    type: driver_change
+    title: Two drivers share the car; the driver change is made at the mandatory stop
+    params:
+      every_nominated_driver_must_drive: TBD
+      required_at: mandatory_stop
+      single_driver_allowed: TBD
+    source: {doc: GT4A-EXPLAINER-2026, section: "Teams and drivers", page: 1}
+    quote: "Teams are composed of two drivers who share driving duties"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["drive_time_csv.DRIVER", "drive_time_csv.START", "drive_time_csv.END", "analysis_csv.DRIVER_NUMBER", "results_csv.DRIVER1_*", "results_csv.DRIVER2_*"]
+    check: |
+      REQUIRE P.single_driver_allowed != TBD else (run, but cap severity at possible and add note "single-driver permission unknown")
+      for car where exactly one normal stop e:
+        before = driver of the last TRACK stint ending at/before e.in_time; after = driver of the first TRACK stint starting at/after e.out_time
+        if before == after:
+          EMIT(car, measured="same driver {before}", evidence=[e.id, stint ids], severity=possible,
+               note="a single-driver entry may be permitted with a different minimum stop time")
+    severity: possible
+    tbd:
+      - {field: params.every_nominated_driver_must_drive, question: "SRO-SR-2026 driver participation article."}
+      - {field: params.single_driver_allowed, question: "Can a nominated pair race with one driver (Indianapolis R2 #37: L. Hayes drove 60:00, stop 114.835 s)?"}
+
+  - id: gt4.fcy.pits_closed
+    type: fcy_pit_procedure
+    title: Pits closed under FCY until Race Control announces them open
+    params: {pits_closed_on: TBD, opens_on: "RC 'PITS ARE OPEN'"}
+    source:
+      - {doc: GT4-RC-INDY-R2, section: "RC message, file line 6", page: 1}
+      - {doc: SRO-SR-2026, section: TBD, page: TBD, field: pits_closed_on}
+    quote: "PITS ARE CLOSED"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["flags.REC_TYPE=FCY", "flags.RCMessage(\"PITS ARE CLOSED\"|\"PITS ARE OPEN\")", "pit_cards_pdf.in_time"]
+    check: |
+      REQUIRE fcy_periods from flags_file else not_evaluated("no flags file (e.g. SRO COTA)")
+      closed from max(FCY start, RC 'PITS ARE CLOSED') (P.pits_closed_on decides which) to RC 'PITS ARE OPEN'
+      for e in pit_events with e.in_time inside a closed interval:
+        sev = info if e.kind in {retirement, garage} else possible
+        EMIT(e.car, measured=e.in_time, threshold=open time, evidence=[e.id, rc ids], severity=sev)
+    severity: possible
+    tbd:
+      - {field: params.pits_closed_on, question: "Are pits closed at the FCY call (R1 had no 'PITS ARE CLOSED' message) or only at the RC message?"}
+      - {field: source.section, question: "FCY / pit closure article in SRO-SR-2026."}
+      - {field: source.page, question: "Page of that article."}
+
+  - id: gt4.classification.min_distance
+    type: classification
+    title: Classification requirement (minimum distance) and results status
+    params: {min_fraction: TBD, results_source: official_results_file}
+    source: {doc: SRO-SR-2026, section: TBD, page: TBD}
+    quote: "TBD"
+    verified: false
+    checkable_with:
+      alkamel_sro: ["results_csv.STATUS", "results_csv.LAPS"]
+    check: |
+      Results status is taken from the results file. If P.min_fraction known:
+        for car where results.status == Classified and laps < P.min_fraction × winner laps:
+          EMIT(car, severity=info, note="listed Classified below the minimum distance (results are provisional?)")
+    severity: info
+    notes: "Indianapolis provisional results list every starter as 'Classified', including R2 #19 with 0 laps."
+    tbd:
+      - {field: quote, question: "Fetch SRO-SR-2026 and quote the classification article."}
+      - {field: params.min_fraction, question: "Minimum distance to be classified."}
+      - {field: source.section, question: "Article number."}
+      - {field: source.page, question: "Page."}
+
+class_overrides: {}
+
+events:
+  sonoma-2026-03:
+    name: Sonoma Raceway (Pirelli GT4 America)
+    track: sonoma
+    dates: [2026-03-26, 2026-03-29]
+    sessions:
+      - {key: race1, date: TBD, duration_s: 3600, notes: "Race dates TBD from the event schedule; 60-minute races per the series explainer."}
+      - {key: race2, date: TBD, duration_s: 3600}
+    match: {track: sonoma, date_range: [2026-03-26, 2026-03-29]}
+    overrides:
+      - rule: gt4.pit.min_stop_time
+        params: {value_s: 90}
+        source: {doc: SRO-BUL-SON-2026-02, section: "Minimum Pit Stop Time", page: 1}
+        quote: "The Minimum Pit Stop Time for GT4 America Teams is: 90 seconds"
+        verified: false
+      - rule: gt4.penalty.drive_through_equivalent
+        params: {unserved_drive_through_equivalent_s: 50}
+        source: {doc: SRO-BUL-SON-2026-02, section: "Drive Thru Penalty Equivalent", page: 1}
+        quote: "The Drive Thru Penalty Equivalent Time Established the Event is: 50 seconds"
+        verified: false
+    notes: "Session dates are not confirmed; take them from the event schedule before analysing a Sonoma race."
+
+  road-atlanta-2026-06:
+    name: Michelin Raceway Road Atlanta (Pirelli GT4 America)
+    track: road-atlanta
+    dates: [2026-06-11, 2026-06-14]
+    sessions:
+      - {key: race1, date: TBD, duration_s: 3600, notes: "Race dates TBD from the event schedule."}
+      - {key: race2, date: TBD, duration_s: 3600}
+    match: {track: road-atlanta, date_range: [2026-06-11, 2026-06-14]}
+    overrides:
+      - rule: gt4.pit.min_stop_time
+        params: {value_s: 83}
+        source: {doc: SRO-BUL-RA-2026-03A, section: "Minimum Pit Stop Time", page: 1}
+        quote: "The Minimum Pit Stop Time for GT4 America Teams is: 83 seconds"
+        verified: false
+      - rule: gt4.penalty.drive_through_equivalent
+        params: {unserved_drive_through_equivalent_s: 43}
+        source: {doc: SRO-BUL-RA-2026-03A, section: "Drive Thru Penalty Equivalent", page: 1}
+        quote: "The Drive Thru Penalty Equivalent Time for the GTWC, GT4, GTA, and GR Cup is: 43 seconds"
+        verified: false
+    notes: "Bulletin is the AMENDED version; which value changed is not stated."
+
+  indianapolis-2026-10:
+    name: Indianapolis Motor Speedway, Rounds 12 & 13 (Pirelli GT4 America)
+    track: indianapolis-road-course
+    dates: [2026-10-08, 2026-10-11]
+    sessions:
+      - {key: race1, date: 2026-10-10, scheduled_start: TBD, duration_s: 3600, notes: "Timing: green flag 10:01:39.998 local (weather file 2026-10-10 14:01 UTC), chequered 11:02:14.127."}
+      - {key: race2, date: 2026-10-11, scheduled_start: TBD, duration_s: 3600, notes: "Timing: green flag 10:26:59.491 local, chequered 11:28:02.954."}
+    match: {track: indianapolis-road-course, date_range: [2026-10-08, 2026-10-11]}
+    documents: []
+    overrides:
+      - rule: gt4.pit.min_stop_time
+        params: {value_s: TBD}
+        source: {doc: SRO-BUL-INDY-2026, section: "Minimum Pit Stop Time", page: TBD}
+        quote: "TBD"
+        verified: false
+        tbd:
+          - {field: quote, question: "Fetch the Indianapolis 2026 SRO bulletin (notice board meeting 103 / GTWC 117)."}
+          - {field: params.value_s, question: "Indianapolis minimum. Data INFERENCE only: R1 #77 106.582 s + 14.18 s / 10 = 108.000 s, and the shortest unpenalised stop is 108.014 s. Do not use until the bulletin confirms."}
+          - {field: source.page, question: "Page."}
+      - rule: gt4.penalty.drive_through_equivalent
+        params: {unserved_drive_through_equivalent_s: TBD}
+        source: {doc: SRO-BUL-INDY-2026, section: "Drive Thru Penalty Equivalent", page: TBD}
+        quote: "TBD"
+        verified: false
+        tbd:
+          - {field: quote, question: "Fetch the Indianapolis 2026 SRO bulletin."}
+          - {field: params.unserved_drive_through_equivalent_s, question: "Indianapolis value (drive-through passages measured 61.9-63.9 s)."}
+          - {field: source.page, question: "Page."}
+    notes: "Event documents not obtained. Short-stop penalties applied by Race Control: R1 #11 'Short Pit Stop Time - Drive Through' (flags line 22); R1 #77 '14.18 sec Post-Race Time Penalty' (line 26)."
+
+open_questions:
+  - id: Q-GT4-1
+    question: "Supply the 2026 SRO America Sporting Regulations (and GT4 appendix): pit window, mandatory stop count, driver change, minimum drive time, FCY pit closure, classification, short-stop penalty formula."
+    blocks: [gt4.pit.window, gt4.pit.mandatory_stop_count, gt4.driver.change_at_mandatory_stop, gt4.fcy.pits_closed, gt4.classification.min_distance]
+    who: owner
+    where_to_get_it: "https://teams.sroamerica.com/teams-login, or SRO America series office."
+  - id: Q-GT4-2
+    question: "Supply the Indianapolis 2026 stewards' bulletin (minimum pit stop time, drive-through equivalent)."
+    blocks: [gt4.pit.min_stop_time, gt4.penalty.drive_through_equivalent]
+    who: owner
+    where_to_get_it: "https://www.gt4-america.com/noticeboard?meeting_id=103 in a browser (JavaScript list), category 'Stewards Bulletin'."
+  - id: Q-GT4-3
+    question: "Several normal stops run 10-16 s above the 108 s floor with no RC time penalty (R1 #5 122.718, #37 122.554, #007 123.910, #028 120.533; R2 #71 118.377, #21 118.030, #5 120.100, #92 118.364). Does GT4 America apply success/compensation pit time, or are these slow stops?"
+    blocks: [gt4.pit.min_stop_time]
+    who: owner
+  - id: Q-GT4-4
+    question: "Is there a pit-lane speed limit and per-driver drive-time requirement in GT4 America 2026? (Not encoded: no source.)"
+    blocks: []
+    who: owner

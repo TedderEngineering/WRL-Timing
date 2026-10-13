@@ -1,0 +1,671 @@
+# RaceTrace rulebook: IMSA Michelin Pilot Challenge, 2026 season. DRAFT, nothing verified.
+# Format: RULEBOOK_FORMAT.md. Every quote must be checked against the printed page: the ISR file on hand is the
+# REDLINE edition, whose extracted text mixes inserted and struck wording.
+schema: racetrace-rulebook/0.1
+id: imsa-mpc-2026
+series:
+  id: imsa-mpc
+  name: IMSA Michelin Pilot Challenge
+  timing_formats: [alkamel_imsa]
+season: 2026
+status: draft
+
+documents:
+  - id: ISR26
+    title: "2026 IMSA Sporting Regulations & Series Supplementary Regulations of the IMSA Michelin Pilot Challenge"
+    version: "Revision Date: 12.03.25 (PDF title: 2026 IMSA SPORTING REGULATIONS and SSR IMPC Redline 120325 V1)"
+    date: 2025-12-03
+    issuer: IMSA
+    url: "https://www.imsa.com/wp-content/uploads/sites/32/2025/12/03/2026-IMSA-SPORTING-REGULATIONS-and-SSR-IMPC-Redline-120325.pdf"
+    local_path: "/mnt/user-data/uploads/WRL Data/Sebring 2026 Docs/Regulations/IMPC_Sporting_Regs.pdf"
+    obtained: "yes"
+    season_of_document: 2026
+    notes: "140 pages. This IS the 2026 edition (cover: 2026, Revision Date 12.03.25). Redline edition; IMSA says bulletins take precedence. Bulletins IMPC #26-01..#26-06 listed at https://www.imsa.com/competitors/2026-competition-bulletins/ (checked 2026-10-13); only #26-06 changes a timing-relevant article."
+  - id: CB-IMPC-26-06
+    title: "Competition Bulletin IMPC #26-06: IMSA Michelin Challenge Sporting Regulations Updates"
+    version: "IMPC #26-06"
+    date: 2026-06-17
+    issuer: IMSA
+    url: "https://www.imsa.com/wp-content/uploads/sites/32/2026/06/17/CB-IMPC-26-06-Sporting-Regulations-Update-061726.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Read through WebFetch (text summary with short verbatim quotes); not saved locally. Amends SSR 46.3.2 (Standard FCY not in effect in first or last 30 minutes). CB #26-04 (2026-03-11) was also read: transporter/awning only, no timing change."
+  - id: SR-MPLM-2026-OFF
+    title: "2026 IMSA Official Schedule and SR, Motul Petit Le Mans week (IMPC section: Fox Factory 120 at Michelin Raceway Road Atlanta)"
+    version: "Official, footer 09/23/26"
+    date: 2026-09-23
+    issuer: IMSA
+    url: "https://www.imsa.com/wp-content/uploads/sites/32/2026/09/23/2026-IMSA-Official-Schedule-and-SR-MPLM-092326.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Read through WebFetch; not saved locally (imsa.com is blocked for direct download from this environment). Owner to save the PDF. The provisional SR of 01/28/26 (…/2026/01/28/2026-IMSA-Provisional-Schedule-and-SR-MPLM-012826.pdf) gives the same IMPC drive-time values."
+  - id: SR-MO-2026-PROV
+    title: "2026 IMSA Provisional Schedule and SR, O'Reilly Auto Parts 4 Hours of Mid-Ohio (IMPC)"
+    version: "Provisional, footer 01/28/26"
+    date: 2026-01-28
+    issuer: IMSA
+    local_path: "/mnt/user-data/uploads/WRL Data/Sebring 2026 Docs/2026-IMSA-Provisional-Schedule-and-SR-M-O-IMPC-012826.pdf"
+    obtained: "yes"
+    notes: "Supplied as the 'event SR example'. It is the Mid-Ohio (June 5-7, 2026) SR, not Sebring. Provisional; the official Mid-Ohio SR was not fetched."
+  - id: MMTB-IMPC-2025-05
+    title: "Michelin Motorsport Technical Bulletin: GS Tire Use Specifications - Non-Daytona"
+    version: "MMTB-IMPC-2025-05"
+    date: 2025-02-03
+    issuer: Michelin Motorsport North America
+    local_path: "/home/claude/racedata/MMTB_IMPC_2025_05_GS_Tire_Usage_Requirements_Non-Daytona-1.pdf"
+    obtained: "yes"
+    season_of_document: 2025
+    notes: "2025 bulletin. Whether a 2026 edition supersedes it is TBD. Tables are images (read by rendering the pages)."
+  - id: RES-RA-2026
+    title: "IMSA Michelin Pilot Challenge, Fox Factory 120, Race, Official Results (Alkamel JSON)"
+    version: "Official; creation_date 09-10-2026 09:04:45"
+    date: 2026-10-02
+    issuer: IMSA Timing & Scoring
+    local_path: "/home/claude/racedata/mpc_road_atlanta_2026/MPC_RoadAtlanta_2026_03_Results_Race_Official.JSON"
+    obtained: "yes"
+    notes: "Timing document, not a regulation. Used only where the regulations leave a value to Race Control (drive-through equivalent for unserved penalties)."
+  - id: IMPC-BRIEF-WGI-2025
+    title: "IMPC Driver Briefing, Watkins Glen International 2025 (Alkamel notice board)"
+    version: "2025 event 14"
+    date: TBD
+    issuer: IMSA
+    url: "https://imsa.results.alkamelcloud.com/Results_NoticeBoard/25_2025/14_Watkins%20Glen%20International/09_Briefing%20Photos/02_IMPC%20DRIVER%20BRIEFING.pdf"
+    retrieved: 2026-10-13
+    obtained: "partial"
+    notes: "Secondary, 2025. Slides 23-24 show the Standard and Short FCY pit sequences. Corroboration only; the Road Atlanta 2026 briefing was not found."
+
+classes:
+  - {id: GS, name: Grand Sport}
+  - {id: TCR, name: Touring Car}
+
+defaults:
+  tolerances:
+    drive_time_s: 1.0          # Drive Time CSV START/END are whole seconds; TIME has ms
+    pit_clock_s: 0.5           # pit card vs out-lap PIT_TIME agree to the ms on 154/154 stops (ACCURACY_ALKAMEL §1)
+    fcy_announcement_grace_s: 10.0   # a car may already be committed to pit entry when FCY is announced
+
+rules:
+  # ------------------------------------------------------------------ drivers and drive time
+  - id: mpc.driver.each_nominated_must_drive
+    type: driver_change
+    title: Every nominated driver must drive the car in the race
+    params:
+      every_nominated_driver_must_drive: true
+      driven_if: "registered driver ID at the start, or crossing the pit-exit loop after the start"
+      required_at: none
+    source: {doc: ISR26, section: "12.2", page: 41}
+    quote: "Each Driver nominated in a Car must drive the Car in a Race."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["results_json.drivers[].number", "time_cards_csv.DRIVER_NUMBER", "drive_time_csv.DRIVER", "pit_stops_json.out_driver_number"]
+    check: |
+      REQUIRE entries[car].nominated_drivers known else not_evaluated("no entry/results driver list")
+      for car in entries:
+        drove = { l.driver_number for l in laps[car] } ∪ { s.driver_number for s in stints where s.car == car }
+        for d in entries[car].nominated_drivers where d.number not in drove:
+          sev = info if results[car].laps < 0.9 * race_leader_laps or car retired else likely
+          EMIT(car, measured="driver {d.number} has no lap or stint", threshold="must drive",
+               evidence=[entries[car].id] + [s.id for s in stints where s.car == car], severity=sev)
+    severity: likely
+    penalty: {kind: TBD, text: "Not stated in 12.2; drive-time order priority 12.12 places cars at back of class for drive-time requirement violations."}
+    timing_signature: "Nominated driver number never appears in Time Cards DRIVER_NUMBER or Drive Time TRACK rows."
+    notes: "Identity must be the driver NUMBER within the car. Abbreviated names collide (#55 Eddie / Eduardo Gou are both 'E. Gou' in the Drive Time CSV at Road Atlanta)."
+
+  - id: mpc.drive_time.min_per_driver
+    type: min_drive_time_per_driver
+    title: Each driver achieves the SR Minimum Drive-Time
+    params:
+      value_s: TBD
+      measure: track_time_excl_pit_lane
+      starts: start_line_first_car
+      ends: published_time_expiry
+      exempt_if_car_race_time_fraction_below: 0.90
+      red_flag_adjustment: {first_half: 0.5, second_half_or_long: 0.0}
+    source:
+      - {doc: ISR26, section: "12.13.1.A", page: 43}
+      - {doc: ISR26, section: "12.11.2", page: 42, field: measure}
+      - {doc: ISR26, section: "12.11.4", page: 42, field: ends}
+      - {doc: ISR26, section: "12.12.1.A", page: 43, field: exempt_if_car_race_time_fraction_below}
+      - {doc: ISR26, section: "12.11.6", page: 43, field: red_flag_adjustment}
+    quote: "Each Driver must individually achieve the Minimum Drive-Time as listed in the SR or Car penalized in the Drive-Time Penalty Order Priority"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["drive_time_csv.STINT_TYPE", "drive_time_csv.START", "drive_time_csv.END", "drive_time_csv.TIME", "time_cards_csv.DRIVER_NUMBER", "flags.GF", "results_json.finalize_type.time_in_seconds"]
+    check: |
+      REQUIRE P.value_s != TBD else not_evaluated("event SR 12.13 value missing")
+      REQUIRE stints from Drive Time (source == drive_time_csv) else not_evaluated("no Drive Time file")
+      REQUIRE no red flag OR P.red_flag_adjustment applied (Race Control announcement) else not_evaluated("red flag: adjusted minimum must be read from RC")
+      for car in entries:
+        car_frac = Σ driver_time[car][*].track_time_capped_s / race.published_duration_s
+        for d in entries[car].nominated_drivers:
+          t = driver_time[car][d.number].track_time_capped_s   # 0 if never drove
+          if t < P.value_s - tol(drive_time_s):
+            sev = info if car_frac < P.exempt_if_car_race_time_fraction_below else likely
+            EMIT(car, measured=t, threshold=P.value_s, margin_s=t - P.value_s,
+                 evidence=[s.id for s in stints where s.car == car and s.driver_number == d.number], severity=sev)
+    severity: likely
+    penalty: {kind: back_of_class, text: "Drive-Time Penalty Order Priority, ISR 12.12.1.C"}
+    timing_signature: "Sum of Drive Time TRACK stints for one driver number below the SR minimum."
+    tbd:
+      - {field: params.value_s, question: "Set per event by SR 12.13 (Road Atlanta and Mid-Ohio: 40 min)."}
+
+  - id: mpc.drive_time.max_per_driver
+    type: max_drive_time_per_driver
+    title: No driver exceeds the SR Maximum Drive-Time
+    params:
+      value_s: TBD
+      by_driver_count: TBD
+      measure: track_time_excl_pit_lane
+      starts: start_line_first_car
+      ends: published_time_expiry
+      per_car: true
+    source:
+      - {doc: ISR26, section: "12.14.1", page: 44}
+      - {doc: ISR26, section: "12.14.2", page: 44, field: per_car}
+    quote: "Drivers must not exceed the Maximum Drive-Time of any limit listed in the SR."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["drive_time_csv.STINT_TYPE", "drive_time_csv.START", "drive_time_csv.END", "drive_time_csv.TIME", "time_cards_csv.DRIVER_NUMBER", "flags.GF"]
+    check: |
+      REQUIRE P.value_s != TBD or P.by_driver_count != TBD else not_evaluated("event SR 12.14 value missing")
+      for car in entries:
+        limit = P.by_driver_count[len(entries[car].nominated_drivers)] if P.by_driver_count != TBD else P.value_s
+        for d in entries[car].nominated_drivers:
+          t = driver_time[car][d.number].track_time_capped_s
+          if t > limit + tol(drive_time_s):
+            EMIT(car, measured=t, threshold=limit, margin_s=t - limit,
+                 evidence=[s.id for s in stints where s.car == car and s.driver_number == d.number], severity=likely)
+          elif t > limit:   # inside tolerance
+            EMIT(car, measured=t, threshold=limit, margin_s=t - limit, evidence=[...], severity=possible)
+    severity: likely
+    penalty: {kind: back_of_class, text: "ISR 12.12.1.B: the car with the driver most exceeding Maximum Drive-Time placed lowest"}
+    timing_signature: "Sum of Drive Time TRACK stints for one driver number above the SR maximum."
+    tbd:
+      - {field: params.value_s, question: "Set per event by SR 12.14 (Road Atlanta: 80 min; Mid-Ohio: by driver count)."}
+      - {field: params.by_driver_count, question: "Set per event when the SR gives limits by number of drivers (Mid-Ohio: 2:40 three-driver, 3:20 two-driver)."}
+
+  - id: mpc.min_pace.115pct
+    type: min_pace
+    title: Drivers should lap within 115% of the class best (advisory wording "should")
+    params: {fraction_of_class_best: 1.15, exclude: [fcy_laps, in_laps, out_laps, lap_1]}
+    source: {doc: ISR26, section: "12.10", page: 42}
+    quote: "a lap time at least equal to 115% of the best time achieved by the fastest Car in the Driver’s respective class"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["time_cards_csv.LAP_TIME", "time_cards_csv.DRIVER_NUMBER", "time_cards_csv.FLAG_AT_FL", "time_cards_csv.CROSSING_FINISH_LINE_IN_PIT"]
+    check: |
+      best[c] = min lap_time_s over all laps of class c
+      for car, n in laps where fcy_state == green and n not in pit_event laps and n > 1:
+        if lap_time_s > P.fraction_of_class_best * best[class]: count per (car, driver)
+      EMIT one info finding per driver with > 3 such laps (context only)
+    severity: info
+    notes: "'should' wording: never more than info."
+
+  # ------------------------------------------------------------------ FCY and pit closure
+  - id: mpc.fcy.pits_closed_on_announcement
+    type: fcy_pit_procedure
+    title: Pits are closed from the FCY announcement until opened by class
+    params:
+      pits_closed_on: fcy_announcement
+      grace_s_for_committed_cars: 10.0
+    source: {doc: ISR26, section: "46.1", page: 99}
+    quote: "The pits are deemed closed at the time of the announcement of Full Course Yellow (FCY) by Race Control"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.REC_TYPE=FCY", "flags.RCMessage(\"PITS OPEN GS\"|\"PITS OPEN TCR\"|\"PITS OPEN ALL CARS\")", "pit_stops_json.in_time", "time_cards_csv.CROSSING_FINISH_LINE_IN_PIT"]
+    check: |
+      REQUIRE fcy_periods from flags_file else not_evaluated("no flags file")
+      for e in pit_events where e.in_time < race.chequered_time and e.kind != pit_lane_start:
+        f = fcy_period containing e.in_time (start ≤ in_time < end, end = null → open-ended)
+        if f is none: continue
+        open_t = earliest pit_state(open) for scope in {e.class, all} with f.start < time ≤ (f.end or ∞)
+        if open_t is none or e.in_time < open_t:
+          sev = info if e.kind in {retirement, garage} and car never rejoins else possible
+          note = "within grace of FCY announcement" if e.in_time - f.start ≤ P.grace_s_for_committed_cars
+          EMIT(e.car, measured=e.in_time, threshold=open_t, evidence=[e.id, f.id, pit_state ids], severity=sev, note)
+    severity: possible
+    penalty: {kind: stop_plus_s, value_s: 60, text: "If more than Emergency Service is received: ISR 46.3.4; Attachment 1 P16"}
+    timing_signature: "Pit-in time between the FCY record and the RC 'PITS OPEN <class>' message."
+    notes: "Emergency Service (46.3.1.A) is permitted in a closed pit after permission; the data cannot see the permission, so never above possible."
+
+  - id: mpc.fcy.pit_entrance_closed_until_pickup
+    type: fcy_pit_procedure
+    title: Pit entrance closed until the Safety Car has picked up the leader
+    params: {}
+    source: {doc: ISR26, section: "46.2.1", page: 99}
+    quote: "The pit entrance is closed from the beginning of the Safety Car intervention until the Safety Car has picked up the overall leader"
+    verified: false
+    checkable_with:
+      alkamel_imsa: []
+    check: |
+      not_evaluated("Safety Car pick-up time is not in the timing files; covered by mpc.fcy.pits_closed_on_announcement")
+    severity: info
+
+  - id: mpc.fcy.standard_open_gs_first
+    type: fcy_pit_procedure
+    title: "Standard FCY: only GS may pit on the first lap after the pits open"
+    params:
+      opening_sequence:
+        - {classes: [GS], when: "first lap after pits declared open (RC 'PITS OPEN GS')"}
+        - {classes: [TCR], when: "subsequent lap (RC 'PITS OPEN TCR')"}
+        - {classes: all, when: "after the two class-specific laps (RC 'PITS OPEN ALL CARS')"}
+    source: {doc: ISR26, section: "46.3.1", page: 99}
+    quote: "Only GS Cars are permitted to pit on the first lap after the pits are declared open."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(\"PITS OPEN GS\"|\"PITS OPEN TCR\"|\"PITS OPEN ALL CARS\")", "pit_stops_json.in_time", "results_json.class"]
+    check: |
+      for f in fcy_periods where not f.short:
+        tGS, tTCR, tALL = pit_state open times for GS, TCR, all inside f
+        REQUIRE tGS and tTCR else not_evaluated("RC pit-open messages missing")
+        for e in pit_events where e.class == TCR and tGS ≤ e.in_time < tTCR:
+          EMIT(e.car, measured=e.in_time, threshold=tTCR, evidence=[e.id, rc ids], severity=possible, note="TCR pitted on the GS-only lap")
+        for e in pit_events where e.class == GS and tTCR ≤ e.in_time < (tALL or ∞):
+          EMIT(e.car, ..., severity=possible, note="GS pitted on the TCR-only lap")
+    severity: possible
+    timing_signature: "Class-specific RC messages bracket the pit-in times."
+
+  - id: mpc.fcy.standard_open_tcr_second
+    type: fcy_pit_procedure
+    title: "Standard FCY: only TCR may pit on the lap after the GS lap"
+    params: {}
+    source: {doc: ISR26, section: "46.3.1", page: 99}
+    quote: "Only TCR Cars are permitted to pit on the subsequent lap."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(\"PITS OPEN TCR\"|\"PITS OPEN ALL CARS\")", "pit_stops_json.in_time"]
+    check: |
+      Evaluated inside mpc.fcy.standard_open_gs_first (second loop). This entry carries the citation only.
+    severity: possible
+
+  - id: mpc.fcy.no_standard_fcy_first_last_30min
+    type: fcy_pit_procedure
+    title: No Standard FCY in the first or last 30 minutes (pits stay closed, Short-FCY-like)
+    params:
+      no_standard_fcy_within_s_of_start: 1800
+      no_standard_fcy_within_s_of_finish: 1800
+    source: {doc: CB-IMPC-26-06, section: "Art. 46.3.2 (SSR) First and Last 30 Minutes", page: TBD}
+    quote: "The Standard FCY is not in effect for any Safety Car period during the first or last thirty (30) minutes of the Race."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.REC_TYPE=FCY", "flags.GF", "results_json.finalize_type.time_in_seconds"]
+    check: |
+      for f in fcy_periods:
+        f.standard_allowed = not (f.start < race.start_time + P.no_standard_fcy_within_s_of_start
+                                  or f.start > race.expiry_time - P.no_standard_fcy_within_s_of_finish)
+      # consumed by mpc.fcy.short_fcy_pits_closed_until_restart; no finding of its own
+    severity: info
+    notes: "Before 2026-06-17 the article read 'Last 30 Minutes' only (ISR26 46.3.2, p. 100). Road Atlanta (Oct 2) is after the bulletin."
+    tbd:
+      - {field: source.page, question: "Page number of the amended article in CB IMPC #26-06 (owner to read the PDF)."}
+
+  - id: mpc.fcy.short_fcy_pits_closed_until_restart
+    type: fcy_pit_procedure
+    title: "Short FCY: pit lane stays closed until the restart is coming"
+    params:
+      short_fcy_if: ["FCY starts < 1800 s after race start", "first FCY < 900 s after a restart green", "RC message 'SHORT YELLOW'"]
+      opens: "after the last car passes pit entry with the restart announced"
+    source: {doc: ISR26, section: "46.3.3", page: 100}
+    quote: "For a Short FCY, after the Pass-Around, the pit lane remains closed until the last Car has passed the pit entry"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.REC_TYPE=FCY", "flags.REC_TYPE=GF", "flags.RCMessage(\"SHORT YELLOW\"|\"PITS OPEN ALL CARS\")", "pit_stops_json.in_time"]
+    check: |
+      for f in fcy_periods where f.short or not f.standard_allowed:
+        open_t = pit_state open (scope all) inside f, else f.end (restart GF), else none (finished under FCY)
+        for e in pit_events where f.start ≤ e.in_time < (open_t or race.chequered_time) and e.in_time < race.chequered_time:
+          sev = info if e.kind in {retirement, garage} else possible
+          EMIT(e.car, measured=e.in_time, threshold=open_t, evidence=[e.id, f.id], severity=sev)
+    severity: possible
+    timing_signature: "Pit-in during a Short FCY before the restart; at Road Atlanta 2026 the second FCY (13:38:08) ran to the chequered flag."
+
+  - id: mpc.fcy.emergency_service_drive_through
+    type: fcy_pit_procedure
+    title: A car taking Emergency Service in a closed pit owes a drive-through after the pits open
+    params:
+      obligation: drive_through
+      standard_fcy_when: "lap after the pits are open for TCR"
+      short_fcy_when: "directly after the pits are opened"
+      obligation_met_if_in_pit_lane_leader_laps: 2
+      fuel_cars_must_refuel_at_first_opportunity: true
+    source:
+      - {doc: ISR26, section: "46.3.1.A.ii", page: 100}
+      - {doc: ISR26, section: "46.3.1.A.iv", page: 100, field: obligation_met_if_in_pit_lane_leader_laps}
+      - {doc: ISR26, section: "46.3.3.A", page: 100, field: short_fcy_when}
+    quote: "obligated to make a drive-through (although any service may be performed) on the lap after the pits are open for TCR Cars"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.in_time", "pit_stops_json.out_time", "flags.RCMessage(\"PITS OPEN TCR\")", "time_cards_csv.HOUR"]
+    check: |
+      for e in pit_events flagged by mpc.fcy.pits_closed_on_announcement (closed-pit entries) where car rejoined:
+        leader_laps_in_pit = number of overall-leader crossings in (e.in_time, e.out_time)
+        if leader_laps_in_pit ≥ P.obligation_met_if_in_pit_lane_leader_laps: pass
+        else:
+          nxt = next pit_event of car with in_time ≥ pits-open-for-TCR time
+          if nxt is none or nxt.in_time > restart GF + 1 lap:
+            EMIT(e.car, measured="no follow-up passage", evidence=[e.id], severity=possible,
+                 note="only applies if the closed-pit entry was Emergency Service")
+    severity: possible
+    penalty: {kind: stop_plus_s, value_s: 10, text: "Non-compliance with the obligation (46.3.1.A.ii; Attachment 1 B9)"}
+
+  - id: mpc.fcy.driver_change_in_closed_pit
+    type: fcy_pit_procedure
+    title: Driver change in a closed pit (not Emergency Service) is penalised
+    params: {}
+    source: {doc: ISR26, section: "12.11.2", page: 42}
+    quote: "Penalty for Driver change in a closed pit that is not considered Emergency Service (Art. 46.3.1.A or Art. 46.3.3.A): Stop plus sixty (60) seconds."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.in_driver_number", "pit_stops_json.out_driver_number", "pit_stops_json.in_time"]
+    check: |
+      for e in closed-pit entries (as in mpc.fcy.pits_closed_on_announcement):
+        if e.driver_in != e.driver_out:
+          EMIT(e.car, measured="driver {e.driver_in}→{e.driver_out}", evidence=[e.id], severity=possible)
+    severity: possible
+    penalty: {kind: stop_plus_s, value_s: 60}
+
+  - id: mpc.fcy.more_than_emergency_service
+    type: fcy_pit_procedure
+    title: Assistance beyond Emergency Service in a closed pit is penalised
+    params: {}
+    source: {doc: ISR26, section: "46.3.4", page: 100}
+    quote: "Any Car not disabled that enters while the pit lane is closed (or closed to that class) and receives assistance beyond Emergency Service"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.pit_time"]
+    check: |
+      not_evaluated("the kind of service is not in timing data; a closed-pit entry is reported by mpc.fcy.pits_closed_on_announcement")
+    severity: info
+    penalty: {kind: stop_plus_s, value_s: 60, text: "Attachment 1 P16"}
+
+  - id: mpc.wave_by.pass_around
+    type: wave_by
+    title: Pass-Around for cars with their class leader behind them
+    params: {kind: pass_around, eligible: class_leader_behind, cars_may_pit: false}
+    source: {doc: ISR26, section: "46.2.2", page: 99}
+    quote: "the Race Director shall authorize the Pass-Around for any Car that has its class leader behind it in the order circulating behind the Safety Car"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(\"COMMENCE PASS AROUND\"|\"THE PASS AROUND IS COMPLETE\")", "time_cards_csv.HOUR"]
+    check: |
+      Context only: the fact engine marks laps inside [COMMENCE PASS AROUND, PASS AROUND IS COMPLETE] so gap/position
+      changes there are not read as on-track passes. No finding.
+    severity: info
+
+  - id: mpc.wave_by.final_wave_by_may_pit
+    type: wave_by
+    title: Final Wave-By cars are permitted to pit
+    params: {kind: final_wave_by, eligible: class_leader_behind, cars_may_pit: true}
+    source: {doc: ISR26, section: "46.4.3", page: 101}
+    quote: "FWB Cars are permitted to pit."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(\"COMMENCE FINAL WAVE-BY\"|\"THE FINAL WAVE-BY IS COMPLETE\")"]
+    check: |
+      Context only (explains pit stops during the wave-by). No finding.
+    severity: info
+
+  # ------------------------------------------------------------------ penalties
+  - id: mpc.penalty.catalogue
+    type: penalty_catalogue
+    title: Penalty kinds and how they appear in timing
+    params:
+      kinds:
+        - {kind: drive_through, timing_signature: "passage ≈ pit-lane transit, no stop (Road Atlanta 2026: 35.1-37.1 s)"}
+        - {kind: stop_plus_s, timing_signature: "passage ≈ transit + N s in the Penalty Box"}
+        - {kind: post_race_time, timing_signature: "results report_message, e.g. '39 second time penalty for unserved drive-through'"}
+      drive_through_equivalent_s: TBD
+    source: {doc: ISR26, section: "33.5.1.A", page: 82}
+    quote: "For a Drive-Through, Car must pass directly through the pit lane without exceeding the PLSL and rejoin the Race without stopping at its Pit Box"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(\"Car N: Penalty - … - Drive Through|Stop + N\")", "pit_stops_json.pit_time", "results_json.session.report_message"]
+    check: |
+      Classification aid for the fact engine: a pit_event within tol of the event's drive-through transit following an RC
+      penalty is kind=drive_through; a passage ≥ transit + N following 'Stop + N' is kind=penalty_stop. No finding.
+    severity: info
+    tbd:
+      - {field: params.drive_through_equivalent_s, question: "Set per event (Race Control). Road Atlanta 2026 results show 39 s; see event override."}
+
+  - id: mpc.penalty.serve_within_4_green_crossings
+    type: penalty_service
+    title: A penalty must be served before the car crosses the line under green more than four times
+    params: {serve_under: green, max_green_crossings: 4}
+    source:
+      - {doc: ISR26, section: "33.5.1", page: 82}
+      - {doc: ISR26, section: "27.8.2", page: 73, field: serve_under}
+    quote: "Car must not cross the Finish line under green flag conditions more than four (4) times prior to serving the penalty"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(penalty)", "time_cards_csv.HOUR", "time_cards_csv.FLAG_AT_FL", "pit_stops_json.in_time"]
+    check: |
+      for p in penalties where p.kind in {drive_through, stop_and_go, stop_plus_s}:
+        e = p.served_by  (first unused pit_event of p.car after p.announced whose kind matches p.kind)
+        n = count of laps[p.car] with p.announced < end < (e.in_time if e else race.chequered_time) and fcy_state == green
+        if e and n > P.max_green_crossings:
+          EMIT(p.car, measured=n, threshold=P.max_green_crossings, evidence=[p.id, e.id, lap ids], severity=possible)
+        if not e:
+          EMIT(p.car, measured="unserved", evidence=[p.id], severity=info,
+               note="expected as post-race time in results; cross-check results report_message")
+    severity: possible
+    penalty: {kind: drive_through, text: "Attachment 1 B10: Drive Through added; 27.8.3 Race Director may stop scoring the car"}
+
+  - id: mpc.penalty.not_on_last_lap
+    type: penalty_service
+    title: Penalties are not served once the car has started its last lap; they become post-race penalties
+    params: {not_on_last_lap: true}
+    source: {doc: ISR26, section: "27.8.2", page: 73}
+    quote: "Such penalties must not be served if the Car has started its last lap of a Race and shall be applied as a post-Race penalty."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.RCMessage(penalty)", "flags.REC_TYPE=FF", "results_json.session.report_message"]
+    check: |
+      for p in penalties where p.served_by is null:
+        if results report_message names p.car: record converted_post_race_s; no finding (info context)
+        else: EMIT(p.car, measured="unserved, not in results note", evidence=[p.id], severity=info)
+    severity: info
+
+  - id: mpc.pit.speed_limit
+    type: penalty_service
+    title: Pit lane speed limit 60 km/h (only a lower bound on pit-lane time is checkable)
+    params: {limit_kph: 60, pit_lane_length_m: TBD}
+    source: {doc: ISR26, section: "32.3", page: 79}
+    quote: "The speed limit in the pit lane is 60 kilometers/hour."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.pit_time"]
+    check: |
+      REQUIRE P.pit_lane_length_m != TBD else not_evaluated("pit-lane length (loop to loop) unknown")
+      min_transit = P.pit_lane_length_m / (P.limit_kph / 3.6)
+      for e in pit_events where e.pit_lane_time_s < min_transit - tol(pit_clock_s):
+        EMIT(e.car, measured=e.pit_lane_time_s, threshold=min_transit, evidence=[e.id], severity=info,
+             note="a passage faster than the limit allows usually means a timing artefact; speeding is policed by IMSA loops")
+    severity: info
+    penalty: {kind: TBD, text: "Attachment 1 P1: Warning/D-T/S&G/Stop + Additional Time"}
+    tbd:
+      - {field: params.pit_lane_length_m, question: "Pit-in to pit-out loop distance per track (IMSA track map / SRO drive-through bulletin x 50 km/h gives the SRO lane length, which may differ)."}
+
+  - id: mpc.pit.drive_through_allowed
+    type: advisory
+    title: A car may drive through the pit lane without stopping
+    params: {}
+    source: {doc: ISR26, section: "35.1.4", page: 84}
+    quote: "A Car may be driven through pit lane without stopping."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.pit_time"]
+    check: |
+      Context: a transit-length passage with no RC penalty (e.g. Road Atlanta #59 at 13:19:09, 37.135 s) is not a breach. No finding.
+    severity: info
+
+  - id: mpc.pit.behind_the_wall_over_10min
+    type: advisory
+    title: Work over about ten minutes should go behind the wall
+    params: {typical_threshold_s: 600}
+    source: {doc: ISR26, section: "35.8.2", page: 85}
+    quote: "Typically, work requiring more than ten (10) minutes should be undertaken “behind the wall”."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["pit_stops_json.pit_time", "drive_time_csv.STINT_TYPE=PIT", "flags.RCMessage(\"BEHIND THE WALL\")"]
+    check: |
+      Context for pit_event.kind = garage (> 600 s or RC 'BEHIND THE WALL'). No finding.
+    severity: info
+
+  # ------------------------------------------------------------------ refuelling and tyres
+  - id: mpc.refuel.min_full_fill_time
+    type: refuel_tyre
+    title: Minimum full refuelling time (measured by IMSA sensors, not timing)
+    params: {min_refuel_time_s: TBD}
+    source: {doc: ISR26, section: "37.8.1", page: 89}
+    quote: "An Entrant must not demonstrate a full refueling time less than the Minimum Full Refueling Time listed in the Technical Regulations"
+    verified: false
+    checkable_with:
+      alkamel_imsa: []
+    check: |
+      not_evaluated("refuel flow time is not in timing data"). Context: explains why stationary times cluster per car model.
+    severity: info
+    tbd:
+      - {field: params.min_refuel_time_s, question: "Per-class BoP table value; only useful as context."}
+
+  - id: mpc.tyre.allocation
+    type: refuel_tyre
+    title: Event tyre allocation (sets per car)
+    params: {tyre_sets: TBD}
+    source: {doc: ISR26, section: "9.4.22", page: 38}
+    quote: "Car Tire Allocation and Specification: Schedule/SR"
+    verified: false
+    checkable_with:
+      alkamel_imsa: []
+    check: |
+      not_evaluated("tyre changes are not in timing data")
+    severity: info
+    tbd:
+      - {field: params.tyre_sets, question: "Per event SR (Road Atlanta: GS 5, TCR 4; Mid-Ohio: GS 7, TCR 6)."}
+    notes: "The ISR numbers this 9.4.22; the 2026 event SRs print it as '9.4.21 - Tire Allocation'."
+
+  - id: mpc.tyre.recommended_max_stint_km
+    type: advisory
+    title: Michelin recommended maximum stint length per tyre set (GS)
+    applies_to: {classes: [GS]}
+    params: {recommended_max_stint_km: 190, note_30_65_18_s9m_p2l_km: 180}
+    source: {doc: MMTB-IMPC-2025-05, section: "27/65-18 S9M+ table", page: 1}
+    quote: "Recommended Maximum Stint length : 190 km"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["time_cards_csv.LAP_NUMBER", "pit_stops_json.in_time", "session.circuit.length"]
+    check: |
+      for each car stint between pit_events: km = laps × circuit_length_m / 1000
+      if km > P.recommended_max_stint_km: EMIT(car, measured=km, threshold=190, severity=info,
+         note="advisory; tyre changes are not in timing data, so a stint is not a tyre stint")
+    severity: info
+    season_confirmed: false
+
+  # ------------------------------------------------------------------ classification
+  - id: mpc.classification.order_by_laps
+    type: classification
+    title: Results ordered by whole laps, then crossing time, subject to penalties; no minimum distance
+    params:
+      min_fraction: none
+      order_by: [laps_desc, finish_crossing_time_asc]
+      chequered_not_required: true
+      results_source: official_results_file
+    source:
+      - {doc: ISR26, section: "49.1.7", page: 104}
+      - {doc: ISR26, section: "49.1.5", page: 104, field: chequered_not_required}
+    quote: "Cars are ordered in the results according to the number of whole laps completed during the Race subject to any penalties applied."
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["results_json.classification[].position", "results_json.classification[].laps", "results_json.session.report_message"]
+    check: |
+      Finishing order is read from results (never derived from laps). For adjacent results rows a, b:
+        if a.laps < b.laps: EMIT('-', severity=info, note="order differs from lap count: post-race penalty or decision")
+    severity: info
+    notes: "All 45 Road Atlanta cars are 'Classified', including retirements (e.g. #77, 36 laps)."
+
+  - id: mpc.classification.incomplete_race
+    type: classification
+    title: A race stopped before 50% and not restarted is incomplete (points)
+    params: {min_fraction: {of: scheduled, measure: time_or_distance, value: 0.5}}
+    source: {doc: ISR26, section: "48", page: 103}
+    quote: "A Race stopped with less than 50% of its originally scheduled time or distance elapsed and not restarted is considered incomplete"
+    verified: false
+    checkable_with:
+      alkamel_imsa: ["flags.REC_TYPE=FF", "results_json.finalize_type"]
+    check: |
+      if race ended by red flag and (race.chequered_time - race.start_time) < 0.5 × race.published_duration_s:
+        EMIT('-', severity=info, note="race incomplete for points")
+    severity: info
+
+class_overrides: {}
+
+events:
+  road-atlanta-2026-10:
+    name: Fox Factory 120 at Michelin Raceway Road Atlanta
+    track: road-atlanta
+    dates: [2026-09-29, 2026-10-02]
+    sessions:
+      - {key: race, date: 2026-10-02, scheduled_start: "2026-10-02T11:40:00-04:00", duration_s: 7200, notes: "Schedule: 11:40 am - 1:40 pm, 2 HOURS. Timing: first GF 11:40:42.357, chequered 13:41:37.688."}
+    match: {track: road-atlanta, date_range: [2026-09-29, 2026-10-03], event_name_contains: "Fox Factory 120"}
+    overrides:
+      - rule: mpc.drive_time.min_per_driver
+        params: {value_s: 2400}
+        source: {doc: SR-MPLM-2026-OFF, section: "IMPC SR 12.13", page: 6}
+        quote: "12.13 - Minimum Drive-Time: Forty (40) minutes"
+        verified: false
+      - rule: mpc.drive_time.max_per_driver
+        params: {value_s: 4800}
+        source: {doc: SR-MPLM-2026-OFF, section: "IMPC SR 12.14", page: 6}
+        quote: "12.14 - Maximum Drive-Time: Eighty (80) minutes"
+        verified: false
+      - rule: mpc.tyre.allocation
+        params: {tyre_sets: {GS: 5, TCR: 4}}
+        source: {doc: SR-MPLM-2026-OFF, section: "IMPC SR 9.4.21", page: 6}
+        quote: "9.4.21 - Tire Allocation: GS: 5 sets - S9M+"
+        verified: false
+      - rule: mpc.penalty.catalogue
+        params: {drive_through_equivalent_s: 39}
+        source: {doc: RES-RA-2026, section: "session.report_message", page: 1}
+        quote: "Car #18 - 39 second time penalty for unserved drive-through"
+        verified: false
+        notes: "Observed conversion, not a published regulation value. '99 second time penalty for unserved stop+60' on #77 = 39 + 60."
+    notes: "No pit window, mandatory stop count or minimum pit time in the IMPC section of the SR (checked 2026-10-13)."
+
+  mid-ohio-2026-06:
+    name: O'Reilly Auto Parts 4 Hours Of Mid-Ohio
+    track: mid-ohio
+    dates: [2026-06-05, 2026-06-07]
+    sessions:
+      - {key: race, date: 2026-06-07, scheduled_start: "2026-06-07T12:15:00-04:00", duration_s: 14400, notes: "Provisional schedule: 12:15 pm - 4:15 pm, 4 HOURS."}
+    match: {track: mid-ohio, date_range: [2026-06-05, 2026-06-07], event_name_contains: "Mid-Ohio"}
+    overrides:
+      - rule: mpc.drive_time.min_per_driver
+        params: {value_s: 2400}
+        source: {doc: SR-MO-2026-PROV, section: "IMPC SR 12.13", page: 4}
+        quote: "12.13 - Minimum Drive-Time: Forty (40) minutes"
+        verified: false
+      - rule: mpc.drive_time.max_per_driver
+        params: {by_driver_count: {"3": 9600, "2": 12000}}
+        source: {doc: SR-MO-2026-PROV, section: "IMPC SR 12.14", page: 4}
+        quote: "Two hours and forty minutes (2:40) - three-driver Car. Three hours and twenty minutes (3:20) - two-driver Car."
+        verified: false
+      - rule: mpc.tyre.allocation
+        params: {tyre_sets: {GS: 7, TCR: 6}}
+        source: {doc: SR-MO-2026-PROV, section: "IMPC SR 9.4.21", page: 4}
+        quote: "GS: 7 sets - S9M+ (30/68 18 application must use S9M specification)"
+        verified: false
+    notes: "Example of a driver-count-dependent maximum. Values are from the PROVISIONAL SR; replace with the official SR if a Mid-Ohio race is analysed."
+
+open_questions:
+  - id: Q-MPC-1
+    question: "Confirm the IMPC has no pit window, mandatory stop count or minimum pit-lane time in 2026 (none found in ISR26, CB #26-01..06, or the Road Atlanta SR)."
+    blocks: []
+    who: owner
+  - id: Q-MPC-2
+    question: "Is the 39 s drive-through equivalent at Road Atlanta published anywhere (briefing / RC), or only visible in the results note?"
+    blocks: [mpc.penalty.catalogue]
+    who: owner
+    where_to_get_it: "IMSA Alkamel notice board for the event (Results_NoticeBoard/26_2026/<event>/), driver briefing PDF."
+  - id: Q-MPC-3
+    question: "Has MMTB-IMPC-2025-05 been superseded by a 2026 Michelin bulletin?"
+    blocks: [mpc.tyre.recommended_max_stint_km]
+    who: owner
