@@ -76,6 +76,15 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
+  // RaceTrace 2.0: Race Analysis Packages (G5). Read at request time through
+  // src/packages/flags.ts so they can be flipped without a code change.
+  // "off" (default) serves the legacy chartData to everyone but admins.
+  RACETRACE_PACKAGES: z.enum(["on", "off"]).default("off"),
+  // Rule Flags release stage: R0 admins only, R1 + Team, R2 + every signed-in user.
+  RACETRACE_RULE_FLAGS: z.enum(["R0", "R1", "R2"]).default("R0"),
+  // Folder with race-analysis-package*.schema.json; default <repo>/shared/race-analysis-package.
+  RACETRACE_SCHEMA_DIR: z.string().optional(),
+
   // Email
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().default("noreply@tedderengineering.com"),

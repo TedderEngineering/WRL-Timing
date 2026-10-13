@@ -107,6 +107,31 @@ class ApiClient {
     return this.request<T>(path, options);
   }
 
+  /**
+   * Send a request with the same auth and refresh handling, and return the
+   * Response itself (for headers, 304s or non-JSON bodies). Resolves for 2xx
+   * and 304; throws ApiClientError (with the parsed body as payload) otherwise.
+   */
+  async fetchResponse(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
+    const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+    if (this.accessToken) headers["Authorization"] = `Bearer ${this.accessToken}`;
+    const response = await fetch(`${BASE_URL}${path}`, { ...init, headers, credentials: "include" });
+    if (response.ok || response.status === 304) return response;
+    if (response.status === 401 && retry) {
+      try {
+        await this.attemptRefresh();
+        return this.fetchResponse(path, init, false);
+      } catch {
+        // Refresh failed — propagate the 401
+      }
+    }
+    const error: ApiError = await response.json().catch(() => ({
+      error: response.statusText || "Request failed",
+      code: "UNKNOWN",
+    }));
+    throw new ApiClientError(response.status, error.error, error.code, error);
+  }
+
   /** GET a text response (CSV etc.) with the same auth and refresh handling. */
   getText(path: string) {
     return this.request<string>(path, {}, true, true);

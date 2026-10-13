@@ -1,0 +1,9650 @@
+{
+ "schemaVersion": "1.1.0",
+ "packageId": "test-minimal-r1",
+ "status": "draft",
+ "completeness": {
+  "entries": "complete",
+  "laps": "complete",
+  "fcyPeriods": "complete",
+  "events": "complete",
+  "stints": "complete",
+  "pitCycles": "complete",
+  "cycleResults": "complete",
+  "positionChanges": "complete",
+  "ruleChecks": "complete",
+  "ruleFindings": "complete",
+  "carStories": "complete",
+  "raceSummary": "complete"
+ },
+ "engineVersion": "1.0.0",
+ "rulebookVersion": null,
+ "rulebook": {
+  "status": "partial"
+ },
+ "generatedAt": "2026-10-13T00:00:00.000Z",
+ "analysis": {
+  "author": "claude",
+  "skill": "/analyze-race@test"
+ },
+ "sourceFiles": [
+  {
+   "fileId": "f1",
+   "role": "laps",
+   "name": "23_Time Cards_Race.CSV",
+   "sha256": "a692d4152c693ca92b68c1fce3255e174f3ad3153a6e0316de7ac62127720fff",
+   "bytes": 24378,
+   "archive": {
+    "path": "synthetic/23_Time Cards_Race.CSV",
+    "archivedAt": "2026-10-13T00:00:00Z"
+   }
+  },
+  {
+   "fileId": "f2",
+   "role": "pit_cards_json",
+   "name": "20_Pit Stops Time Cards_Race.JSON",
+   "sha256": "e609e1a7896bbbd70210845a98b011106ee51c6e7d0806e98614a9d33c7f6b18",
+   "bytes": 3176,
+   "archive": {
+    "path": "synthetic/20_Pit Stops Time Cards_Race.JSON",
+    "archivedAt": "2026-10-13T00:00:00Z"
+   }
+  },
+  {
+   "fileId": "f3",
+   "role": "flags",
+   "name": "25_FlagsAnalysisWithRCMessages_Race.CSV",
+   "sha256": "31f21ffb7133789fd34876f279aaaf67ca4acf7a655d56fc73a6b17fce16ddfe",
+   "bytes": 428,
+   "archive": {
+    "path": "synthetic/25_FlagsAnalysisWithRCMessages_Race.CSV",
+    "archivedAt": "2026-10-13T00:00:00Z"
+   }
+  },
+  {
+   "fileId": "f4",
+   "role": "results",
+   "name": "03_Results_Race_Official.JSON",
+   "sha256": "fe7b6285eac71981cbc498bd95677c8cffc620feaf3f99b01b60cc145e230b73",
+   "bytes": 3770,
+   "archive": {
+    "path": "synthetic/03_Results_Race_Official.JSON",
+    "archivedAt": "2026-10-13T00:00:00Z"
+   },
+   "reportMark": "provisional"
+  },
+  {
+   "fileId": "f5",
+   "role": "drive_time",
+   "name": "20_Drive Time_Race.CSV",
+   "sha256": "c885ed2a199098e8a2200a90d509adf67f1ca5dd762aeca3146dae4778169877",
+   "bytes": 1054,
+   "archive": {
+    "path": "synthetic/20_Drive Time_Race.CSV",
+    "archivedAt": "2026-10-13T00:00:00Z"
+   }
+  }
+ ],
+ "metadata": {
+  "series": "Synthetic Series",
+  "season": 2026,
+  "event": "Synthetic Event",
+  "session": "Race",
+  "track": {
+   "id": "synthetic-park",
+   "name": "Synthetic Park",
+   "pitLaneTransitS": null
+  },
+  "raceDate": "2026-10-02",
+  "timezone": "America/New_York",
+  "timeOrigin": "2026-10-02T12:00:00.000-04:00",
+  "timeOriginSource": "flags_green",
+  "scheduledDurationS": 7200,
+  "scheduledLaps": null,
+  "chequeredFlag": {
+   "raceTimeS": 2277,
+   "clock": "2026-10-02T12:37:57.000-04:00"
+  },
+  "sourceFormat": "alkamel-imsa",
+  "adapterVersion": "1.0.0",
+  "resultsStatus": "provisional",
+  "classes": [
+   {
+    "id": "GS",
+    "name": "GS",
+    "order": 1,
+    "medianCleanGreenLapS": 100.6
+   },
+   {
+    "id": "TCR",
+    "name": "TCR",
+    "order": 2,
+    "medianCleanGreenLapS": 104.4
+   }
+  ],
+  "lexicon": [
+   "Aston Martin Vantage AMR GT4",
+   "Driver One007",
+   "Driver One07",
+   "Driver One10",
+   "Driver One11",
+   "Driver One12",
+   "Driver One20",
+   "Driver One21",
+   "Driver One22",
+   "Driver One23",
+   "Driver One24",
+   "Driver One25",
+   "Driver One7",
+   "Driver Two007",
+   "Driver Two07",
+   "Driver Two10",
+   "Driver Two11",
+   "Driver Two12",
+   "Driver Two20",
+   "Driver Two21",
+   "Driver Two22",
+   "Driver Two23",
+   "Driver Two24",
+   "Driver Two25",
+   "Driver Two7",
+   "Team 007",
+   "Team 07",
+   "Team 10",
+   "Team 11",
+   "Team 12",
+   "Team 20",
+   "Team 21",
+   "Team 22",
+   "Team 23",
+   "Team 24",
+   "Team 25",
+   "Team 7"
+  ]
+ },
+ "entries": [
+  {
+   "id": "car:7",
+   "car": "7",
+   "class": "GS",
+   "team": "Team 7",
+   "make": "Toyota",
+   "makeBasis": "results_json",
+   "makeRaw": "Toyota",
+   "vehicle": "Toyota Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One7"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two7"
+    }
+   ],
+   "result": {
+    "id": "result:7",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 1,
+    "positionClass": 1,
+    "laps": 22,
+    "totalTimeS": 2277,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[0]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:07",
+   "car": "07",
+   "class": "GS",
+   "team": "Team 07",
+   "make": "Toyota",
+   "makeBasis": "results_json",
+   "makeRaw": "Toyota",
+   "vehicle": "Toyota Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One07"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two07"
+    }
+   ],
+   "result": {
+    "id": "result:07",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 2,
+    "positionClass": 2,
+    "laps": 22,
+    "totalTimeS": 2285.2,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[1]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:007",
+   "car": "007",
+   "class": "GS",
+   "team": "Team 007",
+   "make": "Aston Martin",
+   "makeBasis": "results_json",
+   "makeRaw": "Aston Martin",
+   "vehicle": "Aston Martin Vantage AMR GT4",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One007"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two007"
+    }
+   ],
+   "result": {
+    "id": "result:007",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 3,
+    "positionClass": 3,
+    "laps": 22,
+    "totalTimeS": 2290.4,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[2]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:11",
+   "car": "11",
+   "class": "GS",
+   "team": "Team 11",
+   "make": "Toyota",
+   "makeBasis": "results_json",
+   "makeRaw": "Toyota",
+   "vehicle": "Toyota Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One11"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two11"
+    }
+   ],
+   "result": {
+    "id": "result:11",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 4,
+    "positionClass": 4,
+    "laps": 22,
+    "totalTimeS": 2348.8,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[3]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:12",
+   "car": "12",
+   "class": "GS",
+   "team": "Team 12",
+   "make": "Toyota",
+   "makeBasis": "results_json",
+   "makeRaw": "Toyota",
+   "vehicle": "Toyota Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One12"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two12"
+    }
+   ],
+   "result": {
+    "id": "result:12",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 5,
+    "positionClass": 5,
+    "laps": 22,
+    "totalTimeS": 2376,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[4]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:20",
+   "car": "20",
+   "class": "TCR",
+   "team": "Team 20",
+   "make": "Hyundai",
+   "makeBasis": "results_json",
+   "makeRaw": "Hyundai",
+   "vehicle": "Hyundai Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One20"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two20"
+    }
+   ],
+   "result": {
+    "id": "result:20",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 6,
+    "positionClass": 1,
+    "laps": 22,
+    "totalTimeS": 2376.6,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[5]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:21",
+   "car": "21",
+   "class": "TCR",
+   "team": "Team 21",
+   "make": "Hyundai",
+   "makeBasis": "results_json",
+   "makeRaw": "Hyundai",
+   "vehicle": "Hyundai Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One21"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two21"
+    }
+   ],
+   "result": {
+    "id": "result:21",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 7,
+    "positionClass": 2,
+    "laps": 22,
+    "totalTimeS": 2421.6,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": 39,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[6]"
+     ]
+    },
+    "confidence": "high",
+    "prePenaltyPositionOverall": 7,
+    "prePenaltyPositionClass": 2
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:25",
+   "car": "25",
+   "class": "TCR",
+   "team": "Team 25",
+   "make": "Cupra",
+   "makeBasis": "results_json",
+   "makeRaw": "Cupra",
+   "vehicle": "Cupra Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One25"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two25"
+    }
+   ],
+   "result": {
+    "id": "result:25",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 8,
+    "positionClass": 3,
+    "laps": 22,
+    "totalTimeS": 2429.6,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[7]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:23",
+   "car": "23",
+   "class": "TCR",
+   "team": "Team 23",
+   "make": "Honda",
+   "makeBasis": "results_json",
+   "makeRaw": "Honda",
+   "vehicle": "Honda Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One23"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two23"
+    }
+   ],
+   "result": {
+    "id": "result:23",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 9,
+    "positionClass": 4,
+    "laps": 22,
+    "totalTimeS": 2463.6,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[8]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:10",
+   "car": "10",
+   "class": "GS",
+   "team": "Team 10",
+   "make": "Toyota",
+   "makeBasis": "results_json",
+   "makeRaw": "Toyota",
+   "vehicle": "Toyota Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One10"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two10"
+    }
+   ],
+   "result": {
+    "id": "result:10",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 10,
+    "positionClass": 6,
+    "laps": 21,
+    "totalTimeS": 2909.7,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[9]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:22",
+   "car": "22",
+   "class": "TCR",
+   "team": "Team 22",
+   "make": "Honda",
+   "makeBasis": "results_json",
+   "makeRaw": "Honda",
+   "vehicle": "Honda Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One22"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two22"
+    }
+   ],
+   "result": {
+    "id": "result:22",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 11,
+    "positionClass": 5,
+    "laps": 20,
+    "totalTimeS": 2367.8,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[10]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "car:24",
+   "car": "24",
+   "class": "TCR",
+   "team": "Team 24",
+   "make": "Audi",
+   "makeBasis": "results_json",
+   "makeRaw": "Audi",
+   "vehicle": "Audi Racer",
+   "drivers": [
+    {
+     "number": 1,
+     "name": "Driver One24"
+    },
+    {
+     "number": 2,
+     "name": "Driver Two24"
+    }
+   ],
+   "result": {
+    "id": "result:24",
+    "status": "classified",
+    "rawStatus": "Classified",
+    "positionOverall": 12,
+    "positionClass": 6,
+    "laps": 15,
+    "totalTimeS": 1677,
+    "gapFirst": null,
+    "bestLapS": null,
+    "bestLapNumber": null,
+    "postRacePenaltyS": null,
+    "resultsStatus": "provisional",
+    "source": {
+     "kind": "official",
+     "method": "D-FINISH",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:classification[11]"
+     ]
+    },
+    "confidence": "high"
+   },
+   "source": {
+    "kind": "official",
+    "method": "D-MAKE",
+    "files": [
+     "f4",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  }
+ ],
+ "laps": {
+  "layout": "columnar-per-car/1",
+  "columnSources": {
+   "lap": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   },
+   "lapTimeS": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ],
+     "method": "D-LAP"
+    },
+    "confidence": "high"
+   },
+   "endS": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ],
+     "method": "D-TIME"
+    },
+    "confidence": "high"
+   },
+   "flag": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   },
+   "fcy": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-FCY-LAP"
+    },
+    "confidence": "high"
+   },
+   "fcyFrac": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-FCY-LAP"
+    },
+    "confidence": "high"
+   },
+   "pit": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-INLAP"
+    },
+    "confidence": "high"
+   },
+   "pos": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-POS"
+    },
+    "confidence": "high"
+   },
+   "cpos": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-POS"
+    },
+    "confidence": "high"
+   },
+   "lapsDown": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-LAPDOWN"
+    },
+    "confidence": "high"
+   },
+   "clean": {
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "method": "D-REF-PACE"
+    },
+    "confidence": "high"
+   },
+   "driver": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   },
+   "speedKph": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   },
+   "topSpeedKph": {
+    "source": {
+     "kind": "official",
+     "files": [
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   }
+  },
+  "cars": {
+   "7": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     105,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     115,
+     157,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100,
+     100
+    ],
+    "endS": [
+     105,
+     205,
+     305,
+     405,
+     505,
+     605,
+     705,
+     805,
+     905,
+     1020,
+     1177,
+     1277,
+     1377,
+     1477,
+     1577,
+     1677,
+     1777,
+     1877,
+     1977,
+     2077,
+     2177,
+     2277
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "cpos": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "10": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21
+    ],
+    "lapTimeS": [
+     105.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     115.9,
+     159.9,
+     100.9,
+     100.9,
+     100.9,
+     115.9,
+     795.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9,
+     100.9
+    ],
+    "endS": [
+     107.7,
+     208.6,
+     309.5,
+     410.4,
+     511.3,
+     612.2,
+     713.1,
+     814,
+     914.9,
+     1030.8,
+     1190.7,
+     1291.6,
+     1392.5,
+     1493.4,
+     1609.3,
+     2405.2,
+     2506.1,
+     2607,
+     2707.9,
+     2808.8,
+     2909.7
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     11,
+     11,
+     11,
+     11,
+     11,
+     10
+    ],
+    "cpos": [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     6,
+     5,
+     4,
+     3,
+     2,
+     1
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "11": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     106.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     116.2,
+     131.2,
+     101.2,
+     101.2,
+     116.2,
+     156.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2,
+     101.2
+    ],
+    "endS": [
+     108.6,
+     209.8,
+     311,
+     412.2,
+     513.4,
+     629.6,
+     760.8,
+     862,
+     963.2,
+     1079.4,
+     1235.6,
+     1336.8,
+     1438,
+     1539.2,
+     1640.4,
+     1741.6,
+     1842.8,
+     1944,
+     2045.2,
+     2146.4,
+     2247.6,
+     2348.8
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     5,
+     5,
+     5,
+     5,
+     5,
+     6,
+     10,
+     9,
+     9,
+     9,
+     8,
+     6,
+     5,
+     5,
+     5,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    "cpos": [
+     5,
+     5,
+     5,
+     5,
+     5,
+     6,
+     6,
+     5,
+     5,
+     5,
+     6,
+     5,
+     5,
+     5,
+     5,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "12": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     106.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     116.5,
+     146.5,
+     101.5,
+     101.5,
+     116.5,
+     161.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5,
+     101.5
+    ],
+    "endS": [
+     109.5,
+     211,
+     312.5,
+     414,
+     515.5,
+     617,
+     733.5,
+     880,
+     981.5,
+     1083,
+     1199.5,
+     1361,
+     1462.5,
+     1564,
+     1665.5,
+     1767,
+     1868.5,
+     1970,
+     2071.5,
+     2173,
+     2274.5,
+     2376
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     6,
+     6,
+     6,
+     6,
+     6,
+     5,
+     5,
+     10,
+     10,
+     10,
+     5,
+     10,
+     10,
+     10,
+     9,
+     7,
+     7,
+     7,
+     7,
+     6,
+     6,
+     5
+    ],
+    "cpos": [
+     6,
+     6,
+     6,
+     6,
+     6,
+     5,
+     5,
+     6,
+     6,
+     6,
+     5,
+     6,
+     6,
+     6,
+     6,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "20": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     109,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     119,
+     169,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104,
+     104
+    ],
+    "endS": [
+     112.6,
+     216.6,
+     320.6,
+     424.6,
+     528.6,
+     632.6,
+     736.6,
+     840.6,
+     944.6,
+     1063.6,
+     1232.6,
+     1336.6,
+     1440.6,
+     1544.6,
+     1648.6,
+     1752.6,
+     1856.6,
+     1960.6,
+     2064.6,
+     2168.6,
+     2272.6,
+     2376.6
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     7,
+     7,
+     7,
+     7,
+     7,
+     7,
+     6,
+     5,
+     5,
+     5,
+     7,
+     5,
+     6,
+     6,
+     6,
+     5,
+     5,
+     5,
+     5,
+     5,
+     5,
+     6
+    ],
+    "cpos": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "21": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     109.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     119.2,
+     170.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2,
+     104.2
+    ],
+    "endS": [
+     113.4,
+     217.6,
+     321.8,
+     426,
+     530.2,
+     634.4,
+     738.6,
+     842.8,
+     947,
+     1066.2,
+     1236.4,
+     1340.6,
+     1444.8,
+     1549,
+     1653.2,
+     1757.4,
+     1861.6,
+     1965.8,
+     2070,
+     2174.2,
+     2278.4,
+     2382.6
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     8,
+     8,
+     8,
+     8,
+     8,
+     8,
+     7,
+     6,
+     6,
+     6,
+     9,
+     7,
+     7,
+     7,
+     7,
+     6,
+     6,
+     6,
+     6,
+     7,
+     7,
+     7
+    ],
+    "cpos": [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     3,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "22": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20
+    ],
+    "lapTimeS": [
+     109.4,
+     104.4,
+     104.4,
+     104.4,
+     119.4,
+     359.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4,
+     104.4
+    ],
+    "endS": [
+     114.2,
+     218.6,
+     323,
+     427.4,
+     546.8,
+     906.2,
+     1010.6,
+     1115,
+     1219.4,
+     1323.8,
+     1428.2,
+     1532.6,
+     1637,
+     1741.4,
+     1845.8,
+     1950.2,
+     2054.6,
+     2159,
+     2263.4,
+     2367.8
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     9,
+     9,
+     9,
+     9,
+     11,
+     12,
+     12,
+     12,
+     12,
+     12,
+     12,
+     12,
+     12,
+     12,
+     12,
+     10,
+     10,
+     10,
+     10,
+     10
+    ],
+    "cpos": [
+     3,
+     3,
+     3,
+     3,
+     5,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     6,
+     5,
+     5,
+     5,
+     5,
+     5
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     2,
+     2,
+     2,
+     2,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "23": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     109.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     119.6,
+     171.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     119.6,
+     159.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6,
+     104.6
+    ],
+    "endS": [
+     115,
+     219.6,
+     324.2,
+     428.8,
+     533.4,
+     638,
+     742.6,
+     847.2,
+     951.8,
+     1071.4,
+     1243,
+     1347.6,
+     1452.2,
+     1556.8,
+     1661.4,
+     1781,
+     1940.6,
+     2045.2,
+     2149.8,
+     2254.4,
+     2359,
+     2463.6
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     10,
+     10,
+     10,
+     10,
+     9,
+     9,
+     8,
+     7,
+     7,
+     7,
+     11,
+     8,
+     8,
+     8,
+     8,
+     8,
+     9,
+     9,
+     9,
+     9,
+     9,
+     9
+    ],
+    "cpos": [
+     4,
+     4,
+     4,
+     4,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     5,
+     3,
+     3,
+     3,
+     3,
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "24": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15
+    ],
+    "lapTimeS": [
+     109.8,
+     104.8,
+     104.8,
+     104.8,
+     104.8,
+     104.8,
+     104.8,
+     104.8,
+     104.8,
+     119.8,
+     168.8,
+     104.8,
+     104.8,
+     104.8,
+     119.8
+    ],
+    "endS": [
+     115.8,
+     220.6,
+     325.4,
+     430.2,
+     535,
+     639.8,
+     744.6,
+     849.4,
+     954.2,
+     1074,
+     1242.8,
+     1347.6,
+     1452.4,
+     1557.2,
+     1677
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     1
+    ],
+    "pos": [
+     11,
+     11,
+     11,
+     11,
+     10,
+     10,
+     9,
+     8,
+     8,
+     8,
+     10,
+     8,
+     9,
+     9,
+     10
+    ],
+    "cpos": [
+     5,
+     5,
+     5,
+     5,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     3,
+     4,
+     4,
+     4
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     0
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "25": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     140,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     120,
+     168,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105,
+     105
+    ],
+    "endS": [
+     146.6,
+     251.6,
+     356.6,
+     461.6,
+     566.6,
+     671.6,
+     776.6,
+     881.6,
+     986.6,
+     1091.6,
+     1211.6,
+     1379.6,
+     1484.6,
+     1589.6,
+     1694.6,
+     1799.6,
+     1904.6,
+     2009.6,
+     2114.6,
+     2219.6,
+     2324.6,
+     2429.6
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     3,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     12,
+     12,
+     12,
+     12,
+     12,
+     11,
+     11,
+     11,
+     11,
+     11,
+     6,
+     11,
+     11,
+     11,
+     11,
+     9,
+     8,
+     8,
+     8,
+     8,
+     8,
+     8
+    ],
+    "cpos": [
+     6,
+     6,
+     6,
+     6,
+     6,
+     5,
+     5,
+     5,
+     5,
+     5,
+     1,
+     5,
+     5,
+     5,
+     5,
+     4,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "07": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     105.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     115.3,
+     158.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3,
+     100.3
+    ],
+    "endS": [
+     105.9,
+     206.2,
+     306.5,
+     406.8,
+     507.1,
+     607.4,
+     707.7,
+     808,
+     908.3,
+     1023.6,
+     1181.9,
+     1282.2,
+     1382.5,
+     1482.8,
+     1583.1,
+     1683.4,
+     1783.7,
+     1884,
+     1984.3,
+     2084.6,
+     2184.9,
+     2285.2
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    "cpos": [
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     3,
+     3,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2,
+     2
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   "007": {
+    "lap": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22
+    ],
+    "lapTimeS": [
+     105.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     115.6,
+     156.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6,
+     100.6
+    ],
+    "endS": [
+     106.8,
+     207.4,
+     308,
+     408.6,
+     509.2,
+     609.8,
+     710.4,
+     811,
+     911.6,
+     1012.2,
+     1127.8,
+     1284.4,
+     1385,
+     1485.6,
+     1586.2,
+     1686.8,
+     1787.4,
+     1888,
+     1988.6,
+     2089.2,
+     2189.8,
+     2290.4
+    ],
+    "flag": [
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G",
+     "G"
+    ],
+    "fcy": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "fcyFrac": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pit": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "pos": [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     1,
+     1,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    "cpos": [
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     1,
+     1,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3,
+     3
+    ],
+    "lapsDown": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "clean": [
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "driver": [
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1,
+     1
+    ],
+    "speedKph": [
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150,
+     150
+    ],
+    "topSpeedKph": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   }
+  }
+ },
+ "fcyPeriods": [],
+ "events": {
+  "pitPassages": [
+   {
+    "id": "pit:7:1",
+    "car": "7",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1005,
+     "clock": "2026-10-02T12:16:45.000-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1067,
+     "clock": "2026-10-02T12:17:47.000-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 62,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 72,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 272,
+     "refLapS": 100,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 2,
+    "driverChange": true,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:7:1",
+      "f5:L2",
+      "f1:L11",
+      "f1:L12"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:07:1",
+    "car": "07",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1008.6,
+     "clock": "2026-10-02T12:16:48.600-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1071.6,
+     "clock": "2026-10-02T12:17:51.600-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 63,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 73,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 273.6,
+     "refLapS": 100.3,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:07:1",
+      "f5:L3",
+      "f1:L33",
+      "f1:L34"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:10:1",
+    "car": "10",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1015.8,
+     "clock": "2026-10-02T12:16:55.800-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1079.8,
+     "clock": "2026-10-02T12:17:59.800-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 64,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 74,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 275.8,
+     "refLapS": 100.9,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:10:1",
+      "f5:L5",
+      "f1:L77",
+      "f1:L78"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:10:2",
+    "car": "10",
+    "ordinal": 2,
+    "kind": "garage",
+    "kindBasis": [
+     "garage_threshold"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1594.3,
+     "clock": "2026-10-02T12:26:34.300-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 2294.3,
+     "clock": "2026-10-02T12:38:14.300-04:00"
+    },
+    "inLap": 15,
+    "inLapCompleted": true,
+    "outLap": 16,
+    "officialPitLaneTimeS": 700,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 710,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 911.8,
+     "refLapS": 100.9,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 2,
+    "cycleId": null,
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": true,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:10:2",
+      "f5:L6",
+      "f1:L82",
+      "f1:L83"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true,
+    "positionEffect": {
+     "beforeLap": 14,
+     "afterLap": 16,
+     "classPosBefore": 4,
+     "classPosAfter": 6,
+     "netClass": -2,
+     "lostTo": [
+      {
+       "car": "11",
+       "cause": "own_pit",
+       "passId": "pass:11:16:10"
+      },
+      {
+       "car": "12",
+       "cause": "own_pit",
+       "passId": "pass:12:16:10"
+      }
+     ],
+     "gainedOn": []
+    }
+   },
+   {
+    "id": "pit:11:1",
+    "car": "11",
+    "ordinal": 1,
+    "kind": "drive_through",
+    "kindBasis": [
+     "rc_penalty_match",
+     "transit_time"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 614.6,
+     "clock": "2026-10-02T12:10:14.600-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 649.6,
+     "clock": "2026-10-02T12:10:49.600-04:00"
+    },
+    "inLap": 6,
+    "inLapCompleted": true,
+    "outLap": 7,
+    "officialPitLaneTimeS": 35,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 45,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 247.4,
+     "refLapS": 101.2,
+     "refLapCount": 7,
+     "refWindowLaps": 5
+    },
+    "stopNumber": null,
+    "cycleId": null,
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [
+     "pen:11:1"
+    ],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:11:1",
+      "f5:L7",
+      "f1:L94",
+      "f1:L95"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true,
+    "positionEffect": {
+     "beforeLap": 5,
+     "afterLap": 7,
+     "classPosBefore": 5,
+     "classPosAfter": 6,
+     "netClass": -1,
+     "lostTo": [
+      {
+       "car": "12",
+       "cause": "penalty",
+       "passId": "pass:12:6:11"
+      }
+     ],
+     "gainedOn": []
+    }
+   },
+   {
+    "id": "pit:11:2",
+    "car": "11",
+    "ordinal": 2,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1064.4,
+     "clock": "2026-10-02T12:17:44.400-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1124.4,
+     "clock": "2026-10-02T12:18:44.400-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 60,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 70,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 272.4,
+     "refLapS": 101.2,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:11:2",
+      "f5:L8",
+      "f1:L98",
+      "f1:L99"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:12:1",
+    "car": "12",
+    "ordinal": 1,
+    "kind": "stop_and_go",
+    "kindBasis": [
+     "rc_penalty_match"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 718.5,
+     "clock": "2026-10-02T12:11:58.500-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 768.5,
+     "clock": "2026-10-02T12:12:48.500-04:00"
+    },
+    "inLap": 7,
+    "inLapCompleted": true,
+    "outLap": 8,
+    "officialPitLaneTimeS": 50,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 60,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 263,
+     "refLapS": 101.5,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": null,
+    "cycleId": null,
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [
+     "pen:12:1"
+    ],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:12:1",
+      "f5:L9",
+      "f1:L117",
+      "f1:L118"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true,
+    "positionEffect": {
+     "beforeLap": 6,
+     "afterLap": 8,
+     "classPosBefore": 5,
+     "classPosAfter": 6,
+     "netClass": -1,
+     "lostTo": [
+      {
+       "car": "11",
+       "cause": "penalty",
+       "passId": "pass:11:8:12"
+      }
+     ],
+     "gainedOn": []
+    }
+   },
+   {
+    "id": "pit:12:2",
+    "car": "12",
+    "ordinal": 2,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1184.5,
+     "clock": "2026-10-02T12:19:44.500-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1249.5,
+     "clock": "2026-10-02T12:20:49.500-04:00"
+    },
+    "inLap": 11,
+    "inLapCompleted": true,
+    "outLap": 12,
+    "officialPitLaneTimeS": 65,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 75,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 278,
+     "refLapS": 101.5,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:12:2",
+      "f5:L10",
+      "f1:L121",
+      "f1:L122"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:20:1",
+    "car": "20",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1048.6,
+     "clock": "2026-10-02T12:17:28.600-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1118.6,
+     "clock": "2026-10-02T12:18:38.600-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 70,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 80,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 288,
+     "refLapS": 104,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:2",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:20:1",
+      "f5:L11",
+      "f1:L142",
+      "f1:L143"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:21:1",
+    "car": "21",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1051.2,
+     "clock": "2026-10-02T12:17:31.200-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1122.2,
+     "clock": "2026-10-02T12:18:42.200-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 71,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 81,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 289.4,
+     "refLapS": 104.2,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:2",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:21:1",
+      "f5:L12",
+      "f1:L164",
+      "f1:L165"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:22:1",
+    "car": "22",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 531.8,
+     "clock": "2026-10-02T12:08:51.800-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 791.8,
+     "clock": "2026-10-02T12:13:11.800-04:00"
+    },
+    "inLap": 5,
+    "inLapCompleted": true,
+    "outLap": 6,
+    "officialPitLaneTimeS": 260,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 270,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 478.8,
+     "refLapS": 104.4,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": true,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:22:1",
+      "f5:L13",
+      "f1:L181",
+      "f1:L182"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:23:1",
+    "car": "23",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1056.4,
+     "clock": "2026-10-02T12:17:36.400-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1128.4,
+     "clock": "2026-10-02T12:18:48.400-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 72,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 82,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 291.2,
+     "refLapS": 104.6,
+     "refLapCount": 9,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:2",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:23:1",
+      "f5:L14",
+      "f1:L206",
+      "f1:L207"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:23:2",
+    "car": "23",
+    "ordinal": 2,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": null,
+    "pitOut": null,
+    "inLap": 16,
+    "inLapCompleted": true,
+    "outLap": 17,
+    "officialPitLaneTimeS": null,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 70,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 279.2,
+     "refLapS": 104.6,
+     "refLapCount": 9,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 2,
+    "cycleId": "cycle:TCR:3",
+    "driverIn": null,
+    "driverOut": null,
+    "driverChange": null,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "derived",
+     "files": [
+      "f1"
+     ],
+     "refs": [
+      "f1:L212",
+      "f1:L213"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "medium",
+    "confidenceNotes": [
+     "no_time_card"
+    ],
+    "notes": [
+     "In-pit line crossing (CROSSING_FINISH_LINE_IN_PIT) with no time card: pit-in and pit-lane time are unknown."
+    ]
+   },
+   {
+    "id": "pit:24:1",
+    "car": "24",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1059,
+     "clock": "2026-10-02T12:17:39.000-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1128,
+     "clock": "2026-10-02T12:18:48.000-04:00"
+    },
+    "inLap": 10,
+    "inLapCompleted": true,
+    "outLap": 11,
+    "officialPitLaneTimeS": 69,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 79,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 288.6,
+     "refLapS": 104.8,
+     "refLapCount": 8,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:2",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:24:1",
+      "f5:L15",
+      "f1:L228",
+      "f1:L229"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:24:2",
+    "car": "24",
+    "ordinal": 2,
+    "kind": "retirement",
+    "kindBasis": [
+     "no_later_lap"
+    ],
+    "outcome": "retired",
+    "pitIn": {
+     "raceTimeS": 1662,
+     "clock": "2026-10-02T12:27:42.000-04:00"
+    },
+    "pitOut": null,
+    "inLap": 15,
+    "inLapCompleted": true,
+    "outLap": null,
+    "officialPitLaneTimeS": null,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": null,
+     "method": "none"
+    },
+    "stopNumber": null,
+    "cycleId": null,
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": null,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:24:2",
+      "f5:L16",
+      "f1:L233"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high"
+   },
+   {
+    "id": "pit:25:1",
+    "car": "25",
+    "ordinal": 1,
+    "kind": "pit_lane_start",
+    "kindBasis": [
+     "pit_lane_start_time"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 5.6,
+     "clock": "2026-10-02T12:00:05.600-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 35.6,
+     "clock": "2026-10-02T12:00:35.600-04:00"
+    },
+    "inLap": 1,
+    "inLapCompleted": true,
+    "outLap": 1,
+    "officialPitLaneTimeS": 30,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": null,
+     "method": "none"
+    },
+    "stopNumber": null,
+    "cycleId": null,
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": null,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:25:1",
+      "f5:L17",
+      "f1:L234"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:25:2",
+    "car": "25",
+    "ordinal": 2,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1196.6,
+     "clock": "2026-10-02T12:19:56.600-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1264.6,
+     "clock": "2026-10-02T12:21:04.600-04:00"
+    },
+    "inLap": 11,
+    "inLapCompleted": true,
+    "outLap": 12,
+    "officialPitLaneTimeS": 68,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 78,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 288,
+     "refLapS": 105,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:TCR:2",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:25:2",
+      "f5:L18",
+      "f1:L244",
+      "f1:L245"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   },
+   {
+    "id": "pit:007:1",
+    "car": "007",
+    "ordinal": 1,
+    "kind": "stop",
+    "kindBasis": [
+     "default_stop"
+    ],
+    "outcome": "rejoined",
+    "pitIn": {
+     "raceTimeS": 1112.8,
+     "clock": "2026-10-02T12:18:32.800-04:00"
+    },
+    "pitOut": {
+     "raceTimeS": 1173.8,
+     "clock": "2026-10-02T12:19:33.800-04:00"
+    },
+    "inLap": 11,
+    "inLapCompleted": true,
+    "outLap": 12,
+    "officialPitLaneTimeS": 61,
+    "fcyContext": "green",
+    "fcyPeriodIds": [],
+    "timeLost": {
+     "valueS": 71,
+     "method": "green_reference",
+     "nLaps": 2,
+     "lapSumS": 272.2,
+     "refLapS": 100.6,
+     "refLapCount": 10,
+     "refWindowLaps": 5
+    },
+    "stopNumber": 1,
+    "cycleId": "cycle:GS:1",
+    "driverIn": 1,
+    "driverOut": 1,
+    "driverChange": false,
+    "penaltiesServed": [],
+    "lapDown": false,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ],
+     "refs": [
+      "f2:car:007:1",
+      "f5:L4",
+      "f1:L56",
+      "f1:L57"
+     ],
+     "method": "D-PIT-PASSAGE"
+    },
+    "confidence": "high",
+    "pitLaneTimeReliable": true
+   }
+  ],
+  "pitGroups": [],
+  "penalties": [
+   {
+    "id": "pen:11:1",
+    "car": "11",
+    "issued": {
+     "raceTimeS": 450,
+     "clock": "2026-10-02T12:07:30.000-04:00"
+    },
+    "issuedLeaderLap": 5,
+    "reason": "Speeding in pit lane",
+    "penaltyType": "drive_through",
+    "amountS": null,
+    "status": "served",
+    "servedByPassageId": "pit:11:1",
+    "servedConfirmed": null,
+    "appliedInResults": null,
+    "resultsEffectS": null,
+    "rawText": "Car 11: Penalty - Speeding in pit lane - Drive Through",
+    "source": {
+     "kind": "official",
+     "method": "D-PENALTY",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L4"
+     ]
+    },
+    "confidence": "medium",
+    "confidenceNotes": [
+     "served_link_without_message"
+    ]
+   },
+   {
+    "id": "pen:12:1",
+    "car": "12",
+    "issued": {
+     "raceTimeS": 500,
+     "clock": "2026-10-02T12:08:20.000-04:00"
+    },
+    "issuedLeaderLap": 5,
+    "reason": "Unsafe release",
+    "penaltyType": "stop_and_go",
+    "amountS": null,
+    "status": "served",
+    "servedByPassageId": "pit:12:1",
+    "servedConfirmed": null,
+    "appliedInResults": null,
+    "resultsEffectS": null,
+    "rawText": "Car 12: Penalty - Unsafe release - Stop and Go",
+    "source": {
+     "kind": "official",
+     "method": "D-PENALTY",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L5"
+     ]
+    },
+    "confidence": "medium",
+    "confidenceNotes": [
+     "served_link_without_message"
+    ]
+   },
+   {
+    "id": "pen:21:1",
+    "car": "21",
+    "issued": {
+     "raceTimeS": 2100,
+     "clock": "2026-10-02T12:35:00.000-04:00"
+    },
+    "issuedLeaderLap": 21,
+    "reason": "Pass under yellow",
+    "penaltyType": "drive_through",
+    "amountS": null,
+    "status": "converted_post_race",
+    "servedByPassageId": null,
+    "servedConfirmed": null,
+    "appliedInResults": null,
+    "resultsEffectS": null,
+    "rawText": "Car 21: Penalty - Pass under yellow - Drive Through",
+    "source": {
+     "kind": "official",
+     "method": "D-PENALTY",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L6"
+     ]
+    },
+    "confidence": "high"
+   },
+   {
+    "id": "pen:21:2",
+    "car": "21",
+    "issued": null,
+    "issuedLeaderLap": null,
+    "reason": "unserved drive-through",
+    "penaltyType": "post_race_time",
+    "amountS": 39,
+    "status": "applied_post_race",
+    "servedByPassageId": null,
+    "servedConfirmed": null,
+    "appliedInResults": true,
+    "resultsEffectS": 39,
+    "rawText": "Car #21 - 39 second time penalty for unserved drive-through",
+    "source": {
+     "kind": "official",
+     "method": "D-PENALTY",
+     "files": [
+      "f4"
+     ],
+     "refs": [
+      "f4:session.report_message"
+     ]
+    },
+    "confidence": "high",
+    "convertedFromId": "pen:21:1"
+   }
+  ],
+  "retirements": [
+   {
+    "id": "ret:24",
+    "car": "24",
+    "lastCompletedLap": 15,
+    "at": {
+     "raceTimeS": 1662,
+     "clock": "2026-10-02T12:27:42.000-04:00"
+    },
+    "where": "pit_lane",
+    "passageId": "pit:24:2",
+    "classPosAtRetirement": 4,
+    "source": {
+     "kind": "derived",
+     "method": "D-RETIRE",
+     "files": [
+      "f2",
+      "f5",
+      "f1"
+     ]
+    },
+    "confidence": "high"
+   }
+  ],
+  "flags": [
+   {
+    "id": "flag:1",
+    "type": "green",
+    "at": {
+     "raceTimeS": 0,
+     "clock": "2026-10-02T12:00:00.000-04:00"
+    },
+    "leaderLap": 1,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L2"
+     ]
+    },
+    "message": "GREEN FLAG"
+   },
+   {
+    "id": "flag:2",
+    "type": "pits_open",
+    "at": {
+     "raceTimeS": 1300,
+     "clock": "2026-10-02T12:21:40.000-04:00"
+    },
+    "leaderLap": 13,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L7"
+     ]
+    },
+    "message": "PITS OPEN ALL CARS",
+    "classes": []
+   },
+   {
+    "id": "flag:3",
+    "type": "chequered",
+    "at": {
+     "raceTimeS": 2277,
+     "clock": "2026-10-02T12:37:57.000-04:00"
+    },
+    "leaderLap": 22,
+    "source": {
+     "kind": "official",
+     "files": [
+      "f3"
+     ],
+     "refs": [
+      "f3:L3"
+     ]
+    },
+    "message": "FF"
+   }
+  ]
+ },
+ "stints": [
+  {
+   "id": "stint:7:1",
+   "car": "7",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1005,
+    "clock": "2026-10-02T12:16:45.000-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1005,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:7:2",
+   "car": "7",
+   "ordinal": 2,
+   "driver": 2,
+   "start": {
+    "raceTimeS": 1067,
+    "clock": "2026-10-02T12:17:47.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 2277,
+    "clock": "2026-10-02T12:37:57.000-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 11,
+   "endLap": 22,
+   "laps": 12,
+   "driveTimeS": 1210,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:07:1",
+   "car": "07",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1008.6,
+    "clock": "2026-10-02T12:16:48.600-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1008.6,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:07:2",
+   "car": "07",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1071.6,
+    "clock": "2026-10-02T12:17:51.600-04:00"
+   },
+   "end": {
+    "raceTimeS": 2285.2,
+    "clock": "2026-10-02T12:38:05.200-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 11,
+   "endLap": 22,
+   "laps": 12,
+   "driveTimeS": 1213.6,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:10:1",
+   "car": "10",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1015.8,
+    "clock": "2026-10-02T12:16:55.800-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1015.8,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:10:2",
+   "car": "10",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1079.8,
+    "clock": "2026-10-02T12:17:59.800-04:00"
+   },
+   "end": {
+    "raceTimeS": 1594.3,
+    "clock": "2026-10-02T12:26:34.300-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "pit_in",
+   "startLap": 11,
+   "endLap": 15,
+   "laps": 5,
+   "driveTimeS": 514.5,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:10:3",
+   "car": "10",
+   "ordinal": 3,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 2294.3,
+    "clock": "2026-10-02T12:38:14.300-04:00"
+   },
+   "end": {
+    "raceTimeS": 2909.7,
+    "clock": "2026-10-02T12:48:29.700-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 16,
+   "endLap": 21,
+   "laps": 6,
+   "driveTimeS": 615.4,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:11:1",
+   "car": "11",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1064.4,
+    "clock": "2026-10-02T12:17:44.400-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1029.4,
+   "penaltyPassageIds": [
+    "pit:11:1"
+   ],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:11:2",
+   "car": "11",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1124.4,
+    "clock": "2026-10-02T12:18:44.400-04:00"
+   },
+   "end": {
+    "raceTimeS": 2348.8,
+    "clock": "2026-10-02T12:39:08.800-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 11,
+   "endLap": 22,
+   "laps": 12,
+   "driveTimeS": 1224.4,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:12:1",
+   "car": "12",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1184.5,
+    "clock": "2026-10-02T12:19:44.500-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 11,
+   "laps": 11,
+   "driveTimeS": 1134.5,
+   "penaltyPassageIds": [
+    "pit:12:1"
+   ],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:12:2",
+   "car": "12",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1249.5,
+    "clock": "2026-10-02T12:20:49.500-04:00"
+   },
+   "end": {
+    "raceTimeS": 2376,
+    "clock": "2026-10-02T12:39:36.000-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 12,
+   "endLap": 22,
+   "laps": 11,
+   "driveTimeS": 1126.5,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:20:1",
+   "car": "20",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1048.6,
+    "clock": "2026-10-02T12:17:28.600-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1048.6,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:20:2",
+   "car": "20",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1118.6,
+    "clock": "2026-10-02T12:18:38.600-04:00"
+   },
+   "end": {
+    "raceTimeS": 2376.6,
+    "clock": "2026-10-02T12:39:36.600-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 11,
+   "endLap": 22,
+   "laps": 12,
+   "driveTimeS": 1258,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:21:1",
+   "car": "21",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1051.2,
+    "clock": "2026-10-02T12:17:31.200-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1051.2,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:21:2",
+   "car": "21",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1122.2,
+    "clock": "2026-10-02T12:18:42.200-04:00"
+   },
+   "end": {
+    "raceTimeS": 2382.6,
+    "clock": "2026-10-02T12:39:42.600-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 11,
+   "endLap": 22,
+   "laps": 12,
+   "driveTimeS": 1260.4,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:22:1",
+   "car": "22",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 531.8,
+    "clock": "2026-10-02T12:08:51.800-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 5,
+   "laps": 5,
+   "driveTimeS": 531.8,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:22:2",
+   "car": "22",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 791.8,
+    "clock": "2026-10-02T12:13:11.800-04:00"
+   },
+   "end": {
+    "raceTimeS": 2367.8,
+    "clock": "2026-10-02T12:39:27.800-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 6,
+   "endLap": 20,
+   "laps": 15,
+   "driveTimeS": 1576,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:23:1",
+   "car": "23",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1056.4,
+    "clock": "2026-10-02T12:17:36.400-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1056.4,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:23:2",
+   "car": "23",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1128.4,
+    "clock": "2026-10-02T12:18:48.400-04:00"
+   },
+   "end": {
+    "raceTimeS": 1780,
+    "clock": "2026-10-02T12:29:40.000-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "pit_in",
+   "startLap": 11,
+   "endLap": 16,
+   "laps": 6,
+   "driveTimeS": 651.6,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:23:3",
+   "car": "23",
+   "ordinal": 3,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1781.5,
+    "clock": "2026-10-02T12:29:41.500-04:00"
+   },
+   "end": {
+    "raceTimeS": 2463.6,
+    "clock": "2026-10-02T12:41:03.600-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 17,
+   "endLap": 22,
+   "laps": 6,
+   "driveTimeS": 682.1,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:24:1",
+   "car": "24",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1059,
+    "clock": "2026-10-02T12:17:39.000-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 10,
+   "laps": 10,
+   "driveTimeS": 1059,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:24:2",
+   "car": "24",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1128,
+    "clock": "2026-10-02T12:18:48.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1662,
+    "clock": "2026-10-02T12:27:42.000-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "retired",
+   "startLap": 11,
+   "endLap": 15,
+   "laps": 5,
+   "driveTimeS": 534,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:25:1",
+   "car": "25",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 35.6,
+    "clock": "2026-10-02T12:00:35.600-04:00"
+   },
+   "end": {
+    "raceTimeS": 1196.6,
+    "clock": "2026-10-02T12:19:56.600-04:00"
+   },
+   "startReason": "pit_lane_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 11,
+   "laps": 11,
+   "driveTimeS": 1161,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:25:2",
+   "car": "25",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1264.6,
+    "clock": "2026-10-02T12:21:04.600-04:00"
+   },
+   "end": {
+    "raceTimeS": 2429.6,
+    "clock": "2026-10-02T12:40:29.600-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 12,
+   "endLap": 22,
+   "laps": 11,
+   "driveTimeS": 1165,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:007:1",
+   "car": "007",
+   "ordinal": 1,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 0,
+    "clock": "2026-10-02T12:00:00.000-04:00"
+   },
+   "end": {
+    "raceTimeS": 1112.8,
+    "clock": "2026-10-02T12:18:32.800-04:00"
+   },
+   "startReason": "race_start",
+   "endReason": "pit_in",
+   "startLap": 1,
+   "endLap": 11,
+   "laps": 11,
+   "driveTimeS": 1112.8,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "stint:007:2",
+   "car": "007",
+   "ordinal": 2,
+   "driver": 1,
+   "start": {
+    "raceTimeS": 1173.8,
+    "clock": "2026-10-02T12:19:33.800-04:00"
+   },
+   "end": {
+    "raceTimeS": 2290.4,
+    "clock": "2026-10-02T12:38:10.400-04:00"
+   },
+   "startReason": "pit_out",
+   "endReason": "chequered",
+   "startLap": 12,
+   "endLap": 22,
+   "laps": 11,
+   "driveTimeS": 1116.6,
+   "penaltyPassageIds": [],
+   "fcyTimeS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-STINT",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  }
+ ],
+ "driveTimes": [
+  {
+   "id": "drive:7:1",
+   "car": "7",
+   "driver": 1,
+   "driveTimeS": 1005,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:7:1"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:7:2",
+   "car": "7",
+   "driver": 2,
+   "driveTimeS": 1210,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:7:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:07:1",
+   "car": "07",
+   "driver": 1,
+   "driveTimeS": 2222.2,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:07:1",
+    "stint:07:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:10:1",
+   "car": "10",
+   "driver": 1,
+   "driveTimeS": 2145.7,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:10:1",
+    "stint:10:2",
+    "stint:10:3"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:11:1",
+   "car": "11",
+   "driver": 1,
+   "driveTimeS": 2253.8,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:11:1",
+    "stint:11:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:12:1",
+   "car": "12",
+   "driver": 1,
+   "driveTimeS": 2261,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:12:1",
+    "stint:12:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:20:1",
+   "car": "20",
+   "driver": 1,
+   "driveTimeS": 2306.6,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:20:1",
+    "stint:20:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:21:1",
+   "car": "21",
+   "driver": 1,
+   "driveTimeS": 2311.6,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:21:1",
+    "stint:21:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:22:1",
+   "car": "22",
+   "driver": 1,
+   "driveTimeS": 2107.8,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:22:1",
+    "stint:22:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:23:1",
+   "car": "23",
+   "driver": 1,
+   "driveTimeS": 2390.1,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:23:1",
+    "stint:23:2",
+    "stint:23:3"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:24:1",
+   "car": "24",
+   "driver": 1,
+   "driveTimeS": 1593,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:24:1",
+    "stint:24:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:25:1",
+   "car": "25",
+   "driver": 1,
+   "driveTimeS": 2326,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:25:1",
+    "stint:25:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "drive:007:1",
+   "car": "007",
+   "driver": 1,
+   "driveTimeS": 2229.4,
+   "officialDriveTimeS": null,
+   "stintIds": [
+    "stint:007:1",
+    "stint:007:2"
+   ],
+   "source": {
+    "kind": "derived",
+    "method": "D-DRIVETIME"
+   },
+   "confidence": "high"
+  }
+ ],
+ "pitCycles": [
+  {
+   "id": "cycle:GS:1",
+   "class": "GS",
+   "ordinal": 1,
+   "model": "rounds",
+   "trigger": "green",
+   "fcyPeriodIds": [],
+   "opens": {
+    "raceTimeS": 1005,
+    "clock": "2026-10-02T12:16:45.000-04:00"
+   },
+   "closes": {
+    "raceTimeS": 1249.5,
+    "clock": "2026-10-02T12:20:49.500-04:00"
+   },
+   "closeBasis": "pit_out",
+   "splitRule": {
+    "gapThresholdS": 402.4,
+    "windowS": null,
+    "maxGapS": 71.7,
+    "nearestSplitMarginPct": 82.2
+   },
+   "members": [
+    {
+     "car": "7",
+     "passageId": "pit:7:1"
+    },
+    {
+     "car": "07",
+     "passageId": "pit:07:1"
+    },
+    {
+     "car": "10",
+     "passageId": "pit:10:1"
+    },
+    {
+     "car": "11",
+     "passageId": "pit:11:2"
+    },
+    {
+     "car": "007",
+     "passageId": "pit:007:1"
+    },
+    {
+     "car": "12",
+     "passageId": "pit:12:2"
+    }
+   ],
+   "overlappingPassageIds": [],
+   "stats": {
+    "nMembers": 6,
+    "meanTimeLostS": 72.5,
+    "medianTimeLostS": 72.5,
+    "bestTimeLostS": 70,
+    "bestTimeLostPassageId": "pit:11:2",
+    "meanPitLaneS": 62.5,
+    "bestPitLaneS": 60,
+    "bestPitLanePassageId": "pit:11:2"
+   },
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE",
+    "files": [
+     "f2",
+     "f5"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycle:TCR:1",
+   "class": "TCR",
+   "ordinal": 1,
+   "model": "rounds",
+   "trigger": "green",
+   "fcyPeriodIds": [],
+   "opens": {
+    "raceTimeS": 531.8,
+    "clock": "2026-10-02T12:08:51.800-04:00"
+   },
+   "closes": {
+    "raceTimeS": 791.8,
+    "clock": "2026-10-02T12:13:11.800-04:00"
+   },
+   "closeBasis": "pit_out",
+   "splitRule": {
+    "gapThresholdS": 417.6,
+    "windowS": null,
+    "maxGapS": null,
+    "nearestSplitMarginPct": 23.8
+   },
+   "members": [
+    {
+     "car": "22",
+     "passageId": "pit:22:1"
+    }
+   ],
+   "overlappingPassageIds": [],
+   "stats": {
+    "nMembers": 1,
+    "meanTimeLostS": 270,
+    "medianTimeLostS": 270,
+    "bestTimeLostS": 270,
+    "bestTimeLostPassageId": "pit:22:1",
+    "meanPitLaneS": 260,
+    "bestPitLaneS": 260,
+    "bestPitLanePassageId": "pit:22:1"
+   },
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE",
+    "files": [
+     "f2",
+     "f5"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycle:TCR:2",
+   "class": "TCR",
+   "ordinal": 2,
+   "model": "rounds",
+   "trigger": "green",
+   "fcyPeriodIds": [],
+   "opens": {
+    "raceTimeS": 1048.6,
+    "clock": "2026-10-02T12:17:28.600-04:00"
+   },
+   "closes": {
+    "raceTimeS": 1264.6,
+    "clock": "2026-10-02T12:21:04.600-04:00"
+   },
+   "closeBasis": "pit_out",
+   "splitRule": {
+    "gapThresholdS": 417.6,
+    "windowS": null,
+    "maxGapS": 137.6,
+    "nearestSplitMarginPct": 23.8
+   },
+   "members": [
+    {
+     "car": "20",
+     "passageId": "pit:20:1"
+    },
+    {
+     "car": "21",
+     "passageId": "pit:21:1"
+    },
+    {
+     "car": "23",
+     "passageId": "pit:23:1"
+    },
+    {
+     "car": "24",
+     "passageId": "pit:24:1"
+    },
+    {
+     "car": "25",
+     "passageId": "pit:25:2"
+    }
+   ],
+   "overlappingPassageIds": [],
+   "stats": {
+    "nMembers": 5,
+    "meanTimeLostS": 80,
+    "medianTimeLostS": 80,
+    "bestTimeLostS": 78,
+    "bestTimeLostPassageId": "pit:25:2",
+    "meanPitLaneS": 70,
+    "bestPitLaneS": 68,
+    "bestPitLanePassageId": "pit:25:2"
+   },
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE",
+    "files": [
+     "f2",
+     "f5"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycle:TCR:3",
+   "class": "TCR",
+   "ordinal": 3,
+   "model": "rounds",
+   "trigger": "green",
+   "fcyPeriodIds": [],
+   "opens": {
+    "raceTimeS": 1780,
+    "clock": "2026-10-02T12:29:40.000-04:00"
+   },
+   "closes": {
+    "raceTimeS": 1781.5,
+    "clock": "2026-10-02T12:29:41.500-04:00"
+   },
+   "closeBasis": "pit_out",
+   "splitRule": {
+    "gapThresholdS": 417.6,
+    "windowS": null,
+    "maxGapS": null,
+    "nearestSplitMarginPct": 39.7
+   },
+   "members": [
+    {
+     "car": "23",
+     "passageId": "pit:23:2"
+    }
+   ],
+   "overlappingPassageIds": [],
+   "stats": {
+    "nMembers": 1,
+    "meanTimeLostS": 70,
+    "medianTimeLostS": 70,
+    "bestTimeLostS": 70,
+    "bestTimeLostPassageId": "pit:23:2",
+    "meanPitLaneS": null,
+    "bestPitLaneS": null,
+    "bestPitLanePassageId": null
+   },
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  }
+ ],
+ "cycleResults": [
+  {
+   "id": "cycres:GS:1:7",
+   "cycleId": "cycle:GS:1",
+   "car": "7",
+   "passageId": "pit:7:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 1,
+   "classPosAfter": 1,
+   "netClass": 0,
+   "overallPosBefore": 1,
+   "overallPosAfter": 1,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 3,
+   "deltaToCycleMeanS": -0.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:GS:1:07",
+   "cycleId": "cycle:GS:1",
+   "car": "07",
+   "passageId": "pit:07:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 2,
+   "classPosAfter": 2,
+   "netClass": 0,
+   "overallPosBefore": 2,
+   "overallPosAfter": 2,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 4,
+   "deltaToCycleMeanS": 0.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:GS:1:10",
+   "cycleId": "cycle:GS:1",
+   "car": "10",
+   "passageId": "pit:10:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 4,
+   "classPosAfter": 4,
+   "netClass": 0,
+   "overallPosBefore": 4,
+   "overallPosAfter": 4,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 5,
+   "deltaToCycleMeanS": 1.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:GS:1:11",
+   "cycleId": "cycle:GS:1",
+   "car": "11",
+   "passageId": "pit:11:2",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 5,
+   "classPosAfter": 5,
+   "netClass": 0,
+   "overallPosBefore": 9,
+   "overallPosAfter": 6,
+   "netOverall": 3,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 1,
+   "deltaToCycleMeanS": -2.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:GS:1:007",
+   "cycleId": "cycle:GS:1",
+   "car": "007",
+   "passageId": "pit:007:1",
+   "beforeLap": 10,
+   "afterLap": 12,
+   "classPosBefore": 1,
+   "classPosAfter": 3,
+   "netClass": -2,
+   "overallPosBefore": 1,
+   "overallPosAfter": 3,
+   "netOverall": -2,
+   "gainedOn": [],
+   "lostTo": [
+    {
+     "car": "7",
+     "cause": "pit_cycle",
+     "passId": "pass:7:12:007"
+    },
+    {
+     "car": "07",
+     "cause": "pit_cycle",
+     "passId": "pass:07:12:007"
+    }
+   ],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 2,
+   "deltaToCycleMeanS": -1.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:GS:1:12",
+   "cycleId": "cycle:GS:1",
+   "car": "12",
+   "passageId": "pit:12:2",
+   "beforeLap": 10,
+   "afterLap": 12,
+   "classPosBefore": 6,
+   "classPosAfter": 6,
+   "netClass": 0,
+   "overallPosBefore": 10,
+   "overallPosAfter": 10,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 6,
+   "deltaToCycleMeanS": 2.5,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:1:22",
+   "cycleId": "cycle:TCR:1",
+   "car": "22",
+   "passageId": "pit:22:1",
+   "beforeLap": 4,
+   "afterLap": 6,
+   "classPosBefore": 3,
+   "classPosAfter": 6,
+   "netClass": -3,
+   "overallPosBefore": 9,
+   "overallPosAfter": 12,
+   "netOverall": -3,
+   "gainedOn": [],
+   "lostTo": [
+    {
+     "car": "23",
+     "cause": "pit_cycle",
+     "passId": "pass:23:5:22"
+    },
+    {
+     "car": "24",
+     "cause": "pit_cycle",
+     "passId": "pass:24:5:22"
+    },
+    {
+     "car": "25",
+     "cause": "pit_cycle",
+     "passId": "pass:25:6:22"
+    }
+   ],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 2,
+   "lapDown": true,
+   "timeLostRank": 1,
+   "deltaToCycleMeanS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:2:20",
+   "cycleId": "cycle:TCR:2",
+   "car": "20",
+   "passageId": "pit:20:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 1,
+   "classPosAfter": 1,
+   "netClass": 0,
+   "overallPosBefore": 5,
+   "overallPosAfter": 5,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 3,
+   "deltaToCycleMeanS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:2:21",
+   "cycleId": "cycle:TCR:2",
+   "car": "21",
+   "passageId": "pit:21:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 2,
+   "classPosAfter": 2,
+   "netClass": 0,
+   "overallPosBefore": 6,
+   "overallPosAfter": 7,
+   "netOverall": -1,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 4,
+   "deltaToCycleMeanS": 1,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:2:23",
+   "cycleId": "cycle:TCR:2",
+   "car": "23",
+   "passageId": "pit:23:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 3,
+   "classPosAfter": 3,
+   "netClass": 0,
+   "overallPosBefore": 7,
+   "overallPosAfter": 8,
+   "netOverall": -1,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 5,
+   "deltaToCycleMeanS": 2,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:2:24",
+   "cycleId": "cycle:TCR:2",
+   "car": "24",
+   "passageId": "pit:24:1",
+   "beforeLap": 9,
+   "afterLap": 12,
+   "classPosBefore": 4,
+   "classPosAfter": 3,
+   "netClass": 1,
+   "overallPosBefore": 8,
+   "overallPosAfter": 8,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 2,
+   "deltaToCycleMeanS": -1,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:2:25",
+   "cycleId": "cycle:TCR:2",
+   "car": "25",
+   "passageId": "pit:25:2",
+   "beforeLap": 10,
+   "afterLap": 12,
+   "classPosBefore": 5,
+   "classPosAfter": 5,
+   "netClass": 0,
+   "overallPosBefore": 11,
+   "overallPosAfter": 11,
+   "netOverall": 0,
+   "gainedOn": [],
+   "lostTo": [],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 1,
+   "deltaToCycleMeanS": -2,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f2",
+     "f5",
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  },
+  {
+   "id": "cycres:TCR:3:23",
+   "cycleId": "cycle:TCR:3",
+   "car": "23",
+   "passageId": "pit:23:2",
+   "beforeLap": 15,
+   "afterLap": 17,
+   "classPosBefore": 3,
+   "classPosAfter": 4,
+   "netClass": -1,
+   "overallPosBefore": 8,
+   "overallPosAfter": 9,
+   "netOverall": -1,
+   "gainedOn": [],
+   "lostTo": [
+    {
+     "car": "25",
+     "cause": "pit_cycle",
+     "passId": "pass:25:17:23"
+    }
+   ],
+   "lapsDownBefore": 0,
+   "lapsDownAfter": 0,
+   "lapDown": false,
+   "timeLostRank": 1,
+   "deltaToCycleMeanS": 0,
+   "source": {
+    "kind": "derived",
+    "method": "D-CYCLE-POS",
+    "files": [
+     "f1"
+    ]
+   },
+   "confidence": "high"
+  }
+ ],
+ "positionChanges": {
+  "layout": "columnar/1",
+  "scope": "class",
+  "rows": {
+   "lap": [
+    6,
+    8,
+    10,
+    10,
+    11,
+    12,
+    12,
+    12,
+    16,
+    16,
+    5,
+    5,
+    6,
+    11,
+    11,
+    11,
+    11,
+    11,
+    12,
+    12,
+    12,
+    12,
+    12,
+    16,
+    16,
+    17
+   ],
+   "winner": [
+    "12",
+    "11",
+    "007",
+    "007",
+    "12",
+    "7",
+    "07",
+    "11",
+    "11",
+    "12",
+    "23",
+    "24",
+    "25",
+    "25",
+    "25",
+    "24",
+    "25",
+    "25",
+    "20",
+    "21",
+    "24",
+    "23",
+    "23",
+    "25",
+    "22",
+    "25"
+   ],
+   "loser": [
+    "11",
+    "12",
+    "7",
+    "07",
+    "11",
+    "007",
+    "007",
+    "12",
+    "10",
+    "10",
+    "22",
+    "22",
+    "22",
+    "20",
+    "21",
+    "23",
+    "23",
+    "24",
+    "25",
+    "25",
+    "25",
+    "25",
+    "24",
+    "24",
+    "24",
+    "23"
+   ],
+   "mechanism": [
+    "penalty",
+    "penalty",
+    "loser_pitted",
+    "loser_pitted",
+    "both_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "both_pitted",
+    "both_pitted",
+    "both_pitted",
+    "both_pitted",
+    "both_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "loser_pitted",
+    "on_track",
+    "retirement",
+    "retirement",
+    "loser_pitted"
+   ],
+   "fcy": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "lapDowns": {
+   "car": [
+    "10",
+    "22"
+   ],
+   "lap": [
+    16,
+    6
+   ],
+   "lapsDown": [
+    6,
+    2
+   ],
+   "cause": [
+    "pit",
+    "pit"
+   ]
+  },
+  "source": {
+   "kind": "derived",
+   "method": "D-SWAP"
+  },
+  "confidence": "high"
+ },
+ "ruleChecks": [
+  {
+   "id": "rule:min-pit-lane-time:11:1",
+   "ruleKey": "min-pit-lane-time",
+   "rulebookRef": {
+    "field": "pitStop.minimumPitLaneTimeS",
+    "section": "TBD"
+   },
+   "car": "11",
+   "subjectFactIds": [
+    "pit:11:2"
+   ],
+   "status": "unknown",
+   "measured": 60,
+   "limit": null,
+   "unit": "s",
+   "margin": null,
+   "officialAction": [
+    "pen:11:1"
+   ],
+   "source": {
+    "kind": "derived"
+   },
+   "confidence": "low",
+   "confidenceNotes": [
+    "rulebook_value_missing"
+   ]
+  }
+ ],
+ "ruleFindings": [
+  {
+   "id": "finding:1",
+   "ruleCheckIds": [
+    "rule:min-pit-lane-time:11:1"
+   ],
+   "car": "11",
+   "assessment": "data_insufficient",
+   "severity": "info",
+   "statement": {
+    "text": "Race control penalised {car:11}; its stop on lap {0} took {1} in the pit lane, and the rulebook minimum is not on file.",
+    "refs": [
+     {
+      "value": 10,
+      "factId": "pit:11:2",
+      "field": "inLap",
+      "unit": "lap"
+     },
+     {
+      "value": 60,
+      "factId": "pit:11:2",
+      "field": "officialPitLaneTimeS",
+      "unit": "s",
+      "display": "1:00.000"
+     }
+    ]
+   },
+   "judgementOnLowConfidence": {
+    "text": "The check waits for the rulebook value, so no shortfall is stated.",
+    "refs": []
+   }
+  }
+ ],
+ "carStories": [
+  {
+   "id": "story:7",
+   "car": "7",
+   "headline": {
+    "text": "{car:7} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 1,
+      "factId": "result:7",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P1"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:7} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:7",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 62,
+       "factId": "pit:7:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:02.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:7:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:7",
+    "pit:7:1"
+   ],
+   "events": [
+    {
+     "id": "event:7:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1005,
+      "clock": "2026-10-02T12:16:45.000-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 1,
+      "classPosAfter": 1,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:7:1",
+      "cycres:GS:1:7",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12,
+     "title": {
+      "text": "{car:7} in the pit lane",
+      "refs": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "story:07",
+   "car": "07",
+   "headline": {
+    "text": "{car:07} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 2,
+      "factId": "result:07",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P2"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:07} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:07",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 63,
+       "factId": "pit:07:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:03.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:07:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:07",
+    "pit:07:1"
+   ],
+   "events": [
+    {
+     "id": "event:07:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1008.6,
+      "clock": "2026-10-02T12:16:48.600-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 2,
+      "classPosAfter": 2,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:07:1",
+      "cycres:GS:1:07",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12,
+     "title": {
+      "text": "{car:07} in the pit lane",
+      "refs": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "story:007",
+   "car": "007",
+   "headline": {
+    "text": "{car:007} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 3,
+      "factId": "result:007",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P3"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:007} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:007",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 61,
+       "factId": "pit:007:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:01.000"
+      },
+      {
+       "value": 11,
+       "factId": "pit:007:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:007",
+    "pit:007:1"
+   ],
+   "events": [
+    {
+     "id": "event:007:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 911.6,
+      "clock": "2026-10-02T12:15:11.600-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 3,
+      "classPosAfter": 1,
+      "netClass": 2
+     },
+     "evidence": [
+      "stint:007:1",
+      "pass:007:10:7",
+      "pass:007:10:07"
+     ],
+     "confidence": "high",
+     "title": {
+      "text": "{car:007} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:007:2",
+     "lap": 11,
+     "at": {
+      "raceTimeS": 1112.8,
+      "clock": "2026-10-02T12:18:32.800-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 1,
+      "classPosAfter": 3,
+      "netClass": -2,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:007:1",
+      "cycres:GS:1:007",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    }
+   ]
+  },
+  {
+   "id": "story:11",
+   "car": "11",
+   "headline": {
+    "text": "{car:11} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 4,
+      "factId": "result:11",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P4"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:11} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:11",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 60,
+       "factId": "pit:11:2",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:00.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:11:2",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:11",
+    "pen:11:1",
+    "pit:11:1",
+    "pit:11:2"
+   ],
+   "events": [
+    {
+     "id": "event:11:1",
+     "lap": 6,
+     "at": {
+      "raceTimeS": 614.6,
+      "clock": "2026-10-02T12:10:14.600-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 5,
+      "classPosAfter": 6,
+      "netClass": -1,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:11:1",
+      "pen:11:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 7,
+     "title": {
+      "text": "{car:11} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:11:2",
+     "lap": 8,
+     "at": {
+      "raceTimeS": 760.8,
+      "clock": "2026-10-02T12:12:40.800-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 6,
+      "classPosAfter": 5,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:11:1",
+      "pass:11:8:12"
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "event:11:3",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1064.4,
+      "clock": "2026-10-02T12:17:44.400-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 5,
+      "classPosAfter": 5,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:11:2",
+      "cycres:GS:1:11",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    },
+    {
+     "id": "event:11:4",
+     "lap": 16,
+     "at": {
+      "raceTimeS": 1640.4,
+      "clock": "2026-10-02T12:27:20.400-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 5,
+      "classPosAfter": 4,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:11:2",
+      "pass:11:16:10"
+     ],
+     "confidence": "high"
+    }
+   ]
+  },
+  {
+   "id": "story:12",
+   "car": "12",
+   "headline": {
+    "text": "{car:12} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 5,
+      "factId": "result:12",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P5"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:12} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:12",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 65,
+       "factId": "pit:12:2",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:05.000"
+      },
+      {
+       "value": 11,
+       "factId": "pit:12:2",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:12",
+    "pen:12:1",
+    "pit:12:1",
+    "pit:12:2"
+   ],
+   "events": [
+    {
+     "id": "event:12:1",
+     "lap": 6,
+     "at": {
+      "raceTimeS": 515.5,
+      "clock": "2026-10-02T12:08:35.500-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 6,
+      "classPosAfter": 5,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:12:1",
+      "pass:12:6:11"
+     ],
+     "confidence": "high",
+     "title": {
+      "text": "{car:12} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:12:2",
+     "lap": 7,
+     "at": {
+      "raceTimeS": 718.5,
+      "clock": "2026-10-02T12:11:58.500-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 5,
+      "classPosAfter": 6,
+      "netClass": -1,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:12:1",
+      "pen:12:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 8
+    },
+    {
+     "id": "event:12:3",
+     "lap": 11,
+     "at": {
+      "raceTimeS": 1184.5,
+      "clock": "2026-10-02T12:19:44.500-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 6,
+      "classPosAfter": 6,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:12:2",
+      "cycres:GS:1:12",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    },
+    {
+     "id": "event:12:4",
+     "lap": 16,
+     "at": {
+      "raceTimeS": 1665.5,
+      "clock": "2026-10-02T12:27:45.500-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 6,
+      "classPosAfter": 5,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:12:2",
+      "pass:12:16:10"
+     ],
+     "confidence": "high"
+    }
+   ]
+  },
+  {
+   "id": "story:20",
+   "car": "20",
+   "headline": {
+    "text": "{car:20} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 1,
+      "factId": "result:20",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P1"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:20} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:20",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 70,
+       "factId": "pit:20:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:10.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:20:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:20",
+    "pit:20:1"
+   ],
+   "events": [
+    {
+     "id": "event:20:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1048.6,
+      "clock": "2026-10-02T12:17:28.600-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 1,
+      "classPosAfter": 1,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:20:1",
+      "cycres:TCR:2:20",
+      "cycle:TCR:2"
+     ],
+     "confidence": "high",
+     "lapEnd": 12,
+     "title": {
+      "text": "{car:20} in the pit lane",
+      "refs": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "story:21",
+   "car": "21",
+   "headline": {
+    "text": "{car:21} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 2,
+      "factId": "result:21",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P2"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:21} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:21",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 71,
+       "factId": "pit:21:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:11.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:21:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:21",
+    "pen:21:1",
+    "pen:21:2",
+    "pit:21:1"
+   ],
+   "events": [
+    {
+     "id": "event:21:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1051.2,
+      "clock": "2026-10-02T12:17:31.200-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 2,
+      "classPosAfter": 2,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:21:1",
+      "cycres:TCR:2:21",
+      "cycle:TCR:2"
+     ],
+     "confidence": "high",
+     "lapEnd": 12,
+     "title": {
+      "text": "{car:21} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:21:2",
+     "lap": 20,
+     "at": {
+      "raceTimeS": 2100,
+      "clock": "2026-10-02T12:35:00.000-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "penalty_applied"
+     },
+     "evidence": [
+      "pen:21:1",
+      "result:21"
+     ],
+     "confidence": "high"
+    },
+    {
+     "id": "event:21:3",
+     "lap": 22,
+     "at": {
+      "raceTimeS": 2382.6,
+      "clock": "2026-10-02T12:39:42.600-04:00"
+     },
+     "causes": [
+      "penalty"
+     ],
+     "outcome": {
+      "result": "penalty_applied"
+     },
+     "evidence": [
+      "pen:21:2",
+      "result:21"
+     ],
+     "confidence": "high"
+    }
+   ]
+  },
+  {
+   "id": "story:25",
+   "car": "25",
+   "headline": {
+    "text": "{car:25} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 3,
+      "factId": "result:25",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P3"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:25} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:25",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 68,
+       "factId": "pit:25:2",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:08.000"
+      },
+      {
+       "value": 11,
+       "factId": "pit:25:2",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:25",
+    "pit:25:1",
+    "pit:25:2"
+   ],
+   "events": [
+    {
+     "id": "event:25:1",
+     "lap": 6,
+     "at": {
+      "raceTimeS": 566.6,
+      "clock": "2026-10-02T12:09:26.600-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 6,
+      "classPosAfter": 5,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:25:1",
+      "pass:25:6:22"
+     ],
+     "confidence": "high",
+     "title": {
+      "text": "{car:25} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:25:2",
+     "lap": 11,
+     "at": {
+      "raceTimeS": 1196.6,
+      "clock": "2026-10-02T12:19:56.600-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 5,
+      "classPosAfter": 5,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:25:2",
+      "cycres:TCR:2:25",
+      "cycle:TCR:2"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    },
+    {
+     "id": "event:25:3",
+     "lap": 16,
+     "at": {
+      "raceTimeS": 1694.6,
+      "clock": "2026-10-02T12:28:14.600-04:00"
+     },
+     "causes": [
+      "rival_pit",
+      "retirement"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 5,
+      "classPosAfter": 3,
+      "netClass": 2
+     },
+     "evidence": [
+      "stint:25:2",
+      "pass:25:16:24",
+      "pass:25:17:23"
+     ],
+     "confidence": "high",
+     "lapEnd": 17
+    }
+   ]
+  },
+  {
+   "id": "story:23",
+   "car": "23",
+   "headline": {
+    "text": "{car:23} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 4,
+      "factId": "result:23",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P4"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:23} completed {0} laps.",
+     "refs": [
+      {
+       "value": 22,
+       "factId": "result:23",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 72,
+       "factId": "pit:23:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:12.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:23:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:23",
+    "pit:23:1"
+   ],
+   "events": [
+    {
+     "id": "event:23:1",
+     "lap": 5,
+     "at": {
+      "raceTimeS": 428.8,
+      "clock": "2026-10-02T12:07:08.800-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 4,
+      "classPosAfter": 3,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:23:1",
+      "pass:23:5:22"
+     ],
+     "confidence": "high",
+     "title": {
+      "text": "{car:23} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:23:2",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1056.4,
+      "clock": "2026-10-02T12:17:36.400-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 3,
+      "classPosAfter": 3,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:23:1",
+      "cycres:TCR:2:23",
+      "cycle:TCR:2"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    },
+    {
+     "id": "event:23:3",
+     "lap": 16,
+     "at": {
+      "raceTimeS": 1661.4,
+      "clock": "2026-10-02T12:27:41.400-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 3,
+      "classPosAfter": 4,
+      "netClass": -1,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:23:2",
+      "cycres:TCR:3:23",
+      "cycle:TCR:3"
+     ],
+     "confidence": "medium",
+     "lapEnd": 17
+    }
+   ]
+  },
+  {
+   "id": "story:10",
+   "car": "10",
+   "headline": {
+    "text": "{car:10} finished {0} in {class:GS} on the provisional results.",
+    "refs": [
+     {
+      "value": 6,
+      "factId": "result:10",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P6"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:10} completed {0} laps.",
+     "refs": [
+      {
+       "value": 21,
+       "factId": "result:10",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 64,
+       "factId": "pit:10:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:04.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:10:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:10",
+    "pit:10:2",
+    "pit:10:1"
+   ],
+   "events": [
+    {
+     "id": "event:10:1",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1015.8,
+      "clock": "2026-10-02T12:16:55.800-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "held",
+      "classPosBefore": 4,
+      "classPosAfter": 4,
+      "netClass": 0,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:10:1",
+      "cycres:GS:1:10",
+      "cycle:GS:1"
+     ],
+     "confidence": "high",
+     "lapEnd": 12,
+     "title": {
+      "text": "{car:10} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:10:2",
+     "lap": 15,
+     "at": {
+      "raceTimeS": 1594.3,
+      "clock": "2026-10-02T12:26:34.300-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 4,
+      "classPosAfter": 6,
+      "netClass": -2,
+      "lapDown": true
+     },
+     "evidence": [
+      "pit:10:2",
+      "lapdown:10:16"
+     ],
+     "confidence": "high",
+     "lapEnd": 16
+    }
+   ]
+  },
+  {
+   "id": "story:22",
+   "car": "22",
+   "headline": {
+    "text": "{car:22} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 5,
+      "factId": "result:22",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P5"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:22} completed {0} laps.",
+     "refs": [
+      {
+       "value": 20,
+       "factId": "result:22",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 260,
+       "factId": "pit:22:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "4:20.000"
+      },
+      {
+       "value": 5,
+       "factId": "pit:22:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:22",
+    "pit:22:1"
+   ],
+   "events": [
+    {
+     "id": "event:22:1",
+     "lap": 5,
+     "at": {
+      "raceTimeS": 531.8,
+      "clock": "2026-10-02T12:08:51.800-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "lost",
+      "classPosBefore": 3,
+      "classPosAfter": 6,
+      "netClass": -3,
+      "lapDown": true
+     },
+     "evidence": [
+      "pit:22:1",
+      "cycres:TCR:1:22",
+      "cycle:TCR:1",
+      "lapdown:22:6"
+     ],
+     "confidence": "high",
+     "lapEnd": 6,
+     "title": {
+      "text": "{car:22} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:22:2",
+     "lap": 16,
+     "at": {
+      "raceTimeS": 1845.8,
+      "clock": "2026-10-02T12:30:45.800-04:00"
+     },
+     "causes": [
+      "retirement"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 6,
+      "classPosAfter": 5,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:22:2",
+      "pass:22:16:24"
+     ],
+     "confidence": "high"
+    }
+   ]
+  },
+  {
+   "id": "story:24",
+   "car": "24",
+   "headline": {
+    "text": "{car:24} finished {0} in {class:TCR} on the provisional results.",
+    "refs": [
+     {
+      "value": 6,
+      "factId": "result:24",
+      "field": "positionClass",
+      "unit": "pos",
+      "display": "P6"
+     }
+    ]
+   },
+   "paragraphs": [
+    {
+     "text": "{car:24} completed {0} laps.",
+     "refs": [
+      {
+       "value": 15,
+       "factId": "result:24",
+       "field": "laps",
+       "unit": "laps"
+      }
+     ]
+    },
+    {
+     "text": "It spent {0} in the pit lane on lap {1}.",
+     "refs": [
+      {
+       "value": 69,
+       "factId": "pit:24:1",
+       "field": "officialPitLaneTimeS",
+       "unit": "s",
+       "display": "1:09.000"
+      },
+      {
+       "value": 10,
+       "factId": "pit:24:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    }
+   ],
+   "keyFactIds": [
+    "result:24",
+    "ret:24",
+    "pit:24:2",
+    "pit:24:1"
+   ],
+   "events": [
+    {
+     "id": "event:24:1",
+     "lap": 5,
+     "at": {
+      "raceTimeS": 430.2,
+      "clock": "2026-10-02T12:07:10.200-04:00"
+     },
+     "causes": [
+      "rival_pit"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 5,
+      "classPosAfter": 4,
+      "netClass": 1
+     },
+     "evidence": [
+      "stint:24:1",
+      "pass:24:5:22"
+     ],
+     "confidence": "high",
+     "title": {
+      "text": "{car:24} in the pit lane",
+      "refs": []
+     }
+    },
+    {
+     "id": "event:24:2",
+     "lap": 10,
+     "at": {
+      "raceTimeS": 1059,
+      "clock": "2026-10-02T12:17:39.000-04:00"
+     },
+     "causes": [
+      "pit_cycle"
+     ],
+     "outcome": {
+      "result": "gained",
+      "classPosBefore": 4,
+      "classPosAfter": 3,
+      "netClass": 1,
+      "lapDown": false
+     },
+     "evidence": [
+      "pit:24:1",
+      "cycres:TCR:2:24",
+      "cycle:TCR:2"
+     ],
+     "confidence": "high",
+     "lapEnd": 12
+    },
+    {
+     "id": "event:24:3",
+     "lap": 15,
+     "at": {
+      "raceTimeS": 1662,
+      "clock": "2026-10-02T12:27:42.000-04:00"
+     },
+     "causes": [
+      "retirement"
+     ],
+     "outcome": {
+      "result": "retired",
+      "classPosBefore": null,
+      "classPosAfter": null,
+      "netClass": null,
+      "lapDown": null
+     },
+     "evidence": [
+      "pit:24:2"
+     ],
+     "confidence": "high"
+    }
+   ]
+  }
+ ],
+ "raceSummary": {
+  "id": "summary",
+  "headline": {
+   "text": "{car:7} won the race, {0} overall on the provisional results.",
+   "refs": [
+    {
+     "value": 1,
+     "factId": "result:7",
+     "field": "positionOverall",
+     "unit": "pos",
+     "display": "P1"
+    }
+   ]
+  },
+  "paragraphs": [
+   {
+    "text": "{car:7} led at the finish. {car:20} won {class:TCR}.",
+    "refs": []
+   }
+  ],
+  "classSummaries": [
+   {
+    "class": "GS",
+    "text": {
+     "text": "{car:7} won {class:GS}, {0} in class on the provisional results.",
+     "refs": [
+      {
+       "value": 1,
+       "factId": "result:7",
+       "field": "positionClass",
+       "unit": "pos",
+       "display": "P1"
+      }
+     ]
+    }
+   },
+   {
+    "class": "TCR",
+    "text": {
+     "text": "{car:20} won {class:TCR}, {0} in class on the provisional results.",
+     "refs": [
+      {
+       "value": 1,
+       "factId": "result:20",
+       "field": "positionClass",
+       "unit": "pos",
+       "display": "P1"
+      }
+     ]
+    }
+   }
+  ],
+  "keyMoments": [
+   {
+    "id": "moment:1",
+    "lap": {
+     "value": 5,
+     "factId": "pit:22:1",
+     "field": "inLap",
+     "unit": "lap"
+    },
+    "causes": [
+     "pit_cycle"
+    ],
+    "title": {
+     "text": "{car:22} makes its stop",
+     "refs": []
+    },
+    "text": {
+     "text": "{car:22} pitted on lap {0}.",
+     "refs": [
+      {
+       "value": 5,
+       "factId": "pit:22:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    },
+    "cars": [
+     "22"
+    ],
+    "factIds": [
+     "pit:22:1"
+    ]
+   },
+   {
+    "id": "moment:2",
+    "lap": {
+     "value": 10,
+     "factId": "pit:07:1",
+     "field": "inLap",
+     "unit": "lap"
+    },
+    "causes": [
+     "pit_cycle"
+    ],
+    "title": {
+     "text": "{car:07} makes its stop",
+     "refs": []
+    },
+    "text": {
+     "text": "{car:07} pitted on lap {0}.",
+     "refs": [
+      {
+       "value": 10,
+       "factId": "pit:07:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    },
+    "cars": [
+     "07"
+    ],
+    "factIds": [
+     "pit:07:1"
+    ]
+   },
+   {
+    "id": "moment:3",
+    "lap": {
+     "value": 10,
+     "factId": "pit:10:1",
+     "field": "inLap",
+     "unit": "lap"
+    },
+    "causes": [
+     "pit_cycle"
+    ],
+    "title": {
+     "text": "{car:10} makes its stop",
+     "refs": []
+    },
+    "text": {
+     "text": "{car:10} pitted on lap {0}.",
+     "refs": [
+      {
+       "value": 10,
+       "factId": "pit:10:1",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    },
+    "cars": [
+     "10"
+    ],
+    "factIds": [
+     "pit:10:1"
+    ]
+   },
+   {
+    "id": "moment:4",
+    "lap": {
+     "value": 10,
+     "factId": "pit:11:2",
+     "field": "inLap",
+     "unit": "lap"
+    },
+    "causes": [
+     "pit_cycle"
+    ],
+    "title": {
+     "text": "{car:11} makes its stop",
+     "refs": []
+    },
+    "text": {
+     "text": "{car:11} pitted on lap {0}.",
+     "refs": [
+      {
+       "value": 10,
+       "factId": "pit:11:2",
+       "field": "inLap",
+       "unit": "lap"
+      }
+     ]
+    },
+    "cars": [
+     "11"
+    ],
+    "factIds": [
+     "pit:11:2"
+    ]
+   }
+  ]
+ },
+ "dataQuality": [
+  {
+   "id": "dq:1",
+   "severity": "note",
+   "code": "CAR-ID-LEADING-ZERO",
+   "message": "Cars '7', '07', '007' are separate entries. Identity is the exported string.",
+   "factIds": [
+    "car:7",
+    "car:07",
+    "car:007"
+   ]
+  },
+  {
+   "id": "dq:2",
+   "severity": "note",
+   "code": "PASSAGE-FROM-B-FLAG",
+   "message": "Some passages come only from the in-pit line-crossing flag (no time card); their pit-lane time is null."
+  },
+  {
+   "id": "dq:3",
+   "severity": "note",
+   "code": "TRANSIT-ESTIMATED",
+   "message": "No configured pit-lane transit for this track; the race minimum official pit-lane time (35 s, pit:11:1) is the transit estimate (D-TRANSIT).",
+   "factIds": [
+    "pit:11:1"
+   ]
+  },
+  {
+   "id": "dq:4",
+   "severity": "note",
+   "code": "RESULTS-PROVISIONAL",
+   "message": "Finishing positions come from the provisional results; replace when official results arrive.",
+   "files": [
+    "f4"
+   ]
+  },
+  {
+   "id": "dq:test-warning",
+   "severity": "warning",
+   "code": "TEST-WARNING",
+   "message": "Synthetic warning so the derived grade is check_notes."
+  }
+ ]
+}

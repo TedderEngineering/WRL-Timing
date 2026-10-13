@@ -34,6 +34,20 @@ enum RaceStatus {
   PUBLISHED
 }
 
+/// Lifecycle of a Race Analysis Package version (RaceTrace 2.0, G5).
+enum RacePackageStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+  REJECTED
+}
+
+/// Status of the results file a package's finishing order came from.
+enum ResultsStatus {
+  OFFICIAL
+  PROVISIONAL
+}
+
 // ─── Users & Auth ─────────────────────────────────────────────────────────────
 
 model User {
@@ -60,6 +74,8 @@ model User {
   createdRaces        Race[]                   @relation("RaceCreator")
   createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
   auditLogs           AuditLog[]
+  createdPackages     RaceAnalysisPackage[]    @relation("PackageCreator")
+  publishedPackages   RaceAnalysisPackage[]    @relation("PackagePublisher")
 
   gripAccount            GripAccount?
   gripReferenceSessions  GripReferenceSession[]
@@ -188,11 +204,17 @@ model Race {
   sourceFiles    Json?      @map("source_files") // Supabase Storage paths for raw uploaded files
   chartData      Json?      @map("chart_data") // full DATA object for chart rendering
   annotationData Json?      @map("annotation_data") // full ANN object for chart rendering
+  /// The published Race Analysis Package served for this race; null = legacy chartData only.
+  currentPackageId String?  @unique @map("current_package_id")
+  /// Per-race override of RACETRACE_PACKAGES: true serves the legacy chartData even when packages are on.
+  packagesDisabled Boolean  @default(false) @map("packages_disabled")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
   creator   User           @relation("RaceCreator", fields: [createdBy], references: [id])
   event     Event?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  currentPackage   RaceAnalysisPackage? @relation("RaceCurrentPackage", fields: [currentPackageId], references: [id], onDelete: SetNull)
+  packages         RaceAnalysisPackage[] @relation("RacePackages")
   entries          RaceEntry[]
   laps             RaceLap[]
   favorites        UserFavorite[]
@@ -250,6 +272,44 @@ model RaceLap {
   @@index([raceId, lapNumber, position])
   @@index([raceId, carNumber])
   @@map("race_laps")
+}
+
+// ─── Race Analysis Packages (RaceTrace 2.0, G5) ───────────────────────────────
+// One versioned, validated analysis document per race. The gzipped JSON lives
+// in Supabase Storage (bucket "race-files", packages/<raceId>/v<version>.json.gz),
+// never in Postgres. At most one version per race is PUBLISHED; it is the one
+// Race.currentPackageId points to.
+
+model RaceAnalysisPackage {
+  id               String            @id @default(cuid())
+  raceId           String            @map("race_id")
+  version          Int // 1, 2, 3… per race
+  schemaVersion    String            @map("schema_version")
+  engineVersion    String            @map("engine_version")
+  rulebookVersion  String?           @map("rulebook_version") // null when no rulebook covers the series
+  status           RacePackageStatus @default(DRAFT)
+  storagePath      String            @map("storage_path")
+  sha256           String // of the uncompressed JSON bytes as uploaded; served as the ETag
+  sizeBytes        Int               @map("size_bytes") // uncompressed JSON bytes
+  validatorReport  Json              @map("validator_report")
+  dataQualityGrade String?           @map("data_quality_grade") // good | check_notes | limited
+  resultsStatus    ResultsStatus?    @map("results_status")
+  createdById      String?           @map("created_by_id")
+  publishedById    String?           @map("published_by_id")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  publishedAt      DateTime?         @map("published_at")
+  notes            String?
+
+  race        Race  @relation("RacePackages", fields: [raceId], references: [id], onDelete: Cascade)
+  currentFor  Race? @relation("RaceCurrentPackage")
+  createdBy   User? @relation("PackageCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  publishedBy User? @relation("PackagePublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([raceId, version])
+  @@index([raceId, status])
+  @@index([createdById])
+  @@index([publishedById])
+  @@map("race_analysis_packages")
 }
 
 // ─── User Preferences & Activity ──────────────────────────────────────────────
