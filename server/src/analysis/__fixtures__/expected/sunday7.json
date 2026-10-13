@@ -1,0 +1,3182 @@
+{
+ "race": "sunday7",
+ "family": "wrl",
+ "derivedFrom": [
+  "audit1c/wrl/fixtures/sunday7.json",
+  "stage2/core/fixture_deltas.json"
+ ],
+ "fcyIntervalsRaceS": [
+  [
+   4709.1,
+   5225.5
+  ],
+  [
+   6470.3,
+   7024.8
+  ],
+  [
+   7141.1,
+   7444.5
+  ],
+  [
+   8983.8,
+   9554.0
+  ],
+  [
+   11864.4,
+   12517.4
+  ],
+  [
+   13396.1,
+   14059.1
+  ],
+  [
+   16625.0,
+   17794.1
+  ],
+  [
+   18441.6,
+   19289.4
+  ],
+  [
+   22058.5,
+   22675.6
+  ]
+ ],
+ "classMedianCleanGreenLapS": {
+  "GP2": 162.212,
+  "GP1": 157.264,
+  "GTO": 145.445,
+  "GTU": 143.418
+ },
+ "passages": [
+  {
+   "car": "60",
+   "inLap": 24,
+   "outLap": 25,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 66.34,
+    "refLapS": 141.897
+   },
+   "position": {
+    "afterLap": 28,
+    "classPosBefore": 7,
+    "classPosAfter": 4,
+    "netClass": 3,
+    "overallPosBefore": 10,
+    "overallPosAfter": 6,
+    "gainedOn": [
+     "58",
+     "98",
+     "247"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "247",
+     "908",
+     "909"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 32,
+   "outLap": 33,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 4.11
+   },
+   "position": {
+    "afterLap": 34,
+    "classPosBefore": 4,
+    "classPosAfter": 5,
+    "netClass": -1,
+    "overallPosBefore": 5,
+    "overallPosAfter": 8,
+    "gainedOn": [],
+    "lostTo": [
+     "247"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "109",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 43,
+   "outLap": 44,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 8.61
+   },
+   "position": {
+    "afterLap": 46,
+    "classPosBefore": 4,
+    "classPosAfter": 1,
+    "netClass": 3,
+    "overallPosBefore": 7,
+    "overallPosAfter": 3,
+    "gainedOn": [
+     "109",
+     "908",
+     "909"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "58",
+     "60",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 58,
+   "outLap": 59,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 38.81
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 2,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 77,
+   "outLap": 78,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 67.0
+   },
+   "position": {
+    "afterLap": 79,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 1,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 92.61
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 1,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 107,
+   "outLap": 108,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 88.78
+   },
+   "position": {
+    "afterLap": 110,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 1,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "60",
+   "inLap": 134,
+   "outLap": 135,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 66.09,
+    "refLapS": 141.226
+   },
+   "position": {
+    "afterLap": 138,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 2,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "908"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 27,
+   "outLap": 28,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 83.43,
+    "refLapS": 142.969
+   },
+   "position": {
+    "afterLap": 30,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 2,
+    "overallPosAfter": 3,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "11",
+     "70",
+     "71",
+     "92",
+     "119",
+     "163",
+     "188",
+     "191",
+     "246",
+     "410"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 43,
+   "outLap": 44,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 21.32
+   },
+   "position": {
+    "afterLap": 46,
+    "classPosBefore": 1,
+    "classPosAfter": 3,
+    "netClass": -2,
+    "overallPosBefore": 2,
+    "overallPosAfter": 5,
+    "gainedOn": [],
+    "lostTo": [
+     "11",
+     "40"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "246",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 59,
+   "outLap": 60,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 41.49
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 2,
+    "classPosAfter": 10,
+    "netClass": -8,
+    "overallPosBefore": 4,
+    "overallPosAfter": 15,
+    "gainedOn": [],
+    "lostTo": [
+     "2",
+     "11",
+     "71",
+     "77",
+     "99",
+     "119",
+     "191",
+     "410"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "40",
+     "70",
+     "71",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 77,
+   "outLap": 78,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": -156.11
+   },
+   "position": {
+    "afterLap": 80,
+    "classPosBefore": 9,
+    "classPosAfter": 4,
+    "netClass": 5,
+    "overallPosBefore": 14,
+    "overallPosAfter": 8,
+    "gainedOn": [
+     "40",
+     "99",
+     "119",
+     "191",
+     "410"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "78",
+     "91",
+     "92",
+     "99",
+     "119",
+     "191",
+     "246",
+     "410",
+     "678"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 32.76
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 2,
+    "classPosAfter": 5,
+    "netClass": -3,
+    "overallPosBefore": 5,
+    "overallPosAfter": 9,
+    "gainedOn": [
+     "2"
+    ],
+    "lostTo": [
+     "99",
+     "119",
+     "191",
+     "410"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "188"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 107,
+   "outLap": 108,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 45.48
+   },
+   "position": {
+    "afterLap": 111,
+    "classPosBefore": 3,
+    "classPosAfter": 2,
+    "netClass": 1,
+    "overallPosBefore": 6,
+    "overallPosAfter": 5,
+    "gainedOn": [
+     "191"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "188",
+     "191",
+     "246"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "70",
+   "inLap": 139,
+   "outLap": 140,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 61.51
+   },
+   "position": {
+    "afterLap": 142,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 1,
+    "overallPosAfter": 4,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "99",
+     "119",
+     "191",
+     "246"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "62",
+   "inLap": 30,
+   "outLap": 31,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 69.67
+   },
+   "position": {
+    "afterLap": 32,
+    "classPosBefore": 1,
+    "classPosAfter": 3,
+    "netClass": -2,
+    "overallPosBefore": 26,
+    "overallPosAfter": 26,
+    "gainedOn": [],
+    "lostTo": [
+     "29",
+     "237"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "48",
+     "62",
+     "80",
+     "112",
+     "140",
+     "221",
+     "237",
+     "808"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "62",
+   "inLap": 56,
+   "outLap": 57,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 86.99
+   },
+   "position": {
+    "afterLap": 59,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 24,
+    "overallPosAfter": 23,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "29",
+     "48",
+     "62",
+     "64",
+     "80",
+     "112",
+     "118",
+     "140",
+     "189",
+     "221",
+     "315",
+     "555"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "62",
+   "inLap": 84,
+   "outLap": 85,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 36.89
+   },
+   "position": {
+    "afterLap": 85,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 22,
+    "overallPosAfter": 21,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "48",
+     "62",
+     "80",
+     "189",
+     "302",
+     "315"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "62",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "drive_through",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "drive_through_candidate",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 29.48,
+    "refLapS": 157.086
+   },
+   "position": {
+    "afterLap": 87,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 21,
+    "overallPosAfter": 21,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": null
+  },
+  {
+   "car": "62",
+   "inLap": 111,
+   "outLap": 112,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 54.16
+   },
+   "position": {
+    "afterLap": 113,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 23,
+    "overallPosAfter": 22,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "62",
+     "302",
+     "555",
+     "808"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "62",
+   "inLap": 143,
+   "outLap": 144,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 75.74,
+    "refLapS": 155.457
+   },
+   "position": {
+    "afterLap": 144,
+    "classPosBefore": 1,
+    "classPosAfter": 1,
+    "netClass": 0,
+    "overallPosBefore": 20,
+    "overallPosAfter": 20,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "62",
+     "302"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 29,
+   "outLap": 30,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 20.51
+   },
+   "position": {
+    "afterLap": 36,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 38,
+    "overallPosAfter": 36,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "21",
+     "35",
+     "68",
+     "83",
+     "141",
+     "148",
+     "167",
+     "214",
+     "418",
+     "455",
+     "779",
+     "851"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 42,
+   "outLap": 43,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 23.32
+   },
+   "position": {
+    "afterLap": 43,
+    "classPosBefore": 2,
+    "classPosAfter": 7,
+    "netClass": -5,
+    "overallPosBefore": 35,
+    "overallPosAfter": 44,
+    "gainedOn": [],
+    "lostTo": [
+     "21",
+     "141",
+     "167",
+     "418",
+     "779"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 1
+   },
+   "cycle": {
+    "members": [
+     "83"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 71,
+   "outLap": 72,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 119.98
+   },
+   "position": {
+    "afterLap": 74,
+    "classPosBefore": 3,
+    "classPosAfter": 2,
+    "netClass": 1,
+    "overallPosBefore": 36,
+    "overallPosAfter": 35,
+    "gainedOn": [
+     "418"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "65",
+     "83",
+     "148",
+     "417",
+     "418",
+     "455"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 81,
+   "outLap": 82,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": -14.71
+   },
+   "position": {
+    "afterLap": 83,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 36,
+    "overallPosAfter": 36,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "21",
+     "35",
+     "65",
+     "69",
+     "83",
+     "148",
+     "167",
+     "214",
+     "779"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 99,
+   "outLap": 100,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 87.93
+   },
+   "position": {
+    "afterLap": 105,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 34,
+    "overallPosAfter": 33,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "21",
+     "68",
+     "69",
+     "83",
+     "148",
+     "214",
+     "455",
+     "779"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "83",
+   "inLap": 129,
+   "outLap": 130,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 28.92
+   },
+   "position": {
+    "afterLap": 131,
+    "classPosBefore": 2,
+    "classPosAfter": 2,
+    "netClass": 0,
+    "overallPosBefore": 30,
+    "overallPosAfter": 30,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 1,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "21",
+     "68",
+     "83",
+     "148",
+     "214",
+     "455",
+     "779"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 25,
+   "outLap": 26,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 70.12,
+    "refLapS": 144.629
+   },
+   "position": {
+    "afterLap": 27,
+    "classPosBefore": 8,
+    "classPosAfter": 9,
+    "netClass": -1,
+    "overallPosBefore": 18,
+    "overallPosAfter": 21,
+    "gainedOn": [],
+    "lostTo": [
+     "17"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "247",
+     "908",
+     "909"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 32,
+   "outLap": 33,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 40.3
+   },
+   "position": {
+    "afterLap": 33,
+    "classPosBefore": 9,
+    "classPosAfter": 8,
+    "netClass": 1,
+    "overallPosBefore": 15,
+    "overallPosAfter": 17,
+    "gainedOn": [
+     "98"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "109",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 46,
+   "outLap": 47,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 14.29
+   },
+   "position": {
+    "afterLap": 47,
+    "classPosBefore": 4,
+    "classPosAfter": 6,
+    "netClass": -2,
+    "overallPosBefore": 9,
+    "overallPosAfter": 16,
+    "gainedOn": [],
+    "lostTo": [
+     "58",
+     "908"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 58,
+   "outLap": 59,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": -0.01
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 4,
+    "classPosAfter": 5,
+    "netClass": -1,
+    "overallPosBefore": 14,
+    "overallPosAfter": 11,
+    "gainedOn": [],
+    "lostTo": [
+     "908"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 76,
+   "outLap": 77,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 30.62
+   },
+   "position": {
+    "afterLap": 79,
+    "classPosBefore": 5,
+    "classPosAfter": 4,
+    "netClass": 1,
+    "overallPosBefore": 10,
+    "overallPosAfter": 6,
+    "gainedOn": [
+     "109"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 12.34
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 4,
+    "classPosAfter": 4,
+    "netClass": 0,
+    "overallPosBefore": 6,
+    "overallPosAfter": 7,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 106,
+   "outLap": 107,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 114.68
+   },
+   "position": {
+    "afterLap": 109,
+    "classPosBefore": 5,
+    "classPosAfter": 5,
+    "netClass": 0,
+    "overallPosBefore": 10,
+    "overallPosAfter": 11,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 133,
+   "outLap": 134,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 70.43,
+    "refLapS": 144.227
+   },
+   "position": {
+    "afterLap": 136,
+    "classPosBefore": 4,
+    "classPosAfter": 4,
+    "netClass": 0,
+    "overallPosBefore": 12,
+    "overallPosAfter": 12,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 1,
+    "lapsDownAfter": 1
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "908"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "10",
+   "inLap": 136,
+   "outLap": null,
+   "kind": "retirement",
+   "outcome": "retired",
+   "underFcy": false,
+   "stage1Kind": "retired_in_pit",
+   "timeLost": {
+    "method": "none",
+    "valueS": null
+   },
+   "cycle": null
+  },
+  {
+   "car": "17",
+   "inLap": 23,
+   "outLap": 24,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 70.97,
+    "refLapS": 145.497
+   },
+   "position": {
+    "afterLap": 28,
+    "classPosBefore": 8,
+    "classPosAfter": 7,
+    "netClass": 1,
+    "overallPosBefore": 15,
+    "overallPosAfter": 15,
+    "gainedOn": [
+     "58"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "247",
+     "908",
+     "909"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 32,
+   "outLap": 33,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 45.39
+   },
+   "position": {
+    "afterLap": 34,
+    "classPosBefore": 7,
+    "classPosAfter": 7,
+    "netClass": 0,
+    "overallPosBefore": 12,
+    "overallPosAfter": 15,
+    "gainedOn": [
+     "98"
+    ],
+    "lostTo": [
+     "58"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "109",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 43,
+   "outLap": 44,
+   "kind": "garage",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "garage",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 931.49
+   },
+   "position": {
+    "afterLap": 44,
+    "classPosBefore": 6,
+    "classPosAfter": 8,
+    "netClass": -2,
+    "overallPosBefore": 16,
+    "overallPosAfter": 45,
+    "gainedOn": [],
+    "lostTo": [
+     "10",
+     "98"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 4
+   },
+   "cycle": null
+  },
+  {
+   "car": "17",
+   "inLap": 54,
+   "outLap": 55,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 39.94
+   },
+   "position": {
+    "afterLap": 55,
+    "classPosBefore": 8,
+    "classPosAfter": 8,
+    "netClass": 0,
+    "overallPosBefore": 35,
+    "overallPosAfter": 41,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 72,
+   "outLap": 73,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 11.51
+   },
+   "position": {
+    "afterLap": 74,
+    "classPosBefore": 7,
+    "classPosAfter": 7,
+    "netClass": 0,
+    "overallPosBefore": 26,
+    "overallPosAfter": 27,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 98,
+   "outLap": 99,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 75.2,
+    "refLapS": 142.204
+   },
+   "position": {
+    "afterLap": 99,
+    "classPosBefore": 7,
+    "classPosAfter": 7,
+    "netClass": 0,
+    "overallPosBefore": 23,
+    "overallPosAfter": 23,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "17"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 112,
+   "outLap": 113,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 49.3
+   },
+   "position": {
+    "afterLap": 113,
+    "classPosBefore": 7,
+    "classPosAfter": 7,
+    "netClass": 0,
+    "overallPosBefore": 20,
+    "overallPosAfter": 23,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "17"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "17",
+   "inLap": 134,
+   "outLap": 137,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 69.95
+   },
+   "position": {
+    "afterLap": 137,
+    "classPosBefore": 6,
+    "classPosAfter": 5,
+    "netClass": 1,
+    "overallPosBefore": 19,
+    "overallPosAfter": 19,
+    "gainedOn": [
+     "10"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "17",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 26,
+   "outLap": 27,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 126.33,
+    "refLapS": 143.357
+   },
+   "position": {
+    "afterLap": 27,
+    "classPosBefore": 6,
+    "classPosAfter": 8,
+    "netClass": -2,
+    "overallPosBefore": 8,
+    "overallPosAfter": 20,
+    "gainedOn": [],
+    "lostTo": [
+     "17",
+     "60"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "247",
+     "908",
+     "909"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 32,
+   "outLap": 33,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 18.67
+   },
+   "position": {
+    "afterLap": 34,
+    "classPosBefore": 8,
+    "classPosAfter": 6,
+    "netClass": 2,
+    "overallPosBefore": 14,
+    "overallPosAfter": 14,
+    "gainedOn": [
+     "17",
+     "98"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "109",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 44,
+   "outLap": 45,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 7.05
+   },
+   "position": {
+    "afterLap": 45,
+    "classPosBefore": 5,
+    "classPosAfter": 6,
+    "netClass": -1,
+    "overallPosBefore": 13,
+    "overallPosAfter": 15,
+    "gainedOn": [],
+    "lostTo": [
+     "10"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "58",
+     "60",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 58,
+   "outLap": 59,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 5.76
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 12,
+    "overallPosAfter": 5,
+    "gainedOn": [
+     "109"
+    ],
+    "lostTo": [
+     "908"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 77,
+   "outLap": 78,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 11.63
+   },
+   "position": {
+    "afterLap": 79,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 6,
+    "overallPosAfter": 5,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "17",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 22.48
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 4,
+    "overallPosAfter": 6,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 107,
+   "outLap": 108,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 31.59
+   },
+   "position": {
+    "afterLap": 110,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 5,
+    "overallPosAfter": 4,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "109",
+     "908",
+     "909"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "58",
+   "inLap": 134,
+   "outLap": 135,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 61.03,
+    "refLapS": 143.138
+   },
+   "position": {
+    "afterLap": 137,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 5,
+    "overallPosAfter": 8,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "10",
+     "58",
+     "60",
+     "98",
+     "908"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 24,
+   "outLap": 25,
+   "kind": "garage",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "garage",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 666.52
+   },
+   "position": {
+    "afterLap": 25,
+    "classPosBefore": 10,
+    "classPosAfter": 18,
+    "netClass": -8,
+    "overallPosBefore": 36,
+    "overallPosAfter": 59,
+    "gainedOn": [],
+    "lostTo": [
+     "24",
+     "53",
+     "80",
+     "112",
+     "189",
+     "221",
+     "315",
+     "927"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 4
+   },
+   "cycle": null
+  },
+  {
+   "car": "302",
+   "inLap": 45,
+   "outLap": 46,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 179.66,
+    "refLapS": 157.882
+   },
+   "position": {
+    "afterLap": 46,
+    "classPosBefore": 17,
+    "classPosAfter": 17,
+    "netClass": 0,
+    "overallPosBefore": 54,
+    "overallPosAfter": 54,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 4,
+    "lapsDownAfter": 6
+   },
+   "cycle": {
+    "members": [
+     "80",
+     "302"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 64,
+   "outLap": 65,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "long_stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 589.07
+   },
+   "position": {
+    "afterLap": 67,
+    "classPosBefore": 15,
+    "classPosAfter": 14,
+    "netClass": 1,
+    "overallPosBefore": 51,
+    "overallPosAfter": 49,
+    "gainedOn": [
+     "522"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 7,
+    "lapsDownAfter": 10
+   },
+   "cycle": {
+    "members": [
+     "24",
+     "29",
+     "46",
+     "53",
+     "64",
+     "112",
+     "140",
+     "221",
+     "302",
+     "927"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 73,
+   "outLap": 74,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 99.2
+   },
+   "position": {
+    "afterLap": 76,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 49,
+    "overallPosAfter": 49,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 10,
+    "lapsDownAfter": 10
+   },
+   "cycle": {
+    "members": [
+     "48",
+     "62",
+     "80",
+     "189",
+     "302",
+     "315"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 201.63,
+    "refLapS": 161.667
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 48,
+    "overallPosAfter": 48,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 10,
+    "lapsDownAfter": 11
+   },
+   "cycle": {
+    "members": [
+     "189",
+     "302",
+     "808"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 99,
+   "outLap": 100,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 151.75
+   },
+   "position": {
+    "afterLap": 101,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 48,
+    "overallPosAfter": 48,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 11,
+    "lapsDownAfter": 11
+   },
+   "cycle": {
+    "members": [
+     "62",
+     "302",
+     "555",
+     "808"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 114,
+   "outLap": 115,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 217.26,
+    "refLapS": 162.502
+   },
+   "position": {
+    "afterLap": 117,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 47,
+    "overallPosAfter": 46,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 12,
+    "lapsDownAfter": 14
+   },
+   "cycle": {
+    "members": [
+     "24",
+     "302",
+     "315"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "302",
+   "inLap": 127,
+   "outLap": 128,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 95.13,
+    "refLapS": 171.84
+   },
+   "position": {
+    "afterLap": 129,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 45,
+    "overallPosAfter": 45,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 15,
+    "lapsDownAfter": 15
+   },
+   "cycle": {
+    "members": [
+     "62",
+     "302"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 26,
+   "outLap": 27,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 69.93,
+    "refLapS": 143.989
+   },
+   "position": {
+    "afterLap": 30,
+    "classPosBefore": 3,
+    "classPosAfter": 4,
+    "netClass": -1,
+    "overallPosBefore": 9,
+    "overallPosAfter": 9,
+    "gainedOn": [],
+    "lostTo": [
+     "40"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "11",
+     "70",
+     "71",
+     "92",
+     "119",
+     "163",
+     "188",
+     "191",
+     "246",
+     "410"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 43,
+   "outLap": 44,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 78.49
+   },
+   "position": {
+    "afterLap": 46,
+    "classPosBefore": 4,
+    "classPosAfter": 10,
+    "netClass": -6,
+    "overallPosBefore": 8,
+    "overallPosAfter": 16,
+    "gainedOn": [],
+    "lostTo": [
+     "2",
+     "11",
+     "77",
+     "99",
+     "119",
+     "191"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "246",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 58,
+   "outLap": 59,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 33.15
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 10,
+    "classPosAfter": 6,
+    "netClass": 4,
+    "overallPosBefore": 13,
+    "overallPosAfter": 10,
+    "gainedOn": [
+     "40",
+     "70",
+     "119",
+     "191"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "40",
+     "70",
+     "71",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 77,
+   "outLap": 78,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 33.86
+   },
+   "position": {
+    "afterLap": 80,
+    "classPosBefore": 7,
+    "classPosAfter": 5,
+    "netClass": 2,
+    "overallPosBefore": 12,
+    "overallPosAfter": 10,
+    "gainedOn": [
+     "40",
+     "99",
+     "119",
+     "191"
+    ],
+    "lostTo": [
+     "11",
+     "70"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "78",
+     "91",
+     "92",
+     "99",
+     "119",
+     "191",
+     "246",
+     "410",
+     "678"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 105,
+   "outLap": 106,
+   "kind": "garage",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "garage",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 1165.69
+   },
+   "position": {
+    "afterLap": 106,
+    "classPosBefore": 3,
+    "classPosAfter": 14,
+    "netClass": -11,
+    "overallPosBefore": 6,
+    "overallPosAfter": 23,
+    "gainedOn": [],
+    "lostTo": [
+     "11",
+     "70",
+     "71",
+     "77",
+     "78",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "246"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 5
+   },
+   "cycle": null
+  },
+  {
+   "car": "410",
+   "inLap": 129,
+   "outLap": 130,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 78.47,
+    "refLapS": 144.561
+   },
+   "position": {
+    "afterLap": 130,
+    "classPosBefore": 14,
+    "classPosAfter": 14,
+    "netClass": 0,
+    "overallPosBefore": 19,
+    "overallPosAfter": 20,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "78",
+     "92",
+     "188",
+     "410"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "410",
+   "inLap": 150,
+   "outLap": 151,
+   "kind": "drive_through",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "drive_through_candidate",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 39.92,
+    "refLapS": 144.652
+   },
+   "position": {
+    "afterLap": 151,
+    "classPosBefore": 13,
+    "classPosAfter": 13,
+    "netClass": 0,
+    "overallPosBefore": 17,
+    "overallPosAfter": 17,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 5,
+    "lapsDownAfter": 5
+   },
+   "cycle": null
+  },
+  {
+   "car": "99",
+   "inLap": 24,
+   "outLap": 25,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 72.15,
+    "refLapS": 145.185
+   },
+   "position": {
+    "afterLap": 27,
+    "classPosBefore": 10,
+    "classPosAfter": 13,
+    "netClass": -3,
+    "overallPosBefore": 18,
+    "overallPosAfter": 22,
+    "gainedOn": [
+     "78"
+    ],
+    "lostTo": [
+     "11",
+     "77",
+     "92",
+     "246"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "6",
+     "40",
+     "78",
+     "99"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 32,
+   "outLap": 33,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 37.0
+   },
+   "position": {
+    "afterLap": 35,
+    "classPosBefore": 8,
+    "classPosAfter": 11,
+    "netClass": -3,
+    "overallPosBefore": 17,
+    "overallPosAfter": 19,
+    "gainedOn": [],
+    "lostTo": [
+     "11",
+     "77",
+     "191"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "91",
+     "99",
+     "119"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 43,
+   "outLap": 44,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 2.74
+   },
+   "position": {
+    "afterLap": 46,
+    "classPosBefore": 11,
+    "classPosAfter": 7,
+    "netClass": 4,
+    "overallPosBefore": 17,
+    "overallPosAfter": 11,
+    "gainedOn": [
+     "2",
+     "188",
+     "191",
+     "410"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "246",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 58,
+   "outLap": 59,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 29.2
+   },
+   "position": {
+    "afterLap": 61,
+    "classPosBefore": 9,
+    "classPosAfter": 3,
+    "netClass": 6,
+    "overallPosBefore": 11,
+    "overallPosAfter": 6,
+    "gainedOn": [
+     "2",
+     "11",
+     "40",
+     "70",
+     "119",
+     "191"
+    ],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "40",
+     "70",
+     "71",
+     "91",
+     "92",
+     "99",
+     "119",
+     "188",
+     "191",
+     "410"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 77,
+   "outLap": 78,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 98.17
+   },
+   "position": {
+    "afterLap": 80,
+    "classPosBefore": 4,
+    "classPosAfter": 6,
+    "netClass": -2,
+    "overallPosBefore": 7,
+    "overallPosAfter": 11,
+    "gainedOn": [
+     "191"
+    ],
+    "lostTo": [
+     "11",
+     "70",
+     "410"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "78",
+     "91",
+     "92",
+     "99",
+     "119",
+     "191",
+     "246",
+     "410",
+     "678"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 86,
+   "outLap": 87,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 13.84
+   },
+   "position": {
+    "afterLap": 88,
+    "classPosBefore": 5,
+    "classPosAfter": 4,
+    "netClass": 1,
+    "overallPosBefore": 9,
+    "overallPosAfter": 8,
+    "gainedOn": [
+     "2",
+     "11",
+     "70"
+    ],
+    "lostTo": [
+     "119",
+     "410"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "188"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 107,
+   "outLap": 108,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 44.02
+   },
+   "position": {
+    "afterLap": 111,
+    "classPosBefore": 4,
+    "classPosAfter": 4,
+    "netClass": 0,
+    "overallPosBefore": 7,
+    "overallPosAfter": 7,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "91",
+     "92",
+     "99",
+     "188",
+     "191",
+     "246"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 116,
+   "outLap": 117,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 16.01
+   },
+   "position": {
+    "afterLap": 119,
+    "classPosBefore": 4,
+    "classPosAfter": 4,
+    "netClass": 0,
+    "overallPosBefore": 7,
+    "overallPosAfter": 7,
+    "gainedOn": [],
+    "lostTo": [],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "11",
+     "77",
+     "99"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "99",
+   "inLap": 139,
+   "outLap": 140,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 35.71
+   },
+   "position": {
+    "afterLap": 142,
+    "classPosBefore": 3,
+    "classPosAfter": 3,
+    "netClass": 0,
+    "overallPosBefore": 5,
+    "overallPosAfter": 6,
+    "gainedOn": [
+     "191"
+    ],
+    "lostTo": [
+     "2"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 0
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "11",
+     "70",
+     "71",
+     "77",
+     "99",
+     "119",
+     "191",
+     "246"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "78",
+   "inLap": 25,
+   "outLap": 26,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "long_stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 206.88,
+    "refLapS": 147.134
+   },
+   "position": {
+    "afterLap": 26,
+    "classPosBefore": 9,
+    "classPosAfter": 15,
+    "netClass": -6,
+    "overallPosBefore": 16,
+    "overallPosAfter": 24,
+    "gainedOn": [],
+    "lostTo": [
+     "11",
+     "40",
+     "77",
+     "92",
+     "163",
+     "246"
+    ],
+    "lapsDownBefore": 0,
+    "lapsDownAfter": 1
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "6",
+     "40",
+     "78",
+     "99"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "78",
+   "inLap": 52,
+   "outLap": 53,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 144.31,
+    "refLapS": 147.659
+   },
+   "position": {
+    "afterLap": 55,
+    "classPosBefore": 13,
+    "classPosAfter": 15,
+    "netClass": -2,
+    "overallPosBefore": 19,
+    "overallPosAfter": 21,
+    "gainedOn": [],
+    "lostTo": [
+     "6",
+     "92"
+    ],
+    "lapsDownBefore": 1,
+    "lapsDownAfter": 2
+   },
+   "cycle": {
+    "members": [
+     "6",
+     "78",
+     "82"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "78",
+   "inLap": 74,
+   "outLap": 75,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": true,
+   "stage1Kind": "long_stop",
+   "timeLost": {
+    "method": "fcy_neighbours",
+    "valueS": 221.67
+   },
+   "position": {
+    "afterLap": 77,
+    "classPosBefore": 14,
+    "classPosAfter": 15,
+    "netClass": -1,
+    "overallPosBefore": 19,
+    "overallPosAfter": 20,
+    "gainedOn": [],
+    "lostTo": [
+     "91"
+    ],
+    "lapsDownBefore": 2,
+    "lapsDownAfter": 3
+   },
+   "cycle": {
+    "members": [
+     "2",
+     "40",
+     "70",
+     "71",
+     "77",
+     "78",
+     "91",
+     "92",
+     "99",
+     "119",
+     "191",
+     "246",
+     "410",
+     "678"
+    ],
+    "type": "fcy"
+   }
+  },
+  {
+   "car": "78",
+   "inLap": 100,
+   "outLap": 101,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 131.45,
+    "refLapS": 146.034
+   },
+   "position": {
+    "afterLap": 101,
+    "classPosBefore": 13,
+    "classPosAfter": 14,
+    "netClass": -1,
+    "overallPosBefore": 18,
+    "overallPosAfter": 20,
+    "gainedOn": [],
+    "lostTo": [
+     "91"
+    ],
+    "lapsDownBefore": 3,
+    "lapsDownAfter": 4
+   },
+   "cycle": {
+    "members": [
+     "78",
+     "119"
+    ],
+    "type": "green"
+   }
+  },
+  {
+   "car": "78",
+   "inLap": 128,
+   "outLap": 129,
+   "kind": "stop",
+   "outcome": "rejoined",
+   "underFcy": false,
+   "stage1Kind": "stop",
+   "timeLost": {
+    "method": "green_reference",
+    "valueS": 150.25,
+    "refLapS": 145.758
+   },
+   "position": {
+    "afterLap": 131,
+    "classPosBefore": 12,
+    "classPosAfter": 13,
+    "netClass": -1,
+    "overallPosBefore": 17,
+    "overallPosAfter": 18,
+    "gainedOn": [],
+    "lostTo": [
+     "91"
+    ],
+    "lapsDownBefore": 4,
+    "lapsDownAfter": 5
+   },
+   "cycle": {
+    "members": [
+     "78",
+     "92",
+     "188",
+     "410"
+    ],
+    "type": "green"
+   }
+  }
+ ]
+}

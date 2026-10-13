@@ -1,0 +1,3092 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://racetrace.tedderengineering.com/schema/race-analysis-package/1.1.0.json",
+  "title": "RaceTrace Race Analysis Package",
+  "description": "One package per race session. Code computes facts, Claude writes prose that cites facts, the validator refuses any package whose prose disagrees with its facts. Definitions of every quantity: stage2/core/DEFINITIONS.md. Design notes: stage2/core/SCHEMA_NOTES.md. Times are seconds (numbers, millisecond precision). Wall-clock times are ISO 8601 with a UTC offset. Race dates are calendar dates. Car identity is always a string ('007' != '7').",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "packageId",
+    "status",
+    "completeness",
+    "engineVersion",
+    "rulebookVersion",
+    "rulebook",
+    "generatedAt",
+    "sourceFiles",
+    "metadata",
+    "entries",
+    "laps",
+    "fcyPeriods",
+    "events",
+    "stints",
+    "driveTimes",
+    "pitCycles",
+    "cycleResults",
+    "positionChanges",
+    "ruleChecks",
+    "ruleFindings",
+    "carStories",
+    "raceSummary",
+    "dataQuality"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.1.0",
+      "description": "Version of this schema. Semver: a major bump breaks readers. 1.1.0 adds raceSummary.keyMoments, carStories[].events and ruleFindings[].severity."
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable slug, e.g. 'gt4a-2026-indianapolis-r1'."
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "review",
+        "published"
+      ],
+      "description": "Lifecycle. Only 'published' packages are served to the site."
+    },
+    "completeness": {
+      "type": "object",
+      "description": "Per-section state. A published package must have every section 'complete' (enforced below).",
+      "additionalProperties": false,
+      "required": [
+        "entries",
+        "laps",
+        "fcyPeriods",
+        "events",
+        "stints",
+        "pitCycles",
+        "cycleResults",
+        "positionChanges",
+        "ruleChecks",
+        "ruleFindings",
+        "carStories",
+        "raceSummary"
+      ],
+      "properties": {
+        "entries": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "laps": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "fcyPeriods": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "events": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "stints": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "pitCycles": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "cycleResults": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "positionChanges": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "ruleChecks": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "ruleFindings": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "carStories": {
+          "$ref": "#/$defs/SectionState"
+        },
+        "raceSummary": {
+          "$ref": "#/$defs/SectionState"
+        }
+      }
+    },
+    "engineVersion": {
+      "$ref": "#/$defs/SemVer",
+      "description": "Fact-engine version that produced the facts."
+    },
+    "rulebookVersion": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Rulebook file id@version applied, e.g. 'imsa-impc-2026@1.2.0'. null when no rulebook covers the series (D2): facts and stories only, no rule checks."
+    },
+    "rulebook": {
+      "$ref": "#/$defs/RulebookRef"
+    },
+    "generatedAt": {
+      "$ref": "#/$defs/IsoDateTime"
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Who wrote the prose sections.",
+      "properties": {
+        "author": {
+          "enum": [
+            "claude",
+            "engine",
+            "owner"
+          ]
+        },
+        "skill": {
+          "type": "string",
+          "description": "e.g. '/analyze-race@1.0.0'"
+        },
+        "model": {
+          "type": "string"
+        },
+        "completedAt": {
+          "$ref": "#/$defs/IsoDateTime"
+        },
+        "reviewedBy": {
+          "type": "string"
+        },
+        "reviewedAt": {
+          "$ref": "#/$defs/IsoDateTime"
+        }
+      }
+    },
+    "sourceFiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/SourceFile"
+      }
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Entry"
+      }
+    },
+    "laps": {
+      "$ref": "#/$defs/LapTable"
+    },
+    "fcyPeriods": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FcyPeriod"
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pitPassages",
+        "pitGroups",
+        "penalties",
+        "retirements",
+        "flags"
+      ],
+      "properties": {
+        "pitPassages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PitPassage"
+          }
+        },
+        "pitGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PitGroup"
+          },
+          "description": "Back-to-back passages that share a lap. Time lost is reported once per group."
+        },
+        "penalties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Penalty"
+          }
+        },
+        "retirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Retirement"
+          }
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlagEvent"
+          }
+        }
+      }
+    },
+    "stints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Stint"
+      }
+    },
+    "driveTimes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DriveTime"
+      }
+    },
+    "pitCycles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PitCycle"
+      }
+    },
+    "cycleResults": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CycleResult"
+      }
+    },
+    "positionChanges": {
+      "$ref": "#/$defs/PositionChangeTable"
+    },
+    "ruleChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RuleCheck"
+      }
+    },
+    "ruleFindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RuleFinding"
+      }
+    },
+    "carStories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CarStory"
+      }
+    },
+    "raceSummary": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RaceSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "dataQuality": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DataQualityNote"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "published"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "completeness": {
+            "patternProperties": {
+              "^": {
+                "const": "complete"
+              }
+            }
+          },
+          "raceSummary": {
+            "$ref": "#/$defs/RaceSummary"
+          },
+          "dataQuality": {
+            "not": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "severity": {
+                    "const": "blocker"
+                  }
+                },
+                "required": [
+                  "severity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "SemVer": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"
+    },
+    "IsoDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "ISO 8601 date-time with an explicit offset (never a naive local time)."
+    },
+    "IsoDate": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "CarId": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z]{1,8}$",
+      "description": "Car number exactly as exported. Leading zeros are significant."
+    },
+    "ClassId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9+_-]{0,31}$",
+      "description": "Slug of the class name; must match a metadata.classes[].id."
+    },
+    "FactId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(:[A-Za-z0-9+_.-]+)*$",
+      "description": "Stable, human-readable id. Grammar in SCHEMA_NOTES.md §3, e.g. 'car:007', 'lap:007:12', 'pit:007:2', 'pitgroup:11:1', 'fcy:3', 'pen:77:1', 'ret:72', 'flag:4', 'stint:7:2', 'drive:7:1', 'cycle:Silver:1', 'cycres:Silver:1:007', 'pass:24:12:007', 'lapdown:11:21', 'rule:min-pit-lane-time:77:1', 'finding:3', 'story:7', 'summary', 'dq:5'."
+    },
+    "Seconds": {
+      "type": "number",
+      "description": "Seconds, millisecond precision."
+    },
+    "NullableSeconds": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "Confidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "description": "Rules in FACT_ENGINE_SPEC.md §5. high: official data, no ambiguity. medium: derived with a documented approximation. low: inferred; Claude must judge it before a story may state it as fact."
+    },
+    "ConfidenceNotes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      },
+      "description": "Machine-readable reason codes for a non-high confidence (catalogue in FACT_ENGINE_SPEC.md §5)."
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "official",
+            "derived",
+            "reconstructed",
+            "inferred",
+            "manual"
+          ],
+          "description": "official: copied from an official timing file. derived: deterministic computation on official data. reconstructed: rebuilt from indirect evidence (e.g. FCY from per-lap flags). inferred: heuristic classification. manual: entered by the owner."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^f[0-9]+$"
+          },
+          "description": "sourceFiles[].fileId values."
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Row or record pointers, e.g. 'f1:L119' (1-based line incl. header), 'f2:card:11:1', 'f4:rc:10:37:51.506'."
+        },
+        "method": {
+          "type": "string",
+          "description": "Definition id from DEFINITIONS.md, e.g. 'D-LOSS-GREEN', 'D-FCY-RECON'."
+        }
+      }
+    },
+    "TimePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raceTimeS"
+      ],
+      "properties": {
+        "raceTimeS": {
+          "$ref": "#/$defs/Seconds",
+          "description": "Seconds since metadata.timeOrigin."
+        },
+        "clock": {
+          "$ref": "#/$defs/IsoDateTime",
+          "description": "Wall clock, when the source carries a time of day (absent for WRL-website exports)."
+        }
+      }
+    },
+    "FactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "factId",
+        "field"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "integer",
+            "string"
+          ],
+          "description": "The value as stated in the prose. Numbers equal the fact exactly (after transform): seconds at full millisecond precision with no rounding, everything else equal. Text equals the fact verbatim."
+        },
+        "factId": {
+          "$ref": "#/$defs/FactId"
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*|\\[[0-9]+\\])*$",
+          "description": "Dotted path inside the fact, e.g. 'timeLost.valueS', 'classPosAfter', 'members.length'. For lap facts it is a laps column name."
+        },
+        "unit": {
+          "enum": [
+            "s",
+            "laps",
+            "lap",
+            "pos",
+            "places",
+            "count",
+            "pct",
+            "km/h",
+            "text"
+          ]
+        },
+        "display": {
+          "type": "string",
+          "description": "The GUI rendering of value. Required for unit 's': [h:]m:ss.sss to 3 decimals, never rounded, no trailing ' s' (e.g. 1:50.554, 0:47.123, 1:00:34.129; negative values lead with '-'). 'P5' for unit 'pos'; the integer for lap, laps, places, count."
+        },
+        "transform": {
+          "enum": [
+            "abs",
+            "neg"
+          ],
+          "description": "Prose may state |x| or -x (e.g. 'lost 6 places' for netClass -6)."
+        }
+      }
+    },
+    "Prose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "refs"
+      ],
+      "description": "Text with placeholders. '{n}' = refs[n]. Entity tokens '{car:007}', '{class:Silver}', '{driver:7:2}' render names. After removing tokens and metadata.lexicon terms, the text may contain no digit; every number is a reference (validator rule V4).",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactRef"
+          }
+        }
+      }
+    },
+    "SectionState": {
+      "enum": [
+        "complete",
+        "partial",
+        "absent"
+      ]
+    },
+    "RulebookRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "applied",
+            "partial",
+            "absent"
+          ],
+          "description": "absent = series not covered by v1 rule checks (D2)."
+        },
+        "fileId": {
+          "type": "string",
+          "description": "Rulebook file id, e.g. 'sro-gt4-america-2026'."
+        },
+        "version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "eventOverrides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Event/class override ids applied (supplementary regulations)."
+        },
+        "missingFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Rulebook fields still TBD; their checks report 'unknown'."
+        }
+      }
+    },
+    "SourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileId",
+        "role",
+        "name",
+        "sha256",
+        "bytes",
+        "archive"
+      ],
+      "properties": {
+        "fileId": {
+          "type": "string",
+          "pattern": "^f[0-9]+$"
+        },
+        "role": {
+          "enum": [
+            "laps",
+            "time_cards",
+            "summary",
+            "results",
+            "results_by_class",
+            "pit_cards_json",
+            "pit_cards_pdf",
+            "drive_time",
+            "flags",
+            "control_log",
+            "lap_chart",
+            "weather",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reportMark": {
+          "enum": [
+            "unofficial",
+            "provisional",
+            "official",
+            "unknown"
+          ],
+          "description": "Status printed by the timing provider (results files)."
+        },
+        "archive": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "archivedAt"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "archivedAt": {
+              "$ref": "#/$defs/IsoDateTime"
+            }
+          }
+        }
+      }
+    },
+    "ClassDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "order"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ClassId"
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "medianCleanGreenLapS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "Median of all clean green laps of the class (D-REF-PACE)."
+        }
+      }
+    },
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "series",
+        "season",
+        "event",
+        "session",
+        "track",
+        "raceDate",
+        "timezone",
+        "timeOrigin",
+        "sourceFormat",
+        "resultsStatus",
+        "classes",
+        "lexicon"
+      ],
+      "properties": {
+        "series": {
+          "type": "string"
+        },
+        "seriesId": {
+          "type": "string"
+        },
+        "season": {
+          "type": "integer"
+        },
+        "event": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "e.g. 'Race 1'."
+        },
+        "track": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$",
+              "description": "Canonical track id (one per circuit layout; fixes duplicate names)."
+            },
+            "name": {
+              "type": "string"
+            },
+            "layout": {
+              "type": "string"
+            },
+            "lengthM": {
+              "type": "number"
+            },
+            "pitLaneTransitS": {
+              "$ref": "#/$defs/NullableSeconds",
+              "description": "Track/rulebook value for a drive-through pit-lane passage; null when not configured (D-TRANSIT)."
+            }
+          }
+        },
+        "raceDate": {
+          "$ref": "#/$defs/IsoDate",
+          "description": "Local calendar date of the start (D-DATE). Never a timestamp."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA zone of the track, e.g. 'America/Indiana/Indianapolis'."
+        },
+        "timeOrigin": {
+          "$ref": "#/$defs/IsoDateTime",
+          "description": "Instant that raceTimeS = 0 refers to (D-TIME)."
+        },
+        "timeOriginSource": {
+          "enum": [
+            "flags_green",
+            "first_lap_start",
+            "manual"
+          ]
+        },
+        "scheduledDurationS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "scheduledLaps": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "chequeredFlag": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceFormat": {
+          "enum": [
+            "speedhive",
+            "wrl-website",
+            "alkamel-sro",
+            "alkamel-grcup",
+            "alkamel-imsa"
+          ]
+        },
+        "adapterVersion": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "resultsStatus": {
+          "enum": [
+            "official",
+            "provisional",
+            "unofficial",
+            "none"
+          ],
+          "description": "Status of the results file that finishing positions came from (D-FINISH)."
+        },
+        "classes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ClassDef"
+          }
+        },
+        "lexicon": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Proper names that may contain digits and may appear verbatim in prose (series, event, class, team, vehicle, driver names)."
+        }
+      }
+    },
+    "Driver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "name"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Driver slot (DRIVER_NUMBER / results DRIVERn)."
+        },
+        "name": {
+          "type": "string"
+        },
+        "shortName": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "positionOverall",
+        "positionClass",
+        "laps",
+        "resultsStatus",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'result:<car>'"
+        },
+        "status": {
+          "enum": [
+            "classified",
+            "not_classified",
+            "dnf",
+            "dns",
+            "dsq",
+            "excluded"
+          ]
+        },
+        "rawStatus": {
+          "type": "string"
+        },
+        "positionOverall": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "positionClass": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "laps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalTimeS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "gapFirst": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As printed (time or '+N laps')."
+        },
+        "bestLapS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "bestLapNumber": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "postRacePenaltyS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "Time added after the race, = totalTimeS - elapsed at the last crossing, when that is > 0 (D-PENALTY)."
+        },
+        "prePenaltyPositionOverall": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Position the car would hold without its own post-race time penalty (D-FINISH). null when no post-race penalty."
+        },
+        "prePenaltyPositionClass": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "resultsStatus": {
+          "enum": [
+            "official",
+            "provisional",
+            "unofficial"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "class",
+        "team",
+        "make",
+        "makeBasis",
+        "vehicle",
+        "drivers",
+        "result",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'car:<car>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "class": {
+          "$ref": "#/$defs/ClassId"
+        },
+        "team": {
+          "type": "string"
+        },
+        "make": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Normalised make (D-MAKE), e.g. 'BMW', 'Ford', 'Toyota', 'McLaren', 'Mercedes-AMG', 'Honda', 'Hyundai', 'Audi', 'Cupra', 'Porsche', 'Aston Martin'. 'TBD' when no source names it. Drives the Make filter and Make column on every tab."
+        },
+        "makeBasis": {
+          "enum": [
+            "make_column",
+            "results_json",
+            "vehicle_alias",
+            "entry_list",
+            "none"
+          ],
+          "description": "Where make came from (D-MAKE). 'none' when make = 'TBD'."
+        },
+        "makeRaw": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Source value before normalisation, e.g. 'BMW M', 'Toyota Gazoo Racing'."
+        },
+        "vehicle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Full model string as published, e.g. 'BMW M4 GT4 (G82) EVO'. 'TBD' when no source names it."
+        },
+        "drivers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Driver"
+          }
+        },
+        "startPosition": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "result": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Result"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null only when no results file exists (then metadata.resultsStatus = 'none')."
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "LapColumns": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One car's laps as parallel arrays (all arrays have the same length, ascending lap). Row fact id: 'lap:<car>:<lap>'.",
+      "required": [
+        "lap",
+        "lapTimeS",
+        "endS",
+        "flag",
+        "fcy",
+        "fcyFrac",
+        "pit",
+        "pos",
+        "cpos",
+        "lapsDown",
+        "clean"
+      ],
+      "properties": {
+        "lap": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "lapTimeS": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Official lap time; null when blank in the source (never 0.001)."
+        },
+        "endS": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "raceTimeS of the line crossing that ends the lap."
+        },
+        "span": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Laps covered by the row (>1 when the source skipped lap numbers, WRL-website). Omitted when all 1."
+        },
+        "flag": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "G",
+              "Y",
+              "R",
+              "C",
+              "S",
+              null
+            ]
+          },
+          "description": "Flag at the line as exported (G green, Y yellow/FCY, R red, C chequered, S safety car)."
+        },
+        "fcy": {
+          "type": "array",
+          "items": {
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "description": "D-FCY-LAP: 0 green, 1 partial, 2 full."
+        },
+        "fcyFrac": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "description": "Fraction of the lap interval inside FCY periods (3 dp)."
+        },
+        "pit": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7
+          },
+          "description": "Bitmask: 1 in-lap of a passage, 2 out-lap of a passage, 4 lap wholly inside a passage."
+        },
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Overall position at this crossing (lap-chart convention, D-POS)."
+        },
+        "cpos": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "Class position at this crossing (D-POS)."
+        },
+        "lapsDown": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Laps behind the class leader at this crossing (D-LAPDOWN)."
+        },
+        "clean": {
+          "type": "array",
+          "items": {
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "description": "1 = clean green lap (eligible for the reference pace, D-REF-PACE)."
+        },
+        "driver": {
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "description": "Driver slot number (entries[].drivers[].number); null when unknown."
+        },
+        "speedKph": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Optional. Lap average speed as exported (Alkamel KPH; SH Speed converted, unit TBD). Replaces legacy 'spd'."
+        },
+        "topSpeedKph": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Optional. Alkamel TOP_SPEED."
+        }
+      }
+    },
+    "LapTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout",
+        "columnSources",
+        "cars"
+      ],
+      "properties": {
+        "layout": {
+          "const": "columnar-per-car/1"
+        },
+        "columnSources": {
+          "type": "object",
+          "description": "Source and default confidence per column.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "confidence"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/Source"
+              },
+              "confidence": {
+                "$ref": "#/$defs/Confidence"
+              }
+            }
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "description": "Cells whose confidence differs from the column default.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "car",
+              "lap",
+              "column",
+              "confidence",
+              "note"
+            ],
+            "properties": {
+              "car": {
+                "$ref": "#/$defs/CarId"
+              },
+              "lap": {
+                "type": "integer"
+              },
+              "column": {
+                "type": "string"
+              },
+              "confidence": {
+                "$ref": "#/$defs/Confidence"
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "cars": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/CarId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/LapColumns"
+          }
+        }
+      }
+    },
+    "FcyPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "start",
+        "end",
+        "endsAtFinish",
+        "leaderLaps",
+        "durationS",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'fcy:<n>', n = 1-based order of start."
+        },
+        "type": {
+          "enum": [
+            "fcy",
+            "safety_car",
+            "code_60",
+            "red"
+          ],
+          "description": "WRL Code 35 = 'fcy'."
+        },
+        "start": {
+          "$ref": "#/$defs/TimePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/TimePoint",
+          "description": "Green flag; for a race finishing under caution = the last crossing of the race."
+        },
+        "endsAtFinish": {
+          "type": "boolean"
+        },
+        "leaderLaps": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "description": "[first, last] overall-leader laps that overlap the period (display band)."
+        },
+        "durationS": {
+          "$ref": "#/$defs/Seconds"
+        },
+        "pitsOpen": {
+          "type": "array",
+          "description": "Pit-opening announcements during the period (IMSA class-specific).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "flagId",
+              "classes"
+            ],
+            "properties": {
+              "flagId": {
+                "$ref": "#/$defs/FactId"
+              },
+              "classes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "reconstruction": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Present when source.kind = 'reconstructed' (D-FCY-RECON).",
+          "properties": {
+            "lastGreenCrossingS": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "firstFcyCrossingS": {
+              "type": "number"
+            },
+            "lastFcyCrossingS": {
+              "type": "number"
+            },
+            "firstGreenCrossingS": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "TimeLost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valueS",
+        "method"
+      ],
+      "properties": {
+        "valueS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "method": {
+          "enum": [
+            "green_reference",
+            "fcy_neighbours",
+            "fcy_lap_field",
+            "see_group",
+            "none"
+          ],
+          "description": "D-LOSS-GREEN, D-LOSS-FCY (primary), D-LOSS-FCY fallback, grouped (value lives on the pitGroup), none (retirement, pit-lane start, no reference)."
+        },
+        "groupId": {
+          "$ref": "#/$defs/FactId"
+        },
+        "nLaps": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lapSumS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "refLapS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "green_reference: median clean green lap."
+        },
+        "refLapCount": {
+          "type": "integer"
+        },
+        "refWindowLaps": {
+          "enum": [
+            5,
+            10,
+            15,
+            20
+          ]
+        },
+        "anchorS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "fcy_neighbours: T0 = end of the lap before the in-lap."
+        },
+        "elapsedS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "fcy_neighbours: T0 to end of out-lap."
+        },
+        "neighbourMedianS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "neighbourCars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CarId"
+          }
+        },
+        "neighbourScope": {
+          "enum": [
+            "class",
+            "all"
+          ]
+        },
+        "neighbourWindowS": {
+          "enum": [
+            30,
+            60
+          ]
+        },
+        "greenReferenceValueS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "For FCY stops: the green-referenced value, kept for audit only. Never displayed as time lost."
+        }
+      }
+    },
+    "PitPassage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "ordinal",
+        "kind",
+        "kindBasis",
+        "outcome",
+        "pitIn",
+        "pitOut",
+        "inLap",
+        "inLapCompleted",
+        "outLap",
+        "officialPitLaneTimeS",
+        "fcyContext",
+        "timeLost",
+        "stopNumber",
+        "cycleId",
+        "penaltiesServed",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'pit:<car>:<ordinal>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based order of pit-in among all this car's passages (every kind)."
+        },
+        "kind": {
+          "enum": [
+            "stop",
+            "drive_through",
+            "stop_and_go",
+            "penalty_served",
+            "garage",
+            "retirement",
+            "pit_lane_start"
+          ]
+        },
+        "kindBasis": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "drive_time_pit_type",
+              "rc_penalty_match",
+              "rc_penalty_served",
+              "transit_time",
+              "duration_only",
+              "loss_fraction_fallback",
+              "garage_threshold",
+              "no_later_lap",
+              "pit_lane_start_time",
+              "default_stop"
+            ]
+          },
+          "description": "Evidence used by D-PIT-KIND, in order of precedence."
+        },
+        "outcome": {
+          "enum": [
+            "rejoined",
+            "retired",
+            "finished_in_pit_lane"
+          ]
+        },
+        "pitIn": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null when the source has no pit-lane timestamps (WRL)."
+        },
+        "pitOut": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inLap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "D-INLAP: the car's lap that contains pit-in."
+        },
+        "inLapCompleted": {
+          "type": "boolean",
+          "description": "false when the car never completed the in-lap (retired in the pits mid-lap)."
+        },
+        "outLap": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "D-OUTLAP; null when the car never crossed the line again."
+        },
+        "officialPitLaneTimeS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "D-PITLANE: official pit-in to pit-out. null when no official record (never a lap-time estimate)."
+        },
+        "pitLaneTimeReliable": {
+          "type": "boolean"
+        },
+        "fcyContext": {
+          "enum": [
+            "green",
+            "fcy",
+            "mixed"
+          ],
+          "description": "D-FCY-STOP."
+        },
+        "fcyPeriodIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "timeLost": {
+          "$ref": "#/$defs/TimeLost"
+        },
+        "groupId": {
+          "$ref": "#/$defs/FactId",
+          "description": "pitGroups id when back-to-back with another passage."
+        },
+        "stopNumber": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "Ordinal among this car's kind 'stop'/'garage' passages (the 'Stop N' label). null for other kinds."
+        },
+        "cycleId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FactId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "driverIn": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "driverOut": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "driverChange": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "penaltiesServed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          },
+          "description": "Penalties served by or during this passage (DT, S&G, time-at-stop)."
+        },
+        "lapDown": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Car lost a lap to its class leader across this passage (D-LAPDOWN)."
+        },
+        "positionEffect": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Class position across this passage alone (D-CYCLE-POS applied with the passage as its own window). Present for rejoined passages that are not cycle members (drive-throughs, garage visits, penalty stops); members use cycleResults.",
+          "required": [
+            "beforeLap",
+            "afterLap",
+            "classPosBefore",
+            "classPosAfter",
+            "netClass"
+          ],
+          "properties": {
+            "beforeLap": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "afterLap": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "classPosBefore": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "classPosAfter": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "netClass": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "lostTo": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Counterparty"
+              }
+            },
+            "gainedOn": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Counterparty"
+              }
+            }
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "PitGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "passageIds",
+        "laps",
+        "timeLost",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'pitgroup:<car>:<n>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "passageIds": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "laps": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "items": false,
+          "minItems": 2
+        },
+        "timeLost": {
+          "$ref": "#/$defs/TimeLost"
+        },
+        "officialPitLaneTimeSumS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "Penalty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "penaltyType",
+        "status",
+        "reason",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'pen:<car>:<n>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "issued": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "issuedLeaderLap": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Infringement as written, e.g. 'Pit Lane Speed Violation'."
+        },
+        "penaltyType": {
+          "enum": [
+            "warning",
+            "drive_through",
+            "stop_and_go",
+            "stop_plus",
+            "time_at_stop",
+            "post_race_time",
+            "position",
+            "lap",
+            "grid",
+            "disqualification",
+            "other"
+          ]
+        },
+        "amountS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "Seconds for stop_plus / time_at_stop / post_race_time."
+        },
+        "status": {
+          "enum": [
+            "issued",
+            "served",
+            "applied_post_race",
+            "converted_post_race",
+            "unserved",
+            "rescinded",
+            "warning_only"
+          ]
+        },
+        "servedByPassageId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FactId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "servedConfirmed": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "RC 'Penalty Served' message time."
+        },
+        "appliedInResults": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "resultsEffectS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "Time difference actually visible in the results file (may differ from amountS; see dataQuality)."
+        },
+        "convertedFromId": {
+          "$ref": "#/$defs/FactId"
+        },
+        "rawText": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "Retirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "lastCompletedLap",
+        "where",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'ret:<car>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "lastCompletedLap": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "at": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/TimePoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "where": {
+          "enum": [
+            "pit_lane",
+            "garage",
+            "on_track",
+            "did_not_start",
+            "unknown"
+          ]
+        },
+        "passageId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FactId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "classPosAtRetirement": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "FlagEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "at",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'flag:<n>' in time order."
+        },
+        "type": {
+          "enum": [
+            "green",
+            "fcy",
+            "safety_car",
+            "red",
+            "chequered",
+            "pits_open",
+            "pits_closed",
+            "message"
+          ]
+        },
+        "at": {
+          "$ref": "#/$defs/TimePoint"
+        },
+        "leaderLap": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "pits_open scope; empty = all classes."
+        },
+        "message": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        }
+      }
+    },
+    "Stint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "ordinal",
+        "driver",
+        "start",
+        "end",
+        "startReason",
+        "endReason",
+        "startLap",
+        "endLap",
+        "laps",
+        "driveTimeS",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'stint:<car>:<n>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "driver": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start": {
+          "$ref": "#/$defs/TimePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/TimePoint"
+        },
+        "startReason": {
+          "enum": [
+            "race_start",
+            "pit_out",
+            "pit_lane_start"
+          ]
+        },
+        "endReason": {
+          "enum": [
+            "pit_in",
+            "chequered",
+            "retired"
+          ]
+        },
+        "startLap": {
+          "type": "integer"
+        },
+        "endLap": {
+          "type": "integer"
+        },
+        "laps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "driveTimeS": {
+          "$ref": "#/$defs/Seconds",
+          "description": "D-DRIVETIME: stint duration minus pit-lane time of penalty passages inside it."
+        },
+        "penaltyPassageIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "fcyTimeS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "DriveTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "driver",
+        "driveTimeS",
+        "stintIds",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'drive:<car>:<driverNumber>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "driver": {
+          "type": "integer"
+        },
+        "driveTimeS": {
+          "$ref": "#/$defs/Seconds"
+        },
+        "officialDriveTimeS": {
+          "$ref": "#/$defs/NullableSeconds",
+          "description": "Drive Time CSV TOTAL DRIVER TIME when available."
+        },
+        "stintIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        }
+      }
+    },
+    "CycleMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "car",
+        "passageId"
+      ],
+      "properties": {
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "passageId": {
+          "$ref": "#/$defs/FactId"
+        }
+      }
+    },
+    "PitCycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "class",
+        "ordinal",
+        "model",
+        "trigger",
+        "opens",
+        "closes",
+        "closeBasis",
+        "members",
+        "stats",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'cycle:<class>:<n>'"
+        },
+        "class": {
+          "$ref": "#/$defs/ClassId"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "model": {
+          "enum": [
+            "rounds",
+            "windows",
+            "singleton"
+          ],
+          "description": "D-CYCLE."
+        },
+        "trigger": {
+          "enum": [
+            "green",
+            "fcy",
+            "mixed"
+          ]
+        },
+        "fcyPeriodIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "opens": {
+          "$ref": "#/$defs/TimePoint",
+          "description": "Earliest member pit-in (WRL: start of earliest in-lap)."
+        },
+        "closes": {
+          "$ref": "#/$defs/TimePoint",
+          "description": "Latest member rejoin (pit-out; WRL: end of out-lap)."
+        },
+        "closeBasis": {
+          "enum": [
+            "pit_out",
+            "out_lap_end"
+          ]
+        },
+        "splitRule": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gapThresholdS": {
+              "$ref": "#/$defs/NullableSeconds",
+              "description": "rounds: 4 x class median clean green lap."
+            },
+            "windowS": {
+              "$ref": "#/$defs/NullableSeconds",
+              "description": "windows: 3 x class median clean green lap."
+            },
+            "maxGapS": {
+              "$ref": "#/$defs/NullableSeconds",
+              "description": "Largest gap between consecutive member pit-ins."
+            },
+            "nearestSplitMarginPct": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "How close the nearest gap came to the threshold; < 5 % lowers confidence."
+            }
+          }
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/CycleMember"
+          }
+        },
+        "overlappingPassageIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          },
+          "description": "Same-class non-member passages (drive-throughs, garage, retirements) between opens and closes. Context only."
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nMembers"
+          ],
+          "properties": {
+            "nMembers": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "meanTimeLostS": {
+              "$ref": "#/$defs/NullableSeconds"
+            },
+            "medianTimeLostS": {
+              "$ref": "#/$defs/NullableSeconds"
+            },
+            "bestTimeLostS": {
+              "$ref": "#/$defs/NullableSeconds"
+            },
+            "bestTimeLostPassageId": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/FactId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "meanPitLaneS": {
+              "$ref": "#/$defs/NullableSeconds"
+            },
+            "bestPitLaneS": {
+              "$ref": "#/$defs/NullableSeconds"
+            },
+            "bestPitLanePassageId": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/FactId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "Counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "car",
+        "cause"
+      ],
+      "properties": {
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "cause": {
+          "enum": [
+            "pit_cycle",
+            "own_pit",
+            "on_track",
+            "rival_pit",
+            "penalty",
+            "retirement"
+          ],
+          "description": "From the subject car's perspective (D-CAUSE)."
+        },
+        "passId": {
+          "$ref": "#/$defs/FactId",
+          "description": "The last swap between the two inside the window."
+        }
+      }
+    },
+    "CycleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "cycleId",
+        "car",
+        "passageId",
+        "beforeLap",
+        "afterLap",
+        "classPosBefore",
+        "classPosAfter",
+        "netClass",
+        "gainedOn",
+        "lostTo",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'cycres:<class>:<n>:<car>'"
+        },
+        "cycleId": {
+          "$ref": "#/$defs/FactId"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "passageId": {
+          "$ref": "#/$defs/FactId"
+        },
+        "beforeLap": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "afterLap": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "null when the car never completed a lap after the cycle closed (retired)."
+        },
+        "classPosBefore": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "classPosAfter": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "netClass": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "classPosBefore - classPosAfter (positive = gained)."
+        },
+        "overallPosBefore": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Context only; label 'overall' wherever shown (D3)."
+        },
+        "overallPosAfter": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "netOverall": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "gainedOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Counterparty"
+          }
+        },
+        "lostTo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Counterparty"
+          }
+        },
+        "lapsDownBefore": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lapsDownAfter": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lapDown": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "timeLostRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "1 = least time lost among members with a value."
+        },
+        "deltaToCycleMeanS": {
+          "$ref": "#/$defs/NullableSeconds"
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "PositionChangeTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout",
+        "scope",
+        "rows"
+      ],
+      "description": "Every same-class order swap between consecutive lap-chart laps (D-SWAP). Row fact id: 'pass:<winner>:<lap>:<loser>'. Lapped events: 'lapdown:<car>:<lap>'.",
+      "properties": {
+        "layout": {
+          "const": "columnar/1"
+        },
+        "scope": {
+          "const": "class"
+        },
+        "rows": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lap",
+            "winner",
+            "loser",
+            "mechanism"
+          ],
+          "properties": {
+            "lap": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "winner": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CarId"
+              }
+            },
+            "loser": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CarId"
+              }
+            },
+            "mechanism": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "on_track",
+                  "both_pitted",
+                  "winner_pitted",
+                  "loser_pitted",
+                  "penalty",
+                  "retirement"
+                ]
+              },
+              "description": "Neutral mechanism; per-perspective cause mapping in DEFINITIONS.md D-CAUSE."
+            },
+            "fcy": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              "description": "1 when either car's lap L overlaps an FCY period."
+            }
+          }
+        },
+        "lapDowns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "car",
+            "lap",
+            "lapsDown",
+            "cause"
+          ],
+          "description": "Events where a car's laps-behind-class-leader increased (D-LAPDOWN).",
+          "properties": {
+            "car": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CarId"
+              }
+            },
+            "lap": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "lapsDown": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "cause": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "pit",
+                  "on_track",
+                  "fcy_pit",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        }
+      }
+    },
+    "RuleCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "ruleKey",
+        "rulebookRef",
+        "car",
+        "subjectFactIds",
+        "status",
+        "source",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'rule:<ruleKey>:<car>:<n>'"
+        },
+        "ruleKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "e.g. 'min-pit-lane-time', 'earliest-pit', 'max-stint', 'min-drive-time', 'fcy-pits-closed'."
+        },
+        "rulebookRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "section"
+          ],
+          "properties": {
+            "field": {
+              "type": "string",
+              "description": "Rulebook field path."
+            },
+            "section": {
+              "type": "string",
+              "description": "Regulation article cited by the rulebook field, e.g. 'IMSA SR 46.3.1'."
+            },
+            "eventOverride": {
+              "type": "string"
+            }
+          }
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "subjectFactIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "not_applicable",
+            "unknown"
+          ],
+          "description": "unknown = rulebook value TBD or input fact low confidence."
+        },
+        "measured": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "limit": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "s",
+            "laps",
+            "count",
+            "lap"
+          ]
+        },
+        "margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "measured - limit, signed so negative = violation."
+        },
+        "officialAction": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          },
+          "description": "Penalties race control issued for the same subject."
+        },
+        "source": {
+          "$ref": "#/$defs/Source"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        }
+      }
+    },
+    "RuleFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "ruleCheckIds",
+        "assessment",
+        "severity",
+        "statement"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'finding:<n>'"
+        },
+        "ruleCheckIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "assessment": {
+          "enum": [
+            "compliant",
+            "penalised_consistent",
+            "possible_unpenalised",
+            "data_insufficient",
+            "not_assessable"
+          ]
+        },
+        "statement": {
+          "$ref": "#/$defs/Prose",
+          "description": "Prose shown by the GUI as the finding wording."
+        },
+        "judgementOnLowConfidence": {
+          "$ref": "#/$defs/Prose",
+          "description": "Required by the validator when any cited fact is low confidence."
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "possible",
+            "likely"
+          ],
+          "description": "Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7). The GUI shows it; no other vocabulary is used."
+        }
+      }
+    },
+    "CarStory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "car",
+        "headline",
+        "paragraphs",
+        "keyFactIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'story:<car>'"
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "headline": {
+          "$ref": "#/$defs/Prose"
+        },
+        "paragraphs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Prose"
+          }
+        },
+        "keyFactIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "lowConfidenceJudgements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "factId",
+              "judgement"
+            ],
+            "properties": {
+              "factId": {
+                "$ref": "#/$defs/FactId"
+              },
+              "judgement": {
+                "$ref": "#/$defs/Prose"
+              }
+            }
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StoryEvent"
+          }
+        }
+      }
+    },
+    "RaceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "headline",
+        "paragraphs"
+      ],
+      "properties": {
+        "id": {
+          "const": "summary"
+        },
+        "headline": {
+          "$ref": "#/$defs/Prose"
+        },
+        "paragraphs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Prose"
+          }
+        },
+        "classSummaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class",
+              "text"
+            ],
+            "properties": {
+              "class": {
+                "$ref": "#/$defs/ClassId"
+              },
+              "text": {
+                "$ref": "#/$defs/Prose"
+              }
+            }
+          }
+        },
+        "keyMoments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyMoment"
+          }
+        }
+      }
+    },
+    "DataQualityNote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'dq:<n>'"
+        },
+        "severity": {
+          "enum": [
+            "blocker",
+            "warning",
+            "note"
+          ],
+          "description": "FACT_ENGINE_SPEC.md §6. A blocker prevents publishing."
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_-]+$"
+        },
+        "message": {
+          "type": "string"
+        },
+        "factIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^f[0-9]+$"
+          }
+        }
+      }
+    },
+    "KeyMoment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "lap",
+        "causes",
+        "title",
+        "text",
+        "cars",
+        "factIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^moment:[1-9][0-9]*$"
+        },
+        "lap": {
+          "$ref": "#/$defs/FactRef",
+          "description": "Lap the moment happens on (unit 'lap'); the GUI shows it as 'L16'."
+        },
+        "lapEnd": {
+          "$ref": "#/$defs/FactRef",
+          "description": "Last lap when the moment spans laps (e.g. an FCY period)."
+        },
+        "causes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "pit_cycle",
+              "on_track",
+              "rival_pit",
+              "penalty",
+              "fcy",
+              "retirement"
+            ]
+          },
+          "description": "GUI cause chips (GUI_SYSTEM_SPEC.md §6.1). Empty for a result moment."
+        },
+        "title": {
+          "$ref": "#/$defs/Prose"
+        },
+        "text": {
+          "$ref": "#/$defs/Prose"
+        },
+        "cars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CarId"
+          }
+        },
+        "factIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        }
+      }
+    },
+    "StoryEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Timeline card. The fact engine builds every field except title and text (buildStoryEvents); Claude fills title and text as Prose. A published story's skeleton must equal the engine's.",
+      "required": [
+        "id",
+        "lap",
+        "at",
+        "causes",
+        "outcome",
+        "evidence",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^event:[0-9A-Za-z]{1,8}:[1-9][0-9]*$",
+          "description": "'event:<car>:<n>', n in race order"
+        },
+        "lap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "First lap of the event (in-lap for a pit passage)."
+        },
+        "lapEnd": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Last lap when the event spans laps."
+        },
+        "at": {
+          "$ref": "#/$defs/TimePoint",
+          "description": "When the event starts (raceTimeS, and the wall clock where the source has one)."
+        },
+        "causes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "pit_cycle",
+              "on_track_pass",
+              "rival_pit",
+              "penalty",
+              "fcy",
+              "retirement"
+            ]
+          }
+        },
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "result"
+          ],
+          "properties": {
+            "result": {
+              "enum": [
+                "gained",
+                "lost",
+                "held",
+                "lap_down",
+                "retired",
+                "penalty_applied",
+                "none"
+              ]
+            },
+            "classPosBefore": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "classPosAfter": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "netClass": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "lapDown": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FactId"
+          }
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "confidenceNotes": {
+          "$ref": "#/$defs/ConfidenceNotes"
+        },
+        "title": {
+          "$ref": "#/$defs/Prose"
+        },
+        "text": {
+          "$ref": "#/$defs/Prose"
+        }
+      }
+    }
+  }
+}
