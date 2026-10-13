@@ -6,7 +6,11 @@ import * as raceSvc from "../services/races.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
-import { uploadRaceFiles, downloadRaceFiles } from "../lib/supabase.js";
+import { extractPdfText } from "../utils/pdf-extract.js";
+import { suggestRaceDate } from "../utils/suggestRaceDate.js";
+import { downloadRaceFiles, supabase, STORAGE_BUCKET } from "../lib/supabase.js";
+import { archiveRaceFiles } from "../lib/race-archive.js";
+import { env } from "../config/env.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
 
@@ -23,6 +27,63 @@ adminRouter.get(
     res.json({ formats: await getAllParsers() });
   }
 );
+
+// ─── POST /api/admin/races/suggest-date — Derive a race date from a pit PDF ──
+//
+// The event header on Alkamel pit stop PDFs is a raster banner, so the circuit
+// and event name cannot be read from it. The page footer is text, and carries
+// the export timestamp — which, corroborated against the session's own clock,
+// gives the race date. Returns a suggestion plus a confidence, never a decision:
+// the upload page fills only a Date field the operator has left empty.
+
+adminRouter.post(
+  "/races/suggest-date",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { pitStopPdf, timeCardsCsv } = req.body ?? {};
+
+      if (typeof pitStopPdf !== "string" || !pitStopPdf) {
+        throw new AppError(
+          400,
+          'Request body must include "pitStopPdf" (base64 or data URL)',
+          "MISSING_PDF"
+        );
+      }
+
+      let pdfText: string;
+      try {
+        pdfText = await extractPdfText(pitStopPdf);
+      } catch (e: any) {
+        res.json({
+          date: null,
+          exportedAt: null,
+          sessionEnd: null,
+          confidence: "none",
+          note: `Could not read the PDF: ${e.message}`,
+        });
+        return;
+      }
+
+      res.json(
+        suggestRaceDate(
+          pdfText,
+          typeof timeCardsCsv === "string" ? timeCardsCsv : undefined
+        )
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+
+/** Archive raw files before any DB write (G1 / F7). Throws ARCHIVE_FAILED on any upload failure. */
+function archive(files: Record<string, unknown>) {
+  return archiveRaceFiles(files, {
+    bucket: supabase ? supabase.storage.from(STORAGE_BUCKET) : null,
+    nodeEnv: env.NODE_ENV,
+  });
+}
 
 // ─── POST /api/admin/races/import — Upload race from any supported format ────
 
@@ -61,6 +122,10 @@ adminRouter.post(
       // Parse through format-specific parser
       const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
 
+      // Archive raw files BEFORE any DB write: a failed archive stops the import (F7)
+      const archived = await archive(files);
+      parseWarnings.push(...archived.warnings);
+
       // Ingest through existing pipeline
       const result = await raceIngest.ingestRaceData(
         parsedMeta,
@@ -69,12 +134,10 @@ adminRouter.post(
         req.user!.userId
       );
 
-      // Archive raw files to Supabase Storage
-      const storagePaths = await uploadRaceFiles(result.raceId, files, format);
-      if (Object.keys(storagePaths).length > 0) {
+      if (Object.keys(archived.paths).length > 0) {
         await prisma.race.update({
           where: { id: result.raceId },
-          data: { sourceFiles: storagePaths },
+          data: { sourceFiles: archived.paths },
         });
       }
 
@@ -327,6 +390,10 @@ adminRouter.post(
           const parsedMeta = raceMetadataSchema.parse(metadata);
           const { data, annotations, warnings: parseWarnings } = await parser.parse(files);
 
+          // Archive raw files BEFORE any DB write: a failed archive fails this race (F7)
+          const archived = await archive(files);
+          parseWarnings.push(...archived.warnings);
+
           const result = await raceIngest.ingestRaceData(
             parsedMeta,
             data,
@@ -334,12 +401,10 @@ adminRouter.post(
             req.user!.userId
           );
 
-          // Archive raw files
-          const storagePaths = await uploadRaceFiles(result.raceId, files, format);
-          if (Object.keys(storagePaths).length > 0) {
+          if (Object.keys(archived.paths).length > 0) {
             await prisma.race.update({
               where: { id: result.raceId },
-              data: { sourceFiles: storagePaths },
+              data: { sourceFiles: archived.paths },
             });
           }
 

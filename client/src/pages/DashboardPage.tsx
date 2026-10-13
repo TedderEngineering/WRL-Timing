@@ -464,10 +464,12 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function formatDate(dateStr: string): string {
+  // Race dates are calendar days stored as UTC midnight (F5)
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 

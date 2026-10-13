@@ -35,6 +35,66 @@ interface BulkImportResult {
   error?: string;
 }
 
+/** Returned by POST /admin/races/suggest-date. */
+interface DateSuggestion {
+  date: string | null;
+  exportedAt: string | null;
+  sessionEnd: string | null;
+  confidence: "high" | "low" | "none";
+  note: string;
+}
+
+/** One entry from GET /admin/formats — the parser's own declaration. */
+interface FormatInfo {
+  id: string;
+  name: string;
+  series: string;
+  description: string;
+  implemented: boolean;
+  fileSlots: Array<{ key: string; label: string; description: string; required: boolean }>;
+}
+
+/**
+ * What each series needs from the operator by hand.
+ *
+ * The file list beside these comes from the parsers themselves via
+ * /admin/formats, so it cannot drift. These notes cover what the files
+ * do NOT carry, which is the part that has to be written down.
+ */
+const MANUAL_STEPS: Record<string, string[]> = {
+  imsa: [
+    "Supply either the Time Cards CSV or the Time Cards JSON — one of the two is required, and the CSV alone is enough.",
+    "Race Name must be typed in. No IMSA export carries the event name as text.",
+    "Track must be typed in. The circuit is printed only in the pit stop PDF's header, which is an image, not text.",
+    "Date fills itself from the pit stop PDF's export timestamp when that PDF is included. Check it — it is the moment the report was generated, not the race.",
+  ],
+  sro: [
+    "Track is guessed from the venue code at the end of the filename (\"Race 1 COTA\" gives \"COTA\"). Replace it with the full circuit name.",
+    "Date must be typed in unless the pit stop PDF is included, which fills it from the report's export timestamp.",
+    "The laps CSV is required. Results CSV and pit stop PDF are optional; without the pit stop PDF, pit timing is estimated from lap times.",
+  ],
+  grcup: [
+    "Track is guessed from the venue code at the end of the filename. Replace it with the full circuit name.",
+    "Date must be typed in unless the pit stop PDF is included.",
+    "Both the results CSV and the laps CSV are required.",
+  ],
+  speedhive: [
+    "Track, date and race name are read from the download's filename — keep the original name and they fill themselves.",
+    "All four files are required. A missing flags or control log CSV blocks the import.",
+  ],
+  "wrl-website": [
+    "Track, date and race name are read from the download's filename — keep the original name and they fill themselves.",
+    "All four files are required. A missing flags or control log CSV blocks the import.",
+  ],
+};
+
+/** Applies to every Alkamel-sourced series. */
+const FILENAME_TAG_NOTE =
+  "Any file may be renamed with a trailing tag — \"… [Barber Motorsports Park, 2026-04-26, GR Cup].csv\" — " +
+  "and its track, date and season are taken from that instead of being typed.";
+
+const TAGGABLE_FORMATS = new Set(["imsa", "sro", "grcup"]);
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function AdminUploadPage() {
@@ -57,6 +117,30 @@ export function AdminUploadPage() {
   const validationSeq = useRef(0);
 
   const hasFiles = groups.size > 0 || unmatchedFiles.length > 0 || unsupportedFiles.length > 0;
+
+  // ── Series reference notes (admin only) ──────────────────────────────────
+
+  const [formats, setFormats] = useState<FormatInfo[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ formats: FormatInfo[] }>("/admin/formats")
+      .then((r) => setFormats(r.formats))
+      .catch(() => setFormats([]));
+  }, []);
+
+  // ── Date suggested from the pit stop PDF footer ──────────────────────────
+  //
+  // The event header on those PDFs is a raster banner, so the circuit and event
+  // name are unreadable — but the page footer carries the export timestamp as
+  // text, and the server corroborates it against the session's own clock. Only
+  // an empty Date is filled, and the operator sees why.
+
+  const dateAskedRef = useRef<Set<string>>(new Set());
+  const [dateSuggestions, setDateSuggestions] = useState<Map<string, DateSuggestion>>(
+    new Map()
+  );
 
   // ── File handling ────────────────────────────────────────────────────────
 
@@ -106,10 +190,14 @@ export function AdminUploadPage() {
         const g = next.get(groupId);
         if (g) {
           const updated = { ...g.metadata, [field]: value };
-          // Auto-fill season from date year when season is empty
-          if (field === "date" && value && !g.metadata.season) {
+          // Fill season from the date's year unless a plausible season is already
+          // set. A partially typed value such as "0002" is not plausible, and
+          // leaving it in place silently blocks import on a server-side range check.
+          if (field === "date" && value) {
             const year = value.split("-")[0];
-            if (/^\d{4}$/.test(year)) updated.season = year;
+            const seasonIsPlausible = /^\d{4}$/.test(g.metadata.season) &&
+              Number(g.metadata.season) >= 2000;
+            if (/^\d{4}$/.test(year) && !seasonIsPlausible) updated.season = year;
           }
           next.set(groupId, {
             ...g,
@@ -138,6 +226,36 @@ export function AdminUploadPage() {
   const removeUnsupported = useCallback((idx: number) => {
     setUnsupportedFiles((prev) => prev.filter((_, i) => i !== idx));
   }, []);
+
+  useEffect(() => {
+    for (const group of groups.values()) {
+      if (group.metadata.date) continue;
+      if (dateAskedRef.current.has(group.id)) continue;
+
+      const pitStopPdf =
+        group.files.get("imsaPitStopPdf")?.content ??
+        group.files.get("alkamelPitStopPdf")?.content;
+      if (!pitStopPdf) continue;
+
+      const groupId = group.id;
+      dateAskedRef.current.add(groupId);
+
+      const timeCardsCsv =
+        group.files.get("timeCardsCsv")?.content ??
+        group.files.get("alkamelLapsCsv")?.content;
+
+      api
+        .post<DateSuggestion>("/admin/races/suggest-date", { pitStopPdf, timeCardsCsv })
+        .then((suggestion) => {
+          setDateSuggestions((prev) => new Map(prev).set(groupId, suggestion));
+          if (suggestion.date) updateMetadata(groupId, "date", suggestion.date);
+        })
+        .catch(() => {
+          // Nothing to act on: the field simply stays empty for manual entry.
+          dateAskedRef.current.delete(groupId);
+        });
+    }
+  }, [groups, updateMetadata]);
 
   // ── Auto-validation (debounced) ─────────────────────────────────────────
 
@@ -491,6 +609,73 @@ export function AdminUploadPage() {
         )}
       </div>
 
+      {/* Series reference — required files and the steps each format needs by hand */}
+      {formats.length > 0 && (
+        <div className="mb-4 border border-gray-200 dark:border-gray-800 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300"
+          >
+            <span>Series reference — required files and manual steps</span>
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+              {notesOpen ? "Hide" : "Show"}
+            </span>
+          </button>
+
+          {notesOpen && (
+            <div className="px-4 pb-4 space-y-5">
+              {formats.map((fmt) => {
+                // Several slot labels end in "(optional)", which reads as noise
+                // once they are grouped under an "Optional:" heading.
+                const label = (sl: { label: string }) =>
+                  sl.label.replace(/\s*\(optional\)\s*$/i, "");
+                const required = fmt.fileSlots.filter((sl) => sl.required);
+                const optional = fmt.fileSlots.filter((sl) => !sl.required);
+                const steps = MANUAL_STEPS[fmt.id] ?? [];
+                return (
+                  <div key={fmt.id} className="text-sm">
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-200">
+                      {fmt.name}{" "}
+                      <span className="font-normal text-xs text-gray-500 dark:text-gray-400">
+                        ({fmt.series})
+                      </span>
+                    </h3>
+
+                    {/* IMSA declares no single required slot because either the
+                        Time Cards JSON or the CSV will do — a per-slot flag cannot
+                        say "one of these". The steps below carry that rule, so the
+                        line is omitted rather than printed as "none". */}
+                    {required.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                        <span className="font-medium">Required: </span>
+                        {required.map(label).join(" · ")}
+                      </p>
+                    )}
+
+                    {optional.length > 0 && (
+                      <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                        <span className="font-medium">Optional: </span>
+                        {optional.map(label).join(" · ")}
+                      </p>
+                    )}
+
+                    {steps.length > 0 && (
+                      <ul className="mt-1.5 space-y-1 text-xs text-gray-600 dark:text-gray-400 list-disc pl-4">
+                        {steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                        {TAGGABLE_FORMATS.has(fmt.id) && <li>{FILENAME_TAG_NOTE}</li>}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Race groups */}
       {groupsList.length > 0 && (
         <div className="space-y-3 mb-4">
@@ -501,6 +686,7 @@ export function AdminUploadPage() {
             <RaceGroupCard
               key={group.id}
               group={group}
+              dateSuggestion={dateSuggestions.get(group.id)}
               onUpdateMetadata={(field, value) => updateMetadata(group.id, field, value)}
               onRemove={() => removeGroup(group.id)}
             />
@@ -629,14 +815,17 @@ export function AdminUploadPage() {
 
 function RaceGroupCard({
   group,
+  dateSuggestion,
   onUpdateMetadata,
   onRemove,
 }: {
   group: RaceGroup;
+  dateSuggestion?: DateSuggestion;
   onUpdateMetadata: (field: keyof RaceGroupMetadata, value: string) => void;
   onRemove: () => void;
 }) {
-  const needsTrack = (group.format === "speedhive" || group.format === "wrl-website") && !group.metadata.track.trim();
+  // Track is required for every format; only some can derive it from a filename.
+  const needsTrack = !group.metadata.track.trim();
   const needsDate = !group.metadata.date;
   const needsInput = needsTrack || needsDate;
   const [expanded, setExpanded] = useState(needsInput);
@@ -817,6 +1006,18 @@ function RaceGroupCard({
                     : "border-gray-300 dark:border-gray-700"
                 }`}
               />
+              {dateSuggestion && dateSuggestion.date && (
+                <p
+                  className={`mt-1 text-[11px] leading-snug ${
+                    dateSuggestion.confidence === "high"
+                      ? "text-gray-500 dark:text-gray-400"
+                      : "text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {dateSuggestion.confidence === "high" ? "Suggested" : "Unverified"} from the
+                  pit stop PDF. {dateSuggestion.note}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
