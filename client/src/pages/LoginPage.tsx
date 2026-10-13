@@ -17,20 +17,6 @@ export function LoginPage() {
     peekPostAuthRedirect() ||
     "/dashboard";
 
-  if (isLoading) {
-    return (
-      <AuthLayout title="Welcome back" subtitle="Log in to your account">
-        <div className="flex justify-center py-12">
-          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AuthLayout>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to={from} replace />;
-  }
-
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({
       initialValues: { email: "", password: "" },
@@ -46,6 +32,20 @@ export function LoginPage() {
         navigate(from, { replace: true });
       },
     });
+
+  if (isLoading) {
+    return (
+      <AuthLayout title="Welcome back" subtitle="Log in to your account">
+        <div className="flex justify-center py-12">
+          <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={from} replace />;
+  }
 
   return (
     <AuthLayout title="Welcome back" subtitle="Log in to your account">

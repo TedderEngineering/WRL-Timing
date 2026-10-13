@@ -18,7 +18,7 @@ export interface Table {
 }
 
 export function readTable(text: string, delimiter?: string): Table {
-  const clean = text.replace(/^﻿/, "");
+  const clean = text.replace(/^\uFEFF/, "");
   const lines = clean.split(/\r?\n/);
   let headerIdx = 0;
   while (headerIdx < lines.length && !lines[headerIdx].trim()) headerIdx++;

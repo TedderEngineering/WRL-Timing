@@ -134,7 +134,7 @@ export function synthImsa(r: SynthRace): InputFile[] {
       const under = fcy.some(([a, z]) => rt > a && rt <= z);
       const stopOut = b.car.stops?.find((s) => !s.pitLaneStart && !s.noCard && s.lap + 1 === L);
       const stopIn = b.car.stops?.find((s) => !s.pitLaneStart && s.lap === L);
-      if (stopIn?.outDriver && !stopIn.retire) driver = driver; // driver changes on the out-lap
+      // On the in-lap the driver is unchanged; the new driver takes over on the out-lap (below).
       if (stopOut?.outDriver) driver = stopOut.outDriver;
       const pitTime = stopOut ? durStr(stopOut.pitLane) : "";
       lapLines.push(

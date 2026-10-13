@@ -291,7 +291,7 @@ export function adaptAlkamel(format: SourceFormat, files: SourceFileInfo[]): Ada
   for (const f of byRole(files, "results")) {
     resultFileIds.push(f.fileId);
     if (isJson(f)) {
-      const d = JSON.parse((f.text ?? "").replace(/^﻿/, ""));
+      const d = JSON.parse((f.text ?? "").replace(/^\uFEFF/, ""));
       const s = d.session ?? {};
       mark = markFromText(s.report_mark) ?? reportMarkFromName(f.name);
       for (const line of String(s.report_message ?? "").split(/\r?\n/)) if (line.trim()) postRaceLines.push({ text: line.trim(), fileId: f.fileId });
@@ -344,7 +344,7 @@ export function adaptAlkamel(format: SourceFormat, files: SourceFileInfo[]): Ada
   for (const f of byRole(files, "results_by_class")) {
     resultFileIds.push(f.fileId);
     if (isJson(f)) {
-      const d = JSON.parse((f.text ?? "").replace(/^﻿/, ""));
+      const d = JSON.parse((f.text ?? "").replace(/^\uFEFF/, ""));
       if (mark === "unknown") mark = markFromText(d.session?.report_mark) ?? reportMarkFromName(f.name);
       for (const cl of d.classifications ?? []) {
         (cl.classification ?? []).forEach((c: any, i: number) => {
@@ -449,7 +449,7 @@ export function adaptAlkamel(format: SourceFormat, files: SourceFileInfo[]): Ada
   const pitPdf = byRole(files, "pit_cards_pdf");
   if (pitJson.length) {
     for (const f of pitJson) {
-      const d = JSON.parse((f.text ?? "").replace(/^﻿/, ""));
+      const d = JSON.parse((f.text ?? "").replace(/^\uFEFF/, ""));
       const s = d.session ?? {};
       const sd = parseSessionDate(s.session_date);
       if (sd) race.session.dateCandidates.push({ date: sd.date, source: `${f.fileId}:session.session_date`, ambiguous: sd.ambiguous });
@@ -549,7 +549,7 @@ export function adaptAlkamel(format: SourceFormat, files: SourceFileInfo[]): Ada
   for (const f of byRole(files, "flags")) {
     const recs: { time: string; rec: string; flag: string; msg: string; lap: string; row: number }[] = [];
     if (isJson(f)) {
-      const d = JSON.parse((f.text ?? "").replace(/^﻿/, ""));
+      const d = JSON.parse((f.text ?? "").replace(/^\uFEFF/, ""));
       const sd = parseSessionDate(d.session?.session_date);
       if (sd) race.session.dateCandidates.push({ date: sd.date, source: `${f.fileId}:session.session_date`, ambiguous: sd.ambiguous });
       (d.flags ?? []).forEach((x: any, i: number) =>
