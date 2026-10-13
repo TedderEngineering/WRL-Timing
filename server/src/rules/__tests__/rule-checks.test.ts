@@ -1,16 +1,29 @@
 /**
  * Unit tests per rule type on synthetic fact packages: boundaries, FCY interaction, driver-number keying,
- * severity capping, TBD handling.
+ * severity capping, TBD handling. Results are schema 1.1.0 rule checks (one per rule and subject, passes
+ * included) and the rule coverage.
  */
 import { describe, expect, it } from "vitest";
 import { runRuleChecks } from "../run-rule-checks.js";
 import type { OverrideDef, RuleDef } from "../rulebook-types.js";
 import { makePkg, makeRulebook, rule } from "./helpers.js";
 
+type Res = ReturnType<typeof runRuleChecks>;
 const run = (rules: RuleDef[], pkg: ReturnType<typeof makePkg>, extra = {}) =>
   runRuleChecks(pkg, makeRulebook(rules, extra));
-const ids = (r: ReturnType<typeof runRuleChecks>, ruleId: string) =>
-  r.ruleFindings.filter((f) => f.ruleId === ruleId);
+/** Non-pass checks (fail, unknown, not_applicable) of a rule, in check order. */
+const ids = (r: Res, ruleId: string) =>
+  r.ruleChecks.filter((c) => c.ruleKey === ruleId && c.status !== "pass");
+const nonPass = (r: Res) => r.ruleChecks.filter((c) => c.status !== "pass");
+const nc = (r: Res) => r.ruleCoverage.notCheckable;
+const cov = (r: Res, ruleId: string) => r.ruleCoverage.run.find((x) => x.ruleId === ruleId)!;
+/** Check count per status for a rule. */
+const statuses = (r: Res, ruleId: string) => {
+  const out: Record<string, number> = {};
+  for (const c of r.ruleChecks.filter((x) => x.ruleKey === ruleId))
+    out[c.status] = (out[c.status] ?? 0) + 1;
+  return out;
+};
 
 // ─── severity, citations, generic outcomes ─────────────────────────────────
 
@@ -27,22 +40,24 @@ describe("generic behaviour", () => {
     passages: [{ car: "7", pitIn: 1000, lane: 50, inLap: 10 }],
   });
 
-  it("an unverified rule caps a finding at possible; a verified one allows likely", () => {
-    expect(run([minPit()], pkg).ruleFindings[0]).toMatchObject({
-      severity: "possible",
+  it("an unverified rule caps the severity ceiling at possible; a verified one allows likely", () => {
+    expect(run([minPit()], pkg).ruleChecks[0]).toMatchObject({
+      status: "fail",
+      severityCeiling: "possible",
       severityNotes: ["rule_unverified"],
       verified: false,
     });
-    expect(run([minPit({ verified: true })], pkg).ruleFindings[0]).toMatchObject({
-      severity: "likely",
+    expect(run([minPit({ verified: true })], pkg).ruleChecks[0]).toMatchObject({
+      status: "fail",
+      severityCeiling: "likely",
       verified: true,
     });
   });
 
   it("a rule carried from another season caps at possible", () => {
     expect(
-      run([minPit({ verified: true, season_confirmed: false })], pkg).ruleFindings[0]
-        .severity
+      run([minPit({ verified: true, season_confirmed: false })], pkg).ruleChecks[0]
+        .severityCeiling
     ).toBe("possible");
   });
 
@@ -69,31 +84,41 @@ describe("generic behaviour", () => {
       })
     );
     expect(r.rulebook.eventKey).toBe("e");
-    expect(r.ruleFindings[0].severity).toBe("info");
+    expect(r.ruleChecks[0]).toMatchObject({ status: "fail", severityCeiling: "info" });
+    // the citation stays the layer that set the value (series); the event override set only the severity
+    expect(r.ruleChecks[0].rulebookRef).toMatchObject({ doc: "DOC", section: "1.1" });
+    expect(r.ruleChecks[0].rulebookRef.eventOverride).toBeUndefined();
   });
 
-  it("findings carry rule id, citation, car, lap, clock, evidence and no prose", () => {
-    const f = run([minPit()], pkg).ruleFindings[0];
+  it("checks carry rule key, citation, car, lap, time point, subject facts and no prose", () => {
+    const res = run([minPit()], pkg);
+    expect(res.ruleChecks).toHaveLength(1);
+    const f = res.ruleChecks[0];
     expect(f).toMatchObject({
-      id: "finding:1",
-      ruleId: "t.pit.min",
+      id: "rule:t.pit.min:7:1",
+      ruleKey: "t.pit.min",
       car: "7",
-      class: "GS",
+      status: "fail",
       lap: 10,
-      clock: "2026-05-01T12:16:40.000-04:00",
+      at: { raceTimeS: 1000, clock: "2026-05-01T12:16:40.000-04:00" },
       measured: 50,
-      threshold: 60,
-      marginS: -10,
-      statement: null,
-      citation: {
+      limit: 60,
+      margin: -10,
+      unit: "s",
+      rulebookRef: {
+        field: "rules[t.pit.min].params.value_s",
         doc: "DOC",
         section: "1.1",
+        page: 1,
         quote: "A short verbatim quote.",
-        docTitle: "Test regulations",
-        layer: "series",
       },
+      source: { kind: "derived" },
+      confidence: "high",
     });
-    expect(f.evidence).toEqual([{ label: "passage", factId: "pit:7:1" }]);
+    expect(f.rulebookRef.eventOverride).toBeUndefined();
+    expect(f.subjectFactIds).toEqual(["pit:7:1"]);
+    expect(f).not.toHaveProperty("statement");
+    expect(res).not.toHaveProperty("ruleFindings");
   });
 
   it("a disabled rule, a format the rule cannot use, and TBD values are reported as not checkable", () => {
@@ -105,9 +130,10 @@ describe("generic behaviour", () => {
       verified: false,
     };
     const r1 = run([minPit()], pkg, { class_overrides: { GS: [off] } });
-    expect(r1.notCheckable[0]).toMatchObject({ ruleId: "t.pit.min", reason: "disabled" });
+    expect(nc(r1)[0]).toMatchObject({ ruleId: "t.pit.min", reason: "disabled" });
+    expect(r1.ruleCoverage.run).toEqual([]);
     const r2 = run([minPit({ checkable_with: { alkamel_imsa: [] } })], pkg);
-    expect(r2.notCheckable[0]).toMatchObject({ reason: "format_not_checkable" });
+    expect(nc(r2)[0]).toMatchObject({ reason: "format_not_checkable" });
     const r3 = run(
       [
         rule(
@@ -121,12 +147,12 @@ describe("generic behaviour", () => {
       ],
       pkg
     );
-    expect(r3.notCheckable[0]).toMatchObject({
+    expect(nc(r3)[0]).toMatchObject({
       reason: "tbd_value",
       detail: "params.value_s",
       tbd: [{ field: "params.value_s", question: "Event bulletin value?" }],
     });
-    expect(r3.ruleFindings).toHaveLength(0);
+    expect(r3.ruleChecks).toHaveLength(0);
   });
 
   it("a value set by a layer whose quote is TBD (document not obtained) is not used", () => {
@@ -139,7 +165,7 @@ describe("generic behaviour", () => {
       tbd: [{ field: "quote", question: "fetch the bulletin" }],
     };
     const r = run([minPit()], pkg, { class_overrides: { GS: [ov] } });
-    expect(r.notCheckable[0]).toMatchObject({
+    expect(nc(r)[0]).toMatchObject({
       reason: "unsourced_value",
       detail: "params.value_s",
     });
@@ -192,38 +218,48 @@ describe("min_pit_time", () => {
 
   it("boundaries, tolerance and pending time penalties", () => {
     const f = ids(res, "t.pit.min");
-    expect(f.map((x) => [x.car, x.severity, x.marginS])).toEqual([
-      ["2", "info", -0.3],
-      ["3", "possible", -1.418],
-      ["4", "possible", -0.6],
+    expect(f.map((x) => [x.car, x.status, x.severityCeiling, x.margin])).toEqual([
+      ["2", "unknown", "info", -0.3],
+      ["3", "fail", "possible", -1.418],
+      ["4", "fail", "possible", -0.6],
     ]);
     expect(f[0].severityNotes).toContain("within_measurement_tolerance");
-    expect(f[2]).toMatchObject({
-      threshold: 118,
-      notes: ["pending_time_penalties_added"],
-    });
-    expect(f[2].evidence).toContainEqual({
-      label: "pending_time_penalty",
-      factId: "pen:4:1",
+    expect(f[2]).toMatchObject({ limit: 118 });
+    expect(f[2].notes).toContain("pending_time_penalties_added");
+    expect(f[2].subjectFactIds).toEqual(["pit:4:1", "pen:4:1"]);
+  });
+
+  it("a stop at exactly the minimum is a pass check (ceiling info)", () => {
+    expect(res.ruleChecks.find((c) => c.car === "1")).toMatchObject({
+      id: "rule:t.pit.min:1:1",
+      status: "pass",
+      severityCeiling: "info",
+      measured: 108,
+      limit: 108,
+      margin: 0,
+      subjectFactIds: ["pit:1:1"],
     });
   });
 
-  it("links race-control penalties for the same matter", () => {
-    const [, three] = ids(res, "t.pit.min");
-    expect(three.raceControl).toEqual({ status: "penalised", penaltyIds: ["pen:3:1"] });
-    expect(ids(res, "t.pit.min")[0].raceControl.status).toBe("none_found");
+  it("links race-control penalties for the same matter (officialAction)", () => {
+    const [two, three] = ids(res, "t.pit.min");
+    expect(three.officialAction).toEqual(["pen:3:1"]);
+    expect(three.notes).toContain("race_control_penalised");
+    expect(two.officialAction).toBeUndefined();
+    expect(two.notes).toContain("race_control_none_found");
   });
 
   it("passages without an official pit-lane time are not evaluated", () => {
-    expect(res.checksRun[0]).toMatchObject({ evaluated: 4, passed: 1, findings: 3 });
-    expect(res.checksRun[0].notEvaluated).toEqual([
+    expect(cov(res, "t.pit.min")).toMatchObject({ checks: 4, verified: false });
+    expect(statuses(res, "t.pit.min")).toEqual({ pass: 1, unknown: 1, fail: 2 });
+    expect(cov(res, "t.pit.min").notEvaluated).toEqual([
       { car: "5", factId: "pit:5:1", reason: "no_official_pit_lane_time" },
     ]);
   });
 
   it("a stationary-time minimum is not in timing data", () => {
     const st = rule("t.pit.min", "min_pit_time", { value_s: 30, measure: "stationary" });
-    expect(run([st], pkg).notCheckable[0]).toMatchObject({
+    expect(nc(run([st], pkg))[0]).toMatchObject({
       reason: "data_missing",
       detail: "measure_stationary",
     });
@@ -235,7 +271,7 @@ describe("min_pit_time", () => {
       cars: { "1": { class: "GS" } },
       passages: [{ car: "1", inLap: 5, outLap: 6, lane: null }],
     });
-    expect(run([r], wrl).notCheckable[0]).toMatchObject({
+    expect(nc(run([r], wrl))[0]).toMatchObject({
       reason: "data_missing",
       detail: "no_pit_lane_times_in_format",
     });
@@ -282,14 +318,23 @@ describe("pit_window and earliest_legal_pit markers", () => {
     flags: [{ type: "pits_open", at: 650, classes: [], message: "PITS ARE OPEN" }],
   });
 
-  it("stops outside the window are findings; inside pass", () => {
+  it("stops outside the window fail; inside pass", () => {
     const res = run([win(), closed], pkg);
     const f = ids(res, "t.pit.window");
-    expect(f.map((x) => [x.car, x.measured, x.marginS])).toEqual([
-      ["B", 500, -100],
-      ["C", 2000, 200],
+    expect(f.map((x) => [x.car, x.status, x.measured, x.limit, x.margin])).toEqual([
+      ["B", "fail", 500, 600, -100],
+      ["C", "fail", 2000, 1800, -200],
     ]);
-    expect(f[0].threshold).toEqual([600, 1800]);
+    expect(f[0].notes).toEqual(
+      expect.arrayContaining(["window_600_1800", "before_window_opens"])
+    );
+    expect(f[1].notes).toContain("after_window_closes");
+    expect(res.ruleChecks.find((c) => c.ruleKey === "t.pit.window" && c.car === "A")).toMatchObject({
+      status: "pass",
+      measured: 700,
+      limit: 600,
+      margin: 100,
+    });
   });
 
   it("earliest legal pit = window open AND pit lane open for the class (FCY closure until 650 s)", () => {
@@ -299,9 +344,14 @@ describe("pit_window and earliest_legal_pit markers", () => {
       ["B", 650, 7, "earliest_legal_pit"],
       ["C", 650, 7, "earliest_legal_pit"],
     ]);
-    expect(res.ruleMarkers[0].clock).toBe("2026-05-01T12:10:50.000-04:00");
-    expect(res.ruleMarkers[1].findingId).toBe(ids(res, "t.pit.window")[0].id);
-    expect(res.ruleMarkers[0].findingId).toBeNull();
+    expect(res.ruleMarkers[0]).toMatchObject({
+      id: "marker:A:1",
+      clock: "2026-05-01T12:10:50.000-04:00",
+      ruleKey: "t.pit.window",
+    });
+    // the marker links the car's check of the window rule (its citation): B's failing check, A's pass
+    expect(res.ruleMarkers[1].ruleCheckId).toBe(ids(res, "t.pit.window")[0].id);
+    expect(res.ruleMarkers[0].ruleCheckId).toBe("rule:t.pit.window:A:1");
   });
 
   it("without an FCY closure rule the marker is the window opening", () => {
@@ -327,7 +377,12 @@ describe("pit_window and earliest_legal_pit markers", () => {
       tbd: [{ field: "params.fcy_effect", question: "Does an FCY extend the window?" }],
     };
     const res = run([tbdWin], pkg);
-    expect(ids(res, "t.pit.window").every((x) => x.severity === "info")).toBe(true);
+    expect(ids(res, "t.pit.window")).toHaveLength(2);
+    expect(
+      ids(res, "t.pit.window").every(
+        (x) => x.status === "unknown" && x.severityCeiling === "info"
+      )
+    ).toBe(true);
   });
 
   it("TBD window values are not checkable and produce no markers", () => {
@@ -350,7 +405,7 @@ describe("pit_window and earliest_legal_pit markers", () => {
       }
     );
     const res = run([tbd], pkg);
-    expect(res.notCheckable[0].reason).toBe("tbd_value");
+    expect(nc(res)[0].reason).toBe("tbd_value");
     expect(res.ruleMarkers).toHaveLength(0);
   });
 });
@@ -381,11 +436,17 @@ describe("min / max drive time per driver", () => {
       ],
     });
     const res = run([max, min], pkg);
-    expect(res.ruleFindings).toHaveLength(0);
-    expect(res.checksRun.find((c) => c.ruleId === "t.dt.max")).toMatchObject({
-      evaluated: 2,
-      passed: 2,
-    });
+    expect(nonPass(res)).toHaveLength(0);
+    expect(cov(res, "t.dt.max").checks).toBe(2);
+    expect(statuses(res, "t.dt.max")).toEqual({ pass: 2 });
+    expect(
+      res.ruleChecks
+        .filter((c) => c.ruleKey === "t.dt.max")
+        .map((c) => [c.id, c.measured, c.margin, c.notes])
+    ).toEqual([
+      ["rule:t.dt.max:55:1", 3825.142, 974.858, ["driver_number_1"]],
+      ["rule:t.dt.max:55:2", 3293.549, 1506.451, ["driver_number_2"]],
+    ]);
   });
 
   it("over the maximum by more than the tolerance; inside the tolerance is lowered", () => {
@@ -408,19 +469,24 @@ describe("min / max drive time per driver", () => {
       pkg
     );
     expect(
-      ids(res, "t.dt.max").map((f) => [f.car, f.severity, f.marginS, f.notes[0]])
+      ids(res, "t.dt.max").map((f) => [
+        f.car,
+        f.status,
+        f.severityCeiling,
+        f.margin,
+        f.notes![0],
+      ])
     ).toEqual([
-      ["1", "likely", 2, "driver_number_1"],
-      ["2", "possible", 0.5, "driver_number_1"],
+      ["1", "fail", "likely", -2, "driver_number_1"],
+      ["2", "unknown", "possible", -0.5, "driver_number_1"],
     ]);
-    expect(ids(res, "t.dt.min").map((f) => [f.car, f.severity, f.marginS])).toEqual([
-      ["1", "likely", -2],
-      ["2", "possible", -0.5],
+    expect(
+      ids(res, "t.dt.min").map((f) => [f.car, f.status, f.severityCeiling, f.margin])
+    ).toEqual([
+      ["1", "fail", "likely", -2],
+      ["2", "unknown", "possible", -0.5],
     ]);
-    expect(ids(res, "t.dt.max")[0].evidence[0]).toEqual({
-      label: "drive_time",
-      factId: "drive:1:1",
-    });
+    expect(ids(res, "t.dt.max")[0].subjectFactIds[0]).toBe("drive:1:1");
   });
 
   it("a car below 90 % of race time is exempt from the minimum (info), and a nominated driver who never drove counts 0", () => {
@@ -430,18 +496,19 @@ describe("min / max drive time per driver", () => {
       driveTimes: [{ car: "77", driver: 2, s: 3284.485 }],
     });
     const res = run([{ ...min, verified: true }], pkg);
-    expect(res.ruleFindings).toHaveLength(1);
-    expect(res.ruleFindings[0]).toMatchObject({
+    expect(nonPass(res)).toHaveLength(1);
+    expect(nonPass(res)[0]).toMatchObject({
       car: "77",
-      severity: "info",
+      status: "not_applicable",
+      severityCeiling: "info",
       measured: 0,
-      notes: [
-        "driver_number_1",
-        "driver_has_no_drive_time",
-        "car_race_time_fraction_0.456",
-      ],
     });
-    expect(res.ruleFindings[0].severityNotes).toContain(
+    expect(nonPass(res)[0].notes!.slice(0, 3)).toEqual([
+      "driver_number_1",
+      "driver_has_no_drive_time",
+      "car_race_time_fraction_0.456",
+    ]);
+    expect(nonPass(res)[0].severityNotes).toContain(
       "car_below_race_time_fraction_exempt"
     );
   });
@@ -467,13 +534,14 @@ describe("min / max drive time per driver", () => {
         { car: "3D", driver: 3, s: 2200 },
       ],
     });
-    const f = run([byCount], pkg).ruleFindings;
-    expect(f.map((x) => [x.car, x.threshold, x.marginS])).toEqual([["3D", 9600, 400]]);
+    const f = nonPass(run([byCount], pkg));
+    expect(f.map((x) => [x.car, x.limit, x.margin])).toEqual([["3D", 9600, -400]]);
+    expect(f[0].notes).toContain("limit_for_3_driver_car");
   });
 
   it("no drive-time facts or a red flag make the rule not checkable", () => {
     const none = makePkg({ cars: { "1": { class: "GS" } } });
-    expect(run([min], none).notCheckable[0]).toMatchObject({
+    expect(nc(run([min], none))[0]).toMatchObject({
       reason: "data_missing",
       detail: "no_drive_time_facts",
     });
@@ -486,7 +554,7 @@ describe("min / max drive time per driver", () => {
       value_s: 2400,
       red_flag_adjustment: { first_half: 0.5 },
     });
-    expect(run([withRed], red).notCheckable[0]).toMatchObject({ reason: "data_missing" });
+    expect(nc(run([withRed], red))[0]).toMatchObject({ reason: "data_missing" });
   });
 });
 
@@ -539,16 +607,17 @@ describe("max_stint", () => {
       ],
       passages: [{ car: "1", pitIn: 14500, lane: 100, inLap: 150, outLap: 151 }],
     });
-    const f = run([maxStint], pkg).ruleFindings;
+    const f = nonPass(run([maxStint], pkg));
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({
       car: "1",
+      status: "fail",
       measured: 14500,
-      measuredRange: null,
-      marginS: 100,
-      severity: "possible",
+      margin: -100,
+      severityCeiling: "possible",
       lap: 150,
     });
+    expect(f[0].measuredRange).toBeUndefined();
   });
 
   describe("WRL lap-crossing bounds", () => {
@@ -581,15 +650,16 @@ describe("max_stint", () => {
       });
 
     it("lower bound over the limit: possible", () => {
-      const f = run([maxStint], wrl(1000 + 14400 + 250)).ruleFindings[0];
+      const f = nonPass(run([maxStint], wrl(1000 + 14400 + 250)))[0];
       expect(f).toMatchObject({
-        severity: "possible",
+        status: "fail",
+        severityCeiling: "possible",
         measured: 14450,
         measuredRange: [14450, 14850],
-        marginS: 50,
+        margin: -50,
       });
       expect(f.notes).toContain("lap_crossing_bounds");
-      expect(f.evidence.map((e) => e.factId)).toEqual([
+      expect(f.subjectFactIds).toEqual([
         "stint:9:1",
         "pit:9:1",
         "lap:9:10",
@@ -597,9 +667,13 @@ describe("max_stint", () => {
       ]);
     });
 
-    it("only the upper bound over the limit: info", () => {
-      const f = run([maxStint], wrl(1000 + 14400 + 100)).ruleFindings[0];
-      expect(f).toMatchObject({ severity: "info", measuredRange: [14300, 14700] });
+    it("only the upper bound over the limit: unknown, ceiling info", () => {
+      const f = nonPass(run([maxStint], wrl(1000 + 14400 + 100)))[0];
+      expect(f).toMatchObject({
+        status: "unknown",
+        severityCeiling: "info",
+        measuredRange: [14300, 14700],
+      });
       expect(f.severityNotes).toContain("only_upper_bound_exceeds");
     });
 
@@ -627,15 +701,23 @@ describe("max_stint", () => {
           },
         ],
       });
-      const r = run([{ ...maxStint, params: { per: "car", value_s: 6000 } }], pkg)
-        .ruleFindings[0];
+      const r = nonPass(run([{ ...maxStint, params: { per: "car", value_s: 6000 } }], pkg))[0];
       expect(r.measuredRange).toEqual([6800, 7300]); // out-lap 2000 s capped to 300 s
     });
 
     it("both bounds under the limit: pass", () => {
       const res = run([maxStint], wrl(1000 + 10000));
-      expect(res.ruleFindings).toHaveLength(0);
-      expect(res.checksRun[0]).toMatchObject({ evaluated: 1, passed: 1 });
+      expect(nonPass(res)).toHaveLength(0);
+      expect(cov(res, "t.drive.max_stint").checks).toBe(1);
+      // a bounded pass keeps the bounds; its margin is the room left at the upper bound
+      expect(res.ruleChecks[0]).toMatchObject({
+        id: "rule:t.drive.max_stint:9:1",
+        status: "pass",
+        measured: 9800,
+        measuredRange: [9800, 10200],
+        limit: 14400,
+        margin: 4200,
+      });
     });
   });
 
@@ -675,16 +757,17 @@ describe("max_stint", () => {
           },
         ],
       });
-    const ok = run([maxStint], pkg("medium")).ruleFindings;
+    const ok = nonPass(run([maxStint], pkg("medium")));
     expect(
       ok.map((f) => [
-        f.severity,
+        f.status,
+        f.severityCeiling,
         f.measured,
-        f.notes.includes("driver_run_across_service_stops"),
+        f.notes!.includes("driver_run_across_service_stops"),
       ])
-    ).toEqual([["possible", 15500, true]]);
-    const low = run([maxStint], pkg("low")).ruleFindings;
-    expect(low[0]).toMatchObject({ severity: "info" });
+    ).toEqual([["fail", "possible", 15500, true]]);
+    const low = nonPass(run([maxStint], pkg("low")));
+    expect(low[0]).toMatchObject({ status: "unknown", severityCeiling: "info" });
   });
 
   it("minimum break: reliable and both bounds short -> possible; only the lower bound short -> info", () => {
@@ -713,15 +796,19 @@ describe("max_stint", () => {
         ],
       });
     // break: out-lap 41 start (backEnd - 100) - in-lap 20 end (2000) .. out-lap 41 end - in-lap 20 start (1900)
-    const short = run([minBreak], pkg(5000)).ruleFindings;
-    expect(short.map((f) => [f.severity, f.measuredRange])).toEqual([
-      ["possible", [2900, 3100]],
+    const short = nonPass(run([minBreak], pkg(5000)));
+    expect(short.map((f) => [f.status, f.severityCeiling, f.measuredRange])).toEqual([
+      ["fail", "possible", [2900, 3100]],
     ]);
-    const edge = run([minBreak], pkg(5650)).ruleFindings;
-    expect(edge.map((f) => [f.severity, f.measuredRange])).toEqual([
-      ["info", [3550, 3750]],
+    const edge = nonPass(run([minBreak], pkg(5650)));
+    expect(edge.map((f) => [f.status, f.severityCeiling, f.measuredRange])).toEqual([
+      ["unknown", "info", [3550, 3750]],
     ]);
-    expect(run([minBreak], pkg(7000)).ruleFindings).toHaveLength(0);
+    const long = run([minBreak], pkg(7000));
+    expect(nonPass(long)).toHaveLength(0);
+    expect(long.ruleChecks.map((c) => [c.status, c.measuredRange])).toEqual([
+      ["pass", [4900, 5100]],
+    ]);
   });
 
   it("minimum break needs driver data", () => {
@@ -730,7 +817,7 @@ describe("max_stint", () => {
       cars: { "8": { class: "GP1", laps: [[1, 100]] } },
       stints: [{ car: "8", startLap: 1, endLap: 1, driver: null }],
     });
-    expect(run([minBreak], pkg).notCheckable[0]).toMatchObject({
+    expect(nc(run([minBreak], pkg))[0]).toMatchObject({
       reason: "data_missing",
       detail: "no_driver_per_stint",
     });
@@ -808,25 +895,42 @@ describe("pits closed under FCY", () => {
   });
   const res = run([closed, order, noStd, short, dc], pkg);
 
-  it("pit entry while closed; retirement info; grace noted", () => {
+  it("pit entry while closed; a retiring car is not_applicable; grace noted", () => {
     expect(
-      ids(res, "t.fcy.closed").map((f) => [f.car, f.severity, f.measured, f.threshold])
+      ids(res, "t.fcy.closed").map((f) => [
+        f.car,
+        f.status,
+        f.severityCeiling,
+        f.measured,
+        f.limit,
+      ])
     ).toEqual([
-      ["R", "info", 3100, 3260], // car order: R before G2
-      ["G2", "possible", 3005, 3260],
+      ["R", "not_applicable", "info", 3100, 3260], // car order: R before G2
+      ["G2", "fail", "possible", 3005, 3260],
     ]);
     expect(ids(res, "t.fcy.closed")[1].notes).toContain(
       "within_grace_of_fcy_announcement"
     );
-    expect(ids(res, "t.fcy.closed")[1].evidence.map((e) => e.factId)).toEqual([
+    expect(ids(res, "t.fcy.closed")[1].subjectFactIds).toEqual([
       "pit:G2:1",
       "fcy:1",
       "flag:1",
     ]);
   });
 
+  it("every race pit entry is a check of the closure rule, passes included", () => {
+    // 8 entries before the chequered flag; G1's post-chequer entry is not judged
+    expect(statuses(res, "t.fcy.closed")).toEqual({ pass: 6, not_applicable: 1, fail: 1 });
+    expect(res.ruleChecks.find((c) => c.id === "rule:t.fcy.closed:G1:1")).toMatchObject({
+      status: "pass",
+      subjectFactIds: ["pit:G1:1"],
+      notes: ["pit_lane_open_at_entry"],
+    });
+    expect(res.ruleChecks.some((c) => c.subjectFactIds.includes("pit:G1:2"))).toBe(false);
+  });
+
   it("class opening order (GS lap, TCR lap)", () => {
-    expect(ids(res, "t.fcy.order").map((f) => [f.car, f.threshold])).toEqual([
+    expect(ids(res, "t.fcy.order").map((f) => [f.car, f.limit])).toEqual([
       ["X", 3460],
       ["T1", 3360],
     ]);
@@ -834,19 +938,24 @@ describe("pits closed under FCY", () => {
 
   it("Short FCY in the last 30 minutes: closed until the restart; post-chequer entries excluded", () => {
     expect(
-      ids(res, "t.fcy.short").map((f) => [f.car, f.notes.includes("closure_short")])
+      ids(res, "t.fcy.short").map((f) => [f.car, f.notes!.includes("closure_short")])
     ).toEqual([["Y", true]]);
-    expect(res.checksRun.find((c) => c.ruleId === "t.fcy.nostd")!.notes).toContain(
-      "fcy:2:standard_not_in_effect"
-    );
+    // the classifier writes no checks; its classification is in the coverage notes
+    expect(cov(res, "t.fcy.nostd")).toMatchObject({ checks: 0 });
+    expect(cov(res, "t.fcy.nostd").notes).toContain("fcy:2:standard_not_in_effect");
     // the Short FCY entry is not double-reported by the core rule
     expect(ids(res, "t.fcy.closed").some((f) => f.car === "Y")).toBe(false);
   });
 
   it("driver change in a closed pit", () => {
     expect(
-      ids(res, "mpc.fcy.driver_change_in_closed_pit").map((f) => [f.car, f.measured])
-    ).toEqual([["G2", "driver 1 -> 2"]]);
+      ids(res, "mpc.fcy.driver_change_in_closed_pit").map((f) => [
+        f.car,
+        f.status,
+        f.measured,
+        f.notes!.includes("driver_change_1_to_2"),
+      ])
+    ).toEqual([["G2", "fail", null, true]]);
   });
 
   it("Emergency Service: a closed-pit entry with no follow-up passage after the pits open for TCR", () => {
@@ -886,13 +995,16 @@ describe("pits closed under FCY", () => {
       ],
     });
     const f = run([closed, order, es], p);
-    expect(ids(f, "t.fcy.es").map((x) => [x.car, x.measured, x.threshold])).toEqual([
-      ["A", "no_follow_up_passage", 3850],
-    ]);
-    expect(f.checksRun.find((c) => c.ruleId === "t.fcy.es")).toMatchObject({
-      evaluated: 3,
-      passed: 2,
-    });
+    expect(
+      ids(f, "t.fcy.es").map((x) => [
+        x.car,
+        x.measured,
+        x.limit,
+        x.notes!.includes("no_follow_up_passage"),
+      ])
+    ).toEqual([["A", null, 3850, true]]);
+    expect(cov(f, "t.fcy.es").checks).toBe(3);
+    expect(statuses(f, "t.fcy.es")).toEqual({ fail: 1, pass: 2 });
   });
 
   it("no flags file (reconstructed FCY) -> not checkable", () => {
@@ -901,7 +1013,7 @@ describe("pits closed under FCY", () => {
       fcy: [{ start: 100, end: 200, source: "reconstructed" }],
       passages: [{ car: "A", pitIn: 150, lane: 60 }],
     });
-    expect(run([closed], recon).notCheckable[0]).toMatchObject({
+    expect(nc(run([closed], recon))[0]).toMatchObject({
       reason: "data_missing",
       detail: "fcy_periods_not_from_flags_file",
     });
@@ -927,9 +1039,11 @@ describe("pits closed under FCY", () => {
         { car: "C", pitIn: 1250, lane: 100 },
       ],
     });
-    expect(run([tbd], p).ruleFindings.map((f) => [f.car, f.severity])).toEqual([
-      ["A", "info"],
-      ["B", "possible"],
+    expect(
+      nonPass(run([tbd], p)).map((f) => [f.car, f.status, f.severityCeiling])
+    ).toEqual([
+      ["A", "unknown", "info"],
+      ["B", "fail", "possible"],
     ]);
   });
 
@@ -956,15 +1070,17 @@ describe("pits closed under FCY", () => {
         { car: "A", inLap: 9, fcyContext: "green" },
       ],
     });
-    expect(run([c35("TBD")], w).notCheckable[0]).toMatchObject({
+    expect(nc(run([c35("TBD")], w))[0]).toMatchObject({
       reason: "tbd_value",
       detail: "params.pits_open_under_code35",
     });
-    expect(run([c35(true)], w).ruleFindings).toHaveLength(0);
-    const f = run([c35(false)], w).ruleFindings;
-    expect(f.map((x) => [x.car, x.lap, x.raceControl.status])).toEqual([
-      ["A", 5, "not_available"],
-    ]);
+    const open = run([c35(true)], w);
+    expect(nonPass(open)).toHaveLength(0);
+    expect(open.ruleChecks.map((c) => c.status)).toEqual(["pass", "pass"]);
+    const f = nonPass(run([c35(false)], w));
+    expect(
+      f.map((x) => [x.car, x.lap, x.officialAction, x.notes!.includes("race_control_not_available")])
+    ).toEqual([["A", 5, undefined, true]]);
     expect(f[0].notes).toContain(
       "fcy_periods_reconstructed_boundaries_plus_minus_one_lap"
     );
@@ -1001,32 +1117,46 @@ describe("penalty served within N green crossings", () => {
     });
 
   it("4 green crossings pass; a 5th is a finding", () => {
-    expect(run([r], mk(550)).ruleFindings).toHaveLength(0); // 200, 300, 400, 500
-    const f = run([r], mk(650)).ruleFindings; // 200 .. 600
-    expect(f.map((x) => [x.car, x.measured, x.threshold, x.severity])).toEqual([
-      ["66", 5, 4, "possible"],
-    ]);
+    const ok = run([r], mk(550)); // 200, 300, 400, 500
+    expect(nonPass(ok)).toHaveLength(0);
+    expect(ok.ruleChecks[0]).toMatchObject({ status: "pass", measured: 4, limit: 4, margin: 0 });
+    const f = nonPass(run([r], mk(650))); // 200 .. 600
     expect(
-      f[0].evidence.filter((e) => e.label === "green_crossing").map((e) => e.factId)
-    ).toEqual(["lap:66:2", "lap:66:3", "lap:66:4", "lap:66:5", "lap:66:6"]);
-    expect(f[0].raceControl).toEqual({ status: "served", penaltyIds: ["pen:66:1"] });
+      f.map((x) => [x.car, x.status, x.measured, x.limit, x.margin, x.severityCeiling])
+    ).toEqual([["66", "fail", 5, 4, -1, "possible"]]);
+    expect(f[0].subjectFactIds.filter((id) => id.startsWith("lap:"))).toEqual([
+      "lap:66:2",
+      "lap:66:3",
+      "lap:66:4",
+      "lap:66:5",
+      "lap:66:6",
+    ]);
+    expect(f[0].officialAction).toEqual(["pen:66:1"]);
+    expect(f[0].notes).toContain("race_control_served");
   });
 
   it("crossings under FCY are not counted", () => {
-    expect(run([r], mk(650, [{ start: 250, end: 450 }])).ruleFindings).toHaveLength(0); // green: 200, 500, 600
+    expect(nonPass(run([r], mk(650, [{ start: 250, end: 450 }])))).toHaveLength(0); // green: 200, 500, 600
   });
 
-  it("an unserved penalty is info, with its race-control status", () => {
+  it("an unserved penalty fails with ceiling info, linked to the race-control penalty", () => {
     const pkg = makePkg({
       cars: { "18": { class: "GS", laps } },
       penalties: [
         { car: "18", type: "drive_through", issued: 1950, status: "converted_post_race" },
       ],
     });
-    const f = run([r], pkg).ruleFindings;
-    expect(f.map((x) => [x.car, x.severity, x.raceControl.status])).toEqual([
-      ["18", "info", "converted_post_race"],
-    ]);
+    const f = nonPass(run([r], pkg));
+    expect(
+      f.map((x) => [
+        x.car,
+        x.status,
+        x.severityCeiling,
+        x.margin,
+        x.officialAction,
+        x.notes!.includes("race_control_converted_post_race"),
+      ])
+    ).toEqual([["18", "fail", "info", null, ["pen:18:1"], true]]);
   });
 
   it("warnings and time penalties are not drive-through style penalties", () => {
@@ -1037,7 +1167,9 @@ describe("penalty served within N green crossings", () => {
         { car: "1", type: "post_race_time", issued: 100, amountS: 5 },
       ],
     });
-    expect(run([r], pkg).checksRun[0]).toMatchObject({ evaluated: 0, findings: 0 });
+    const res = run([r], pkg);
+    expect(cov(res, "t.pen.serve")).toMatchObject({ checks: 0 });
+    expect(res.ruleChecks).toHaveLength(0);
   });
 });
 
@@ -1066,19 +1198,21 @@ describe("classification minimum distance", () => {
   it("below the fraction of the class leader's laps (results file, never lap counting)", () => {
     const res = run([r], pkg);
     expect(
-      res.ruleFindings.map((f) => [f.car, f.measured, f.severity, f.notes[0]])
+      nonPass(res).map((f) => [f.car, f.status, f.measured, f.severityCeiling, f.notes![0]])
     ).toEqual([
-      ["B", 0.495, "info", "results_status_dnf"],
-      ["C", 0.4, "info", "results_status_classified"],
+      ["B", "fail", 0.495, "info", "results_status_dnf"],
+      ["C", "fail", 0.4, "info", "results_status_classified"],
     ]);
-    expect(res.ruleFindings[1].notes).toContain(
-      "listed_classified_below_minimum_distance"
-    );
-    expect(res.ruleFindings[1].evidence).toEqual([
-      { label: "result", factId: "result:C" },
-      { label: "leader_result", factId: "result:E" },
-    ]);
-    expect(res.checksRun[0].notEvaluated).toEqual([
+    expect(nonPass(res)[1].notes).toContain("listed_classified_below_minimum_distance");
+    expect(nonPass(res)[1].subjectFactIds).toEqual(["result:C", "result:E"]);
+    expect(res.ruleChecks.find((c) => c.car === "A")).toMatchObject({
+      status: "pass",
+      unit: "fraction",
+      measured: 0.5,
+      margin: 0,
+    });
+    expect(statuses(res, "t.class.min")).toEqual({ pass: 3, fail: 2 });
+    expect(cov(res, "t.class.min").notEvaluated).toEqual([
       { car: "D", factId: "result:D", reason: "did_not_start" },
     ]);
   });
@@ -1093,7 +1227,7 @@ describe("classification minimum distance", () => {
         tbd: [{ field: "params.min_fraction", question: "minimum distance?" }],
       }
     );
-    expect(run([tbd], pkg).notCheckable[0]).toMatchObject({
+    expect(nc(run([tbd], pkg))[0]).toMatchObject({
       reason: "tbd_value",
       tbd: [{ question: "minimum distance?" }],
     });

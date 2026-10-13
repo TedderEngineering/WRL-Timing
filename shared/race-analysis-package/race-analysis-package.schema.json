@@ -34,7 +34,7 @@
   "properties": {
     "schemaVersion": {
       "const": "1.1.0",
-      "description": "Version of this schema. Semver: a major bump breaks readers. 1.1.0 adds raceSummary.keyMoments, carStories[].events and ruleFindings[].severity."
+      "description": "Version of this schema. Semver: a major bump breaks readers. 1.1.0 adds raceSummary.keyMoments, carStories[].events, ruleFindings[].severity, the rule-check contract (ruleChecks[] citation, severityCeiling and evidence fields) and the optional ruleMarkers[] and ruleCoverage sections."
     },
     "packageId": {
       "type": "string",
@@ -253,13 +253,26 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/RuleCheck"
-      }
+      },
+      "description": "Machine rule-check results, written by the rule checks (run-rule-checks): one check per rule and subject (car, stop, stint or driver) evaluated, passes included. Never prose."
     },
     "ruleFindings": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/RuleFinding"
-      }
+      },
+      "description": "Written by the Claude pass (/analyze-race) from ruleChecks, never by the engine. A finding's severity may not exceed the severityCeiling of any check it cites (validator A21)."
+    },
+    "ruleMarkers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RuleMarker"
+      },
+      "description": "Chart markers computed by the rule checks (e.g. earliest legal pit per car). Optional: a facts-only draft has none."
+    },
+    "ruleCoverage": {
+      "$ref": "#/$defs/RuleCoverage",
+      "description": "Which rules were run and which were not checkable, and why. Optional: absent when no rule checks ran."
     },
     "carStories": {
       "type": "array",
@@ -2614,12 +2627,12 @@
       "properties": {
         "id": {
           "$ref": "#/$defs/FactId",
-          "description": "'rule:<ruleKey>:<car>:<n>'"
+          "description": "'rule:<ruleKey>:<car>:<n>', n = 1, 2 … per rule and car in race order; car '_race' for a race-level check."
         },
         "ruleKey": {
           "type": "string",
-          "pattern": "^[a-z0-9-]+$",
-          "description": "e.g. 'min-pit-lane-time', 'earliest-pit', 'max-stint', 'min-drive-time', 'fcy-pits-closed'."
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$",
+          "description": "Rulebook rule id, e.g. 'gt4.pit.min_stop_time', 'mpc.drive_time.min_per_driver'."
         },
         "rulebookRef": {
           "type": "object",
@@ -2631,19 +2644,44 @@
           "properties": {
             "field": {
               "type": "string",
-              "description": "Rulebook field path."
+              "description": "Rulebook field path, e.g. 'rules[gt4.pit.min_stop_time].params.value_s'."
             },
             "section": {
               "type": "string",
-              "description": "Regulation article cited by the rulebook field, e.g. 'IMSA SR 46.3.1'."
+              "description": "Regulation article cited by the rulebook field, e.g. 'IMSA SR 46.3.1'; 'TBD' when unknown."
             },
             "eventOverride": {
-              "type": "string"
+              "type": "string",
+              "description": "Rulebook event key, when an event (supplementary regulation) layer set the value."
+            },
+            "doc": {
+              "type": "string",
+              "description": "Rulebook document id, e.g. 'SRO-BUL-INDY-2026'; 'TBD' when unknown."
+            },
+            "page": {
+              "type": [
+                "string",
+                "integer"
+              ],
+              "description": "Page in the document; 'TBD' when unknown."
+            },
+            "quote": {
+              "type": "string",
+              "description": "Verbatim quote from the document (<= 25 words), or 'TBD' when the document was not obtained."
             }
-          }
+          },
+          "description": "Citation of the rulebook layer that set the value the check used (the innermost layer that set a param, else the series layer)."
         },
         "car": {
-          "$ref": "#/$defs/CarId"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CarId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null for a race-level check (e.g. incomplete race)."
         },
         "subjectFactIds": {
           "type": "array",
@@ -2665,7 +2703,17 @@
           "type": [
             "number",
             "null"
-          ]
+          ],
+          "description": "The measured quantity in `unit`. With measuredRange it is the lower bound."
+        },
+        "measuredRange": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number"
+          },
+          "description": "[lower, upper] when the data only bounds the quantity (lap-crossing bounds on formats without pit-lane times)."
         },
         "limit": {
           "type": [
@@ -2678,7 +2726,8 @@
             "s",
             "laps",
             "count",
-            "lap"
+            "lap",
+            "fraction"
           ]
         },
         "margin": {
@@ -2686,14 +2735,49 @@
             "number",
             "null"
           ],
-          "description": "measured - limit, signed so negative = violation."
+          "description": "Signed distance to the limit in `unit`: negative = violation (below a minimum, above a maximum, outside a window), positive = room to spare. For a minimum it is measured - limit, for a maximum limit - measured."
         },
         "officialAction": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/FactId"
           },
-          "description": "Penalties race control issued for the same subject."
+          "description": "Penalties race control issued for the same subject and matter (race-control linkage)."
+        },
+        "lap": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Lap the check is placed on (in-lap of a stop, lap at which a limit is reached)."
+        },
+        "at": {
+          "$ref": "#/$defs/TimePoint",
+          "description": "When the check is placed on the race timeline."
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "true when the owner has verified every rulebook layer of the rule."
+        },
+        "severityCeiling": {
+          "$ref": "#/$defs/FindingSeverity",
+          "description": "The most a finding citing this check may claim (validator A21). The rule's severity, lowered by event overrides and by measurement doubt, and capped at 'possible' while the rule is unverified or carried from another season. 'info' for pass and not_applicable checks."
+        },
+        "severityNotes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "description": "Machine codes for every step that lowered severityCeiling below the rule's severity (e.g. 'rule_unverified', 'within_measurement_tolerance')."
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:+-]+$"
+          },
+          "description": "Machine-readable notes (snake_case codes, never prose), e.g. 'driver_number_2', 'race_control_none_found'."
         },
         "source": {
           "$ref": "#/$defs/Source"
@@ -2704,7 +2788,8 @@
         "confidenceNotes": {
           "$ref": "#/$defs/ConfidenceNotes"
         }
-      }
+      },
+      "description": "One rule evaluated against one subject (car, stop, stint, driver; a race-level rule has car null). Written by the rule checks; Claude writes ruleFindings from these and never edits them."
     },
     "RuleFinding": {
       "type": "object",
@@ -2749,12 +2834,249 @@
           "description": "Required by the validator when any cited fact is low confidence."
         },
         "severity": {
+          "$ref": "#/$defs/FindingSeverity",
+          "description": "Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7). The GUI shows it; no other vocabulary is used. Never above the severityCeiling of a cited rule check (A21)."
+        }
+      }
+    },
+    "FindingSeverity": {
+      "enum": [
+        "info",
+        "possible",
+        "likely"
+      ],
+      "description": "Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7), ordered info < possible < likely."
+    },
+    "RuleMarker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "car",
+        "lap",
+        "clock",
+        "raceTimeS",
+        "ruleCheckId"
+      ],
+      "description": "A chart marker computed by the rule checks. The GUI draws it on the car's trace.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/FactId",
+          "description": "'marker:<car>:<n>'"
+        },
+        "kind": {
           "enum": [
-            "info",
-            "possible",
-            "likely"
+            "earliest_legal_pit"
           ],
-          "description": "Rulebook severity vocabulary (rules/RULEBOOK_FORMAT.md R7). The GUI shows it; no other vocabulary is used."
+          "description": "earliest_legal_pit: first instant the pit window and the pit lane are both open for the car (D-EARLIEST-PIT)."
+        },
+        "car": {
+          "$ref": "#/$defs/CarId"
+        },
+        "lap": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "The car's lap that contains the instant."
+        },
+        "clock": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/IsoDateTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raceTimeS": {
+          "$ref": "#/$defs/Seconds"
+        },
+        "ruleCheckId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/FactId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The car's rule check for the rule that defines the marker (its citation); null when the car had no check."
+        },
+        "ruleKey": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$",
+          "description": "Rulebook rule id that defines the marker."
+        }
+      }
+    },
+    "RuleCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rulebookId",
+        "rulebookHash",
+        "event",
+        "session",
+        "run",
+        "notCheckable"
+      ],
+      "description": "Every rule of the rulebook is either run (with its check count) or not checkable (with the reason). The GUI's 'Not checkable' group reads notCheckable.",
+      "properties": {
+        "rulebookId": {
+          "type": "string",
+          "description": "e.g. 'imsa-mpc-2026'."
+        },
+        "rulebookHash": {
+          "$ref": "#/$defs/Sha256",
+          "description": "sha256 of the resolved rulebook."
+        },
+        "event": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Rulebook event key applied, or null."
+        },
+        "session": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Rulebook session key applied, or null."
+        },
+        "run": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ruleId",
+              "checks"
+            ],
+            "properties": {
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+              },
+              "checks": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "ruleChecks[] written for this rule (and class group)."
+              },
+              "classes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Rulebook class ids of the group the rule was resolved for."
+              },
+              "verified": {
+                "type": "boolean"
+              },
+              "notEvaluated": {
+                "type": "array",
+                "description": "Subjects in scope that the check could not evaluate, with the reason code.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "car",
+                    "reason"
+                  ],
+                  "properties": {
+                    "car": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/$defs/CarId"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "factId": {
+                      "$ref": "#/$defs/FactId"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_]+$"
+                    }
+                  }
+                }
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_.:+-]+$"
+                }
+              }
+            }
+          }
+        },
+        "notCheckable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ruleId",
+              "reason",
+              "detail"
+            ],
+            "properties": {
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+              },
+              "reason": {
+                "enum": [
+                  "tbd_value",
+                  "unsourced_value",
+                  "format_not_checkable",
+                  "data_missing",
+                  "context_only",
+                  "evaluated_by_other_rule",
+                  "not_implemented",
+                  "disabled",
+                  "no_cars_in_scope"
+                ]
+              },
+              "detail": {
+                "type": "string",
+                "description": "Machine-readable detail, e.g. 'params.value_s' or 'no_pit_lane_times_in_format'."
+              },
+              "classes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "tbd": {
+                "type": "array",
+                "description": "Open questions whose answers would make the rule checkable.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "question"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

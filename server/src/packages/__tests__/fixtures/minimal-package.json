@@ -7982,7 +7982,9 @@
    "ruleKey": "min-pit-lane-time",
    "rulebookRef": {
     "field": "pitStop.minimumPitLaneTimeS",
-    "section": "TBD"
+    "section": "TBD",
+    "doc": "TBD",
+    "quote": "TBD"
    },
    "car": "11",
    "subjectFactIds": [
@@ -7996,6 +7998,15 @@
    "officialAction": [
     "pen:11:1"
    ],
+   "lap": 10,
+   "verified": false,
+   "severityCeiling": "info",
+   "severityNotes": [
+    "rule_unverified"
+   ],
+   "notes": [
+    "race_control_penalised"
+   ],
    "source": {
     "kind": "derived"
    },
@@ -8006,6 +8017,32 @@
   }
  ],
  "ruleFindings": [],
+ "ruleMarkers": [],
+ "ruleCoverage": {
+  "rulebookId": "sample-2026",
+  "rulebookHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "event": null,
+  "session": null,
+  "run": [
+   {
+    "ruleId": "min-pit-lane-time",
+    "checks": 1
+   }
+  ],
+  "notCheckable": [
+   {
+    "ruleId": "max-stint",
+    "reason": "tbd_value",
+    "detail": "params.value_s",
+    "tbd": [
+     {
+      "field": "params.value_s",
+      "question": "Maximum stint?"
+     }
+    ]
+   }
+  ]
+ },
  "carStories": [],
  "raceSummary": null,
  "dataQuality": [

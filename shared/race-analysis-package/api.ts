@@ -105,7 +105,7 @@ export interface PackageMeta {
   status: PackageStatus;
   publishedAt: string | null;
   etag: string | null;
-  /** "hidden": ruleChecks and ruleFindings were emptied for this viewer (Rule Flags stage). */
+  /** "hidden": ruleChecks and ruleFindings were emptied, ruleMarkers and ruleCoverage removed, for this viewer (Rule Flags stage). */
   ruleFlags: "included" | "hidden";
 }
 

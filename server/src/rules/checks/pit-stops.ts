@@ -1,11 +1,12 @@
 /**
  * Pit window / earliest legal pit (pit_window) and minimum pit-lane time (min_pit_time).
  */
-import type { PitPassage } from "../package-types.js";
+import type { PitPassage } from "../../analysis/schema/package-types.js";
 import type { Severity } from "../rulebook-types.js";
 import type { CheckHandler, FindingDraft, MarkerDraft } from "./common.js";
 import {
   emptyOutput,
+  passOf,
   ev,
   isTbd,
   minConf,
@@ -149,9 +150,32 @@ export const pitWindowHandler: CheckHandler = {
         : counted.some(inside)
           ? []
           : [counted[0]];
-      out.evaluated++;
       if (!outside.length) {
-        out.passed++;
+        // pass: the stop(s) inside the window; measured = the first one, margin = room to the nearer bound
+        const ins = anyStop ? counted : counted.filter(inside);
+        const v = pos(ins[0])!;
+        const toOpen = v - lo;
+        const toClose = hi - v;
+        const tp = boundary === "pit_out" ? ins[0].pitOut : ins[0].pitIn;
+        out.results.push(
+          passOf({
+            car,
+            lap: ins[0].inLap,
+            clock: tp?.clock ?? (tp ? ctx.clock(tp.raceTimeS) : null),
+            raceTimeS: tp?.raceTimeS ?? null,
+            measured: spec.by === "time" ? r3(v - spec.t0) : v,
+            limit: toOpen <= toClose ? spec.open : spec.close,
+            margin: r3(Math.min(toOpen, toClose)),
+            unit: spec.by === "time" ? "s" : "lap",
+            evidence: ins.flatMap((p) => ev("passage", p.id)),
+            confidence: minConf(...ins.map((p) => p.confidence)),
+            notes: [
+              anyStop ? "every_stop_must_be_in_window" : "stop_inside_window",
+              `boundary_${boundary}`,
+              `window_${spec.open}_${spec.close}`,
+            ],
+          })
+        );
         continue;
       }
       for (const p of outside) {
@@ -168,9 +192,9 @@ export const pitWindowHandler: CheckHandler = {
         }
         const tp = boundary === "pit_out" ? p.pitOut : p.pitIn;
         const measured = spec.by === "time" ? r3(v - spec.t0) : v;
-        out.findings.push({
+        const early = v < lo;
+        out.results.push({
           car,
-          class: ctx.classOf(car),
           severity,
           severityNotes: sevNotes,
           lap: p.inLap,
@@ -178,8 +202,8 @@ export const pitWindowHandler: CheckHandler = {
           raceTimeS: tp?.raceTimeS ?? null,
           measured,
           measuredRange: null,
-          threshold: [spec.open, spec.close],
-          marginS: spec.by === "time" ? r3(v < lo ? v - lo : v - hi) : null,
+          limit: early ? spec.open : spec.close,
+          margin: r3(early ? v - lo : hi - v),
           unit: spec.by === "time" ? "s" : "lap",
           evidence: ev("passage", p.id),
           raceControl: raceControlFor(ctx, car, WINDOW_PENALTY, (tp?.raceTimeS ?? 0) - 1),
@@ -187,6 +211,8 @@ export const pitWindowHandler: CheckHandler = {
           notes: [
             anyStop ? "every_stop_must_be_in_window" : "no_stop_inside_window",
             `boundary_${boundary}`,
+            `window_${spec.open}_${spec.close}`,
+            early ? "before_window_opens" : "after_window_closes",
           ],
         });
       }
@@ -239,7 +265,6 @@ export const minPitTimeHandler: CheckHandler = {
           });
           continue;
         }
-        out.evaluated++;
         // time penalties to be served at this stop ("N sec Time Penalty at next eligible stop")
         const pending = addPending
           ? pens.filter((q) => {
@@ -276,8 +301,30 @@ export const minPitTimeHandler: CheckHandler = {
         req = r3(req + pendingS);
         if (pendingS) notes.push("pending_time_penalties_added");
         const margin = r3(p.officialPitLaneTimeS - req);
+        const conf = minConf(
+          p.confidence,
+          p.pitLaneTimeReliable === false ? "low" : undefined
+        );
+        const pendingEv = pending.map((q) => ({
+          label: "pending_time_penalty",
+          factId: q.id,
+        }));
         if (margin >= 0) {
-          out.passed++;
+          out.results.push(
+            passOf({
+              car,
+              lap: p.inLap,
+              clock: p.pitIn?.clock ?? (p.pitIn ? ctx.clock(p.pitIn.raceTimeS) : null),
+              raceTimeS: p.pitIn?.raceTimeS ?? null,
+              measured: p.officialPitLaneTimeS,
+              limit: req,
+              margin,
+              unit: "s",
+              evidence: [...ev("passage", p.id), ...pendingEv],
+              confidence: conf,
+              notes,
+            })
+          );
           continue;
         }
         const { severity, notes: sevNotes } = toleranceSeverity(
@@ -295,7 +342,6 @@ export const minPitTimeHandler: CheckHandler = {
         );
         const f: FindingDraft = {
           car,
-          class: ctx.classOf(car),
           severity,
           severityNotes: sevNotes,
           lap: p.inLap,
@@ -303,22 +349,15 @@ export const minPitTimeHandler: CheckHandler = {
           raceTimeS: p.pitIn?.raceTimeS ?? null,
           measured: p.officialPitLaneTimeS,
           measuredRange: null,
-          threshold: req,
-          marginS: margin,
+          limit: req,
+          margin,
           unit: "s",
-          evidence: [
-            ...ev("passage", p.id),
-            ...pending.map((q) => ({ label: "pending_time_penalty", factId: q.id })),
-            ...rc.penaltyIds.map((id) => ({ label: "race_control_penalty", factId: id })),
-          ],
+          evidence: [...ev("passage", p.id), ...pendingEv],
           raceControl: rc,
-          confidence: minConf(
-            p.confidence,
-            p.pitLaneTimeReliable === false ? "low" : undefined
-          ),
+          confidence: conf,
           notes,
         };
-        out.findings.push(f);
+        out.results.push(f);
       }
     }
     return out;

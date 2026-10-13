@@ -2,12 +2,17 @@
  * Race Analysis Package validator.
  *
  * Core rules V1–V8 (FACT_ENGINE_SPEC.md §7; port of stage2/core/tools/check_package.py) and analysis
- * rules A1–A20 (CLAUDE_ANALYSIS_DESIGN.md §6.2; port of stage2/claude/tools/check_analysis.py with
+ * rules A1–A21 (CLAUDE_ANALYSIS_DESIGN.md §6.2; port of stage2/claude/tools/check_analysis.py with
  * schema/prose-rules.json). V1 (JSON Schema 2020-12, Ajv) stops everything on failure.
+ *
+ * Rule-check contract (schema 1.1.0): the engine writes ruleChecks[] (passes included), ruleMarkers[] and
+ * ruleCoverage; Claude writes ruleFindings[] from the checks. V2/V3/V8 check check ids, marker links, margins
+ * and coverage counts; A21 (every stage) refuses a finding whose severity exceeds the severityCeiling of a
+ * check it cites.
  *
  * Stages:
  *  - 'facts'    (engine draft): V1–V8; prose, if any, is checked for references and values.
- *  - 'analysis' (after the Claude pass, and always at publish): V1–V8 and A1–A20.
+ *  - 'analysis' (after the Claude pass, and always at publish): V1–V8 and A1–A21.
  *
  * Fact-reference values (schema 1.1.0): a number equals the fact exactly after `transform`; seconds are
  * cited at full millisecond precision, never rounded, and carry `display` = the GUI rendering
@@ -17,7 +22,7 @@ import Ajv2020Module from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 import schemaJson from "./schema/race-analysis-package.schema.json" with { type: "json" };
 import proseRulesJson from "./schema/prose-rules.json" with { type: "json" };
-import type { FactRef, Prose, RaceAnalysisPackage, StoryEvent } from "./schema/package-types.js";
+import type { FactRef, FindingSeverity, Prose, RaceAnalysisPackage, StoryEvent } from "./schema/package-types.js";
 import { buildStoryEvents } from "./engine/story-events.js";
 
 export interface ValidateOptions {
@@ -120,6 +125,7 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
   for (const k of ["fcyPeriods", "stints", "driveTimes", "pitCycles", "cycleResults", "ruleChecks", "ruleFindings", "carStories", "dataQuality"] as const) {
     for (const x of P[k] as { id: string }[]) add(x);
   }
+  for (const m of P.ruleMarkers ?? []) add(m);
   if (P.raceSummary) add(P.raceSummary);
   const cars = new Set(P.entries.map((e) => e.car));
   const entries = new Map(P.entries.map((e) => [e.car, e]));
@@ -135,6 +141,14 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
     if (!cars.has(x.car)) err("V2", `${x.id} refers to unknown car ${x.car}`);
   }
   for (const e of P.entries) if (!classes.has(e.class)) err("V2", `${e.id} class ${e.class} is not in metadata.classes`);
+  for (const rc of P.ruleChecks) {
+    if (rc.car !== null && !cars.has(rc.car)) err("V2", `${rc.id} refers to unknown car ${rc.car}`);
+    if (!rc.id.startsWith(`rule:${rc.ruleKey}:${rc.car ?? "_race"}:`)) err("V2", `${rc.id} must be rule:${rc.ruleKey}:${rc.car ?? "_race"}:<n>`);
+  }
+  for (const m of P.ruleMarkers ?? []) {
+    if (!cars.has(m.car)) err("V2", `${m.id} refers to unknown car ${m.car}`);
+    if (!m.id.startsWith(`marker:${m.car}:`)) err("V2", `${m.id} must be marker:${m.car}:<n>`);
+  }
 
   /* ---------------------------------------------------------------- V6 lap table, row facts */
   const laps = P.laps.cars;
@@ -210,6 +224,15 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
   for (const d of P.driveTimes) for (const f of d.stintIds) need(f, d.id);
   for (const rc of P.ruleChecks) for (const f of [...rc.subjectFactIds, ...(rc.officialAction ?? [])]) need(f, rc.id);
   for (const fd of P.ruleFindings) for (const f of fd.ruleCheckIds) need(f, fd.id);
+  {
+    const rcById = new Map(P.ruleChecks.map((r) => [r.id, r]));
+    for (const m of P.ruleMarkers ?? []) {
+      if (m.ruleCheckId === null) continue;
+      const rc = rcById.get(m.ruleCheckId);
+      if (!rc) err("V3", `${m.id} -> ruleCheckId ${m.ruleCheckId} is not a rule check`);
+      else if (rc.car !== m.car || (m.ruleKey !== undefined && rc.ruleKey !== m.ruleKey)) err("V3", `${m.id} -> ${rc.id} is for another car or rule`);
+    }
+  }
   for (const st of P.carStories) {
     for (const f of st.keyFactIds) need(f, st.id);
     for (const e of st.events ?? []) for (const f of e.evidence) need(f, `${st.id}.${e.id}`);
@@ -470,10 +493,19 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
   }
   if (analysis) {
     for (const [cid, r] of checks) {
-      if (r.status === "pass" || r.status === "not_applicable" || !inScope(r.car)) continue;
+      if (r.status === "pass" || r.status === "not_applicable" || (r.car === null ? !!opts.scopeClass : !inScope(r.car))) continue;
       const cov = covered.get(cid);
       if (!cov) (opts.allowPartial ? warn : err)("A16", `rule check ${cid} (${r.status}) has no finding`);
       else if (cov.length > 1) err("A16", `rule check ${cid} is covered by ${cov.length} findings`);
+    }
+  }
+
+  /* ---------------------------------------------------------------- A21 severity ceiling (every stage) */
+  const SEV_RANK: Record<FindingSeverity, number> = { info: 0, possible: 1, likely: 2 };
+  for (const fd of P.ruleFindings) {
+    for (const cid of fd.ruleCheckIds) {
+      const ceil = checks.get(cid)?.severityCeiling;
+      if (ceil && SEV_RANK[fd.severity] > SEV_RANK[ceil]) err("A21", `${fd.id} severity ${fd.severity} exceeds the severityCeiling ${ceil} of ${cid}`);
     }
   }
 
@@ -613,6 +645,31 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
   }
   for (const e of P.entries) {
     if (M.resultsStatus !== "none" && e.result && e.result.resultsStatus !== M.resultsStatus) err("V8", `${e.id} resultsStatus differs from metadata`);
+  }
+  for (const rc of P.ruleChecks) {
+    const m = rc.margin;
+    if (m !== null && m !== undefined) {
+      if (rc.status === "pass" && m < 0) err("V8", `${rc.id} passes with a negative margin ${m}`);
+      if (rc.status === "fail" && m >= 0) err("V8", `${rc.id} fails with a non-negative margin ${m}`);
+    }
+    if (rc.measuredRange) {
+      const [lo, hi] = rc.measuredRange;
+      if (lo > hi) err("V8", `${rc.id} measuredRange lower ${lo} > upper ${hi}`);
+      if (rc.measured !== null && rc.measured !== undefined && rc.measured !== lo) err("V8", `${rc.id} measured ${rc.measured} is not the measuredRange lower bound ${lo}`);
+    }
+    if ((rc.status === "pass" || rc.status === "not_applicable") && rc.severityCeiling && rc.severityCeiling !== "info") err("V8", `${rc.id} ${rc.status} with severityCeiling ${rc.severityCeiling} (must be info)`);
+  }
+  const cov = P.ruleCoverage;
+  if (cov) {
+    const perRule = new Map<string, number>();
+    for (const rc of P.ruleChecks) perRule.set(rc.ruleKey, (perRule.get(rc.ruleKey) ?? 0) + 1);
+    const ran = new Map<string, number>();
+    for (const r of cov.run) ran.set(r.ruleId, (ran.get(r.ruleId) ?? 0) + r.checks);
+    for (const [k, n] of perRule) if (ran.get(k) !== n) err("V8", `ruleCoverage.run counts ${ran.get(k) ?? 0} checks for ${k}, ruleChecks has ${n}`);
+    for (const [k, n] of ran) if (n > 0 && !perRule.has(k)) err("V8", `ruleCoverage.run counts ${n} checks for ${k}, ruleChecks has none`);
+    if (P.rulebook.sha256 && P.rulebook.sha256 !== cov.rulebookHash) err("V8", `ruleCoverage.rulebookHash differs from rulebook.sha256`);
+  } else if (P.ruleChecks.some((rc) => rc.severityCeiling !== undefined) || (P.ruleMarkers ?? []).length) {
+    warn("V8", "ruleChecks or ruleMarkers without ruleCoverage");
   }
   return { ok: errors.length === 0, errors, warnings, factCount: facts.size, lapRows, swapRows };
 }

@@ -4,11 +4,11 @@
  *
  * The pit-closure model per class is shared with the pit-window check (earliest legal pit, D-EARLIEST-PIT).
  */
-import type { CarId, FcyPeriod, FlagEvent, PitPassage } from "../package-types.js";
+import type { CarId, FcyPeriod, FlagEvent, PitPassage } from "../../analysis/schema/package-types.js";
 import type { ResolvedRule, Severity } from "../rulebook-types.js";
 import { rulebookClassFor } from "../load-rulebook.js";
 import type { CheckHandler, CheckInput, CheckOutput, FindingDraft } from "./common.js";
-import { emptyOutput, ev, isTbd, minConf, num, param, raceControlFor } from "./common.js";
+import { emptyOutput, ev, isTbd, minConf, num, param, passOf, raceControlFor } from "./common.js";
 import type { RaceCtx } from "./context.js";
 import { r3 } from "./context.js";
 
@@ -262,17 +262,18 @@ export function closedPitEntries(
 ) {
   const entries: ClosedEntry[] = [];
   const notes = new Set<string>();
-  let considered = 0;
+  /** Every race pit entry judged, with the closure interval it fell in (null = pits open for the car). */
+  const considered: { passage: PitPassage; interval: ClosedInterval | null }[] = [];
   for (const car of cars) {
     const { intervals, notes: n } = closureIntervals(ctx, rules, ctx.classOf(car));
     n.forEach((x) => notes.add(x));
     for (const p of candidatePassages(ctx, car)) {
       const t = p.pitIn!.raceTimeS;
       if (t >= ctx.chequeredS) continue; // entered after the chequered flag: not a race pit entry
-      considered++;
       const hit = intervals.find(
         (iv) => reasons.includes(iv.reason) && iv.fromS <= t && t < iv.toS
       );
+      considered.push({ passage: p, interval: hit ?? null });
       if (hit) entries.push({ passage: p, interval: hit });
     }
   }
@@ -311,7 +312,6 @@ function entryFinding(
     notes.push("within_grace_of_fcy_announcement");
   return {
     car: p.car,
-    class: ctx.classOf(p.car),
     severity,
     severityNotes: sevNotes,
     lap: p.inLap,
@@ -319,8 +319,8 @@ function entryFinding(
     raceTimeS: t,
     measured: r3(t),
     measuredRange: null,
-    threshold: Number.isFinite(e.interval.toS) ? r3(e.interval.toS) : null,
-    marginS: Number.isFinite(e.interval.toS) ? r3(t - e.interval.toS) : null,
+    limit: Number.isFinite(e.interval.toS) ? r3(e.interval.toS) : null,
+    margin: Number.isFinite(e.interval.toS) ? r3(t - e.interval.toS) : null,
     unit: "s",
     evidence: [
       ...ev("passage", p.id),
@@ -351,11 +351,24 @@ function runEntries(
 ): CheckOutput {
   const { ctx, rule, rules, cars } = input;
   const out = emptyOutput();
-  const { entries, notes, considered } = closedPitEntries(ctx, rules, cars, reasons);
+  const { notes, considered } = closedPitEntries(ctx, rules, cars, reasons);
   out.notes.push(...notes);
-  out.evaluated = considered;
-  for (const e of entries) out.findings.push(entryFinding(ctx, rule, e));
-  out.passed = considered - entries.length;
+  for (const c of considered) {
+    const p = c.passage;
+    if (c.interval) out.results.push(entryFinding(ctx, rule, { passage: p, interval: c.interval }));
+    else
+      out.results.push(
+        passOf({
+          car: p.car,
+          lap: p.inLap,
+          clock: p.pitIn!.clock ?? ctx.clock(p.pitIn!.raceTimeS),
+          raceTimeS: p.pitIn!.raceTimeS,
+          evidence: ev("passage", p.id),
+          confidence: minConf(p.confidence),
+          notes: ["pit_lane_open_at_entry"],
+        })
+      );
+  }
   extra(out);
   return out;
 }
@@ -401,8 +414,7 @@ export const standardFcyClassifier: CheckHandler = {
   run: ({ ctx, rules }) => {
     const out = emptyOutput();
     const ps = classifyPeriods(ctx, rules);
-    out.evaluated = ps.length;
-    out.passed = ps.length;
+    // writes no rule checks: its classification feeds the Short FCY rule and the pit-closure model
     out.notes.push(
       "classifier_only",
       ...ps.map(
@@ -432,14 +444,33 @@ export const emergencyServiceHandler: CheckHandler = {
     for (const e of entries) {
       const p = e.passage;
       if (didNotRejoin(p) || !p.pitOut) continue;
-      out.evaluated++;
       const inT = p.pitIn!.raceTimeS;
       const outT = p.pitOut.raceTimeS;
       const leaderLapsInPit = ctx.leaderCrossings.filter(
         (t) => t > inT && t < outT
       ).length;
+      const base = {
+        car: p.car,
+        lap: p.inLap,
+        clock: p.pitIn!.clock ?? ctx.clock(inT),
+        raceTimeS: inT,
+        confidence: minConf(p.confidence),
+      };
       if (leaderLapsInPit >= needLaps) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            ...base,
+            measured: leaderLapsInPit,
+            limit: needLaps,
+            margin: leaderLapsInPit - needLaps,
+            unit: "laps",
+            evidence: [
+              ...ev("closed_pit_passage", p.id),
+              ...ev("fcy_period", e.interval.period.id),
+            ],
+            notes: ["obligation_met_in_pit_lane_leader_laps"],
+          })
+        );
         continue;
       }
       // obligation window opens when the pits are open to every class group but "all" (TCR at IMSA), or the restart
@@ -457,7 +488,6 @@ export const emergencyServiceHandler: CheckHandler = {
         : e.interval.period.end.raceTimeS;
       if (restart === null) {
         out.notEvaluated.push({ car: p.car, factId: p.id, reason: "fcy_ran_to_finish" });
-        out.evaluated--;
         continue;
       }
       const after = ctx.leaderCrossings.filter((t) => t >= restart);
@@ -468,37 +498,45 @@ export const emergencyServiceHandler: CheckHandler = {
           factId: p.id,
           reason: "no_leader_crossings_after_restart",
         });
-        out.evaluated--;
         continue;
       }
       const nxt = (ctx.passages.get(p.car) ?? []).find(
         (q) => q.ordinal > p.ordinal && q.pitIn && q.pitIn.raceTimeS >= from
       );
+      const evidence = [
+        ...ev("closed_pit_passage", p.id),
+        ...ev("follow_up_passage", nxt?.id),
+        ...ev("fcy_period", e.interval.period.id),
+      ];
       if (nxt && nxt.pitIn!.raceTimeS <= deadline) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            ...base,
+            measured: r3(nxt.pitIn!.raceTimeS),
+            limit: r3(deadline),
+            margin: r3(deadline - nxt.pitIn!.raceTimeS),
+            unit: "s",
+            evidence,
+            notes: ["follow_up_passage_before_deadline"],
+          })
+        );
         continue;
       }
-      out.findings.push({
-        car: p.car,
-        class: ctx.classOf(p.car),
+      out.results.push({
+        ...base,
         severity: rule.severity,
         severityNotes: [],
-        lap: p.inLap,
-        clock: p.pitIn!.clock ?? ctx.clock(inT),
-        raceTimeS: inT,
-        measured: nxt ? r3(nxt.pitIn!.raceTimeS) : "no_follow_up_passage",
+        measured: nxt ? r3(nxt.pitIn!.raceTimeS) : null,
         measuredRange: null,
-        threshold: r3(deadline),
-        marginS: nxt ? r3(nxt.pitIn!.raceTimeS - deadline) : null,
+        limit: r3(deadline),
+        margin: nxt ? r3(deadline - nxt.pitIn!.raceTimeS) : null,
         unit: "s",
-        evidence: [
-          ...ev("closed_pit_passage", p.id),
-          ...ev("follow_up_passage", nxt?.id),
-          ...ev("fcy_period", e.interval.period.id),
-        ],
+        evidence,
         raceControl: raceControlFor(ctx, p.car, CLOSED_PIT_PENALTY, inT - 1),
-        confidence: minConf(p.confidence),
-        notes: ["applies_only_if_closed_pit_entry_was_emergency_service"],
+        notes: [
+          "applies_only_if_closed_pit_entry_was_emergency_service",
+          ...(nxt ? [] : ["no_follow_up_passage"]),
+        ],
       });
     }
     return out;
@@ -529,17 +567,32 @@ export const closedPitDriverChangeHandler: CheckHandler = {
         });
         continue;
       }
-      out.evaluated++;
       if (p.driverIn === p.driverOut) {
-        out.passed++;
+        out.results.push(
+          passOf({
+            car: p.car,
+            lap: p.inLap,
+            clock: p.pitIn!.clock ?? ctx.clock(p.pitIn!.raceTimeS),
+            raceTimeS: p.pitIn!.raceTimeS,
+            evidence: [
+              ...ev("passage", p.id),
+              ...ev("fcy_period", e.interval.period.id),
+            ],
+            confidence: minConf(p.confidence),
+            notes: [`no_driver_change_driver_${p.driverIn}`],
+          })
+        );
         continue;
       }
-      const f = entryFinding(ctx, rule, e, ["driver_change_in_closed_pit"]);
-      f.measured = `driver ${p.driverIn} -> ${p.driverOut}`;
-      f.threshold = "no_driver_change";
-      f.marginS = null;
+      const f = entryFinding(ctx, rule, e, [
+        "driver_change_in_closed_pit",
+        `driver_change_${p.driverIn}_to_${p.driverOut}`,
+      ]);
+      f.measured = null;
+      f.limit = null;
+      f.margin = null;
       f.unit = null;
-      out.findings.push(f);
+      out.results.push(f);
     }
     return out;
   },
@@ -555,35 +608,40 @@ export const code35Handler: CheckHandler = {
     for (const car of cars) {
       for (const p of ctx.passages.get(car) ?? []) {
         if (p.kind === "pit_lane_start") continue;
-        out.evaluated++;
-        if (open === true || p.fcyContext === "green") {
-          out.passed++;
-          continue;
-        }
         const lap = ctx.lap(car, p.inLap);
-        out.findings.push({
+        const base = {
           car,
-          class: ctx.classOf(car),
-          severity: rule.severity,
-          severityNotes: [],
           lap: p.inLap,
           clock: p.pitIn?.clock ?? (lap ? ctx.clock(lap.endS) : null),
           raceTimeS: p.pitIn?.raceTimeS ?? lap?.endS ?? null,
-          measured: p.fcyContext,
-          measuredRange: null,
-          threshold: "green",
-          marginS: null,
-          unit: null,
           evidence: [
             ...ev("passage", p.id),
             ...(p.fcyPeriodIds ?? []).map((id) => ({ label: "fcy_period", factId: id })),
             ...ev("in_lap", `lap:${car}:${p.inLap}`),
           ],
-          raceControl: raceControlFor(ctx, car, CLOSED_PIT_PENALTY),
           confidence: minConf(p.confidence, ctx.fcyFromFlags ? "high" : "medium"),
-          notes: ctx.fcyFromFlags
+        };
+        const notes = [
+          `in_lap_${p.fcyContext}`,
+          ...(ctx.fcyFromFlags
             ? []
-            : ["fcy_periods_reconstructed_boundaries_plus_minus_one_lap"],
+            : ["fcy_periods_reconstructed_boundaries_plus_minus_one_lap"]),
+        ];
+        if (open === true || p.fcyContext === "green") {
+          out.results.push(passOf({ ...base, notes }));
+          continue;
+        }
+        out.results.push({
+          ...base,
+          severity: rule.severity,
+          severityNotes: [],
+          measured: null,
+          measuredRange: null,
+          limit: null,
+          margin: null,
+          unit: null,
+          raceControl: raceControlFor(ctx, car, CLOSED_PIT_PENALTY),
+          notes,
         });
       }
     }
