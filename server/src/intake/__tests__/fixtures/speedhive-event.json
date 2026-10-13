@@ -1,0 +1,79 @@
+{
+ "id": 3197001,
+ "name": "WRL @ Barber #87",
+ "sport": "Car",
+ "startDate": "2026-02-27T00:00:00",
+ "updatedAt": "2026-03-01T10:00:00Z",
+ "location": {
+  "id": 501,
+  "name": "Barber Motorsports Park",
+  "length": 3.83,
+  "lengthUnit": "km",
+  "country": {
+   "name": "United States",
+   "alpha2": "US"
+  }
+ },
+ "organization": {
+  "id": 90001,
+  "name": "SYNTHETIC RACING LEAGUE",
+  "city": "Testville",
+  "country": {
+   "name": "United States",
+   "alpha2": "US"
+  }
+ },
+ "sessions": {
+  "groups": [
+   {
+    "id": 1,
+    "name": "Friday",
+    "sessions": [
+     {
+      "id": 11748900,
+      "name": "Practice 1",
+      "type": "practice",
+      "startTime": "2026-02-27T10:00:00",
+      "eventId": 3197001
+     }
+    ]
+   },
+   {
+    "id": 2,
+    "name": "Saturday",
+    "sessions": [
+     {
+      "id": 11748960,
+      "name": "Qualifying",
+      "type": "qualify",
+      "startTime": "2026-02-28T07:30:00",
+      "eventId": 3197001
+     },
+     {
+      "id": 11748965,
+      "name": "Saturday 8 Hour",
+      "type": "race",
+      "startTime": "2026-02-28T09:00:00",
+      "eventId": 3197001
+     }
+    ],
+    "subGroups": [
+     {
+      "id": 3,
+      "name": "Sunday",
+      "sessions": [
+       {
+        "id": 11748970,
+        "name": "Sunday 7 hour",
+        "type": "race",
+        "startTime": "2026-03-01T08:00:00",
+        "eventId": 3197001
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "sessions": []
+ }
+}

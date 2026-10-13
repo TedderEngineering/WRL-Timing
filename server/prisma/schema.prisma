@@ -76,6 +76,7 @@ model User {
   auditLogs           AuditLog[]
   createdPackages     RaceAnalysisPackage[]    @relation("PackageCreator")
   publishedPackages   RaceAnalysisPackage[]    @relation("PackagePublisher")
+  apiTokens           ApiToken[]               @relation("ApiTokenCreator")
 
   gripAccount            GripAccount?
   gripReferenceSessions  GripReferenceSession[]
@@ -208,6 +209,14 @@ model Race {
   currentPackageId String?  @unique @map("current_package_id")
   /// Per-race override of RACETRACE_PACKAGES: true serves the legacy chartData even when packages are on.
   packagesDisabled Boolean  @default(false) @map("packages_disabled")
+  /// Stable identity of the timing-site session this race was pulled from
+  /// (machine intake, G4), e.g. "speedhive:session:11748965". Reruns update
+  /// the race with this key instead of creating a duplicate.
+  sourceKey      String?    @unique @map("source_key")
+  /// Fingerprint of the files the site offered at the last intake.
+  sourceVersion  String?    @map("source_version")
+  /// Results mark of the last intake: official | provisional | unofficial | unknown | none.
+  resultsStatus  String?    @map("results_status")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
@@ -366,6 +375,26 @@ model AuditLog {
   @@index([createdAt(sort: Desc)])
   @@index([adminUserId])
   @@map("audit_log")
+}
+
+/// Machine API token (G4 intake). Only the sha256 of the token is stored; the
+/// token itself is shown once at creation. `prefix` identifies it in the UI.
+model ApiToken {
+  id          String    @id @default(cuid())
+  name        String
+  tokenHash   String    @unique @map("token_hash")
+  prefix      String
+  scopes      String[]  @default([])
+  createdById String    @map("created_by_id")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  createdBy User @relation("ApiTokenCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+  @@map("api_tokens")
 }
 
 // ─── Qualifying Sessions ─────────────────────────────────────────────────────
