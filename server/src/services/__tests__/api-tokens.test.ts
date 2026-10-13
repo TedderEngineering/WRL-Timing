@@ -93,7 +93,7 @@ describe("auth middleware with API tokens", () => {
   it("requireAuth looks the token up by its hash and acts as the creating admin", async () => {
     const { token, tokenHash } = generateApiToken();
     db.apiToken.findUnique.mockResolvedValue(rec({ tokenHash }));
-    const req: any = { headers: { authorization: `Bearer ${token}` } };
+    const req: any = { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: `Bearer ${token}` } };
     expect(await run(requireAuth, req)).toBeNull();
     expect(db.apiToken.findUnique.mock.calls[0][0].where).toEqual({ tokenHash });
     expect(req.user).toEqual({ userId: "u1", email: "owner@example.com", role: "ADMIN" });
@@ -105,25 +105,25 @@ describe("auth middleware with API tokens", () => {
   it("does not write lastUsedAt more than once a minute", async () => {
     const { token } = generateApiToken();
     db.apiToken.findUnique.mockResolvedValue(rec({ lastUsedAt: new Date(Date.now() - 5_000) }));
-    await run(requireAuth, { headers: { authorization: `Bearer ${token}` } });
+    await run(requireAuth, { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: `Bearer ${token}` } });
     expect(db.apiToken.update).not.toHaveBeenCalled();
   });
 
   it("a revoked token is a 401", async () => {
     db.apiToken.findUnique.mockResolvedValue(rec({ revokedAt: new Date() }));
-    const err = await run(requireAuth, { headers: { authorization: `Bearer ${generateApiToken().token}` } });
+    const err = await run(requireAuth, { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: `Bearer ${generateApiToken().token}` } });
     expect(err).toMatchObject({ statusCode: 401, code: "TOKEN_REVOKED" });
   });
 
   it("an unknown token is a 401", async () => {
     db.apiToken.findUnique.mockResolvedValue(null);
-    const err = await run(requireAuth, { headers: { authorization: "Bearer rt_nottherealtoken" } });
+    const err = await run(requireAuth, { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: "Bearer rt_nottherealtoken" } });
     expect(err).toMatchObject({ statusCode: 401, code: "TOKEN_UNKNOWN" });
   });
 
   it("requireAdmin refuses a token without the intake scope", async () => {
     db.apiToken.findUnique.mockResolvedValue(rec({ scopes: [] }));
-    const req: any = { headers: { authorization: `Bearer ${generateApiToken().token}` } };
+    const req: any = { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: `Bearer ${generateApiToken().token}` } };
     expect(await run(requireAuth, req)).toBeNull();
     expect(await run(requireAdmin, req)).toMatchObject({ statusCode: 403, code: "TOKEN_SCOPE_REQUIRED" });
   });
@@ -131,7 +131,7 @@ describe("auth middleware with API tokens", () => {
   it("tokens cannot manage tokens; a signed-in admin can", async () => {
     expect(await run(rejectApiToken, { apiToken: { id: "t1" } })).toMatchObject({ statusCode: 403, code: "SESSION_REQUIRED" });
     const jwt = generateAccessToken({ userId: "u1", email: "owner@example.com", role: "ADMIN" });
-    const req: any = { headers: { authorization: `Bearer ${jwt}` } };
+    const req: any = { method: "GET", originalUrl: "/api/admin/intake/whoami", headers: { authorization: `Bearer ${jwt}` } };
     expect(await run(requireAuth, req)).toBeNull();
     expect(req.apiToken).toBeUndefined();
     expect(await run(requireAdmin, req)).toBeNull();
