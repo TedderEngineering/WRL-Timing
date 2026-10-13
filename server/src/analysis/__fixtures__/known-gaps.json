@@ -20,6 +20,24 @@
     },
     "sunday7": {
       "class:GTU medianCleanGreenLapS": "G5"
+    },
+    "mpc_road_atlanta": {
+      "drive:12:1 driveTimeS": "G7",
+      "drive:23:1 driveTimeS": "G6",
+      "drive:52:2 driveTimeS": "G6",
+      "drive:53:1 driveTimeS": "G6",
+      "drive:57:2 driveTimeS": "G6",
+      "drive:59:2 driveTimeS": "G6",
+      "drive:77:1 driveTimeS": "G6"
+    },
+    "gt4_indy_r1": {
+      "drive:19:2 driveTimeS": "G6",
+      "drive:72:1 driveTimeS": "G6"
+    },
+    "gt4_indy_r2": {
+      "drive:38:2 driveTimeS": "G6",
+      "drive:028:2 driveTimeS": "G6",
+      "drive:131:2 driveTimeS": "G6"
     }
   }
 }

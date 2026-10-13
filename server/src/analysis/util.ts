@@ -169,3 +169,23 @@ export function parseClock(raw: string | null | undefined): number | null {
 export function uniq<T>(xs: T[]): T[] {
   return [...new Set(xs)];
 }
+
+/**
+ * Match a timing abbreviation ('J. Catania', 'Catania') to an entry driver. Initial and surname must
+ * both match when an initial is given (siblings share surnames); a surname alone must be unique.
+ */
+export function matchDriver(abbrev: string | null | undefined, drivers: { number: number; name: string }[]): number | null {
+  const a = (abbrev ?? "").trim();
+  if (!a) return null;
+  const exact = drivers.filter((d) => d.name.toLowerCase() === a.toLowerCase());
+  if (exact.length === 1) return exact[0].number;
+  const m = a.match(/^((?:[A-Za-z]\.\s*)+)?(.+)$/);
+  const initials = (m?.[1] ?? "").replace(/[\s.]/g, "").toLowerCase();
+  const surname = (m?.[2] ?? a).trim().toLowerCase();
+  const hits = drivers.filter((d) => {
+    const n = d.name.toLowerCase();
+    if (!n.endsWith(surname)) return false;
+    return !initials || n.startsWith(initials[0]);
+  });
+  return hits.length === 1 ? hits[0].number : null;
+}

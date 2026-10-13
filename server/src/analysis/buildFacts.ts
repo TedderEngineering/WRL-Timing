@@ -34,7 +34,7 @@ import { classMedians, classifyWrl, computeTimeLost, markClean } from "./engine/
 import { buildPitCycles, buildPositionChanges, computeCycleResults, detectSwaps, toPitCycles } from "./engine/cycles.js";
 import { buildStints } from "./engine/stints.js";
 import { buildResults, finalisePenalties } from "./engine/results.js";
-import { carOrder, rd } from "./util.js";
+import { carOrder, matchDriver, rd } from "./util.js";
 
 export const ENGINE_VERSION = "1.0.0";
 export type FactsPackage = RaceAnalysisPackage;
@@ -89,9 +89,6 @@ function slug(s: string): string {
     .replace(/^-+|-+$/g, "") || "race";
 }
 
-function surnameOf(s: string): string {
-  return s.replace(/^([A-Z]\.\s*)+/, "").trim().toLowerCase();
-}
 
 export function buildFacts(input: BuildFactsInput): FactsPackage {
   const opts = input.options ?? {};
@@ -231,8 +228,10 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
     return sf;
   });
   const lexicon = new Set<string>();
+  // Lexicon = proper names that contain a digit (they may appear verbatim in prose, V4/A7). Names
+  // without digits are left out so that they cannot mask a banned or required word (e.g. session 'Race').
   const addLex = (s: string | null | undefined) => {
-    if (s && s.trim()) lexicon.add(s.trim());
+    if (s && s.trim() && /[0-9]/.test(s)) lexicon.add(s.trim());
   };
   const meta = race.session;
   const series = opts.series ?? meta.series ?? "TBD";
@@ -348,13 +347,7 @@ function dedupeIssues(issues: Issue[]): Issue[] {
 function toPitPassage(ctx: Ctx, p: Passage, entries: RaceAnalysisPackage["entries"]): PitPassage {
   const rows = ctx.laps[p.car] ?? [];
   const drivers = entries.find((e) => e.car === p.car)?.drivers ?? [];
-  const drvNum = (num: number | null, name: string | null): number | null => {
-    if (num !== null) return num;
-    if (!name) return null;
-    const sn = surnameOf(name);
-    const hits = drivers.filter((d) => d.name.toLowerCase().endsWith(sn) || d.name.toLowerCase() === name.toLowerCase());
-    return hits.length === 1 ? hits[0].number : null;
-  };
+  const drvNum = (num: number | null, name: string | null): number | null => (num !== null ? num : matchDriver(name, drivers));
   const di = drvNum(p.inDriverNumber, p.inDriverName);
   const dout = drvNum(p.outDriverNumber, p.outDriverName);
   const refs = [...p.refs];

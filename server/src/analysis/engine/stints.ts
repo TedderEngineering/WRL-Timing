@@ -3,7 +3,7 @@
  */
 import type { DriveTime, Stint } from "../schema/package-types.js";
 import type { CarId } from "../types.js";
-import { carOrder, rd } from "../util.js";
+import { carOrder, matchDriver, rd } from "../util.js";
 import { tp, type Ctx } from "./context.js";
 import type { Period } from "./fcy.js";
 import type { Passage } from "./passages.js";
@@ -11,9 +11,6 @@ import type { Passage } from "./passages.js";
 const SERVICE = new Set(["stop", "garage", "retirement"]);
 const PENALTY = new Set(["drive_through", "stop_and_go", "penalty_served"]);
 
-function surname(s: string): string {
-  return s.replace(/^([A-Z]\.\s*)+/, "").trim().toLowerCase();
-}
 
 export function buildStints(
   ctx: Ctx,
@@ -135,20 +132,14 @@ export function buildStints(
     }
     // drive time per driver, with the official TOTAL_TRACK_TIME cross-check (last TRACK row per driver)
     const entry = ctx.race.entries.find((e) => e.car === car);
-    const official = new Map<string, { v: number | null; ref: string }>();
-    for (const d of ctx.race.driveStints) if (d.car === car && d.type === "TRACK") official.set(d.driver, { v: d.totalTrackTimeS, ref: `${d.fileId}:L${d.row}` });
+    const official = new Map<number, { v: number | null; ref: string }>();
+    for (const d of ctx.race.driveStints) {
+      if (d.car !== car || d.type !== "TRACK") continue;
+      const n = matchDriver(d.driver, entry?.drivers ?? []);
+      if (n !== null) official.set(n, { v: d.totalTrackTimeS, ref: `${d.fileId}:L${d.row}` });
+    }
     for (const [drv, v] of [...perDriver.entries()].sort((x, y) => x[0] - y[0])) {
-      const name = entry?.drivers.find((d) => d.number === drv)?.name ?? null;
-      let off: { v: number | null; ref: string } | null = null;
-      if (name) {
-        for (const [k, o] of official) {
-          const sn = surname(k);
-          if (sn && name.toLowerCase().endsWith(sn)) {
-            off = o;
-            break;
-          }
-        }
-      }
+      const off = official.get(drv) ?? null;
       const dt: DriveTime = {
         id: `drive:${car}:${drv}`,
         car,

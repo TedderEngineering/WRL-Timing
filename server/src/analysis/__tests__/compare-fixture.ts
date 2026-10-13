@@ -160,6 +160,11 @@ export function compareRace(pkg: RaceAnalysisPackage, exp: any): CompareResult {
     const pg = [...groups.values()].find((x) => x.car === g.car && x.laps[0] === g.laps[0] && x.laps[1] === g.laps[1]);
     if (!pg || pg.timeLost.method !== g.method || !near(pg.timeLost.valueS, g.valueS, TOL.lossAlkamel)) raceLevel.push({ key: `group:${g.car}:${g.laps.join("-")}`, field: "timeLost", expected: g, actual: pg?.timeLost });
   }
+  // T9 drive time: every driver with an official Drive Time TOTAL_TRACK_TIME, ±0.0015 s.
+  for (const d of pkg.driveTimes) {
+    if (d.officialDriveTimeS === null || d.officialDriveTimeS === undefined) continue;
+    if (!near(d.driveTimeS, d.officialDriveTimeS, 0.0015)) raceLevel.push({ key: d.id, field: "driveTimeS", expected: d.officialDriveTimeS, actual: d.driveTimeS });
+  }
   if (exp.transitEstimateS !== undefined) {
     const pls = pkg.events.pitPassages.filter((p) => p.officialPitLaneTimeS !== null && p.kind !== "pit_lane_start" && p.outcome === "rejoined").map((p) => p.officialPitLaneTimeS!);
     const m = pls.length ? Math.min(...pls) : null;
