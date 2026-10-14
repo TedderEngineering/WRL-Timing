@@ -1,11 +1,5 @@
 import type { LapData, PitMarker } from "@shared/types";
-
-/** One driver's spell in the car: laps `from`–`to` (the in-lap belongs to the spell it ends). */
-export interface DriverStint {
-  from: number;
-  to: number;
-  driver?: string;
-}
+import { TRACE } from "./constants";
 
 /** Positions before and after one stop: `delta` > 0 is places gained. */
 export interface PitDelta {
@@ -19,39 +13,6 @@ export interface PitDelta {
 export function surname(name: string | undefined): string | undefined {
   const parts = name?.trim().split(/\s+/).filter(Boolean);
   return parts?.length ? parts[parts.length - 1].toUpperCase() : undefined;
-}
-
-/**
- * Who drove when. Spells break at each stop (a lap with `pit`); the driver of each spell comes
- * from the stop that began it (its out-driver) or the stop that ended it (its in-driver).
- * Neighbouring spells with the same driver are merged, so the band shows driver changes only.
- */
-export function driverStints(laps: LapData[], pits: PitMarker[]): DriverStint[] {
-  if (!laps.length) return [];
-  const byLap = new Map(pits.map((p) => [p.l, p] as const));
-  const stops = laps.filter((d) => d.pit && d !== laps[0]).map((d) => d.l);
-  const first = laps[0].l;
-  const last = laps[laps.length - 1].l;
-  const start = pits.find((p) => p.stintNumber === 1 || /^start\b/i.test(p.lb));
-
-  const raw: DriverStint[] = [];
-  let from = first;
-  let opener: string | undefined = start?.outDriver;
-  for (const s of stops) {
-    const m = byLap.get(s);
-    raw.push({ from, to: s, driver: surname(opener ?? m?.inDriver) });
-    opener = m?.outDriver;
-    from = s + 1;
-  }
-  if (from <= last) raw.push({ from, to: last, driver: surname(opener) });
-
-  const out: DriverStint[] = [];
-  for (const st of raw) {
-    const prev = out[out.length - 1];
-    if (prev && st.driver && prev.driver === st.driver) prev.to = st.to;
-    else out.push({ ...st });
-  }
-  return out;
 }
 
 /**
@@ -76,4 +37,115 @@ export function pitDeltas(laps: LapData[], pk: "p" | "cp", fcy: [number, number]
 
 export function deltaText(d: number): string {
   return d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "±0";
+}
+
+/** Space above the plot for the pit tags (computeDimensions `pitTags`). */
+export interface PitTagBand {
+  tagY: number;
+  laneH: number;
+  lanes: number;
+}
+
+export function pitTagBand(isMobile: boolean): PitTagBand {
+  return isMobile ? { tagY: 2, laneH: 13, lanes: 2 } : { tagY: 3, laneH: 15, lanes: 2 };
+}
+
+function rgba(hex: string, a: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/**
+ * The focus car's pit and driver tags, the same on Position Trace and Lap Times: a thin line in
+ * the tag's colour at each stop (and the start) through the plot, and its label ("Pit 2 ·
+ * WEISENBERG", "Start · GOODMAN") above the plot with the places gained or lost at that stop.
+ * Labels go in two lanes so neighbours never overlap and nothing is written over the traces.
+ */
+export function drawPitTags(
+  ctx: CanvasRenderingContext2D,
+  o: {
+    markers: PitMarker[];
+    laps: LapData[];
+    pk: "p" | "cp";
+    fcy: [number, number][];
+    x: (lap: number) => number;
+    lapStart: number;
+    lapEnd: number;
+    plotLeft: number;
+    plotRight: number;
+    plotTop: number;
+    plotBottom: number;
+    band: PitTagBand;
+    activeLap: number | null;
+    /** The chart's background, behind each label. */
+    background: string;
+  }
+) {
+  const deltas = new Map(pitDeltas(o.laps, o.pk, o.fcy).map((d) => [d.lap, d] as const));
+  const small = o.band.laneH < 15;
+  const font = `600 ${small ? 9 : 10}px 'IBM Plex Sans', system-ui, sans-serif`;
+  const lastRight = Array.from({ length: o.band.lanes }, () => -Infinity);
+  const markers = [...o.markers].filter((m) => m.l >= o.lapStart && m.l <= o.lapEnd).sort((a, b) => a.l - b.l);
+  const placed: { m: PitMarker; label: string; px: number; left: number; w: number; wLabel: number; cy: number; color: string; d?: PitDelta; delta: string }[] = [];
+  ctx.save();
+  ctx.font = font;
+  ctx.textBaseline = "middle";
+  for (const m of markers) {
+    const px = o.x(m.l);
+    if (px < o.plotLeft - 1 || px > o.plotRight + 1) continue;
+    const color = m.c || TRACE.fcyBar;
+    const d = deltas.get(m.l);
+    const delta = d ? ` ${deltaText(d.delta)}` : "";
+    // Where tags crowd, the driver's name gives way first ("Pit 3 · ESTEP" → "Pit 3"), then the tag moves along.
+    const place = (label: string) => {
+      const wLabel = ctx.measureText(label).width;
+      const w = wLabel + ctx.measureText(delta).width;
+      // Left-aligned after the line, as on Lap Times; right-aligned before it near the right edge.
+      let left = px + 3;
+      if (left + w > o.plotRight) left = px - 3 - w;
+      return { label, wLabel, w, left, lane: lastRight.findIndex((r) => r < left - 6) };
+    };
+    let pl = place(m.lb);
+    const short = m.lb.replace(/\s*·.*$/, "");
+    if (pl.lane < 0 && short !== m.lb) pl = place(short);
+    let { left, lane } = pl;
+    const { label, wLabel, w } = pl;
+    if (lane < 0) {
+      // Every lane is taken here: use the one that frees first and start after its label.
+      lane = lastRight.indexOf(Math.min(...lastRight));
+      left = lastRight[lane] + 6;
+    }
+    lastRight[lane] = left + w;
+    const cy = o.band.tagY + lane * o.band.laneH + o.band.laneH / 2;
+    placed.push({ m, label, px, left, w, wLabel, cy, color, d, delta });
+  }
+
+  // Lines first, then the labels on a backing, so a line never runs through a label.
+  for (const t of placed) {
+    ctx.strokeStyle = rgba(t.color, 0.75);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(t.px) + 0.5, t.cy + o.band.laneH / 2 - 2);
+    ctx.lineTo(Math.round(t.px) + 0.5, o.plotBottom);
+    ctx.stroke();
+  }
+  for (const t of placed) {
+    const box = [t.left - 3, t.cy - o.band.laneH / 2 + 1, t.w + 6, o.band.laneH - 2] as const;
+    ctx.fillStyle = o.background;
+    ctx.fillRect(...box);
+    if (o.activeLap === t.m.l) {
+      ctx.fillStyle = rgba(t.color, 0.22);
+      ctx.fillRect(...box);
+    }
+    ctx.textAlign = "left";
+    ctx.fillStyle = t.color;
+    ctx.fillText(t.label, t.left, t.cy);
+    if (t.d) {
+      ctx.fillStyle = t.d.delta > 0 ? TRACE.gain : t.d.delta < 0 ? TRACE.loss : TRACE.axis;
+      ctx.fillText(t.delta, t.left + t.wLabel, t.cy);
+    }
+  }
+  ctx.restore();
 }

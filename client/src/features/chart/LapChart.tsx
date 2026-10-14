@@ -9,7 +9,6 @@ import {
   buildLapInfo,
   computeDimensions,
   lapOfX,
-  getVisibleCars,
   type ChartState,
   type ChartDimensions,
   type LapInfoData,
@@ -17,7 +16,7 @@ import {
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
 import { AxisToggle, TraceControls } from "./TraceControls";
-import { makeGroupsOf } from "./makes";
+import type { TraceView } from "./trace-view";
 import { PitCyclePanel } from "./PitCyclePanel";
 import { GapEvolutionPanel } from "./GapEvolutionPanel";
 import { HeadToHeadPanel } from "./HeadToHeadPanel";
@@ -40,30 +39,22 @@ interface LapChartProps {
   setClassView: React.Dispatch<React.SetStateAction<string>>;
   activeLap: number | null;
   setActiveLap: React.Dispatch<React.SetStateAction<number | null>>;
+  /** Class, makes and compare, shared with Lap Times (held by the race page). */
+  view: TraceView;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function LapChart({
   data, annotations, watermarkEmail,
-  focusNum, setFocusNum, compSet, setCompSet,
-  classView, setClassView, activeLap, setActiveLap,
+  focusNum, setFocusNum, compSet,
+  classView, activeLap, setActiveLap, view,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
   const isTeam = hasTeamAccess(user);
-  // Makes picked in the Make filter; empty = all makes.
-  const [makeFilter, setMakeFilter] = useState<string[]>([]);
   const [teamNote, setTeamNote] = useState(false);
-
-  // The faint field: every car in the class view (and the makes picked, if any).
-  const fieldCars = useMemo(() => {
-    const base = getVisibleCars(data, classView);
-    if (!makeFilter.length) return base;
-    const groups = makeGroupsOf(data);
-    const keep = new Set(makeFilter.flatMap((m) => groups[m] ?? []));
-    return base.filter((n) => keep.has(n) || n === focusNum);
-  }, [data, classView, makeFilter, focusNum]);
+  const { fieldCars } = view;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -116,7 +107,7 @@ export function LapChart({
     if (!wrapperRef.current) return;
     const containerW = wrapperRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, isMobile, xAxisMode, undefined, { driverBand: true });
+    const newDim = computeDimensions(containerW, containerH, isMobile, xAxisMode, undefined, { pitTags: true });
     setDim(newDim);
     return newDim;
   }, [isMobile, xAxisMode]);
@@ -465,18 +456,6 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
-  // Compare starts with every car in view, each in its own colour, as RaceTrace always has.
-  // Picking or removing a car switches to the cars picked; a new class, make or race goes
-  // back to every car. "All" in the controls does the same.
-  const [compareAll, setCompareAll] = useState(true);
-  useEffect(() => {
-    if (!compareAll) return;
-    setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && (data.cars[String(n)]?.laps.length ?? 0) > 0)));
-  }, [compareAll, fieldCars, focusNum, data, setCompSet]);
-  useEffect(() => {
-    setCompareAll(true);
-  }, [classView, makeFilter, data]);
-
   // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
     setSidePanel((prev) => {
@@ -485,25 +464,6 @@ export function LapChart({
       return null;
     });
   }, [activeLap]);
-
-  // ── Comparison toggles ──────────────────────────────────────────
-  const toggleComp = useCallback(
-    (num: number) => {
-      setCompareAll(false);
-      setCompSet((prev) => {
-        const next = new Set(prev);
-        if (next.has(num)) next.delete(num);
-        else next.add(num);
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleClear = useCallback(() => {
-    setCompareAll(false);
-    setCompSet(new Set());
-  }, [setCompSet]);
 
   // Cursor style
   const cursorStyle = rangeSelectStart.current !== null
@@ -553,25 +513,8 @@ export function LapChart({
         focusNum={focusNum}
         onFocus={(n) => setFocusNum(n)}
         classView={classView}
-        setClassView={(c) => {
-          setMakeFilter([]);
-          // A class view is about that class: if the focus car is in another class, focus its leader.
-          if (c && data.cars[String(focusNum)]?.cls !== c) {
-            const leader = (data.classGroups[c] ?? [])
-              .map((n) => data.cars[String(n)])
-              .filter((car) => car && car.laps.length > 0)
-              .sort((x, y) => (x.finishPosClass || 999) - (y.finishPosClass || 999))[0];
-            if (leader) setFocusNum(leader.num);
-          }
-          setClassView(c);
-        }}
         compSet={compSet}
-        toggleComp={toggleComp}
-        clearComp={handleClear}
-        compareAll={compareAll}
-        onCompareAll={() => setCompareAll(true)}
-        makeFilter={makeFilter}
-        setMakeFilter={setMakeFilter}
+        view={view}
         xAxisMode={xAxisMode}
         setXAxisMode={setXAxisMode}
       />
@@ -664,13 +607,7 @@ export function LapChart({
                       h2hDefaultCarRef.current = carNum;
                       setSidePanel("h2h");
                     }}
-                    onAddToCompare={(carNum) => {
-                      setCompSet((prev) => {
-                        const next = new Set(prev);
-                        next.add(carNum);
-                        return next;
-                      });
-                    }}
+                    onAddToCompare={view.addComp}
                   />
                 )}
               </div>

@@ -3,14 +3,14 @@ import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
+import { useTraceView } from "../features/chart/trace-view";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 
-import { getVisibleCars } from "../features/chart/chart-renderer";
 import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
 import EventSidebar from "../components/EventSidebar";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
 
 /** Redirect /races/:id → /chart?race=:id for bookmarked URLs */
@@ -134,12 +134,6 @@ export function RaceDetailPage() {
     setCompSet(allOthers);
   }, [data, id]);
 
-  // ── Derived data for dropdowns ──────────────────────────────
-  const visibleCars = useMemo(
-    () => (data ? getVisibleCars(data, classView).sort((a, b) => a - b) : []),
-    [data, classView]
-  );
-
   const handleFocusChange = useCallback(
     (num: number) => {
       setFocusNum(num);
@@ -152,6 +146,9 @@ export function RaceDetailPage() {
     },
     []
   );
+
+  // Class, makes and compare, the same on Position Trace and Lap Times.
+  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView });
 
   // Favorite and results status from the race detail endpoint
   useEffect(() => {
@@ -477,33 +474,6 @@ export function RaceDetailPage() {
         </div>
       )}
 
-      {/* Lap Times keeps its focus picker above the chart */}
-      {activeTab === "laptimes" && (
-        <div className="flex shrink-0 items-center gap-2 px-3 pt-3 sm:px-6">
-          <label htmlFor="lt-focus" className="text-[11px] uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
-            Focus
-          </label>
-          <select
-            id="lt-focus"
-            value={focusNum}
-            onChange={(e) => handleFocusChange(Number(e.target.value))}
-            className="min-h-[40px] cursor-pointer rounded-md border px-2 font-mono text-sm"
-            style={{ background: RT.card, borderColor: RT.accent, color: RT.text, minWidth: 220 }}
-          >
-            {visibleCars.map((n) => {
-              const c = data.cars[String(n)];
-              if (c.laps.length === 0) return null;
-              const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
-              return (
-                <option key={n} value={n}>
-                  #{n} {c.team} ({c.make || c.cls}) — {posLabel}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-      )}
-
       {/* Chart — kept mounted to preserve internal state (focusNum, compSet, classView) */}
       <div className={activeTab !== "position" ? "hidden" : "flex flex-col md:min-h-0 md:flex-1"}>
         <LapChart
@@ -512,17 +482,19 @@ export function RaceDetailPage() {
           compSet={compSet} setCompSet={setCompSet}
           classView={classView} setClassView={setClassView}
           activeLap={activeLap} setActiveLap={setActiveLap}
+          view={traceView}
         />
       </div>
 
       {activeTab === "laptimes" && (
-        <div className="flex flex-col px-2 pb-2 pt-2 sm:px-6 md:min-h-0 md:flex-1">
+        <div className="flex flex-col md:min-h-0 md:flex-1">
           <LapTimeChart
             data={data} annotations={annotations} watermarkEmail={user?.email}
-            focusNum={focusNum} setFocusNum={setFocusNum}
-            compSet={compSet} setCompSet={setCompSet}
-            classView={classView} setClassView={setClassView}
+            focusNum={focusNum} setFocusNum={handleFocusChange}
+            compSet={compSet}
+            classView={classView}
             activeLap={activeLap} setActiveLap={setActiveLap}
+            view={traceView}
           />
         </div>
       )}

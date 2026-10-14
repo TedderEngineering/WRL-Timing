@@ -3,14 +3,19 @@ import { hasFullAccess } from "../../lib/utils";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import {
   computeDimensions,
+  compareStroke,
   lapOfX,
-  getVisibleCars,
   getCompColor,
   getMaxPos,
   type ChartDimensions,
   formatLapTime,
 } from "./chart-renderer";
-import { CHART_STYLE, CLASS_COLORS } from "./constants";
+import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
+import { drawPitTags } from "./pit-band";
+import { TraceControls } from "./TraceControls";
+import { LapScrubber } from "./LapScrubber";
+import { CarSummary, Stat } from "./LapDetailsPanel";
+import type { TraceView } from "./trace-view";
 import { useAuth } from "../../features/auth/AuthContext";
 import {
   computeLapTimeRankings,
@@ -147,44 +152,54 @@ function drawLapTimeChart(
     ctx.fillRect(x(s - 0.4), dim.MT, x(e + 0.4) - x(s - 0.4), dim.CH);
   }
 
-  // 3. Pit vertical lines
+  // 3. The focus car's pit and driver tags, as on the Position Trace
   const ann = annotations[String(focusNum)] || { reasons: {}, pits: [], settles: [] };
-  for (const p of ann.pits || []) {
-    if (p.l < lapStart || p.l > lapEnd) continue;
-    ctx.save();
-    ctx.strokeStyle = p.c;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x(p.l), dim.MT);
-    ctx.lineTo(x(p.l), dim.H - dim.MB);
-    ctx.stroke();
-    ctx.font = "500 9px system-ui";
-    ctx.fillStyle = p.c;
-    ctx.textAlign = "left";
-    ctx.fillText(p.lb, x(p.l) + 3, dim.MT + 10 + (p.yo || 0));
-    ctx.restore();
+  if (dim.band) {
+    drawPitTags(ctx, {
+      markers: ann.pits || [],
+      laps: focusCar.laps,
+      pk: classView ? "cp" : "p",
+      fcy: data.fcy || [],
+      x,
+      lapStart,
+      lapEnd,
+      plotLeft: dim.ML,
+      plotRight: dim.W - dim.MR,
+      plotTop: dim.MT,
+      plotBottom: dim.H - dim.MB,
+      band: dim.band,
+      activeLap,
+      background: CHART_STYLE.card,
+    });
   }
 
-  // 4. Comparison traces
+  // 4. Comparison traces (compareStroke: the same lines as the Position Trace)
+  const many = [...compSet].filter((n) => n !== focusNum).length > COMPARE_PALETTE.length;
   compSet.forEach((cn) => {
     if (cn === focusNum) return;
     const pts = getCarSegments(cn, rankings, maxLap);
     if (!pts.length) return;
+    const cs = compareStroke(getCompColor(compSet, focusNum, cn), many);
     ctx.beginPath();
-    ctx.strokeStyle = hexA(getCompColor(compSet, focusNum, cn), 0.28);
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = cs.stroke;
+    ctx.lineWidth = cs.width;
     traceStepWithGaps(ctx, pts, lapStart, lapEnd, maxRank, dim);
     ctx.stroke();
   });
 
-  // 5. Focus car trace
+  // 5. Focus car trace: orange over a dark halo, as on the Position Trace
   const focusPts = getCarSegments(focusNum, rankings, maxLap);
-  const clsColor = CLASS_COLORS[focusCar.cls] || "#4472C4";
+  const clsColor = TRACE.focus;
   ctx.beginPath();
-  ctx.strokeStyle = clsColor;
-  ctx.lineWidth = 2.5;
   traceStepWithGaps(ctx, focusPts, lapStart, lapEnd, maxRank, dim);
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = CHART_STYLE.card;
+  ctx.lineWidth = 7;
   ctx.stroke();
+  ctx.strokeStyle = clsColor;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.lineJoin = "miter";
 
   // 6. Pit dots along bottom edge
   for (const d of focusCar.laps) {
@@ -419,21 +434,21 @@ interface LapTimeChartProps {
   raceId?: string;
   watermarkEmail?: string;
   focusNum: number;
-  setFocusNum: React.Dispatch<React.SetStateAction<number>>;
+  setFocusNum: (n: number) => void;
   compSet: Set<number>;
-  setCompSet: React.Dispatch<React.SetStateAction<Set<number>>>;
   classView: string;
-  setClassView: React.Dispatch<React.SetStateAction<string>>;
   activeLap: number | null;
   setActiveLap: React.Dispatch<React.SetStateAction<number | null>>;
+  /** Class, makes and compare, shared with the Position Trace (held by the race page). */
+  view: TraceView;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function LapTimeChart({
   data, annotations, watermarkEmail,
-  focusNum, compSet, setCompSet,
-  classView, setClassView, activeLap, setActiveLap,
+  focusNum, setFocusNum, compSet,
+  classView, activeLap, setActiveLap, view,
 }: LapTimeChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -484,7 +499,7 @@ export function LapTimeChart({
     if (!wrapperRef.current) return;
     const containerW = wrapperRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, isMobile);
+    const newDim = computeDimensions(containerW, containerH, isMobile, "laps", undefined, { pitTags: true });
     setDim(newDim);
     return newDim;
   }, [isMobile]);
@@ -799,66 +814,6 @@ export function LapTimeChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
-  // When class view changes, replace compSet with all cars in that class
-  useEffect(() => {
-    if (!classView) {
-      const allCars = Object.keys(data.cars).map(Number);
-      setCompSet(new Set(allCars.filter((n) => n !== focusNum)));
-      return;
-    }
-    const classCars = data.classGroups[classView] ?? [];
-    setCompSet(new Set(classCars.filter((n) => n !== focusNum)));
-  }, [classView, data, focusNum]);
-
-  const toggleComp = useCallback(
-    (num: number) => {
-      setCompSet((prev) => { const next = new Set(prev); if (next.has(num)) next.delete(num); else next.add(num); return next; });
-    },
-    [setCompSet],
-  );
-
-  const setPreset = useCallback(
-    (cars: number[]) => {
-      const relevant = cars.filter((n) => n !== focusNum);
-      setCompSet((prev) => {
-        const allOn = relevant.every((n) => prev.has(n));
-        const next = new Set(prev);
-        if (allOn) relevant.forEach((n) => next.delete(n));
-        else relevant.forEach((n) => next.add(n));
-        next.delete(focusNum);
-        return next;
-      });
-    },
-    [focusNum, setCompSet],
-  );
-
-  const clearComp = useCallback(() => setCompSet(new Set()), [setCompSet]);
-
-  const visibleCars = useMemo(
-    () => getVisibleCars(data, classView).sort((a, b) => a - b),
-    [data, classView],
-  );
-
-
-  const presets = useMemo(() => {
-    if (classView) {
-      const classCars = data.classGroups[classView] || [];
-      const result: Array<{ label: string; cars: number[] }> = [{ label: `All ${classView}`, cars: classCars }];
-      if ((data as any).makeGroups) {
-        const mg = (data as any).makeGroups as Record<string, number[]>;
-        for (const [make, makeCars] of Object.entries(mg).sort()) {
-          const inClass = makeCars.filter((n) => classCars.includes(n));
-          if (inClass.length > 0) result.push({ label: make, cars: inClass });
-        }
-      }
-      return result;
-    }
-    return [
-      { label: "All Classes", cars: Object.keys(data.cars).map(Number) },
-      ...Object.entries(data.classGroups).sort().map(([cls, cars]) => ({ label: cls, cars })),
-    ];
-  }, [data, classView]);
-
   // Cursor style
   const cursorStyle = rangeSelectStart.current !== null
     ? "crosshair"
@@ -869,271 +824,137 @@ export function LapTimeChart({
     : "default";
 
   // ─── RENDER ───────────────────────────────────────────────────────────
+  // The same frame as the Position Trace: shared controls, the chart with its caption and the
+  // lap strip, and the lap details beside it from md up (below it on a phone).
+
+  const lapFlag = info ? (info.isFcy ? "FCY" : "Green") : null;
+  const legend = (
+    <ul aria-label="Legend" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs" style={{ color: "#cbd5e1" }}>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{focusNum}</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)" }} />Full Course Yellow (FCY)</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px" style={{ background: TRACE.fcyBar }} />Pit stop · driver out</li>
+      <li><span style={{ color: TRACE.gain }}>▲</span><span style={{ color: TRACE.loss }}>▼</span> Places gained / lost at a stop</li>
+      <li style={{ color: TRACE.axis }}>Rank 1 = fastest lap; pit and FCY laps are not ranked</li>
+    </ul>
+  );
 
   return (
-    <div className="flex flex-col gap-1 md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* Class filter + Compare controls */}
-      <div className="px-1">
-        <div>
-          {/* Class view filter (only when multiple classes exist) */}
-          {Object.keys(data.classGroups).length > 1 && (
-            <div className="flex flex-wrap items-center gap-1 mb-1">
-              <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
-                Class
-              </span>
-              <button
-                onClick={() => setClassView("")}
-                className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                style={{
-                  background: !classView ? "#4472C4" : CHART_STYLE.card,
-                  borderColor: !classView ? "#4472C4" : CHART_STYLE.border,
-                  color: !classView ? "#fff" : CHART_STYLE.muted,
-                }}
-              >
-                All ({data.totalCars})
-              </button>
-              {Object.entries(data.classGroups).sort().map(([cls, cars]) => (
-                <button
-                  key={cls}
-                  onClick={() => setClassView(classView === cls ? "" : cls)}
-                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                  style={{
-                    background: classView === cls ? "#4472C4" : CHART_STYLE.card,
-                    borderColor: classView === cls ? "#4472C4" : CHART_STYLE.border,
-                    color: classView === cls ? "#fff" : CHART_STYLE.muted,
-                  }}
-                >
-                  {cls} ({cars.length})
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Label + preset pills on one row */}
-          <div className="flex flex-wrap items-center gap-1 mb-1">
-            <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
-              Compare
-            </span>
-            {presets.map((p) => {
-              const relevant = p.cars.filter((n) => n !== focusNum);
-              const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
-              return (
-                <button
-                  key={p.label}
-                  onClick={() => setPreset(p.cars)}
-                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                  style={{
-                    background: isActive ? "#4472C4" : CHART_STYLE.card,
-                    borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
-                    color: isActive ? "#fff" : CHART_STYLE.muted,
-                  }}
-                >
-                  {p.label} ({p.cars.length})
-                </button>
-              );
-            })}
-            <button
-              onClick={clearComp}
-              className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-              style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
+    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+      <TraceControls
+        data={data}
+        focusNum={focusNum}
+        onFocus={setFocusNum}
+        classView={classView}
+        compSet={compSet}
+        view={view}
+      />
+
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
+          <figure className="m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
+            <div
+              ref={wrapperRef}
+              tabIndex={0}
+              aria-label={`Lap time rank for car ${focusNum}. Click a lap for details; arrow keys step laps.`}
+              className="relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"
             >
-              Clear
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {visibleCars.map((n) => {
-              const isOn = compSet.has(n);
-              const isFocus = n === focusNum;
-              const col = isOn && !isFocus ? getCompColor(compSet, focusNum, n) : undefined;
-              return (
-                <button
-                  key={n}
-                  onClick={() => !isFocus && toggleComp(n)}
-                  disabled={isFocus}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all cursor-pointer"
-                  style={{
-                    borderColor: col || CHART_STYLE.border,
-                    background: col ? `${col}33` : "transparent",
-                    color: isFocus ? CHART_STYLE.dim : isOn ? "#fff" : CHART_STYLE.dim,
-                    opacity: isFocus ? 0.3 : 1,
-                    pointerEvents: isFocus ? "none" : undefined,
-                  }}
-                  title={`${data.cars[String(n)]?.team}${data.cars[String(n)]?.make ? ` · ${data.cars[String(n)]?.make}` : ''} (${data.cars[String(n)]?.cls})`}
-                >
-                  #{n}
-                </button>
-              );
-            })}
-          </div>
+              <canvas
+                ref={canvasRef}
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onDoubleClick={onDoubleClick}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ display: "block", cursor: cursorStyle }}
+              />
+            </div>
+            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
+              <span>{classView ? `Lap time rank in ${classView}` : "Lap time rank"} · {view.fieldCars.length} cars</span>
+              <span>
+                {isZoomed ? (
+                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
+                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
+                  </button>
+                ) : (
+                  isMobile ? "Tap a lap for details · swipe to move along the race" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                )}
+              </span>
+            </figcaption>
+          </figure>
+
+          <LapScrubber
+            maxLap={data.maxLap}
+            fcy={data.fcy || []}
+            activeLap={activeLap}
+            flagLabel={lapFlag}
+            onLap={(l) => { showLapInfo(l); autoPan(l); }}
+            navPrev={navPrev}
+            navNext={navNext}
+          />
+          <div className="md:hidden">{legend}</div>
         </div>
-      </div>
 
-      {/* Chart canvas */}
-      <div
-        ref={wrapperRef}
-        tabIndex={0}
-        className="relative h-[calc(100vh-280px)] min-h-[300px] overflow-hidden rounded-lg border outline-none md:h-auto md:min-h-[220px] md:flex-1"
-        style={{
-          background: CHART_STYLE.card,
-          borderColor: CHART_STYLE.border,
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onDoubleClick={onDoubleClick}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ display: "block", cursor: cursorStyle }}
-        />
-        {/* Zoom indicator */}
-        {isZoomed && (
-          <div
-            className="absolute text-[10px] font-mono"
-            style={{ bottom: 5, left: (dim?.ML ?? 50) - 2, color: CHART_STYLE.muted, zIndex: 2 }}
-          >
-            L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
+        <aside
+          aria-label="Lap details"
+          className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:overflow-hidden md:border-l md:border-t-0 lg:w-[400px]"
+          style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
+        >
+          <div className="no-scrollbar flex flex-col gap-3 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
+            <CarSummary data={data} focusNum={focusNum} />
+            <LapTimeDetails info={info} classView={classView} />
+            <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
           </div>
-        )}
-      </div>
-
-      {/* Info panel */}
-      <LapTimeInfoPanel info={info} focusNum={focusNum} navPrev={navPrev} navNext={navNext} />
-
-      {/* Legend */}
-      <div
-        className="flex flex-wrap gap-3 px-3 py-1 rounded-md text-[11px] border"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
-      >
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-2 rounded-sm" style={{ background: "#fbbf24", opacity: 0.2 }} />
-          FCY
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#fbbf24", border: "1px solid #000" }} />
-          Pit
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-0.5 rounded-sm" style={{ background: "linear-gradient(90deg,#f87171,#fbbf24,#34d399,#60a5fa,#a78bfa)", opacity: 0.5 }} />
-          Comp. cars
-        </span>
-      </div>
-
-      {/* Footnote */}
-      <div
-        className="px-3 py-1 rounded-md text-[11px] leading-relaxed border"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.dim }}
-      >
-        Rank 1 = fastest lap time. Pit laps and FCY laps excluded from ranking.
-        Use "Class View" to rank within a single class.
+        </aside>
       </div>
     </div>
   );
 }
 
-// ─── Info Panel ─────────────────────────────────────────────────────────────
+// ─── Lap details (side panel) ───────────────────────────────────────────────
 
-function LapTimeInfoPanel({
-  info,
-  focusNum,
-  navPrev,
-  navNext,
-}: {
-  info: LapTimeInfo | null;
-  focusNum: number;
-  navPrev: () => void;
-  navNext: () => void;
-}) {
-  const mobile = typeof window !== "undefined" && window.innerWidth <= 640;
+const LT = { card: "#12122a", line: "#1e1e38", muted: "#9a9ab4", good: "#4ade80", warn: "#fab219", bad: "#f87171" };
 
+function LapTimeDetails({ info, classView }: { info: LapTimeInfo | null; classView: string }) {
   if (!info) {
     return (
-      <div
-        className="flex items-center sm:block rounded-md border overflow-hidden"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, height: mobile ? 80 : 68, opacity: 0.4 }}
-      >
-        <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full border-r text-sm" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>◀</button>
-        <div className="flex-1 text-center text-sm py-4" style={{ color: CHART_STYLE.dim }}>
-          Tap a lap or use ◀ ▶ to step
-        </div>
-        <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 h-full border-l text-sm" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>▶</button>
-      </div>
+      <p className="rounded-lg border p-3 text-[13px]" style={{ background: LT.card, borderColor: LT.line, color: LT.muted }}>
+        Pick a lap: click or tap the chart, drag the strip under it, or use ◀ ▶ (arrow keys on a keyboard).
+      </p>
     );
   }
-
+  const toP1 = info.deltaToFastest;
   return (
-    <div
-      className="flex items-stretch sm:block rounded-md border overflow-hidden"
-      style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, minHeight: mobile ? 80 : 68 }}
-    >
-      <button onClick={navPrev} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-r cursor-pointer active:bg-[#1f1f3a]" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>◀</button>
-
-      <div className="flex-1 min-w-0 px-3 py-2 overflow-hidden">
-        <div className="flex flex-wrap items-baseline gap-2 sm:gap-4">
-          {/* Lap + rank */}
-          <div className="flex items-baseline gap-2.5 shrink-0 flex-wrap">
-            <span className="font-bold text-[15px] font-mono text-white">L{info.lapNum}</span>
-            {info.rank !== null ? (
-              <span className="font-bold text-[15px] font-mono text-white">
-                Rank {info.rank}/{info.totalRanked}
-              </span>
-            ) : (
-              <span className="text-[13px] font-mono" style={{ color: CHART_STYLE.muted }}>
-                {info.isPit ? "PIT" : info.isFcy ? "FCY" : "No rank"}
-              </span>
-            )}
-            <span className="text-xs" style={{ color: CHART_STYLE.muted }}>
-              {info.flagLabel}{info.isPit ? " — PIT" : ""}
-            </span>
-          </div>
-
-          {/* Lap time + delta */}
-          <div className="flex-1 min-w-0 flex items-baseline gap-3 text-xs flex-wrap" style={{ color: "#aaa" }}>
-            {info.lapTimeSec > 1 && (
-              <span>
-                Time: <b className="text-white font-mono font-semibold">{info.lapTime}</b>
-              </span>
-            )}
-            {info.deltaToFastest !== null && info.deltaToFastest > 0 && (
-              <span
-                className="font-semibold"
-                style={{ color: info.deltaToFastest < 0.5 ? "#4ade80" : info.deltaToFastest < 1.5 ? "#fbbf24" : "#f87171" }}
-              >
-                +{info.deltaToFastest.toFixed(3)}s to P1
-              </span>
-            )}
-            {info.rank === 1 && (
-              <span className="font-semibold" style={{ color: "#4ade80" }}>Fastest</span>
-            )}
-            {info.fastestTime && info.rank !== 1 && (
-              <span>
-                P1: <b className="text-white font-mono font-semibold">{info.fastestTime}</b>
-              </span>
-            )}
-            {info.compAvg && (
-              <>
-                <span className="text-[10px]" style={{ color: CHART_STYLE.border }}>│</span>
-                <span>
-                  Avg: <b className="text-white font-mono font-semibold">{info.compAvg}</b>
-                  <span style={{ color: CHART_STYLE.dim }}> ({info.compN} car{info.compN !== 1 ? "s" : ""})</span>
-                </span>
-                <span className="font-semibold" style={{ color: info.compDeltaColor }}>
-                  Δ{info.compDelta! > 0 ? "+" : ""}{info.compDelta!.toFixed(2)}s
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Car metadata */}
-          <div className="shrink-0 text-right text-[11px]" style={{ color: CHART_STYLE.dim }}>
-            #{focusNum} {info.carTeam} · {info.carClass}
-          </div>
-        </div>
+    <div className="grid grid-cols-2 gap-2.5 rounded-lg border p-3" style={{ background: LT.card, borderColor: LT.line }}>
+      <div className="col-span-2 flex justify-between">
+        <span className="font-semibold">Lap {info.lapNum}</span>
+        <span style={{ color: info.isFcy ? LT.warn : "#0ca30c" }}>● {info.isFcy ? "Full Course Yellow" : "Green"}</span>
       </div>
-
-      <button onClick={navNext} className="sm:hidden flex items-center justify-center w-9 shrink-0 border-l cursor-pointer active:bg-[#1f1f3a]" style={{ borderColor: CHART_STYLE.border, color: CHART_STYLE.text }}>▶</button>
+      <Stat
+        label={classView ? `Rank in ${classView}` : "Rank"}
+        value={info.rank !== null ? `${info.rank} of ${info.totalRanked}` : info.isPit ? "Pit lap" : info.isFcy ? "FCY lap" : "Not ranked"}
+        sub={info.rank === 1 ? "Fastest this lap" : undefined}
+      />
+      <Stat label="Lap time" value={info.lapTimeSec > 1 ? info.lapTime : "—"} sub={info.isPit ? "pit lap" : undefined} />
+      {info.fastestTime && info.rank !== 1 && toP1 !== null && toP1 > 0 && (
+        <div className="col-span-2 text-[13px]">
+          <span className="font-mono" style={{ color: toP1 < 0.5 ? LT.good : toP1 < 1.5 ? LT.warn : LT.bad }}>+{toP1.toFixed(3)}</span>
+          <span style={{ color: LT.muted }}> to the fastest this lap ({info.fastestTime})</span>
+        </div>
+      )}
+      {info.compAvg && info.compDelta !== null && (
+        <div className="col-span-2 text-[13px]">
+          <span className="font-mono" style={{ color: info.compDeltaColor }}>
+            {info.compDelta > 0 ? "+" : "−"}
+            {Math.abs(info.compDelta).toFixed(3)}
+          </span>
+          <span style={{ color: LT.muted }}>
+            {" "}vs the compare average {info.compAvg} ({info.compN} car{info.compN !== 1 ? "s" : ""} on green-flag laps)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

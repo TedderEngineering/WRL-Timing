@@ -18,7 +18,7 @@ function sec(s: number | null | undefined): string {
   return m > 0 ? `${sign}${m}:${r.toFixed(3).padStart(6, "0")}` : `${sign}${r.toFixed(3)}`;
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+export function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
       <div className="text-[11px] uppercase tracking-[0.06em]" style={{ color: T.muted }}>
@@ -42,6 +42,31 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
+/** The focus car: number, team, class, vehicle and finish (top of both charts' side panels). */
+export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: number }) {
+  const car = data.cars[String(focusNum)];
+  if (!car) return null;
+  const finish = car.finishPos && car.finishPos < 999 ? `P${car.finishPosClass} in ${car.cls} · P${car.finishPos} overall` : car.status || "Not classified";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="font-semibold">
+        <span className="font-mono" style={{ color: TRACE.focus }}>
+          #{focusNum}
+        </span>{" "}
+        {car.team} · {car.cls}
+      </div>
+      {(car.make || car.vehicle) && (
+        <div className="text-[13px]" style={{ color: T.soft }}>
+          {car.vehicle || car.make}
+        </div>
+      )}
+      <div className="text-[13px]" style={{ color: T.muted }}>
+        Finished {finish} · {car.laps.length} laps
+      </div>
+    </div>
+  );
+}
+
 export function LapDetailsPanel({
   data,
   info,
@@ -57,8 +82,6 @@ export function LapDetailsPanel({
 }) {
   const car = data.cars[String(focusNum)];
   if (!car) return null;
-  const lapsRun = car.laps.length;
-  const finish = car.finishPos && car.finishPos < 999 ? `P${car.finishPosClass} in ${car.cls} · P${car.finishPos} overall` : car.status || "Not classified";
 
   const lap = info?.lap ?? null;
   const pit = info?.pitInfo ?? null;
@@ -70,22 +93,7 @@ export function LapDetailsPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <div className="font-semibold">
-          <span className="font-mono" style={{ color: TRACE.focus }}>
-            #{focusNum}
-          </span>{" "}
-          {car.team} · {car.cls}
-        </div>
-        {(car.make || car.vehicle) && (
-          <div className="text-[13px]" style={{ color: T.soft }}>
-            {car.vehicle || car.make}
-          </div>
-        )}
-        <div className="text-[13px]" style={{ color: T.muted }}>
-          Finished {finish} · {lapsRun} laps
-        </div>
-      </div>
+      <CarSummary data={data} focusNum={focusNum} />
 
       {!lap ? (
         <p className="rounded-lg border p-3 text-[13px]" style={{ background: T.card, borderColor: T.line, color: T.muted }}>
