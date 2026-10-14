@@ -28,6 +28,7 @@ import { findOrCreateEvent, mapSeriesToSanctioningBody } from "./race-ingest.js"
 import { canonicalSourceKey, SOURCE_KEY_PATTERN } from "../intake/source-key.js";
 import { resultsStatusRank } from "../intake/file-select.js";
 import { sameSessionTraits } from "../intake/push.js";
+import { raceFamily } from "../intake/reimport.js";
 
 export const RESULTS_STATUSES = ["official", "provisional", "unofficial", "unknown", "none"] as const;
 
@@ -52,44 +53,8 @@ export const intakeBodySchema = z.object({
 
 export type IntakeBody = z.infer<typeof intakeBodySchema>;
 
-/**
- * Files some parsers require but a machine intake cannot always supply. The
- * Speedhive and WRL-website parsers throw without the Redmist flags CSV and
- * control log, which are not on Speedhive. A header-only table makes the
- * parser fall back to lap-status FCY detection (its own documented path,
- * speedhive.ts "Flags CSV produced no valid flag periods"). Placeholders go to
- * the parser only; they are never archived.
- */
-export const PARSER_PLACEHOLDERS: Record<string, Record<string, string>> = {
-  speedhive: {
-    flagsCsv: "Flag,Start,End,Duration\r\n",
-    controlLogCsv: "Sequence,Timestamp,Car_1,Car_2,Description,Action,Status\r\n",
-  },
-  "wrl-website": {
-    flagsCsv: "Flag,Start,End,Duration\r\n",
-    controlLogCsv: "Sequence,Timestamp,Car_1,Car_2,Description,Action,Status\r\n",
-  },
-};
-
-/** Parser input: declared slots only, plus placeholders for missing intake-optional slots. */
-export function parserInput(
-  parser: Pick<RaceDataParser, "id" | "fileSlots">,
-  files: Record<string, string>
-): { input: Record<string, string>; placeholders: string[]; missing: string[] } {
-  const input: Record<string, string> = {};
-  const placeholders: string[] = [];
-  const missing: string[] = [];
-  const ph = PARSER_PLACEHOLDERS[parser.id] ?? {};
-  for (const slot of parser.fileSlots) {
-    const v = files[slot.key];
-    if (typeof v === "string" && v.length > 0) input[slot.key] = v;
-    else if (ph[slot.key]) {
-      input[slot.key] = ph[slot.key];
-      placeholders.push(slot.key);
-    } else if (slot.required) missing.push(`${slot.label} (key: ${slot.key})`);
-  }
-  return { input, placeholders, missing };
-}
+export { PARSER_PLACEHOLDERS, parserInput } from "../intake/parser-input.js";
+import { parserInput } from "../intake/parser-input.js";
 
 export interface IntakeDeps {
   getParser: (format: string) => RaceDataParser | undefined;
@@ -204,7 +169,9 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
       if (r.sourceKey) throw new AppError(409, `Race ${r.id} already has the source key ${r.sourceKey}`, "ATTACH_KEYED");
       // The session may be up to four days after the race's date (older uploads carry the event's first day).
       const days = (Date.parse(`${body.metadata.date}T00:00:00Z`) - new Date(r.date).getTime()) / 86400000;
-      if (!body.force && (r.series !== body.metadata.series || !(days >= -1.5 && days <= 4.5) || !sameSessionTraits(body.metadata.name, r.name))) {
+      // Same series family (older uploads spell series several ways: "GR CUP", "GR_CUP", "GTWC", a championship name).
+      const sameFamily = r.series === body.metadata.series || (raceFamily(r.series) !== null && raceFamily(r.series) === raceFamily(body.metadata.series, body.metadata.subSeries));
+      if (!body.force && (!sameFamily || !(days >= -2.5 && days <= 4.5) || !sameSessionTraits(body.metadata.name, r.name))) {
         throw new AppError(
           409,
           `Race ${r.id} ("${r.name}", ${r.series}, ${new Date(r.date).toISOString().slice(0, 10)}) does not look like this session (${body.metadata.series}, ${body.metadata.date}). Send force: true to attach anyway.`,
@@ -355,10 +322,14 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
  * Races without a source key (imported by hand before the intake), for
  * `intake discover` to suggest which one a session could be attached to.
  */
-export async function listUnkeyedRaces(filter: { series?: string; season?: number } = {}) {
+export async function listUnkeyedRaces(filter: { series?: string; season?: number; withCars?: boolean } = {}) {
   const rows = await prisma.race.findMany({
     where: { sourceKey: null, ...(filter.series ? { series: filter.series } : {}), ...(filter.season ? { season: filter.season } : {}) },
-    select: { id: true, name: true, date: true, track: true, series: true, season: true, status: true, maxLap: true, totalCars: true },
+    select: {
+      id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true, status: true, maxLap: true, totalCars: true,
+      // Car numbers let the re-import match a race to its timing session by the cars that ran.
+      ...(filter.withCars ? { entries: { select: { carNumber: true, lapsCompleted: true } } } : {}),
+    },
     orderBy: { date: "desc" },
   });
   return rows.map((r: any) => ({
@@ -371,6 +342,10 @@ export async function listUnkeyedRaces(filter: { series?: string; season?: numbe
     status: r.status as string,
     maxLap: r.maxLap ?? null,
     totalCars: r.totalCars ?? null,
+    ...(r.subSeries ? { subSeries: r.subSeries as string } : {}),
+    ...(filter.withCars
+      ? { cars: ((r.entries ?? []) as { carNumber: string; lapsCompleted: number | null }[]).filter((e) => (e.lapsCompleted ?? 1) > 0).map((e) => e.carNumber) }
+      : {}),
   }));
 }
 

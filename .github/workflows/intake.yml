@@ -3,6 +3,12 @@
 #
 # Run it from the Actions tab (works from a phone): Actions → "RaceTrace intake" → Run workflow.
 #   mode = discover   lists what is new or changed; nothing is written anywhere.
+#   mode = reimport-plan  pairs every race already on the site (no source key) with its timing
+#                     session by its cars, laps and race number: exact / unsure / duplicate /
+#                     not found. Nothing is written.
+#   mode = reimport   the same, then re-imports every exact pair in place (same id, URL, name
+#                     and status; the old files stay archived). Unsure, duplicate and not-found
+#                     races are left as they are.
 #   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
 #                     New sessions that may be a race already on the site (an older
 #                     upload without a source key) are skipped and listed, unless the
@@ -27,7 +33,7 @@ on:
         required: true
         default: "wrl"
       season:
-        description: "Season (year)"
+        description: "Season (year); reimport modes take several, e.g. 2025,2026"
         required: true
         default: "2026"
       since:
@@ -35,9 +41,9 @@ on:
         required: false
         default: ""
       mode:
-        description: "discover = list only; import = pull and push new/changed races as drafts"
+        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place"
         type: choice
-        options: [discover, import]
+        options: [discover, import, reimport-plan, reimport]
         default: discover
       replace_matched:
         description: "import only: replace races already on the site when exactly one matches (same series, date and session); otherwise they are held"
@@ -81,7 +87,29 @@ jobs:
           fi
           npx tsx scripts/intake.ts preflight
 
+      - name: Re-import plan
+        if: inputs.mode == 'reimport-plan' || inputs.mode == 'reimport'
+        env:
+          SERIES: ${{ inputs.series }}
+          SEASON: ${{ inputs.season }}
+          APPLY: ${{ inputs.mode == 'reimport' }}
+        run: |
+          set -o pipefail
+          args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/reimport-plan.json")
+          [ "$APPLY" = "true" ] && args+=(--apply)
+          status=0
+          npx tsx scripts/intake.ts reimport-plan "${args[@]}" > "$RUNNER_TEMP/plan.txt" 2> "$RUNNER_TEMP/plan.log" || status=1
+          tail -n 40 "$RUNNER_TEMP/plan.log"
+          cat "$RUNNER_TEMP/plan.txt"
+          { echo "## Re-import plan: $SERIES $SEASON"; echo '```'; cat "$RUNNER_TEMP/plan.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Re-import plan::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/plan.txt"
+          if [ "$status" -ne 0 ]; then
+            node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").split("\n").slice(-25).join("\n");console.log("::error title=Re-import plan failed::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/plan.log"
+          fi
+          exit $status
+
       - name: Discover
+        if: inputs.mode == 'discover' || inputs.mode == 'import'
         env:
           SERIES: ${{ inputs.series }}
           SEASON: ${{ inputs.season }}

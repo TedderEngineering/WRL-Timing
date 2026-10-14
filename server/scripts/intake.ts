@@ -15,6 +15,9 @@
  *   npx tsx scripts/intake.ts validate <draft.json> [--base <facts.base.json>] [--scope-class <id>] [--publish] [--json]
  *   npx tsx scripts/intake.ts steps                              which pipeline scripts this checkout has
  *   npx tsx scripts/intake.ts speedhive-org --from-session <URL|id>
+ *   npx tsx scripts/intake.ts reimport-plan --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--save <file>] [--apply]
+ *                                      pair races already on the site (no source key) with their timing sessions by
+ *                                      their cars; --apply re-imports every exact pair in place (same id, URL, name, status)
  *
  * Environment (process env, then server/.env.intake, then <repo>/.env.intake):
  *   RACETRACE_API_URL     e.g. https://<api host>   (the "/api" suffix is optional)
@@ -39,6 +42,9 @@ import { addManualFiles, readManifest, workDirFor, writeManifest } from "../src/
 import { apiConfigFromEnv, apiRequest, attachCandidates, buildPushBody, compareWithKnown, type KnownRace, type UnkeyedRace } from "../src/intake/push.js";
 import { seriesById } from "../src/intake/series.js";
 import { speedhiveOrgFromSession } from "../src/intake/sources/speedhive.js";
+import { candidateSessions, planReimport, type SessionPrint, type SiteRace } from "../src/intake/reimport.js";
+import { parserInput } from "../src/intake/parser-input.js";
+import { getParser } from "../src/utils/parsers/index.js";
 import { canonicalSourceKey } from "../src/intake/source-key.js";
 import { buildFactsArgs, packageIdFor } from "../src/intake/facts-args.js";
 import type { Manifest, RaceSession } from "../src/intake/types.js";
@@ -402,6 +408,119 @@ async function cmdSpeedhiveOrg(a: ReturnType<typeof parseArgs>) {
   if (r.id) log(`\nAdd to .env.intake:  SPEEDHIVE_WRL_ORG_ID=${r.id}`);
 }
 
+/** WRL 2025 on Speedhive: a known WRL session (COTA 2025 Sunday) gives the organisation id when none is set. */
+const KNOWN_WRL_SPEEDHIVE_SESSION = 11586857;
+
+/** Cars and laps of a pulled session, from the legacy parser (what the site's chart would show). */
+async function sessionPrint(dir: string, m: Manifest): Promise<SessionPrint | null> {
+  const parser = getParser(m.legacyFormat);
+  if (!parser) return null;
+  const { body } = buildPushBody(dir, m, { includeArchiveOnly: false });
+  const { input, missing } = parserInput(parser, body.files);
+  if (missing.length) return null;
+  const parsed = await parser.parse(input);
+  const cars = Object.entries(parsed.data.cars)
+    .filter(([, c]) => (c as { laps: unknown[] }).laps.length > 0)
+    .map(([k]) => k);
+  return { cars, maxLap: parsed.data.maxLap };
+}
+
+async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("reimport-plan needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const series = a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"];
+  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
+  const ur = await apiRequest<{ races: SiteRace[] }>(cfg, "GET", "/admin/intake/races?unkeyed=1&cars=1");
+  if (ur.status !== 200) throw new Error(`GET /admin/intake/races?unkeyed=1&cars=1 → HTTP ${ur.status}`);
+  const races = ur.data.races.filter((r) => seasons.includes(r.season));
+  log(`${races.length} race(s) on the site without a source key in ${seasons.join(", ")}`);
+
+  let org = Number(a.one("org") ?? process.env.SPEEDHIVE_WRL_ORG_ID ?? "") || undefined;
+  const h = http();
+  if (!org && series.some((x) => x.split(",").includes("wrl-speedhive"))) {
+    try {
+      org = (await speedhiveOrgFromSession(h, String(KNOWN_WRL_SPEEDHIVE_SESSION))).id ?? undefined;
+      log(`Speedhive WRL organisation: ${org ?? "not found"}`);
+    } catch (e) {
+      log(`Warning: could not find the Speedhive WRL organisation (${(e as Error).message}); 2025 WRL races will be not-found.`);
+    }
+  }
+  const sessions: RaceSession[] = [];
+  for (const season of seasons) {
+    for (const sel of series) {
+      const ids = sel.split(",").filter((x) => x !== "wrl-speedhive" || org);
+      if (!ids.length) continue;
+      try {
+        sessions.push(...(await discover(h, { series: ids, season, speedhiveOrgId: org, log })));
+      } catch (e) {
+        log(`Warning: discover ${ids.join(",")} ${season}: ${(e as Error).message}`);
+      }
+    }
+  }
+  const uniq = [...new Map(sessions.map((x) => [x.sourceKey, x])).values()];
+  const cands = candidateSessions(races, uniq);
+  log(`${uniq.length} session(s) found; ${cands.length} could be one of those races — fetching them to compare cars`);
+
+  const prints = new Map<string, SessionPrint>();
+  const dirs = new Map<string, string>();
+  for (const [i, s] of cands.entries()) {
+    log(`[${i + 1}/${cands.length}] ${s.raceDate} ${s.seriesId} ${s.event} — ${s.sessionName}`);
+    try {
+      const dir = workDirFor(WORK, s.sourceKey);
+      const r = await download(h, s, dir, { log: () => undefined });
+      const p = await sessionPrint(dir, r.manifest);
+      if (p) {
+        prints.set(s.sourceKey, p);
+        dirs.set(s.sourceKey, dir);
+      } else log("  could not parse (missing lap file?)");
+    } catch (e) {
+      log(`  skipped: ${(e as Error).message}`);
+    }
+  }
+
+  const rows = planReimport(races, uniq, prints);
+  const save = a.one("save") ?? join(WORK, "reimport-plan.json");
+  mkdirSync(dirname(save), { recursive: true });
+  writeFileSync(save, JSON.stringify({ plannedAt: new Date().toISOString(), seasons, series, rows: rows.map((r) => ({ ...r, dir: r.sourceKey ? dirs.get(r.sourceKey) ?? null : null })) }, null, 2));
+  const n = (st: string) => rows.filter((r) => r.state === st).length;
+  console.log(
+    table([
+      ["STATE", "RACE DATE", "SERIES", "RACE ON THE SITE", "SESSION", "CARS", "LAPS", "NOTE"],
+      ...rows.map((r) => [
+        r.state,
+        r.raceDate,
+        r.raceSeries,
+        `${r.raceName} (${r.raceId})`,
+        r.session ? `${r.session.date} ${r.session.event} — ${r.session.sessionName}` : "",
+        r.carOverlap !== undefined ? `${Math.round(r.carOverlap * 100)}%` : "",
+        r.lapCounts ? `${r.lapCounts[0] ?? "?"}/${r.lapCounts[1]}` : "",
+        r.note,
+      ]),
+    ])
+  );
+  console.log(`\n${rows.length} race(s): ${n("exact")} exact, ${n("unsure")} unsure, ${n("duplicate")} duplicate, ${n("not-found")} not found. Saved: ${save}`);
+
+  if (!a.has("apply")) return;
+  const out = [["RESULT", "RACE", "SOURCE KEY"]];
+  let failed = 0;
+  for (const r of rows.filter((x) => x.state === "exact")) {
+    const dir = r.sourceKey ? dirs.get(r.sourceKey) : undefined;
+    if (!dir) continue;
+    const m = readManifest(dir)!;
+    m.attachToRaceId = r.raceId;
+    writeManifest(dir, m);
+    const { body } = buildPushBody(dir, m, {});
+    const res = await apiRequest<any>(cfg, "POST", "/admin/intake/races", body);
+    if (res.status >= 200 && res.status < 300) out.push([res.data.attached ? "re-imported" : res.data.action, `${r.raceName} (${r.raceId})`, r.sourceKey!]);
+    else {
+      failed++;
+      out.push([`error ${res.status} ${res.data?.code ?? ""}`, `${r.raceName} (${r.raceId})`, `${r.sourceKey}: ${String(res.data?.error ?? "").slice(0, 160)}`]);
+    }
+  }
+  console.log("\n" + table(out));
+  if (failed) process.exitCode = 1;
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const a = parseArgs(rest);
@@ -424,8 +543,10 @@ async function main() {
       return cmdPreflight(a);
     case "speedhive-org":
       return cmdSpeedhiveOrg(a);
+    case "reimport-plan":
+      return cmdReimportPlan(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan`);
   }
 }
 
