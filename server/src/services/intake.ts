@@ -129,11 +129,23 @@ export async function insertEntriesAndLaps(tx: Tx, raceId: string, data: RaceDat
         speed: lap.spd ?? null,
         pitStop: lap.pit === 1,
       });
-      if (batch.length >= 500) await flush();
+      if (batch.length >= LAP_BATCH) await flush();
     }
   }
   await flush();
   return { entries: entryData.length, laps: total };
+}
+
+/** Lap rows per insert: 11 columns × 2,000 rows stays well under Postgres's 65,535 bind parameters. */
+const LAP_BATCH = 2000;
+/**
+ * The write transaction's time limit. A 24-hour race has about 45,000 laps, and a re-import deletes
+ * the old rows before writing the new ones; 60 seconds was not enough for the Rolex 24.
+ */
+const WRITE_TIMEOUT_MS = 300_000;
+
+function isTransactionTimeout(e: unknown): boolean {
+  return !!e && typeof e === "object" && (e as { code?: string }).code === "P2028";
 }
 
 function isUniqueViolation(e: unknown): boolean {
@@ -281,9 +293,16 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
         const c = await insertEntriesAndLaps(tx, race.id, data);
         return { action: "created" as const, raceId: race.id, counts: c };
       },
-      { timeout: 60000 }
+      { timeout: WRITE_TIMEOUT_MS, maxWait: 20_000 }
     ));
   } catch (e) {
+    if (isTransactionTimeout(e)) {
+      throw new AppError(
+        504,
+        `Saving ${carCount} cars and their laps took longer than ${WRITE_TIMEOUT_MS / 1000} s, so nothing was saved (the raw files are archived). Run it again; if it keeps happening, the race is too large for one write.`,
+        "WRITE_TIMEOUT"
+      );
+    }
     if (isUniqueViolation(e)) {
       throw new AppError(409, "Another intake created this race at the same moment; run push again to update it.", "SOURCE_KEY_CONFLICT");
     }

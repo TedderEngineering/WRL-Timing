@@ -231,6 +231,15 @@ describe("intake upsert by source key", () => {
     expect(store.races.size).toBe(1);
   });
 
+  it("a write that runs out of time is a clear 504, with a long enough limit for a 24-hour race", async () => {
+    db.$transaction.mockImplementationOnce(async (_fn: any, opts: any) => {
+      expect(opts.timeout).toBeGreaterThanOrEqual(300_000);
+      throw Object.assign(new Error("Transaction already closed"), { code: "P2028" });
+    });
+    await expect(intakeRace(body(), actor, deps)).rejects.toMatchObject({ statusCode: 504, code: "WRITE_TIMEOUT" });
+    expect(store.races.size).toBe(0);
+  });
+
   it("lists intake races for discovery", async () => {
     await intakeRace(body(), actor, deps);
     const rows = await listIntakeRaces();
