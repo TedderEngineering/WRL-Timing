@@ -95,3 +95,31 @@ describe("re-import plan", () => {
     expect(candidateSessions([races[0]], sessions).map((s) => s.sourceKey).sort()).toEqual(["sro:gr-r1", "sro:gt4-r1", "sro:gt4-r2"]);
   });
 });
+
+describe("re-import plan: telling candidates apart", () => {
+  it("one race listed twice with identical results is one candidate, from the source the intake uses", () => {
+    const rm = { ...session("redmist:event:9/session:1", "redmist", "2026-07-26", "Sunday 7 Hour", "wrl"), season: 2026 };
+    const sh = { ...session("speedhive:session:55", "speedhive", "2026-07-26", "Sunday 7 Hour", "wrl-speedhive"), season: 2026 };
+    const prints = new Map<string, SessionPrint>([[rm.sourceKey, { cars: cars(40), maxLap: 240 }], [sh.sourceKey, { cars: cars(40), maxLap: 240 }]]);
+    const rows = planReimport([race("w1", "WRL", "2026-07-24", "Sunday 7-Hour", cars(40), 240)], [sh, rm], prints);
+    expect(rows[0]).toMatchObject({ state: "exact", sourceKey: rm.sourceKey });
+  });
+
+  it("a sprint weekend's two races with the same field: the matching lap count and date decide", () => {
+    const r1 = session("sro:son-r1", "sro", "2025-03-29", "Race 1");
+    const r2 = session("sro:son-r2", "sro", "2025-03-30", "Race 2");
+    const prints = new Map<string, SessionPrint>([[r1.sourceKey, { cars: cars(20), maxLap: 23 }], [r2.sourceKey, { cars: cars(20), maxLap: 22 }]]);
+    const rows = planReimport([race("g1", "GR_CUP", "2025-03-30", "GR Cup — Sonoma Raceway", cars(20), 22)], [r1, r2], prints);
+    expect(rows[0]).toMatchObject({ state: "exact", sourceKey: r2.sourceKey });
+  });
+
+  it("same field, same laps, same day: still the owner's call", () => {
+    const a = session("imsa:a-r1", "imsa", "2026-03-19", "Race 1");
+    const b = session("imsa:a-r2", "imsa", "2026-03-19", "Race 2");
+    // Identical results too: Race 1 and Race 2 are still two races.
+    const prints = new Map<string, SessionPrint>([[a.sourceKey, { cars: cars(20), maxLap: 20 }], [b.sourceKey, { cars: cars(20), maxLap: 20 }]]);
+    const rows = planReimport([race("p1", "Porsche Carrera Cup North America", "2026-03-19", "Porsche Carrera Cup — Sebring", cars(20), 20)], [a, b], prints);
+    expect(rows[0].state).toBe("unsure");
+  });
+});
+
