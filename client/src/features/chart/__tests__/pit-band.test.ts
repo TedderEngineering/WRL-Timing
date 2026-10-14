@@ -70,3 +70,23 @@ describe("pit-cycle leaders", () => {
     expect(texts[2].y).toBeLessThan(texts[0].y - 25);
   });
 });
+
+describe("pit cycle panel", () => {
+  it("compares the focus car's stop with the same stop of every car in its class, and keeps the out-lap", async () => {
+    const { classStopCycle } = await import("../pit-stops");
+    const t = (out: number | null) => ({ pitInTime: null, pitRoadTime: 55, pitOutTime: null, isDriveThrough: false, totalPitLoss: 56, inLapTime: 168, outLapTime: out, avgGreenLapTime: 117, splitReliable: out !== null, decompositionLevel: "total_only" as const });
+    const car = (num: number, cls: string, pitLaps: number[]) => ({ num, team: `T${num}`, cls, finishPos: 1, finishPosClass: 1, laps: Array.from({ length: 60 }, (_, i) => lap(i + 1, 1, pitLaps.includes(i + 1) ? 1 : 0)) });
+    const data = {
+      cars: { "67": car(67, "GS", [26, 51]), "3": car(3, "GS", [20, 36]), "4": car(4, "GS", [22]), "93": car(93, "TCR", [30, 50]) },
+      classGroups: { GS: [67, 3, 4], TCR: [93] },
+    } as never;
+    const pm = (l: number, out: number | null = 100) => ({ l, lb: "Pit", c: "#fff", yo: 0, da: 0, pitTiming: t(out) });
+    const ann = { "67": { reasons: {}, settles: [], pits: [pm(26), pm(51, null)] }, "3": { reasons: {}, settles: [], pits: [pm(20), pm(36)] }, "4": { reasons: {}, settles: [], pits: [pm(22)] }, "93": { reasons: {}, settles: [], pits: [pm(30), pm(50)] } } as never;
+    const c = classStopCycle(data, ann, 67, 51)!;
+    expect(c.stopNumber).toBe(2);
+    expect(c.rows.map((r) => [r.carNum, r.pitLap])).toEqual([[67, 51], [3, 36]]);
+    expect([c.firstLap, c.lastLap]).toEqual([36, 51]);
+    // No split from the import: the whole out-lap (lap 52, 100 s) is shown.
+    expect(c.rows[0]).toMatchObject({ outLap: 100, outLapWhole: true });
+  });
+});
