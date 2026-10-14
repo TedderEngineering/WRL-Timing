@@ -50,7 +50,7 @@ export function SupportAsk() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => openSupport(copy.site === "grip" ? "calculation" : "recap")}
+            onClick={() => openSupport(copy.site === "grip" ? "on-target" : "recap")}
             className="rounded-md bg-[var(--rt-accent)] px-3.5 py-2 text-sm font-semibold text-[var(--rt-on-accent)]"
           >
             ☕ Buy me a coffee

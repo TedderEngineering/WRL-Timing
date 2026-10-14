@@ -111,10 +111,10 @@ describe("Finding Grip", () => {
     expect(out).toContain("Buy me 3 coffees · $15");
   });
 
-  it("asks after a calculation, and the card and thanks name Finding Grip", () => {
+  it("asks when a run came in on target, and the card and thanks name Finding Grip", () => {
     __setSiteConfigForTests({ support: SUPPORT });
     const ask = text(renderToStaticMarkup(<MemoryRouter><SupportProvider site="grip"><SupportAsk /><SupportCard /></SupportProvider></MemoryRouter>));
-    expect(ask).toContain("Got your pressures?");
+    expect(ask).toContain("On target.");
     expect(ask).toContain("Brent, and I build Finding Grip");
     expect(ask).toContain("Finding Grip is free");
     expect(ask).not.toContain("RaceTrace");

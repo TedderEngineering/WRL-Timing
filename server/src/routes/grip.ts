@@ -45,6 +45,7 @@ import {
   createGripPortalSession,
 } from "../services/grip/billing.js";
 import { gripSite, readGripPublicUrl } from "../services/site.js";
+import { actualOf, compare, ON_TARGET_PSI } from "../services/grip/outcome.js";
 
 export const gripRouter = Router();
 
@@ -186,6 +187,14 @@ const convertSchema = z.object({
   notes,
 });
 
+/** How a run came in. Optionally also saves it as a reference session (once). */
+const outcomeSchema = z.object({
+  hot: corners(psi),
+  saveAsReference: z.boolean().optional().default(false),
+  referenceName: name.optional(),
+  notes,
+});
+
 const trackSchema = z.object({
   name: z.string().trim().min(2).max(120),
   shortName: z
@@ -250,9 +259,70 @@ function calculationOut(c: GripCalculation & { track: GripTrack }) {
     result: { lf: c.resultLf, rf: c.resultRf, lr: c.resultLr, rr: c.resultRr },
     referenceCold: { lf: c.refColdLf, rf: c.refColdRf, lr: c.refColdLr, rr: c.refColdRr },
     convertedToRef: c.convertedToRef,
+    outcome: outcomeOut(c),
+    /** The driver said there is nothing to record for this run. */
+    outcomeSkipped: c.outcomeSkipped,
     createdAt: c.createdAt,
   };
 }
+
+/** The measured hot pressures and how close they were to the targets, once recorded. */
+function outcomeOut(c: GripCalculation) {
+  const hot = actualOf(c);
+  if (!hot || !c.outcomeAt) return null;
+  const target = { lf: c.targetLf, rf: c.targetRf, lr: c.targetLr, rr: c.targetRr };
+  return {
+    hot,
+    ...compare(target, hot),
+    onTargetPsi: ON_TARGET_PSI,
+    recordedAt: c.outcomeAt,
+  };
+}
+
+/** Row data for a reference session made from a calculation plus the measured hot pressures. */
+function referenceFromCalculation(
+  calc: GripCalculation,
+  userId: string,
+  input: {
+    name: string;
+    hot: { lf: number; rf: number; lr: number; rr: number };
+    notes?: string | null;
+  }
+) {
+  return {
+    userId,
+    name: input.name,
+    trackId: calc.trackId,
+    sessionDate: calc.sessionDate,
+    weather: calc.weather,
+    trackTemp: calc.trackTemp,
+    ambientTemp: calc.ambientTemp,
+    durationMin: calc.durationMin,
+    // The cold pressures that were set for the run are the calculated ones.
+    coldLf: calc.resultLf,
+    coldRf: calc.resultRf,
+    coldLr: calc.resultLr,
+    coldRr: calc.resultRr,
+    hotLf: input.hot.lf,
+    hotRf: input.hot.rf,
+    hotLr: input.hot.lr,
+    hotRr: input.hot.rr,
+    wheelLf: calc.wheelLf,
+    wheelRf: calc.wheelRf,
+    wheelLr: calc.wheelLr,
+    wheelRr: calc.wheelRr,
+    notes: input.notes || null,
+  };
+}
+
+const outcomeData = (hot: { lf: number; rf: number; lr: number; rr: number }) => ({
+  actualHotLf: hot.lf,
+  actualHotRf: hot.rf,
+  actualHotLr: hot.lr,
+  actualHotRr: hot.rr,
+  outcomeAt: new Date(),
+  outcomeSkipped: false,
+});
 
 function sessionData(input: z.infer<typeof sessionSchema>) {
   return {
@@ -686,9 +756,10 @@ gripRouter.post(
 
     const session = await prisma.$transaction(async (tx) => {
       // Claim it first so a double submit cannot create two reference sessions.
+      // The measured hot pressures also record how this run came in.
       const claimed = await tx.gripCalculation.updateMany({
         where: { id: calc.id, userId, convertedToRef: false },
-        data: { convertedToRef: true },
+        data: { convertedToRef: true, ...outcomeData(input.hot) },
       });
       if (claimed.count === 0) {
         throw new AppError(
@@ -698,35 +769,77 @@ gripRouter.post(
         );
       }
       return tx.gripReferenceSession.create({
-        data: {
-          userId,
-          name: input.name,
-          trackId: calc.trackId,
-          sessionDate: calc.sessionDate,
-          weather: calc.weather,
-          trackTemp: calc.trackTemp,
-          ambientTemp: calc.ambientTemp,
-          durationMin: calc.durationMin,
-          // The cold pressures that were set for the run are the calculated ones.
-          coldLf: calc.resultLf,
-          coldRf: calc.resultRf,
-          coldLr: calc.resultLr,
-          coldRr: calc.resultRr,
-          hotLf: input.hot.lf,
-          hotRf: input.hot.rf,
-          hotLr: input.hot.lr,
-          hotRr: input.hot.rr,
-          wheelLf: calc.wheelLf,
-          wheelRf: calc.wheelRf,
-          wheelLr: calc.wheelLr,
-          wheelRr: calc.wheelRr,
-          notes: input.notes || null,
-        },
+        data: referenceFromCalculation(calc, userId, input),
         include: { track: true },
       });
     });
 
     res.status(201).json({ session: sessionOut(session) });
+  })
+);
+
+/**
+ * Record how a run came in: the hot pressures measured after it. Can be
+ * corrected later. With saveAsReference, the run also becomes a reference
+ * session for next time (only once per calculation).
+ */
+gripRouter.post(
+  "/calculations/:id/outcome",
+  wrap(async (req, res) => {
+    const userId = req.user!.userId;
+    const calc = await ownCalculation(userId, idParam(req));
+    const input = outcomeSchema.parse(req.body);
+
+    const { updated, session } = await prisma.$transaction(async (tx) => {
+      let session = null;
+      if (input.saveAsReference) {
+        // Claim the conversion first so a double submit cannot create two reference sessions.
+        const claimed = await tx.gripCalculation.updateMany({
+          where: { id: calc.id, userId, convertedToRef: false },
+          data: { convertedToRef: true },
+        });
+        if (claimed.count > 0) {
+          session = await tx.gripReferenceSession.create({
+            data: referenceFromCalculation(calc, userId, {
+              name: input.referenceName ?? `${calc.name} (ref)`.slice(0, 100),
+              hot: input.hot,
+              notes: input.notes,
+            }),
+            include: { track: true },
+          });
+        }
+      }
+      const changed = await tx.gripCalculation.updateMany({
+        where: { id: calc.id, userId },
+        data: outcomeData(input.hot),
+      });
+      if (changed.count === 0)
+        throw new AppError(404, "Calculation not found", "NOT_FOUND");
+      const updated = await tx.gripCalculation.findUniqueOrThrow({
+        where: { id: calc.id },
+        include: { track: true },
+      });
+      return { updated, session };
+    });
+
+    res.json({
+      calculation: calculationOut(updated),
+      session: session ? sessionOut(session) : null,
+    });
+  })
+);
+
+/** "Didn't run it": stop asking how this calculation came in. */
+gripRouter.post(
+  "/calculations/:id/skip-outcome",
+  wrap(async (req, res) => {
+    const userId = req.user!.userId;
+    const calc = await ownCalculation(userId, idParam(req));
+    await prisma.gripCalculation.updateMany({
+      where: { id: calc.id, userId },
+      data: { outcomeSkipped: true },
+    });
+    res.json({ calculation: calculationOut(await ownCalculation(userId, calc.id)) });
   })
 );
 
@@ -861,10 +974,11 @@ gripRouter.get(
         c.resultRf,
         c.resultLr,
         c.resultRr,
-        "",
-        "",
-        "",
-        "",
+        // Hot pressures measured after the run, when recorded.
+        c.actualHotLf,
+        c.actualHotRf,
+        c.actualHotLr,
+        c.actualHotRr,
         c.targetLf,
         c.targetRf,
         c.targetLr,

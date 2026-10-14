@@ -48,7 +48,7 @@ import { GripDashboardPage } from "./pages/grip/GripDashboardPage";
 import { GripSessionsPage } from "./pages/grip/GripSessionsPage";
 import { GripSessionFormPage } from "./pages/grip/GripSessionFormPage";
 import { GripCalculatorPage } from "./pages/grip/GripCalculatorPage";
-import { GripConvertPage } from "./pages/grip/GripConvertPage";
+import { GripOutcomePage } from "./pages/grip/GripOutcomePage";
 import { GripDamperPage } from "./pages/grip/GripDamperPage";
 import { GripGuidePage } from "./pages/grip/GripGuidePage";
 import { GripSettingsPage } from "./pages/grip/GripSettingsPage";
@@ -74,7 +74,9 @@ function gripRoutes() {
         <Route path={gp("/sessions/new")} element={<GripSessionFormPage />} />
         <Route path={gp("/sessions/:id/edit")} element={<GripSessionFormPage />} />
         <Route path={gp("/calculate")} element={<GripCalculatorPage />} />
-        <Route path={gp("/calculations/:id/convert")} element={<GripConvertPage />} />
+        <Route path={gp("/calculations/:id/outcome")} element={<GripOutcomePage />} />
+        {/* Older links: converting is now part of recording how the run came in. */}
+        <Route path={gp("/calculations/:id/convert")} element={<GripOutcomePage />} />
         <Route path={gp("/damper")} element={<GripDamperPage />} />
         <Route path={gp("/guide")} element={<GripGuidePage />} />
         <Route path={gp("/settings")} element={<GripSettingsPage />} />

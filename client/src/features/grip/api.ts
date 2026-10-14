@@ -88,7 +88,31 @@ export interface Calculation {
   result: Corners;
   referenceCold: Corners;
   convertedToRef: boolean;
+  /** How the run came in, once the measured hot pressures are recorded. */
+  outcome: Outcome | null;
+  /** The driver said there is nothing to record for this run. */
+  outcomeSkipped: boolean;
   createdAt: string;
+}
+
+export interface Outcome {
+  /** Measured hot pressures (PSI). */
+  hot: Corners;
+  /** Measured minus target, per corner (PSI). */
+  delta: Corners;
+  onTarget: boolean;
+  worstMiss: number;
+  averageMiss: number;
+  /** A corner within this many PSI of its target counts as on target. */
+  onTargetPsi: number;
+  recordedAt: string;
+}
+
+export interface OutcomeInput {
+  hot: Corners;
+  saveAsReference?: boolean;
+  referenceName?: string;
+  notes?: string | null;
 }
 
 export interface CalculationInput {
@@ -184,6 +208,18 @@ export const gripApi = {
     api
       .post<{ session: ReferenceSession }>(`/grip/calculations/${id}/convert`, input)
       .then((r) => r.session),
+
+  /** Record the hot pressures measured after the run (optionally also saving it as a reference). */
+  recordOutcome: (id: string, input: OutcomeInput) =>
+    api.post<{ calculation: Calculation; session: ReferenceSession | null }>(
+      `/grip/calculations/${id}/outcome`,
+      input
+    ),
+  /** "Didn't run it": stop asking how this one came in. */
+  skipOutcome: (id: string) =>
+    api
+      .post<{ calculation: Calculation }>(`/grip/calculations/${id}/skip-outcome`)
+      .then((r) => r.calculation),
 
   damper: (q: DamperQuery) =>
     api.get<DamperResult>(`/grip/damper?${new URLSearchParams({ ...q }).toString()}`),

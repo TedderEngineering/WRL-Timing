@@ -50,7 +50,7 @@ import {
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
-import { SupportAsk } from "@/features/support/SupportPrompts";
+import { OutcomePill } from "@/features/grip/outcome";
 import { gp } from "@/lib/site";
 
 const WEATHER = [
@@ -97,8 +97,7 @@ export function GripCalculatorPage() {
   const [upgrade, setUpgrade] = useState(false);
   /** Phone only: the reference session's full details start folded away. */
   const [referenceOpen, setReferenceOpen] = useState(false);
-  // True once a calculation has been run on this visit (not just opened):
-  // the moment the driver got something useful, so the one place we may ask for a coffee.
+  /** True once a calculation has been run on this visit (not just opened). */
   const [calculatedHere, setCalculatedHere] = useState(false);
 
   // A saved calculation opened from the dashboard (?calc=<id>), or the one
@@ -616,17 +615,44 @@ export function GripCalculatorPage() {
                     see them for what you have entered now.
                   </p>
                 )}
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-gray-500">Saved to your dashboard.</span>
+                <span className="block text-xs text-gray-500">
+                  Saved to your dashboard.
+                </span>
+                {/* Close the loop: the hot pressures after the run show how close it came. */}
+                {result.outcome ? (
                   <Link
-                    to={gp(`/calculations/${result.id}/convert`)}
-                    className="text-sm font-semibold text-grip-600 dark:text-grip-400 hover:underline"
+                    to={gp(`/calculations/${result.id}/outcome`)}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/60"
                   >
-                    Convert to reference →
+                    <span className="flex items-center gap-2">
+                      <OutcomePill calc={result} units={units} />
+                      <span className="text-gray-700 dark:text-gray-300">
+                        How it came in
+                      </span>
+                    </span>
+                    <span className="font-semibold text-grip-600 dark:text-grip-400">
+                      →
+                    </span>
                   </Link>
-                </div>
-                {/* At most once every 30 days, never to a supporter (see features/support). */}
-                {calculatedHere && <SupportAsk />}
+                ) : (
+                  <Link
+                    to={gp(`/calculations/${result.id}/outcome`)}
+                    className={cn(
+                      "block rounded-lg border px-3 py-2.5 text-sm hover:bg-grip-500/10",
+                      calculatedHere
+                        ? "border-grip-500 bg-grip-500/5"
+                        : "border-gray-200 dark:border-gray-800"
+                    )}
+                  >
+                    <span className="block font-semibold text-gray-900 dark:text-gray-100">
+                      After the session: how did it come in? →
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      Enter the hot pressures you measure to see how close it came, and
+                      save it as a reference for next time.
+                    </span>
+                  </Link>
+                )}
               </>
             ) : (
               <>
