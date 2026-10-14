@@ -8,6 +8,7 @@ import { RecapCard, EventRow } from "../features/dashboard/RecapCard";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
+import { SupportCard } from "../features/support/SupportPrompts";
 
 interface RaceItem {
   id: string;
@@ -263,6 +264,9 @@ export function DashboardPage() {
         {/* Season */}
         <div className="min-w-0 flex-[1_1_340px]">
           <SeasonPanel data={season} />
+          <div className="mt-4">
+            <SupportCard />
+          </div>
         </div>
       </div>
     </div>

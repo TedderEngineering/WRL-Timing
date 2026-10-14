@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { optionalAuth } from "../middleware/auth.js";
 import { prisma } from "../models/prisma.js";
 import { getFreeAccessRaceIds } from "../services/races.js";
+import { freeMode } from "../lib/free-mode.js";
 
 export const searchRouter = Router();
 
@@ -146,7 +147,7 @@ searchRouter.get(
       });
 
       // Include free access race IDs for gating
-      const isFullAccess = isAdmin; // PRO/TEAM check handled client-side via auth context
+      const isFullAccess = isAdmin || freeMode(); // PRO/TEAM check handled client-side via auth context
       const freeRaceIds = isFullAccess ? [] : await getFreeAccessRaceIds();
 
       res.json({ events: results, freeAccessRaceIds: freeRaceIds });

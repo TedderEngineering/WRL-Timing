@@ -498,15 +498,26 @@ describe("GET /api/races/:id/package", () => {
     expect(fake.state.audit.at(-1)).toMatchObject({ action: "SET_RACE_PACKAGES_OVERRIDE", details: { disabled: true } });
   });
 
-  it("keeps the /chart-data access gating", async () => {
-    await uploadAndPublish("pkg-one");
-    // Make the race too new for the free tier (10-hour rule).
-    fake.state.races.get(RACE)!.createdAt = new Date();
+  it("keeps the /chart-data access gating (plans on)", async () => {
+    process.env.RACETRACE_FREE = "off";
+    try {
+      await uploadAndPublish("pkg-one");
+      // Make the race too new for the free tier (10-hour rule).
+      fake.state.races.get(RACE)!.createdAt = new Date();
 
-    const anon = await get("");
-    expect(anon.status).toBe(403);
-    expect(anon.body.code).toBe("AUTH_REQUIRED");
-    expect((await get("", bearer(users.pro))).status).toBe(200);
+      const anon = await get("");
+      expect(anon.status).toBe(403);
+      expect(anon.body.code).toBe("AUTH_REQUIRED");
+      expect((await get("", bearer(users.pro))).status).toBe(200);
+    } finally {
+      delete process.env.RACETRACE_FREE;
+    }
+  });
+
+  it("opens every published race to everyone while RaceTrace is free", async () => {
+    await uploadAndPublish("pkg-one");
+    fake.state.races.get(RACE)!.createdAt = new Date();
+    expect((await get("")).status).toBe(200);
   });
 
   it("hides draft races from users", async () => {

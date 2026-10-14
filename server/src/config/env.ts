@@ -84,6 +84,16 @@ const envSchema = z.object({
   RACETRACE_RULE_FLAGS: z.enum(["R0", "R1", "R2"]).default("R0"),
   // Folder with race-analysis-package*.schema.json; default <repo>/shared/race-analysis-package.
   RACETRACE_SCHEMA_DIR: z.string().optional(),
+  // RaceTrace is free (October 2026): "on" (default) opens every race and feature to
+  // everyone and hides the plans; "off" restores the Free / Pro / Team limits. Stripe
+  // subscriptions are untouched either way. Read at request time (lib/free-mode.ts).
+  RACETRACE_FREE: z.enum(["on", "off"]).default("on"),
+  // Optional support ("Buy me a coffee"). One coffee in cents; checkout runs through the
+  // Stripe account above. SUPPORT_PAYMENT_LINK_URL (a Stripe Payment Link) is used instead
+  // when SUPPORT_CHECKOUT is "off".
+  SUPPORT_CHECKOUT: z.enum(["on", "off"]).default("on"),
+  SUPPORT_COFFEE_CENTS: z.coerce.number().int().min(100).max(10000).default(500),
+  SUPPORT_PAYMENT_LINK_URL: z.string().url().optional(),
 
   // Email
   RESEND_API_KEY: z.string().optional(),

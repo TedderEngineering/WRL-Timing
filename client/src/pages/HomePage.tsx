@@ -6,6 +6,8 @@ import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { HeroChart } from "../components/landing/HeroChart";
 import { FeatureCard } from "../components/landing/FeatureCard";
+import { useSiteConfig } from "../lib/site-config";
+import { FreePlans } from "../features/support/FreePlans";
 
 const PRICE_IDS: Record<string, string | undefined> = {
   PRO: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
@@ -14,6 +16,7 @@ const PRICE_IDS: Record<string, string | undefined> = {
 
 export function HomePage() {
   const { isAuthenticated } = useAuth();
+  const free = useSiteConfig().freeMode;
   const navigate = useNavigate();
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -85,15 +88,17 @@ export function HomePage() {
                     {isAuthenticated ? "Go to Dashboard" : "Get Started Free"}
                   </Button>
                 </Link>
-                <Link to="/pricing">
-                  <Button variant="secondary" size="lg" className="text-base px-8 border-gray-700 text-gray-300 hover:bg-gray-800">
-                    View Pricing
-                  </Button>
-                </Link>
+                {!free && (
+                  <Link to="/pricing">
+                    <Button variant="secondary" size="lg" className="text-base px-8 border-gray-700 text-gray-300 hover:bg-gray-800">
+                      View Pricing
+                    </Button>
+                  </Link>
+                )}
               </div>
 
               <p className="mt-4 text-sm text-gray-500">
-                No credit card required. Free tier includes 3 most recent races.
+                {free ? "Free for everyone. No credit card, no ads." : "No credit card required. Free tier includes 3 most recent races."}
               </p>
             </div>
 
@@ -215,7 +220,12 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ─── Pricing Preview ──────────────────────────────────────────── */}
+      {/* ─── Pricing Preview (or "Everything is free") ─────────────────── */}
+      {free ? (
+        <section className="container-page py-20 lg:py-28">
+          <FreePlans />
+        </section>
+      ) : (
       <section className="container-page py-20 lg:py-28">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
@@ -336,6 +346,8 @@ export function HomePage() {
           </Link>
         </p>
       </section>
+
+      )}
 
       {/* ─── Final CTA ─────────────────────────────────────────────────── */}
       <section className="relative bg-gray-950 text-white overflow-hidden">

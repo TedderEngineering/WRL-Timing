@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../features/auth/AuthContext";
 import { api } from "../../lib/api";
+import { isFreeMode } from "../../lib/site-config";
 export function BillingSettingsPage() {
   const { user, refreshUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -48,6 +49,16 @@ export function BillingSettingsPage() {
   return (
     <div className="space-y-8 max-w-lg">
       <h2 className="text-xl font-bold text-gray-900 dark:text-gray-50">Billing</h2>
+
+      {isFreeMode() && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-300">
+          <p className="m-0 font-semibold text-gray-900 dark:text-gray-100">RaceTrace is free now.</p>
+          <p className="mb-0 mt-1">
+            Every race and feature is open to everyone. If you still have a paid subscription, you can cancel it below with
+            "Manage subscription"; nothing you can see will change.
+          </p>
+        </div>
+      )}
 
       {/* Success banner */}
       {showSuccess && (

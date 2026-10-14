@@ -1,4 +1,5 @@
 import { prisma } from "../models/prisma.js";
+import { freeMode } from "../lib/free-mode.js";
 import { AppError } from "../middleware/error-handler.js";
 import { Prisma } from "@prisma/client";
 import { packagesEnabledFor } from "../packages/flags.js";
@@ -35,6 +36,7 @@ export async function canUserAccessRace(
   userPlan: string | null,
   userRole: string | null
 ): Promise<{ accessible: boolean; reason?: string }> {
+  if (freeMode()) return { accessible: true };
   if (userRole === "ADMIN") return { accessible: true };
   if (userPlan === "PRO" || userPlan === "TEAM") return { accessible: true };
 
@@ -113,7 +115,9 @@ export async function listRaces(params: RaceListParams, userId?: string) {
     prisma.race.count({ where }),
   ]);
 
-  const freeAccessIds = await getFreeAccessRaceIds();
+  // Free mode: every race is open, so skip the "three newest" lookup.
+  const free = freeMode();
+  const freeAccessIds = free ? [] : await getFreeAccessRaceIds();
 
   return {
     races: races.map((r: any) => ({
@@ -130,7 +134,7 @@ export async function listRaces(params: RaceListParams, userId?: string) {
       entryCount: r._count.entries,
       favoriteCount: r._count.favorites,
       isFavorited: userId ? r.favorites?.length > 0 : false,
-      accessibleToFree: freeAccessIds.includes(r.id),
+      accessibleToFree: free || freeAccessIds.includes(r.id),
       createdAt: r.createdAt.toISOString(),
     })),
     total,

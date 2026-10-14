@@ -53,6 +53,7 @@ import { GripDamperPage } from "./pages/grip/GripDamperPage";
 import { GripGuidePage } from "./pages/grip/GripGuidePage";
 import { GripSettingsPage } from "./pages/grip/GripSettingsPage";
 import { GripAdminPage } from "./pages/grip/GripAdminPage";
+import { SupportThanksPage } from "./features/support/SupportThanksPage";
 
 /** Finding Grip pages. At /grip/... on RaceTrace; at the root of the Finding Grip site. */
 function gripRoutes() {
@@ -148,6 +149,7 @@ export function App() {
         {/* Public routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/support/thanks" element={<SupportThanksPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
 

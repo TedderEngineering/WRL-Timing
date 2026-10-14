@@ -3,6 +3,7 @@ import { verifyAccessToken, type AccessTokenPayload } from "../utils/tokens.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "./error-handler.js";
 import { authenticateApiToken, hasScope, isApiTokenString } from "../services/api-tokens.js";
+import { freeMode } from "../lib/free-mode.js";
 
 // Extend Express Request to include user
 declare global {
@@ -138,8 +139,8 @@ export function requireSubscription(minimumTier: "FREE" | "PRO" | "TEAM") {
       return next(new AppError(401, "Authentication required", "AUTH_REQUIRED"));
     }
 
-    // Admins bypass subscription checks
-    if (req.user.role === "ADMIN") {
+    // Admins bypass subscription checks; while RaceTrace is free, so does everyone.
+    if (req.user.role === "ADMIN" || freeMode()) {
       return next();
     }
 

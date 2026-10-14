@@ -118,8 +118,15 @@ describe("GET /api/dashboard/latest", () => {
     expect(res.body.events[0].races[0].recap).toBeNull();
   });
 
-  it("marks races a free member cannot open as locked and sends no recap for them", async () => {
+  it("while RaceTrace is free, nothing is locked for a free member", async () => {
     const res = await request(app).get("/api/dashboard/latest").set("Authorization", bearer(users.free));
+    expect(res.body.events.flatMap((e: any) => e.races).every((r: any) => !r.locked)).toBe(true);
+  });
+
+  it("with plans on, marks races a free member cannot open as locked and sends no recap for them", async () => {
+    process.env.RACETRACE_FREE = "off";
+    const res = await request(app).get("/api/dashboard/latest").set("Authorization", bearer(users.free));
+    delete process.env.RACETRACE_FREE;
     const all = res.body.events.flatMap((e: any) => e.races);
     // free members get the three newest races
     expect(all.filter((r: any) => !r.locked).map((r: any) => r.id)).toEqual(["gt4r1", "gt4r2", "vir"]);

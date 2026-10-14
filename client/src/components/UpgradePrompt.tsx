@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
+import { isFreeMode } from "../lib/site-config";
 
 interface UpgradePromptProps {
   open: boolean;
@@ -10,7 +11,7 @@ export function UpgradePrompt({ open, onClose }: UpgradePromptProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  if (!open) return null;
+  if (!open || isFreeMode()) return null;
 
   return (
     <div

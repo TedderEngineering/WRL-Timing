@@ -3,6 +3,7 @@ import { optionalAuth } from "../middleware/auth.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getFreeAccessRaceIds } from "../services/races.js";
+import { freeMode } from "../lib/free-mode.js";
 
 export const eventsRouter = Router();
 
@@ -54,8 +55,8 @@ eventsRouter.get(
       });
 
       // Determine free access race IDs for non-premium users
-      const plan = isAdmin ? "ADMIN" : await getUserPlan(req.user?.userId);
-      const fullAccess = isAdmin || plan === "PRO" || plan === "TEAM";
+      const plan = isAdmin || freeMode() ? "ADMIN" : await getUserPlan(req.user?.userId);
+      const fullAccess = isAdmin || freeMode() || plan === "PRO" || plan === "TEAM";
       const freeRaceIds = fullAccess ? [] : await getFreeAccessRaceIds();
 
       res.json({
@@ -130,8 +131,8 @@ eventsRouter.get(
       }
 
       // Determine per-race accessibility
-      const plan = isAdmin ? "ADMIN" : await getUserPlan(req.user?.userId);
-      const fullAccess = isAdmin || plan === "PRO" || plan === "TEAM";
+      const plan = isAdmin || freeMode() ? "ADMIN" : await getUserPlan(req.user?.userId);
+      const fullAccess = isAdmin || freeMode() || plan === "PRO" || plan === "TEAM";
       const freeRaceIds = fullAccess ? null : await getFreeAccessRaceIds();
       const freeSet = freeRaceIds ? new Set(freeRaceIds) : null;
 
