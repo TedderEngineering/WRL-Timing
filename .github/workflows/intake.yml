@@ -95,14 +95,25 @@ jobs:
           APPLY: ${{ inputs.mode == 'reimport' }}
         run: |
           set -o pipefail
-          args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/reimport-plan.json")
+          args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/reimport-plan.json" --notes "$RUNNER_TEMP/plan-notes.txt")
           [ "$APPLY" = "true" ] && args+=(--apply)
           status=0
           npx tsx scripts/intake.ts reimport-plan "${args[@]}" > "$RUNNER_TEMP/plan.txt" 2> "$RUNNER_TEMP/plan.log" || status=1
           tail -n 40 "$RUNNER_TEMP/plan.log"
           cat "$RUNNER_TEMP/plan.txt"
           { echo "## Re-import plan: $SERIES $SEASON"; echo '```'; cat "$RUNNER_TEMP/plan.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Re-import plan::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/plan.txt"
+          # Annotations hold about 4 KB and a step may post ten of each kind: post the compact plan
+          # in parts so all of it can be read through the checks API.
+          if [ -f "$RUNNER_TEMP/plan-notes.txt" ]; then
+            node -e '
+              const t = require("fs").readFileSync(process.argv[1], "utf8").split("\n");
+              const parts = []; let cur = "";
+              for (const l of t) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+              if (cur.trim()) parts.push(cur);
+              const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+              parts.slice(0, 10).forEach((p, i) => console.log(`::notice title=Re-import plan ${i + 1}/${Math.min(parts.length, 10)}${parts.length > 10 ? " (more in the job summary)" : ""}::` + enc(p)));
+            ' "$RUNNER_TEMP/plan-notes.txt"
+          fi
           if [ "$status" -ne 0 ]; then
             node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").split("\n").slice(-25).join("\n");console.log("::error title=Re-import plan failed::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/plan.log"
           fi

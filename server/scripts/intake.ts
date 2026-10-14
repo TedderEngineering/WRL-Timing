@@ -499,6 +499,26 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
     ])
   );
   console.log(`\n${rows.length} race(s): ${n("exact")} exact, ${n("unsure")} unsure, ${n("duplicate")} duplicate, ${n("not-found")} not found. Saved: ${save}`);
+  // --notes: the same plan, compact, for the workflow's annotations (they hold ~4 KB each):
+  // the races to look at first in full, then the exact pairs one short line each.
+  const notes = a.one("notes");
+  if (notes) {
+    const short = (r: (typeof rows)[number]) =>
+      [r.raceDate, r.raceSeries, r.raceName, r.raceId, r.session ? `${r.session.date} ${r.session.event} — ${r.session.sessionName}` : "-", r.carOverlap !== undefined ? `${Math.round(r.carOverlap * 100)}%` : "-", r.lapCounts ? `${r.lapCounts[0] ?? "?"}/${r.lapCounts[1]}` : "-", r.note].join(" | ");
+    const lines = [
+      `${rows.length} race(s): ${n("exact")} exact, ${n("unsure")} unsure, ${n("duplicate")} duplicate, ${n("not-found")} not found.`,
+      "date | series | race on the site | id | session | cars | laps (site/session) | note",
+      ...(["unsure", "duplicate", "not-found"] as const).flatMap((st) => {
+        const rs = rows.filter((r) => r.state === st);
+        return rs.length ? [``, `${st.toUpperCase()} (${rs.length})`, ...rs.map(short)] : [];
+      }),
+      "",
+      `EXACT (${n("exact")})`,
+      ...rows.filter((r) => r.state === "exact").map((r) => `${r.raceDate} | ${r.raceSeries} | ${r.raceName} | ${r.raceId} | ${r.session?.date ?? ""} ${r.session?.sessionName ?? ""}`),
+    ];
+    mkdirSync(dirname(notes), { recursive: true });
+    writeFileSync(notes, lines.join("\n") + "\n");
+  }
 
   if (!a.has("apply")) return;
   const out = [["RESULT", "RACE", "SOURCE KEY"]];
