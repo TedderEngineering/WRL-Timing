@@ -358,7 +358,7 @@ function PitCycleView({
           </div>
 
           {/* Table rows */}
-          <div className="flex-1 overflow-y-auto px-3 pb-3">
+          <div className="no-scrollbar flex-1 overflow-y-auto px-3 pb-3">
             {sorted.map((car) => {
               const isExp = expanded === car.num;
               const cc = CLASS_COLORS[car.cls] || "#666";
@@ -487,7 +487,7 @@ function RacingLapView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="no-scrollbar flex-1 overflow-y-auto">
         {carEvents.map((ev) => {
           const style = REASON_STYLES[ev.reason];
           return (

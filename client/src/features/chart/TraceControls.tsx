@@ -29,11 +29,9 @@ export interface TraceControlsProps {
   compSet: Set<number>;
   toggleComp: (n: number) => void;
   clearComp: () => void;
-  makeFilter: string;
-  setMakeFilter: (m: string) => void;
-  activeLap: number | null;
-  navPrev: () => void;
-  navNext: () => void;
+  /** Makes picked; empty = all. Several can be picked. */
+  makeFilter: string[];
+  setMakeFilter: (m: string[]) => void;
   xAxisMode: "laps" | "hours" | "both";
   setXAxisMode: (m: "laps" | "hours" | "both") => void;
 }
@@ -303,13 +301,18 @@ export function TraceControls(p: TraceControlsProps) {
             Make
           </span>
           {[{ m: "", n: 0 }, ...makes].map(({ m, n }) => {
-            const on = p.makeFilter === m;
+            const on = m ? p.makeFilter.includes(m) : p.makeFilter.length === 0;
             return (
               <button
                 key={m || "all"}
                 type="button"
                 aria-pressed={on}
-                onClick={() => p.setMakeFilter(m)}
+                onClick={() => {
+                  if (!m) return p.setMakeFilter([]);
+                  const next = on ? p.makeFilter.filter((x) => x !== m) : [...p.makeFilter, m];
+                  // Every make picked is the same as all of them.
+                  p.setMakeFilter(next.length === makes.length ? [] : next);
+                }}
                 className="min-h-[32px] rounded-full border px-2.5 text-[13px]"
                 style={{
                   borderColor: on ? T.accent : T.border,
@@ -381,37 +384,6 @@ export function TraceControls(p: TraceControlsProps) {
         </div>
       )}
 
-      <span className="hidden flex-1 lg:block" />
-
-      {/* Lap stepper (the strip under the chart has its own on a phone) + x axis */}
-      {!compact && (
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Previous lap"
-            onClick={p.navPrev}
-            className="h-10 w-10 rounded-md border"
-            style={{ background: T.card, borderColor: T.border, color: T.text }}
-          >
-            ◀
-          </button>
-          <span
-            className="min-w-[70px] px-2 text-center font-mono text-sm font-semibold"
-            aria-live="polite"
-          >
-            {p.activeLap !== null ? `Lap ${p.activeLap}` : "Lap —"}
-          </span>
-          <button
-            type="button"
-            aria-label="Next lap"
-            onClick={p.navNext}
-            className="h-10 w-10 rounded-md border"
-            style={{ background: T.card, borderColor: T.border, color: T.text }}
-          >
-            ▶
-          </button>
-        </div>
-      )}
       {compact && filtersOpen && <AxisToggle value={p.xAxisMode} onChange={p.setXAxisMode} />}
     </div>
   );

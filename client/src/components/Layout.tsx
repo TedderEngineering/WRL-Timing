@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Button } from "./Button";
 import { UserMenu } from "./UserMenu";
@@ -102,10 +102,14 @@ function MobileMenu() {
 export function Layout() {
   const { isAuthenticated, isLoading } = useAuth();
   useSiteConfig(); // re-render when free mode / support settings arrive
+  // Race and qualifying pages are apps: they fill the window exactly (no page scroll, no footer)
+  // and each part scrolls on its own.
+  const { pathname } = useLocation();
+  const appPage = pathname === "/chart" || pathname.startsWith("/qualifying/");
 
   return (
     <SupportProvider>
-    <div className="min-h-screen flex flex-col">
+    <div className={appPage ? "h-dvh flex flex-col overflow-hidden" : "min-h-screen flex flex-col"}>
       {/* Navigation */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
         <nav className="container-page flex items-center justify-between h-16">
@@ -167,12 +171,12 @@ export function Layout() {
       </header>
 
       {/* Page content */}
-      <main className="flex-1">
+      <main className={appPage ? "flex-1 min-h-0" : "flex-1"}>
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
+      {!appPage && <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
         <div className="container-page flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
           <a href="https://tedderengineering.com" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-6 dark:hidden" />
@@ -188,7 +192,7 @@ export function Layout() {
             </Link>
           </div>
         </div>
-      </footer>
+      </footer>}
     </div>
     </SupportProvider>
   );

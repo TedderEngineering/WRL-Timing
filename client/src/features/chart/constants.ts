@@ -46,6 +46,10 @@ export const TRACE = {
   selected: "rgba(255,255,255,0.35)",
   axis: "#9a9ab4",
   grid: "#1e1e38",
+  gain: "#4ade80",
+  loss: "#f87171",
+  leader: "rgba(224,224,232,0.18)",
+  driverText: "#f3f4f6",
 } as const;
 
 /** Compare-car colours, in the order cars were added (mockup F1). */

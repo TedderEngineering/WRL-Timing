@@ -190,7 +190,7 @@ export function RaceDetailPage() {
     <>
 
       {/* Desktop: flex-row layout — sidebar left, chart right */}
-      <div className="hidden md:flex h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="hidden md:flex h-full overflow-hidden">
         <EventSidebar
           isCollapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((p) => !p)}
@@ -204,7 +204,7 @@ export function RaceDetailPage() {
       </div>
 
       {/* Mobile: full-width content + drawer overlay */}
-      <div className="md:hidden min-w-0">
+      <div className="md:hidden h-full min-w-0">
         {content}
         <EventSidebar
           isCollapsed={false}
@@ -367,9 +367,11 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
-    <div className="h-full overflow-y-auto" style={{ background: "#0b0b18", color: RT.text }}>
+    // Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
+    // parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar.
+    <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
       {/* Header (mockup F1): breadcrumb, race, status, star */}
-      <section className="flex flex-col gap-2 px-3 pt-3 sm:px-6 sm:pt-4">
+      <section className="flex shrink-0 flex-col gap-1.5 px-3 pt-2.5 sm:px-6 sm:pt-3">
         <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: RT.muted }}>
           {/* Phone: the event list opens as a drawer */}
           <button
@@ -425,7 +427,7 @@ export function RaceDetailPage() {
       </section>
 
       {/* Race views */}
-      <nav aria-label="Race views" className="mt-1 flex gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+      <nav aria-label="Race views" className="no-scrollbar mt-0.5 flex shrink-0 gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -447,7 +449,7 @@ export function RaceDetailPage() {
                   return next;
                 }, { replace: true });
               }}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-sm"
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm"
               style={{
                 color: isActive ? RT.text : RT.muted,
                 fontWeight: isActive ? 600 : 400,
@@ -467,7 +469,7 @@ export function RaceDetailPage() {
       </nav>
 
       {lockedMsg && (
-        <div className="mx-3 mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
+        <div className="mx-3 mt-3 inline-flex shrink-0 items-center gap-2 self-start rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
           This view is part of the Team plan.{" "}
           <Link to="/pricing" className="underline" style={{ color: RT.accent }}>
             See plans
@@ -477,7 +479,7 @@ export function RaceDetailPage() {
 
       {/* Lap Times keeps its focus picker above the chart */}
       {activeTab === "laptimes" && (
-        <div className="flex items-center gap-2 px-3 pt-3 sm:px-6">
+        <div className="flex shrink-0 items-center gap-2 px-3 pt-3 sm:px-6">
           <label htmlFor="lt-focus" className="text-[11px] uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
             Focus
           </label>
@@ -503,7 +505,7 @@ export function RaceDetailPage() {
       )}
 
       {/* Chart — kept mounted to preserve internal state (focusNum, compSet, classView) */}
-      <div className={activeTab !== "position" ? "hidden" : undefined}>
+      <div className={activeTab !== "position" ? "hidden" : "flex flex-col md:min-h-0 md:flex-1"}>
         <LapChart
           data={data} annotations={annotations} watermarkEmail={user?.email}
           focusNum={focusNum} setFocusNum={setFocusNum}
@@ -514,28 +516,32 @@ export function RaceDetailPage() {
       </div>
 
       {activeTab === "laptimes" && (
-        <LapTimeChart
-          data={data} annotations={annotations} watermarkEmail={user?.email}
-          focusNum={focusNum} setFocusNum={setFocusNum}
-          compSet={compSet} setCompSet={setCompSet}
-          classView={classView} setClassView={setClassView}
-          activeLap={activeLap} setActiveLap={setActiveLap}
-        />
+        <div className="flex flex-col px-2 pb-2 pt-2 sm:px-6 md:min-h-0 md:flex-1">
+          <LapTimeChart
+            data={data} annotations={annotations} watermarkEmail={user?.email}
+            focusNum={focusNum} setFocusNum={setFocusNum}
+            compSet={compSet} setCompSet={setCompSet}
+            classView={classView} setClassView={setClassView}
+            activeLap={activeLap} setActiveLap={setActiveLap}
+          />
+        </div>
       )}
 
       {activeTab === "pitanalysis" && (
-        <div className="px-2 py-3 sm:px-6">
+        <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
           <PitAnalysisTab raceId={id} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
         </div>
       )}
 
       {activeTab === "strategy" && (
-        <StrategyTab
-          data={data} annotations={annotations}
-          classView={classView} setClassView={setClassView}
-          focusNum={focusNum} setFocusNum={setFocusNum}
-          onSwitchToTrace={() => setActiveTab("position")}
-        />
+        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <StrategyTab
+            data={data} annotations={annotations}
+            classView={classView} setClassView={setClassView}
+            focusNum={focusNum} setFocusNum={setFocusNum}
+            onSwitchToTrace={() => setActiveTab("position")}
+          />
+        </div>
       )}
 
     </div>

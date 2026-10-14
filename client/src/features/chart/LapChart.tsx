@@ -52,15 +52,16 @@ export function LapChart({
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
   const isTeam = hasTeamAccess(user);
-  const [makeFilter, setMakeFilter] = useState("");
+  // Makes picked in the Make filter; empty = all makes.
+  const [makeFilter, setMakeFilter] = useState<string[]>([]);
   const [teamNote, setTeamNote] = useState(false);
 
-  // The faint field: every car in the class view (and make, when one is picked).
+  // The faint field: every car in the class view (and the makes picked, if any).
   const fieldCars = useMemo(() => {
     const base = getVisibleCars(data, classView);
-    if (!makeFilter) return base;
-    const mg = makeGroupsOf(data)[makeFilter] ?? [];
-    const keep = new Set(mg);
+    if (!makeFilter.length) return base;
+    const groups = makeGroupsOf(data);
+    const keep = new Set(makeFilter.flatMap((m) => groups[m] ?? []));
     return base.filter((n) => keep.has(n) || n === focusNum);
   }, [data, classView, makeFilter, focusNum]);
 
@@ -116,7 +117,7 @@ export function LapChart({
     if (!wrapperRef.current) return;
     const containerW = wrapperRef.current.clientWidth;
     const containerH = wrapperRef.current.clientHeight;
-    const newDim = computeDimensions(containerW, containerH, isMobile, xAxisMode);
+    const newDim = computeDimensions(containerW, containerH, isMobile, xAxisMode, undefined, { driverBand: true });
     setDim(newDim);
     return newDim;
   }, [isMobile, xAxisMode]);
@@ -529,16 +530,33 @@ export function LapChart({
   const focusCar = data.cars[String(focusNum)];
   const viewLabel = classView ? `Class position (${classView}) · ${fieldCars.length} cars` : `Overall position · ${fieldCars.length} cars`;
   const lapFlag = info?.lap ? (info.lap.flag === "FCY" ? "FCY" : "Green") : null;
+  // Under the chart on a phone; at the foot of the side panel from md up, so the trace keeps the height.
+  const legend = (
+    <ul aria-label="Legend" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs" style={{ color: "#cbd5e1" }}>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{focusNum}</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-px w-[18px]" style={{ background: "rgba(224,224,232,0.5)" }} />Other cars{classView ? ` in ${classView}` : ""}</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)", borderTop: "2px solid #fbbf24" }} />Full Course Yellow (FCY)</li>
+      <li>● Pit stop</li>
+      <li><span style={{ color: TRACE.garage }}>●</span> Garage</li>
+      <li>▲ Drive-through</li>
+      <li><span style={{ color: TRACE.penalty }}>◆</span> Penalty</li>
+      <li><span style={{ color: TRACE.gain }}>▲</span><span style={{ color: TRACE.loss }}>▼</span> Places gained / lost at a stop</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-white" />Selected lap</li>
+      <li style={{ color: TRACE.axis }} title={`Lap time under ${data.greenPaceCutoff.toFixed(1)} s; no FCY laps.`}>Pace: green-flag laps only</li>
+    </ul>
+  );
 
   return (
-    <div className="flex flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    // From md up the trace fills the space it is given; only the side panel scrolls (invisibly).
+    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       <TraceControls
         data={data}
         focusNum={focusNum}
         onFocus={(n) => setFocusNum(n)}
         classView={classView}
         setClassView={(c) => {
-          setMakeFilter("");
+          setMakeFilter([]);
           // A class view is about that class: if the focus car is in another class, focus its leader.
           if (c && data.cars[String(focusNum)]?.cls !== c) {
             const leader = (data.classGroups[c] ?? [])
@@ -554,22 +572,18 @@ export function LapChart({
         clearComp={handleClear}
         makeFilter={makeFilter}
         setMakeFilter={setMakeFilter}
-        activeLap={activeLap}
-        navPrev={navPrev}
-        navNext={navNext}
         xAxisMode={xAxisMode}
         setXAxisMode={setXAxisMode}
       />
 
-      <div className="flex flex-wrap">
-        <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-3 px-2 py-3 sm:px-6 sm:py-4">
-          <figure className="m-0 rounded-lg border p-2 sm:p-3" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
+          <figure className="m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
             <div
               ref={wrapperRef}
               tabIndex={0}
               aria-label={`Position trace for car ${focusNum}${focusCar ? `, ${focusCar.team}` : ""}. Click a lap for details; arrow keys step laps.`}
-              className="relative overflow-hidden outline-none"
-              style={{ height: isMobile ? 360 : "calc(100vh - 360px)", minHeight: isMobile ? 300 : 380 }}
+              className="relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"
             >
               <canvas
                 ref={canvasRef}
@@ -583,7 +597,7 @@ export function LapChart({
                 style={{ display: "block", cursor: cursorStyle }}
               />
             </div>
-            <figcaption className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
+            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
               <span className="flex items-center gap-3">
                 {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
                 {viewLabel}
@@ -610,41 +624,24 @@ export function LapChart({
             navNext={navNext}
           />
 
-          <ul aria-label="Legend" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1.5 p-0 text-xs" style={{ color: "#cbd5e1" }}>
-            <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{focusNum}</li>
-            <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
-            <li className="flex items-center gap-1.5"><span className="inline-block h-px w-[18px]" style={{ background: "rgba(224,224,232,0.5)" }} />Other cars{classView ? ` in ${classView}` : ""}</li>
-            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)", borderTop: "2px solid #fbbf24" }} />Full Course Yellow (FCY)</li>
-            <li>● Pit stop</li>
-            <li><span style={{ color: TRACE.garage }}>●</span> Garage</li>
-            <li>▲ Drive-through</li>
-            <li><span style={{ color: TRACE.penalty }}>◆</span> Penalty</li>
-            <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-white" />Selected lap</li>
-          </ul>
-          <p className="m-0 text-xs" style={{ color: TRACE.axis }}>
-            Pace comparisons use green-flag laps only (lap time under {data.greenPaceCutoff.toFixed(1)} s; no FCY laps).
-          </p>
+          <div className="md:hidden">{legend}</div>
         </div>
 
         <aside
           aria-label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
-          className="flex w-full flex-[1_1_360px] flex-col gap-3 border-t p-4 lg:max-w-[420px] lg:border-l lg:border-t-0"
+          className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:overflow-hidden md:border-l md:border-t-0 lg:w-[400px]"
           style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
         >
-          {teamNote && !sidePanel && (
-            <div className="rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: CHART_STYLE.border, color: TRACE.axis }}>
-              These panels are part of the Team plan.
-            </div>
-          )}
           {sidePanel ? (
-            <div className="flex min-h-[420px] flex-col">
-              <div className="mb-2 flex items-center justify-between">
+            <div className="flex h-[70vh] flex-col md:h-auto md:min-h-0 md:flex-1">
+              <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-3">
                 <span className="font-semibold">{panelTitle[sidePanel]}</span>
                 <button type="button" onClick={() => setSidePanel(null)} className="min-h-[36px] text-[13px]" style={{ color: TRACE.focus }}>
                   ‹ Lap details
                 </button>
               </div>
-              <div className="-mx-4 flex-1 overflow-y-auto" style={{ background: CHART_STYLE.card }}>
+              {/* Each panel scrolls its own list, without a visible scrollbar */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ background: CHART_STYLE.card }}>
                 {sidePanel === "pit" && activeLap !== null && (
                   <PitCyclePanel data={data} annotations={annotations} focusNum={focusNum} activeLap={activeLap} />
                 )}
@@ -679,7 +676,15 @@ export function LapChart({
               </div>
             </div>
           ) : (
-            <LapDetailsPanel data={data} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
+            <div className="no-scrollbar flex flex-col gap-3 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
+              {teamNote && (
+                <div className="rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: CHART_STYLE.border, color: TRACE.axis }}>
+                  These panels are part of the Team plan.
+                </div>
+              )}
+              <LapDetailsPanel data={data} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
+              <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
+            </div>
           )}
         </aside>
       </div>

@@ -13,6 +13,7 @@ import type {
   LapData,
 } from "@shared/types";
 import { COMPARE_PALETTE, COMP_PALETTE, CHART_STYLE, TRACE } from "./constants";
+import { deltaText, driverStints, pitDeltas } from "./pit-band";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,8 @@ export interface ChartDimensions {
   MB: number;
   CW: number;
   CH: number;
+  /** Position Trace only: the driver band and the pit row above the plot. */
+  band?: { stripY: number; stripH: number; chipY: number; chipH: number };
 }
 
 export interface LapInfoData {
@@ -212,21 +215,30 @@ export function computeDimensions(
   containerH: number,
   isMobile: boolean,
   xAxisMode?: "laps" | "hours" | "both",
-  minWidth?: number
+  minWidth?: number,
+  opts?: { driverBand?: boolean }
 ): ChartDimensions {
   const W = Math.max(minWidth ?? 300, Math.floor(containerW));
-  const H = Math.max(300, Math.floor(containerH));
+  // The Position Trace fills whatever height the window leaves it, so it may be shorter.
+  const H = Math.max(opts?.driverBand ? 200 : 300, Math.floor(containerH));
 
   const ML = isMobile ? 36 : 44;
   // Right margin holds the car-number labels at the end of each trace.
   const MR = isMobile ? 34 : 44;
-  const MT = isMobile ? 18 : 22;
+  // With the driver band, the top margin holds two rows: who drove each spell, then the
+  // places gained or lost at each stop. Nothing is written over the plot.
+  const band = opts?.driverBand
+    ? isMobile
+      ? { stripY: 2, stripH: 16, chipY: 21, chipH: 15 }
+      : { stripY: 2, stripH: 19, chipY: 25, chipH: 17 }
+    : undefined;
+  const MT = band ? band.chipY + band.chipH + 6 : isMobile ? 18 : 22;
   const baseMB = isMobile ? 26 : 34;
   const MB = xAxisMode === "both" ? baseMB + 14 : baseMB;
   const CW = W - ML - MR;
   const CH = H - MT - MB;
 
-  return { W, H, ML, MR, MT, MB, CW, CH };
+  return { W, H, ML, MR, MT, MB, CW, CH, ...(band ? { band } : {}) };
 }
 
 // ─── Main draw function ──────────────────────────────────────────────────────
@@ -389,6 +401,41 @@ export function drawChart(
     }
   });
 
+  // ── 2b. Pit row layout (drawn in 11) and faint leaders from each chip down to its stop ──
+  const band = adjDim.band;
+  const plotL = adjDim.ML;
+  const plotR = adjDim.W - adjDim.MR;
+  const chipFont = `600 ${band && band.chipH < 17 ? 10 : 11}px 'IBM Plex Mono', ui-monospace, monospace`;
+  const chips: Array<{ lap: number; px: number; py: number; cx: number; w: number; text: string; color: string; tip: string }> = [];
+  if (band) {
+    ctx.font = chipFont;
+    let right = plotL - 4;
+    for (const pd of pitDeltas(laps, pk, data.fcy || [])) {
+      if (pd.lap < lapStart || pd.lap > lapEnd) continue;
+      const d = laps.find((q) => q.l === pd.lap);
+      if (!d) continue;
+      const text = deltaText(pd.delta);
+      const w = Math.ceil(ctx.measureText(text).width) + 10;
+      const px = xForCar(focusNumStr, pd.lap);
+      const cx = Math.min(plotR + adjDim.MR - w / 2 - 1, Math.max(px, right + 3 + w / 2));
+      right = cx + w / 2;
+      const color = pd.delta > 0 ? TRACE.gain : pd.delta < 0 ? TRACE.loss : TRACE.axis;
+      chips.push({ lap: pd.lap, px, py: y(d[pk]), cx, w, text, color, tip: `P${pd.before} → P${pd.after}` });
+    }
+    ctx.save();
+    ctx.setLineDash([2, 3]);
+    ctx.strokeStyle = TRACE.leader;
+    ctx.lineWidth = 1;
+    for (const c of chips) {
+      ctx.beginPath();
+      ctx.moveTo(c.cx, band.chipY + band.chipH);
+      ctx.lineTo(c.px, adjDim.MT);
+      ctx.lineTo(c.px, c.py - 7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // Step path for one car: horizontal to the lap, vertical to the new position.
   const tracePath = (carNum: string, cl: LapData[]) => {
     ctx.beginPath();
@@ -489,7 +536,6 @@ export function drawChart(
 
   // ── 6. Focus car's stops: ● pit stop, ● orange garage, ▲ drive-through, ◆ penalty ──
   const pitByLap = new Map((ann.pits || []).map((p: PitMarker) => [p.l, p] as const));
-  const stopLabels: Array<{ x: number; y: number; text: string }> = [];
   for (const d of laps) {
     if (d.l < lapStart || d.l > lapEnd) continue;
     if (!d.pit) continue; // markers without a pit lap (e.g. "Start · driver") are not stops
@@ -498,27 +544,14 @@ export function drawChart(
     const py = y(d[pk]);
     if (marker?.pitTiming?.isDriveThrough) triangle(px, py, 7, TRACE.glyph);
     else circle(px, py, 6, marker?.isGarage ? TRACE.garage : TRACE.glyph);
-    if (marker?.lb) stopLabels.push({ x: px, y: py, text: marker.lb });
   }
   for (const [lapStr, reason] of Object.entries(ann.reasons || {})) {
     const l = Number(lapStr);
     if (!(l >= lapStart && l <= lapEnd) || !/penalt|drive[- ]?through|stop[- ]?and[- ]?go|black flag/i.test(String(reason))) continue;
     const d = laps.find((q) => q.l === l);
-    if (d) diamond(xForCar(focusNumStr, l), y(d[pk]) + 16, 6, TRACE.penalty);
+    // Below the stop, or above it when the car is near the bottom of the chart.
+    if (d) { const py = y(d[pk]); diamond(xForCar(focusNumStr, l), py + 16 > adjDim.MT + adjDim.CH - 4 ? py - 16 : py + 16, 6, TRACE.penalty); }
   }
-  // Stop labels above their glyphs, skipped where they would overlap.
-  ctx.font = "500 11px 'IBM Plex Sans', system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#cbd5e1";
-  let lastLabelRight = -Infinity;
-  for (const lb of stopLabels.sort((a, b) => a.x - b.x)) {
-    const w = ctx.measureText(lb.text).width;
-    if (lb.x - w / 2 < lastLabelRight + 6) continue;
-    const ty = Math.max(adjDim.MT + 12, lb.y - 12);
-    ctx.fillText(lb.text, lb.x, ty);
-    lastLabelRight = lb.x + w / 2;
-  }
-
   // ── 7. Selected lap: a light line, the focus car ringed, compare cars dotted ──
   if (activeLap !== null && activeLap >= lapStart && activeLap <= lapEnd) {
     const d = laps.find((l) => l.l === activeLap);
@@ -558,6 +591,57 @@ export function drawChart(
       ctx.fillText(lb.text, adjDim.W - adjDim.MR + 6, ly);
       prevY = ly;
     }
+  }
+
+  // ── 8b. Driver band and pit row above the plot ──
+  if (band) {
+    const sans = (px: number, w = 600) => `${w} ${px}px 'IBM Plex Sans', system-ui, sans-serif`;
+    // Row captions in the left margin
+    ctx.font = sans(9, 500);
+    ctx.fillStyle = TRACE.axis;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Driver", plotL - 6, band.stripY + band.stripH / 2);
+    if (chips.length) ctx.fillText("Pits", plotL - 6, band.chipY + band.chipH / 2);
+
+    const stints = driverStints(laps, ann.pits || []);
+    ctx.font = sans(band.stripH < 19 ? 10 : 11);
+    for (const [k, st] of stints.entries()) {
+      if (st.to < lapStart || st.from > lapEnd) continue;
+      const first = st.from === laps[0].l;
+      const x0 = Math.max(plotL, first ? plotL : xForCar(focusNumStr, st.from - 1));
+      const x1 = Math.min(plotR, st.to >= laps[laps.length - 1].l ? plotR : xForCar(focusNumStr, st.to));
+      if (x1 - x0 < 1) continue;
+      // Spells alternate shade, so a change of driver always shows.
+      ctx.fillStyle = !st.driver ? "rgba(255,255,255,0.04)" : hexA(TRACE.focus, k % 2 ? 0.1 : 0.22);
+      ctx.fillRect(x0 + 1, band.stripY, x1 - x0 - 2, band.stripH);
+      if (!st.driver) continue;
+      const tw = ctx.measureText(st.driver).width;
+      const label = tw + 10 <= x1 - x0 ? st.driver : ctx.measureText(st.driver[0]).width + 6 <= x1 - x0 ? st.driver[0] : "";
+      if (!label) continue;
+      ctx.fillStyle = TRACE.driverText;
+      ctx.textAlign = "center";
+      ctx.fillText(label, (x0 + x1) / 2, band.stripY + band.stripH / 2 + 0.5);
+    }
+
+    ctx.font = chipFont;
+    for (const c of chips) {
+      const sel = activeLap === c.lap;
+      const x0 = c.cx - c.w / 2;
+      ctx.beginPath();
+      ctx.roundRect(x0, band.chipY, c.w, band.chipH, 4);
+      ctx.fillStyle = hexA(c.color, sel ? 0.32 : 0.16);
+      ctx.fill();
+      if (sel) {
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.fillStyle = c.color;
+      ctx.textAlign = "center";
+      ctx.fillText(c.text, c.cx, band.chipY + band.chipH / 2 + 0.5);
+    }
+    ctx.textBaseline = "alphabetic";
   }
 
   // ── 9. Axis labels ─────────────────────────────────────────────

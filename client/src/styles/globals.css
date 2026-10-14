@@ -28,7 +28,11 @@
   }
 }
 
-/* Hide scrollbar for drag-to-pan chart */
+/* Scrolls without a visible scrollbar (side panels, drag-to-pan chart) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
