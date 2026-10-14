@@ -353,7 +353,20 @@ export async function listUnkeyedRaces(filter: { series?: string; season?: numbe
 export async function listIntakeRaces(site?: string) {
   const rows = await prisma.race.findMany({
     where: site ? { sourceKey: { startsWith: `${site}:` } } : { sourceKey: { not: null } },
-    select: { id: true, name: true, status: true, sourceKey: true, sourceVersion: true, resultsStatus: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      sourceKey: true,
+      sourceVersion: true,
+      resultsStatus: true,
+      updatedAt: true,
+      date: true,
+      series: true,
+      season: true,
+      // The newest analysis package, so the intake can tell which races still need one.
+      packages: { select: { version: true, status: true, engineVersion: true, rulebookVersion: true, createdAt: true }, orderBy: { version: "desc" }, take: 1 },
+    },
     orderBy: { updatedAt: "desc" },
   });
   return rows.map((r: any) => ({
@@ -364,5 +377,9 @@ export async function listIntakeRaces(site?: string) {
     name: r.name,
     status: r.status,
     updatedAt: r.updatedAt,
+    date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date,
+    series: r.series,
+    season: r.season,
+    latestPackage: r.packages?.[0] ?? null,
   }));
 }

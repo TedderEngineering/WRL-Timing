@@ -143,6 +143,11 @@ export interface KnownRace {
   name: string;
   status: string;
   updatedAt: string;
+  date?: string;
+  series?: string;
+  season?: number;
+  /** The newest analysis package of the race, if any. */
+  latestPackage?: { version: number; status: string; engineVersion: string; rulebookVersion: string | null; createdAt: string } | null;
 }
 
 export type CompareState = "new" | "changed" | "results-upgrade" | "unchanged";
