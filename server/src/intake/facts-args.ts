@@ -28,7 +28,16 @@ function pick(files: ManifestFile[], role: FileRole, prefer: string[]): Manifest
 export function factFiles(m: Manifest): ManifestFile[] {
   const fs = m.files;
   const out: (ManifestFile | null)[] = [];
-  if (m.factFormat === "speedhive" || m.factFormat === "wrl-website") {
+  if (m.factFormat === "redmist") {
+    // The RedMist adapter reads the raw JSON; the CSVs in the folder are for the chart's legacy parser.
+    out.push(
+      pick(fs, "laps", ["json"]),
+      pick(fs, "pit_cards_json", ["json"]),
+      pick(fs, "results", ["json"]),
+      pick(fs, "flags", ["json"]),
+      pick(fs, "control_log", ["json"])
+    );
+  } else if (m.factFormat === "speedhive" || m.factFormat === "wrl-website") {
     out.push(pick(fs, "laps", ["csv"]), pick(fs, "summary", ["csv"]), pick(fs, "flags", ["csv"]), pick(fs, "control_log", ["csv"]));
   } else {
     out.push(pick(fs, "laps", ["csv"]) ?? pick(fs, "time_cards", ["csv"]));

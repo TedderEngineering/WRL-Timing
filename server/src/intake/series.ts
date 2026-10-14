@@ -43,8 +43,13 @@ export const SERIES: SeriesDef[] = [
   { id: "sro-tca", site: "sro", label: "TC America", match: /tc\s+america/i, raceSeries: "SRO", subSeries: "TC America", namePrefix: "TC America", legacyFormat: "sro", factFormat: "alkamel-sro" },
   { id: "sro-mclaren", site: "sro", label: "McLaren Trophy America", match: /mclaren\s+trophy/i, raceSeries: "SRO", subSeries: "McLaren Trophy America", namePrefix: "McLaren Trophy", legacyFormat: "sro", factFormat: "alkamel-sro" },
 
-  // ── WRL via Speedhive ───────────────────────────────────────────────────
-  { id: "wrl", site: "speedhive", label: "World Racing League", match: /.*/, raceSeries: "WRL", namePrefix: "WRL", legacyFormat: "speedhive", factFormat: "speedhive" },
+  // ── WRL ────────────────────────────────────────────────────────────────
+  // RedMist (api.redmist.racing) is the WRL source from 2026: lap data with pit-lane flags, and the
+  // Flagtronics pit report (pit-in / pit-out times, in-lap and out-lap) where the event ran it. The
+  // chart still goes through the Speedhive-format legacy parser (parse-redmist.ts writes its CSVs).
+  { id: "wrl", site: "redmist", label: "World Racing League", match: /.*/, raceSeries: "WRL", namePrefix: "WRL", legacyFormat: "speedhive", factFormat: "redmist" },
+  // Speedhive, for races RedMist holds no lap history for (all of 2025).
+  { id: "wrl-speedhive", site: "speedhive", label: "World Racing League", match: /.*/, raceSeries: "WRL", namePrefix: "WRL", legacyFormat: "speedhive", factFormat: "speedhive" },
 ];
 
 /** Fallbacks for championships on a site that no catalogue entry names. */

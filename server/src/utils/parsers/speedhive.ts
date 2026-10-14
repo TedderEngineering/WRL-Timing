@@ -10,6 +10,10 @@
  *      Diff vs Last Lap, Speed, In Pit, Field Position, Leader Lap,
  *      Gap to Leader (Time), Gap to Leader (Laps), Gap Ahead (Time),
  *      Gap Behind (Time), Status
+ *
+ * Laps CSVs written from RedMist (src/intake/parse-redmist.ts) may add a
+ * "Pit Stop" column, True on each stop's in-lap, taken from the Flagtronics
+ * pit report. When it is there, it replaces the lap-time pit detection.
  */
 
 import type { RaceDataParser } from "./types.js";
@@ -107,6 +111,9 @@ export const speedhiveParser: RaceDataParser = {
     >();
 
     let maxLap = 0;
+    // RedMist pit report (Flagtronics): authoritative pit stops when the column is present.
+    const pitStopIdx = lapsHdr.get("pit stop");
+    const reportedPits = new Map<number, Set<number>>();
 
     for (let i = 1; i < lapsRows.length; i++) {
       const row = lapsRows[i];
@@ -146,6 +153,10 @@ export const speedhiveParser: RaceDataParser = {
       });
 
       if (lapNum > maxLap) maxLap = lapNum;
+      if (pitStopIdx !== undefined && /^true$/i.test((row[pitStopIdx] ?? "").trim())) {
+        if (!reportedPits.has(num)) reportedPits.set(num, new Set());
+        reportedPits.get(num)!.add(lapNum);
+      }
 
       if (!carFromLaps.has(num)) {
         carFromLaps.set(num, {
@@ -175,12 +186,26 @@ export const speedhiveParser: RaceDataParser = {
     for (const [num, laps] of carLaps) {
       allCarLapsStr.set(String(num), laps);
     }
-    const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
-    for (const [numStr, { pitLaps }] of pitResults) {
-      const laps = allCarLapsStr.get(numStr);
-      if (!laps) continue;
-      for (const lap of laps) {
-        if (pitLaps.has(lap.l)) lap.pit = 1;
+    if (pitStopIdx !== undefined) {
+      let n = 0;
+      for (const [num, laps] of carLaps) {
+        const pits = reportedPits.get(num);
+        if (!pits) continue;
+        for (const lap of laps) {
+          if (!pits.has(lap.l)) continue;
+          lap.pit = 1;
+          n++;
+        }
+      }
+      warnings.push(`Pit stops from the timing pit report (${n} stops), not from lap times`);
+    } else {
+      const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
+      for (const [numStr, { pitLaps }] of pitResults) {
+        const laps = allCarLapsStr.get(numStr);
+        if (!laps) continue;
+        for (const lap of laps) {
+          if (pitLaps.has(lap.l)) lap.pit = 1;
+        }
       }
     }
 

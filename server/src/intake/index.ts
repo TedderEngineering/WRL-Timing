@@ -7,6 +7,7 @@ import { parseSourceKey } from "./source-key.js";
 import { discoverImsa, downloadImsa, resolveImsa } from "./sources/imsa.js";
 import { discoverSro, downloadSro, resolveSro } from "./sources/sro.js";
 import { discoverSpeedhive, discoverSpeedhiveEvent, downloadSpeedhive, resolveSpeedhive } from "./sources/speedhive.js";
+import { discoverRedmist, discoverRedmistRef, downloadRedmist, resolveRedmist } from "./sources/redmist.js";
 import type { DiscoverOptions, DownloadOptions, DownloadReport, RaceSession } from "./types.js";
 
 export interface DiscoverRequest extends DiscoverOptions {
@@ -16,6 +17,8 @@ export interface DiscoverRequest extends DiscoverOptions {
   speedhiveOrgId?: number;
   /** Speedhive event or session URLs/ids (WRL without the organisation id). */
   speedhiveRefs?: string[];
+  /** RedMist event or event/session refs ("405", "405/3", an API URL); default: every WRL event. */
+  redmistRefs?: string[];
 }
 
 export async function discover(http: HttpClient, req: DiscoverRequest): Promise<RaceSession[]> {
@@ -23,7 +26,11 @@ export async function discover(http: HttpClient, req: DiscoverRequest): Promise<
   for (const sel of resolveSeries(req.series)) {
     if (sel.site === "imsa") out.push(...(await discoverImsa(http, sel, req)));
     else if (sel.site === "sro") out.push(...(await discoverSro(http, sel, req)));
-    else if (sel.site === "speedhive") {
+    else if (sel.site === "redmist") {
+      if (req.redmistRefs?.length) {
+        for (const ref of req.redmistRefs) out.push(...(await discoverRedmistRef(http, ref, req)));
+      } else out.push(...(await discoverRedmist(http, req)));
+    } else if (sel.site === "speedhive") {
       if (req.speedhiveRefs?.length) {
         for (const ref of req.speedhiveRefs) out.push(...(await discoverSpeedhiveEvent(http, ref, req)));
       } else if (req.speedhiveOrgId) {
@@ -49,6 +56,8 @@ export function resolve(http: HttpClient, sourceKey: string): Promise<RaceSessio
       return resolveSro(http, sourceKey);
     case "speedhive":
       return resolveSpeedhive(http, sourceKey);
+    case "redmist":
+      return resolveRedmist(http, sourceKey);
   }
 }
 
@@ -60,6 +69,8 @@ export function download(http: HttpClient, s: RaceSession, dir: string, opts?: D
       return downloadSro(s, dir, http, opts);
     case "speedhive":
       return downloadSpeedhive(s, dir, http, opts);
+    case "redmist":
+      return downloadRedmist(s, dir, http, opts);
   }
 }
 

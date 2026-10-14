@@ -12,6 +12,10 @@
  *  4. An existing race keeps its id (so its URL), name, status, premium flag,
  *     event and round; its chart data, entries, laps, archive paths, version
  *     and results status are replaced. A new race is created as DRAFT.
+ *  5. `attachToRaceId` claims a race imported before source keys existed (the
+ *     admin upload): the race must have no source key, the same series and a
+ *     date within a day (unless `force`); it is then updated as in 4 and keeps
+ *     the source key from then on. Only ever sent by `intake push --attach`.
  */
 import { z } from "zod";
 import { prisma } from "../models/prisma.js";
@@ -41,6 +45,7 @@ export const intakeBodySchema = z.object({
   files: z.record(z.string()),
   manifest: z.unknown().optional(),
   force: z.boolean().optional(),
+  attachToRaceId: z.string().min(1).max(100).optional(),
 });
 
 export type IntakeBody = z.infer<typeof intakeBodySchema>;
@@ -96,6 +101,8 @@ export interface IntakeActor {
 
 export interface IntakeResult {
   action: "created" | "updated" | "unchanged";
+  /** True when this push gave an existing race without a source key its source key. */
+  attached?: boolean;
   raceId: string;
   sourceKey: string;
   entriesCreated: number;
@@ -177,10 +184,34 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
   const parser = deps.getParser(body.format);
   if (!parser) throw new AppError(400, `Unknown format: "${body.format}"`, "UNKNOWN_FORMAT");
 
-  const existing = await prisma.race.findUnique({
+  let existing: { id: string; sourceVersion: string | null; resultsStatus: string | null; sourceFiles: unknown } | null = await prisma.race.findUnique({
     where: { sourceKey },
     select: { id: true, sourceVersion: true, resultsStatus: true, sourceFiles: true },
   });
+  let attached = false;
+  if (body.attachToRaceId) {
+    if (existing && existing.id !== body.attachToRaceId) {
+      throw new AppError(409, `This source key already belongs to race ${existing.id}; it cannot also be attached to race ${body.attachToRaceId}.`, "ATTACH_CONFLICT");
+    }
+    if (!existing) {
+      const r = await prisma.race.findUnique({
+        where: { id: body.attachToRaceId },
+        select: { id: true, sourceKey: true, sourceVersion: true, resultsStatus: true, sourceFiles: true, series: true, date: true, name: true },
+      });
+      if (!r) throw new AppError(404, `Race ${body.attachToRaceId} not found`, "ATTACH_NOT_FOUND");
+      if (r.sourceKey) throw new AppError(409, `Race ${r.id} already has the source key ${r.sourceKey}`, "ATTACH_KEYED");
+      const days = Math.abs(Date.parse(`${body.metadata.date}T00:00:00Z`) - new Date(r.date).getTime()) / 86400000;
+      if (!body.force && (r.series !== body.metadata.series || !(days <= 1.5))) {
+        throw new AppError(
+          409,
+          `Race ${r.id} ("${r.name}", ${r.series}, ${new Date(r.date).toISOString().slice(0, 10)}) does not look like this session (${body.metadata.series}, ${body.metadata.date}). Send force: true to attach anyway.`,
+          "ATTACH_MISMATCH"
+        );
+      }
+      existing = { id: r.id, sourceVersion: null, resultsStatus: r.resultsStatus ?? null, sourceFiles: r.sourceFiles ?? null };
+      attached = true;
+    }
+  }
 
   const previous = existing ? { resultsStatus: existing.resultsStatus ?? null, sourceFiles: (existing.sourceFiles as unknown) ?? null } : null;
 
@@ -236,6 +267,7 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
               sourceVersion: body.sourceVersion,
               resultsStatus: body.resultsStatus,
               ...(sourceFiles ? { sourceFiles } : {}),
+              ...(attached ? { sourceKey } : {}),
             },
           });
           await tx.raceLap.deleteMany({ where: { raceId: existing.id } });
@@ -291,7 +323,7 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
   await prisma.auditLog.create({
     data: {
       adminUserId: actor.userId,
-      action: action === "created" ? "INTAKE_CREATE_RACE" : "INTAKE_UPDATE_RACE",
+      action: action === "created" ? "INTAKE_CREATE_RACE" : attached ? "INTAKE_ATTACH_RACE" : "INTAKE_UPDATE_RACE",
       targetType: "race",
       targetId: raceId,
       details: {
@@ -303,6 +335,7 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
         format: body.format,
         parser: parser.name,
         apiTokenId: actor.apiTokenId ?? null,
+        attached,
         files: Object.keys(body.files),
         manifest: (body.manifest as any) ?? null,
         entries: counts.entries,
@@ -312,7 +345,30 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
     },
   });
 
-  return { action, raceId, sourceKey, entriesCreated: counts.entries, lapsCreated: counts.laps, warnings, archived: archived.paths };
+  return { action, ...(attached ? { attached: true } : {}), raceId, sourceKey, entriesCreated: counts.entries, lapsCreated: counts.laps, warnings, archived: archived.paths };
+}
+
+/**
+ * Races without a source key (imported by hand before the intake), for
+ * `intake discover` to suggest which one a session could be attached to.
+ */
+export async function listUnkeyedRaces(filter: { series?: string; season?: number } = {}) {
+  const rows = await prisma.race.findMany({
+    where: { sourceKey: null, ...(filter.series ? { series: filter.series } : {}), ...(filter.season ? { season: filter.season } : {}) },
+    select: { id: true, name: true, date: true, track: true, series: true, season: true, status: true, maxLap: true, totalCars: true },
+    orderBy: { date: "desc" },
+  });
+  return rows.map((r: any) => ({
+    raceId: r.id as string,
+    name: r.name as string,
+    date: new Date(r.date).toISOString().slice(0, 10),
+    track: r.track as string,
+    series: r.series as string,
+    season: r.season as number,
+    status: r.status as string,
+    maxLap: r.maxLap ?? null,
+    totalCars: r.totalCars ?? null,
+  }));
 }
 
 /** Races created by the intake, for `intake discover` to compare against. */

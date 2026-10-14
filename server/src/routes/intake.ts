@@ -3,6 +3,7 @@
  *
  *   GET    /api/admin/intake/whoami          who the caller is (token or session) — skill preflight
  *   GET    /api/admin/intake/races?site=     races with a source key, for `intake discover`
+ *   GET    /api/admin/intake/races?unkeyed=1&series=&season=   races without one (attach candidates)
  *   POST   /api/admin/intake/races           idempotent upsert by source key (services/intake.ts)
  *
  *   GET    /api/admin/api-tokens             list tokens (never the token or its hash)
@@ -22,7 +23,7 @@ import { getParser } from "../utils/parsers/index.js";
 import { archiveRaceFiles } from "../lib/race-archive.js";
 import { supabase, STORAGE_BUCKET } from "../lib/supabase.js";
 import { env } from "../config/env.js";
-import { intakeRace, listIntakeRaces } from "../services/intake.js";
+import { intakeRace, listIntakeRaces, listUnkeyedRaces } from "../services/intake.js";
 import { API_TOKEN_SCOPES, generateApiToken, toPublicToken } from "../services/api-tokens.js";
 
 // ─── Intake ──────────────────────────────────────────────────────────────────
@@ -42,7 +43,13 @@ intakeRouter.get("/whoami", (req: Request, res: Response) => {
 
 intakeRouter.get("/races", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const site = typeof req.query.site === "string" && /^(imsa|sro|speedhive)$/.test(req.query.site) ? req.query.site : undefined;
+    if (req.query.unkeyed === "1" || req.query.unkeyed === "true") {
+      const series = typeof req.query.series === "string" && /^[A-Za-z0-9_ -]{1,100}$/.test(req.query.series) ? req.query.series : undefined;
+      const season = typeof req.query.season === "string" && /^\d{4}$/.test(req.query.season) ? Number(req.query.season) : undefined;
+      res.json({ races: await listUnkeyedRaces({ series, season }) });
+      return;
+    }
+    const site = typeof req.query.site === "string" && /^(imsa|sro|speedhive|redmist)$/.test(req.query.site) ? req.query.site : undefined;
     res.json({ races: await listIntakeRaces(site) });
   } catch (err) {
     next(err);

@@ -37,6 +37,8 @@ export interface IntakePushBody {
     missing: { role: string; note: string }[];
   };
   force?: boolean;
+  /** Existing race (no source key yet) this session replaces; `intake push --attach`. */
+  attachToRaceId?: string;
 }
 
 export interface BuildPushOptions {
@@ -113,6 +115,7 @@ export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions =
       missing: m.missing,
     },
     ...(opts.force ? { force: true } : {}),
+    ...(m.attachToRaceId ? { attachToRaceId: m.attachToRaceId } : {}),
   };
   return { body, skipped };
 }
@@ -183,4 +186,28 @@ export async function apiRequest<T>(cfg: ApiConfig, method: "GET" | "POST", path
     /* not JSON */
   }
   return { status: res.status, data: data as T };
+}
+
+/** One row of GET /api/admin/intake/races?unkeyed=1: a race imported before source keys. */
+export interface UnkeyedRace {
+  raceId: string;
+  name: string;
+  date: string;
+  track: string;
+  series: string;
+  season: number;
+  status: string;
+}
+
+const dayDiff = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
+
+/**
+ * Races on the site without a source key that a new session may be the same
+ * race as: same Race.series and a date within a day, the same date first.
+ * A suggestion only; attaching is the owner's call (`push --attach`).
+ */
+export function attachCandidates(session: Pick<RaceSession, "raceDate">, raceSeries: string, unkeyed: UnkeyedRace[]): UnkeyedRace[] {
+  return unkeyed
+    .filter((r) => r.series === raceSeries && dayDiff(r.date, session.raceDate) <= 1)
+    .sort((a, b) => dayDiff(a.date, session.raceDate) - dayDiff(b.date, session.raceDate) || a.name.localeCompare(b.name));
 }

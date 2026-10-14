@@ -3,10 +3,12 @@
  *
  *   npx tsx scripts/intake.ts preflight
  *   npx tsx scripts/intake.ts discover --series imsa-mpc,sro-gt4,sro-grcup,wrl --season 2026 [--since 2026-09-01]
- *                                      [--all-sessions] [--org <speedhive org id>] [--speedhive <event|session URL>]…
+ *                                      [--all-sessions] [--redmist <event id|event/session>]…
  *                                      [--json] [--save <file>]
+ *   npx tsx scripts/intake.ts discover --series wrl-speedhive --season 2025 [--org <speedhive org id>] [--speedhive <event|session URL>]…
  *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade] [--force]
  *   npx tsx scripts/intake.ts push <dir…> [--force] [--dry-run] [--no-archive-only]
+ *   npx tsx scripts/intake.ts push <dir> --attach <raceId>      replace an existing race that has no source key yet
  *   npx tsx scripts/intake.ts status <dir…>
  *   npx tsx scripts/intake.ts facts <dir> [--out <file>]        G2 build-facts on the folder's files (when present)
  *   npx tsx scripts/intake.ts validate <draft.json> [--base <facts.base.json>] [--scope-class <id>] [--publish] [--json]
@@ -16,7 +18,8 @@
  * Environment (process env, then server/.env.intake, then <repo>/.env.intake):
  *   RACETRACE_API_URL     e.g. https://<api host>   (the "/api" suffix is optional)
  *   RACETRACE_API_TOKEN   rt_… token from Admin → API Tokens (scope "intake"). Never printed.
- *   SPEEDHIVE_WRL_ORG_ID  Speedhive organisation id of WRL (for `discover --series wrl`)
+ *   SPEEDHIVE_WRL_ORG_ID  Speedhive organisation id of WRL (for `discover --series wrl-speedhive`, 2025 races)
+ *   INTAKE_REDMIST_GAP_MS gap between RedMist requests (default 1600; RedMist allows ~1 per 1.1 s anonymously)
  *   INTAKE_WORK_DIR       work folder root (default <repo>/intake-work, git-ignored)
  *   INTAKE_USER_AGENT     User-Agent override for the timing sites
  *   INTAKE_DELAY_MS       gap between requests to a timing site (default 500)
@@ -32,7 +35,8 @@ import dotenv from "dotenv";
 import { createHttpClient, DEFAULT_USER_AGENT } from "../src/intake/http.js";
 import { discover, download, resolve } from "../src/intake/index.js";
 import { addManualFiles, readManifest, workDirFor, writeManifest } from "../src/intake/manifest.js";
-import { apiConfigFromEnv, apiRequest, buildPushBody, compareWithKnown, type KnownRace } from "../src/intake/push.js";
+import { apiConfigFromEnv, apiRequest, attachCandidates, buildPushBody, compareWithKnown, type KnownRace, type UnkeyedRace } from "../src/intake/push.js";
+import { seriesById } from "../src/intake/series.js";
 import { speedhiveOrgFromSession } from "../src/intake/sources/speedhive.js";
 import { canonicalSourceKey } from "../src/intake/source-key.js";
 import { buildFactsArgs, packageIdFor } from "../src/intake/facts-args.js";
@@ -88,12 +92,20 @@ async function knownRaces(): Promise<KnownRace[] | null> {
   return r.data.races;
 }
 
+async function unkeyedRaces(series: string, season: number): Promise<UnkeyedRace[]> {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) return [];
+  const r = await apiRequest<{ races: UnkeyedRace[] }>(cfg, "GET", `/admin/intake/races?unkeyed=1&series=${encodeURIComponent(series)}&season=${season}`);
+  if (r.status !== 200) throw new Error(`GET /admin/intake/races?unkeyed=1 → HTTP ${r.status}`);
+  return r.data.races;
+}
+
 // ─── commands ────────────────────────────────────────────────────────────────
 
 async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
   const series = a.flags.series ?? [];
   const season = Number(a.one("season") ?? new Date().getFullYear());
-  if (series.length === 0) throw new UsageError("discover needs --series (e.g. imsa-mpc, imsa-*, sro-gt4, sro-grcup, sro-*, wrl)");
+  if (series.length === 0) throw new UsageError("discover needs --series (e.g. imsa-mpc, imsa-*, sro-gt4, sro-grcup, sro-*, wrl, wrl-speedhive)");
   if (!Number.isInteger(season)) throw new UsageError("--season must be a year");
   const since = a.one("since");
   if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new UsageError("--since must be YYYY-MM-DD");
@@ -105,6 +117,7 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
     allSessions: a.has("all-sessions"),
     speedhiveOrgId: org,
     speedhiveRefs: a.flags.speedhive,
+    redmistRefs: a.flags.redmist,
     log,
   });
   let known: KnownRace[] | null = null;
@@ -114,6 +127,22 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
     log(`Warning: could not read known races from the API (${(e as Error).message}); every session is listed as "new".`);
   }
   const cmp = compareWithKnown(sessions, known ?? []);
+  // New sessions may be races already on the site from before source keys (admin uploads): suggest them.
+  const unkeyed = new Map<string, UnkeyedRace[]>();
+  if (known) {
+    for (const c of cmp.filter((x) => x.state === "new")) {
+      const rs = seriesById(c.session.seriesId)?.raceSeries;
+      const k = `${rs}|${c.session.season}`;
+      if (rs && !unkeyed.has(k)) {
+        try {
+          unkeyed.set(k, await unkeyedRaces(rs, c.session.season));
+        } catch (e) {
+          log(`Warning: could not read races without a source key (${(e as Error).message}).`);
+          unkeyed.set(k, []);
+        }
+      }
+    }
+  }
   const out = cmp.map((c) => ({
     state: known ? c.state : "new",
     sourceKey: c.session.sourceKey,
@@ -125,6 +154,15 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
     knownResultsStatus: c.known?.resultsStatus ?? null,
     raceId: c.known?.raceId ?? null,
     version: c.session.version,
+    attachCandidates:
+      c.state === "new"
+        ? attachCandidates(c.session, seriesById(c.session.seriesId)?.raceSeries ?? "", unkeyed.get(`${seriesById(c.session.seriesId)?.raceSeries}|${c.session.season}`) ?? []).map((r) => ({
+            raceId: r.raceId,
+            name: r.name,
+            date: r.date,
+            status: r.status,
+          }))
+        : [],
   }));
   const save = a.one("save") ?? join(WORK, "discover-latest.json");
   mkdirSync(dirname(save), { recursive: true });
@@ -133,8 +171,8 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
     process.stdout.write(JSON.stringify(out, null, 2) + "\n");
     return;
   }
-  const rows = [["STATE", "DATE", "SERIES", "EVENT", "SESSION", "RESULTS", "SOURCE KEY"]];
-  for (const o of out) rows.push([o.state, o.date, o.series, o.event, o.session, o.resultsStatus, o.sourceKey]);
+  const rows = [["STATE", "DATE", "SERIES", "EVENT", "SESSION", "RESULTS", "SOURCE KEY", "ON SITE WITHOUT KEY?"]];
+  for (const o of out) rows.push([o.state, o.date, o.series, o.event, o.session, o.resultsStatus, o.sourceKey, o.attachCandidates.map((r) => `${r.raceId} (${r.name})`).join("; ")]);
   console.log(table(rows));
   const n = (s: string) => out.filter((o) => o.state === s).length;
   console.log(`\n${out.length} session(s): ${n("new")} new, ${n("changed")} changed, ${n("results-upgrade")} results upgrade, ${n("unchanged")} unchanged.${known ? "" : " (Not compared with the site: RACETRACE_API_URL/RACETRACE_API_TOKEN not set.)"}`);
@@ -191,11 +229,20 @@ async function cmdPush(a: ReturnType<typeof parseArgs>) {
   if (a.pos.length === 0) throw new UsageError("push needs one or more work folders");
   const cfg = apiConfigFromEnv();
   if (!cfg && !a.has("dry-run")) throw new UsageError("Set RACETRACE_API_URL and RACETRACE_API_TOKEN (see .claude/skills/racetrace-ingest/SKILL.md)");
+  const attach = a.one("attach");
+  if (attach !== undefined && (a.pos.length !== 1 || attach === "true" || !/^[A-Za-z0-9_-]{1,100}$/.test(attach))) {
+    throw new UsageError("--attach <raceId> takes one race id and exactly one work folder");
+  }
   const rows = [["ACTION", "RACE", "RESULTS", "WARNINGS", "DIR"]];
   let failed = 0;
   for (const d of a.pos) {
     const dir = resolvePath(d);
     const m = loadDir(dir);
+    if (attach) {
+      m.attachToRaceId = attach;
+      writeManifest(dir, m);
+      log(`${dir}: will replace the chart of existing race ${attach} and give it the source key ${m.sourceKey}`);
+    }
     const added = addManualFiles(dir, m, new Date());
     if (added.length) {
       log(`${dir}: added by hand: ${added.join(", ")}`);
@@ -212,7 +259,7 @@ async function cmdPush(a: ReturnType<typeof parseArgs>) {
     writeFileSync(join(dir, "intake-result.json"), JSON.stringify({ at: new Date().toISOString(), status: r.status, ...(typeof r.data === "object" ? r.data : { body: String(r.data).slice(0, 2000) }) }, null, 2));
     if (r.status >= 200 && r.status < 300) {
       for (const w of r.data.warnings ?? []) log(`  warning: ${w}`);
-      rows.push([r.data.action, r.data.raceId, body.resultsStatus, String((r.data.warnings ?? []).length), dir]);
+      rows.push([r.data.attached ? "attached" : r.data.action, r.data.raceId, body.resultsStatus, String((r.data.warnings ?? []).length), dir]);
     } else {
       failed++;
       log(`  ${dir}: HTTP ${r.status} ${r.data?.code ?? ""}: ${r.data?.error ?? JSON.stringify(r.data).slice(0, 500)}`);
