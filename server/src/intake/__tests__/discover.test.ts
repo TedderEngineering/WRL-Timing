@@ -129,7 +129,7 @@ const shRoutes = {
 describe("WRL discovery (Speedhive organisation events)", () => {
   it("lists the season's race sessions only", async () => {
     const http = fakeHttp(shRoutes);
-    const s = await discover(http, { series: ["wrl"], season: 2026, speedhiveOrgId: 90001 });
+    const s = await discover(http, { series: ["wrl-speedhive"], season: 2026, speedhiveOrgId: 90001 });
     expect(s.map((x) => [x.sourceKey, x.sessionName, x.raceDate])).toEqual([
       ["speedhive:session:11748965", "Saturday 8 Hour", "2026-02-28"],
       ["speedhive:session:11748970", "Sunday 7 hour", "2026-03-01"],
@@ -140,16 +140,16 @@ describe("WRL discovery (Speedhive organisation events)", () => {
   });
 
   it("works from an event URL without the organisation id", async () => {
-    const s = await discover(fakeHttp(shRoutes), { series: ["wrl"], season: 2026, speedhiveRefs: ["https://speedhive.mylaps.com/events/3197001"] });
+    const s = await discover(fakeHttp(shRoutes), { series: ["wrl-speedhive"], season: 2026, speedhiveRefs: ["https://speedhive.mylaps.com/events/3197001"] });
     expect(s.map((x) => x.sourceKey)).toEqual(["speedhive:session:11748965", "speedhive:session:11748970"]);
   });
 
   it("refuses WRL discovery with neither an organisation id nor a URL", async () => {
-    await expect(discover(fakeHttp(shRoutes), { series: ["wrl"], season: 2026 })).rejects.toThrow(/organisation id/);
+    await expect(discover(fakeHttp(shRoutes), { series: ["wrl-speedhive"], season: 2026 })).rejects.toThrow(/organisation id/);
   });
 
   it("resolve(speedhive:session:<id>) matches discovery", async () => {
-    const found = (await discover(fakeHttp(shRoutes), { series: ["wrl"], season: 2026, speedhiveOrgId: 90001 }))[0];
+    const found = (await discover(fakeHttp(shRoutes), { series: ["wrl-speedhive"], season: 2026, speedhiveOrgId: 90001 }))[0];
     const r = await resolve(fakeHttp(shRoutes), "speedhive:session:11748965");
     expect(r.sourceKey).toBe(found.sourceKey);
     expect(r.version).toBe(found.version);

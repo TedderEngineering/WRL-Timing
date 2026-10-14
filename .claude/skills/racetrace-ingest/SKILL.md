@@ -1,7 +1,7 @@
 ---
 name: racetrace-ingest
-description: Pull new or changed race sessions from the timing sites (IMSA results site, SRO America results page, Speedhive for WRL), import each raw race into RaceTrace as a draft through the intake API, then build the fact package, run rule checks, write the stories class by class, validate, and upload the analysis package as a draft. Use when the owner asks to ingest, pull, import or update races (e.g. "/racetrace-ingest imsa-mpc 2026", "pull this weekend's GT4 races", "official results are out for Road Atlanta"). Never publishes.
-argument-hint: "[--series imsa-mpc,sro-gt4,sro-grcup,wrl] [--season 2026] [--since YYYY-MM-DD] [--yes] [--raw-only] [<sourceKey>…]"
+description: Pull new or changed race sessions from the timing sites (IMSA results site, SRO America results page, RedMist for WRL from 2026, Speedhive for 2025 WRL), import each raw race into RaceTrace as a draft through the intake API, then build the fact package, run rule checks, write the stories class by class, validate, and upload the analysis package as a draft. Use when the owner asks to ingest, pull, import or update races (e.g. "/racetrace-ingest imsa-mpc 2026", "pull this weekend's GT4 races", "official results are out for Road Atlanta"). Never publishes.
+argument-hint: "[--series imsa-mpc,sro-gt4,sro-grcup,wrl,wrl-speedhive] [--season 2026] [--since YYYY-MM-DD] [--yes] [--raw-only] [<sourceKey>…]"
 ---
 
 # /racetrace-ingest (G4, draft 1.0)
@@ -35,15 +35,18 @@ If `.claude/skills/analyze-race/SKILL.md` exists in this checkout, follow it for
    - `results-upgrade`: the site now has better results (official over provisional);
    - `unchanged`: skip.
 
-   WRL needs `SPEEDHIVE_WRL_ORG_ID`, or `--speedhive <event or session URL>` for one event.
+   **WRL** (`wrl`) comes from RedMist (redmist.racing): every WRL event RedMist lists, or one event with `--redmist <event id>` (`--redmist 405/3` for one session). Only sessions that have ended and have lap data are listed; RedMist paces itself to one request per 1.6 s, so a full WRL season takes a few minutes. RedMist has no lap history for 2025: for 2025 races use `wrl-speedhive`, which needs `SPEEDHIVE_WRL_ORG_ID` or `--speedhive <event or session URL>`.
+
+   **Races already on the site.** Races imported by hand before the intake have no source key, so discovery lists their sessions as `new`. When the site has a race of the same series within a day, the last column (`ON SITE WITHOUT KEY?`) names it. Do not push such a session on your own: a plain push would create a second race. Show the owner the pair and ask, per race, whether to **attach** (replace the old race's chart with this import, keeping its id, URL, name and status, and give it the source key) or to skip. Attach only on the owner's answer, with `intake push <dir> --attach <raceId>`. The server refuses an attach when the race already has a source key (`ATTACH_KEYED`), or when its series or date do not match (`ATTACH_MISMATCH`; only the owner may say to add `--force`).
 3. **Confirm.** Show the owner the `new`, `changed` and `results-upgrade` rows (date, series, event, session, results status). Ask which to process. With `--yes`, take all of them. With explicit source keys as arguments, take exactly those.
 4. **Pull.** Run `intake pull --from ../intake-work/discover-latest.json` (or `intake pull '<sourceKey>' …`). For each folder, read the printed `missing:` and `warning:` lines:
    - **Provisional results**: fine. Note them; a later run picks up the official results (`results-upgrade`).
    - **No results file at all**: tell the owner. Finishing order comes only from results (D-FINISH).
-   - **WRL without Redmist flags or control log**: optional. Ask once whether the owner has Redmist exports to drop into the folder; if not, continue (FCY is reconstructed from lap status).
+   - **WRL from RedMist without a pit report** (`missing: No Flagtronics pit report…`): normal before Road Atlanta 2026. Pit stops then come from RedMist's pit-lane lap flags, without pit-in / pit-out times. Say so in the report.
+   - **WRL from Speedhive (2025) without Redmist flags or control log**: optional. Ask once whether the owner has Redmist exports to drop into the folder; if not, continue (FCY is reconstructed from lap status).
    - **A failed file**: rerun pull once; if it still fails, report it and continue with the others.
 5. **Push the raw race.** Run `intake push <dir> …`. The server archives every file before any database write, runs the legacy parser so the current charts work, and creates the race as a **draft**, or updates the existing race with the same source key (same id and URL; the owner's name, status and premium flag are kept). Results:
-   - `created`, `updated`, `unchanged`: continue;
+   - `created`, `updated`, `unchanged`, `attached`: continue;
    - `409 RESULTS_DOWNGRADE`: the site has better results than this pull. Skip the race and report it. Never add `--force` on your own;
    - `502 ARCHIVE_FAILED`: nothing was saved. Report it and stop for that race;
    - `400 PARSE_FAILED` / `INVALID_RACE_DATA`: report the message; do not edit the files.
@@ -125,7 +128,7 @@ notepad .env.intake
 ```
 
 4. **Create the token.** Sign in to RaceTrace as an admin → **Admin → API Tokens** → name it (for example "Laptop intake"), choose an expiry → **Create token** → **Copy**. Paste it into `.env.intake` as `RACETRACE_API_TOKEN=rt_…`. It is shown once; if lost, revoke it and create another. Set `RACETRACE_API_URL` to the API host.
-5. **WRL organisation id** (once):
+5. **WRL organisation id on Speedhive** (once; only for 2025 WRL races):
    ```powershell
    npx tsx scripts/intake.ts speedhive-org --from-session https://speedhive.mylaps.com/sessions/<any WRL race session id>
    ```
@@ -138,8 +141,9 @@ Work folders go to `intake-work\` at the repo root (`INTAKE_WORK_DIR` to move th
 
 | Item | Value |
 |---|---|
-| Source keys | `imsa:<season>/<event>/<championship>/<session folder>` · `sro:<site series>/<season>/<event>/<sub-series>/<session folder>` · `speedhive:session:<id>` |
-| Series ids | `imsa-mpc`, `imsa-wtsc`, `imsa-endurance`, `imsa-vprc`, `imsa-mx5`, `imsa-pccna`, `imsa-lst`, `imsa-mustang`, `imsa-*`; `sro-gt4`, `sro-grcup`, `sro-gtwca`, `sro-gta`, `sro-tca`, `sro-mclaren`, `sro-*`; `wrl` |
+| Source keys | `imsa:<season>/<event>/<championship>/<session folder>` · `sro:<site series>/<season>/<event>/<sub-series>/<session folder>` · `redmist:event:<id>/session:<id>` · `speedhive:session:<id>` |
+| Series ids | `imsa-mpc`, `imsa-wtsc`, `imsa-endurance`, `imsa-vprc`, `imsa-mx5`, `imsa-pccna`, `imsa-lst`, `imsa-mustang`, `imsa-*`; `sro-gt4`, `sro-grcup`, `sro-gtwca`, `sro-gta`, `sro-tca`, `sro-mclaren`, `sro-*`; `wrl` (RedMist), `wrl-speedhive` (2025) |
+| WRL work folder | `redmist_<event>_<session>_{laps,pits,results,flags,control}.json` (raw, for the fact engine, format `redmist`) and `…_{summary,all_laps,flags,control}.csv` (Speedhive-format, for the chart). Crossing time = race-clock start (results `localTimeOfDay − runningRaceTime`) + total time |
 | Work folder | `intake-work/<slug>/`: original file names, `manifest.json` (URL, sha256, size, fetch time, role, API key per file), `intake-result.json` after push |
-| API | `GET /api/admin/intake/whoami`, `GET /api/admin/intake/races`, `POST /api/admin/intake/races` (token scope `intake`) |
+| API | `GET /api/admin/intake/whoami`, `GET /api/admin/intake/races` (`?unkeyed=1&series=&season=` for races without a source key), `POST /api/admin/intake/races` (`attachToRaceId` for an owner-approved attach) (token scope `intake`) |
 | Results | official › provisional › unofficial › unmarked; the server refuses a downgrade (409) |

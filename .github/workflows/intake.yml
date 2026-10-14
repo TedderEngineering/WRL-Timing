@@ -1,0 +1,115 @@
+# RaceTrace intake on GitHub's runners (RaceTrace 2.0, G4): discover race sessions on
+# the timing sites and, when asked, import the raw races into RaceTrace as DRAFTS.
+#
+# Run it from the Actions tab (works from a phone): Actions → "RaceTrace intake" → Run workflow.
+#   mode = discover   lists what is new or changed; nothing is written anywhere.
+#   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
+#                     New sessions that may be a race already on the site (an older
+#                     upload without a source key) are skipped and listed: the owner
+#                     decides those (`intake push <dir> --attach <raceId>` on the laptop).
+#
+# Needs repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Admin → API Tokens,
+# scope "intake"); WRL 2025 from Speedhive also needs SPEEDHIVE_WRL_ORG_ID.
+#
+# Raw timing files are third-party data: they stay on the runner (deleted when the job
+# ends) and in RaceTrace's private storage. They are never uploaded as workflow artifacts
+# or committed. Only the session list (dates, names, source keys) goes to the job summary.
+# Nothing is published: races arrive as drafts, as with the laptop intake.
+name: RaceTrace intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      series:
+        description: "Series ids, comma-separated (wrl, wrl-speedhive, imsa-mpc, imsa-*, sro-gt4, sro-grcup, sro-*)"
+        required: true
+        default: "wrl"
+      season:
+        description: "Season (year)"
+        required: true
+        default: "2026"
+      since:
+        description: "Only sessions on or after this date (YYYY-MM-DD); empty = whole season"
+        required: false
+        default: ""
+      mode:
+        description: "discover = list only; import = pull and push new/changed races as drafts"
+        type: choice
+        options: [discover, import]
+        default: discover
+
+concurrency:
+  group: racetrace-intake
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: server
+    env:
+      RACETRACE_API_URL: ${{ secrets.RACETRACE_API_URL }}
+      RACETRACE_API_TOKEN: ${{ secrets.RACETRACE_API_TOKEN }}
+      SPEEDHIVE_WRL_ORG_ID: ${{ secrets.SPEEDHIVE_WRL_ORG_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+
+      - name: Check settings
+        run: |
+          # Work folder on the runner's temp disk (the runner context is not available in job-level env).
+          echo "INTAKE_WORK_DIR=$RUNNER_TEMP/intake-work" >> "$GITHUB_ENV"
+          if [ -z "$RACETRACE_API_URL" ] || [ -z "$RACETRACE_API_TOKEN" ]; then
+            echo "::error::Add the repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          npx tsx scripts/intake.ts preflight
+
+      - name: Discover
+        env:
+          SERIES: ${{ inputs.series }}
+          SEASON: ${{ inputs.season }}
+          SINCE: ${{ inputs.since }}
+        run: |
+          args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/discover.json")
+          if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+          npx tsx scripts/intake.ts discover "${args[@]}" | tee "$RUNNER_TEMP/discover.txt"
+          {
+            echo "## Discover: $SERIES $SEASON${SINCE:+ since $SINCE}"
+            echo '```'
+            cat "$RUNNER_TEMP/discover.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pull and push as drafts
+        if: inputs.mode == 'import'
+        run: |
+          set -o pipefail
+          n=$(node -e 'const d=require(process.argv[1]);console.log(d.sessions.filter(s=>["new","changed","results-upgrade"].includes(s.state)&&!(s.state==="new"&&(s.attachCandidates||[]).length)).length)' "$INTAKE_WORK_DIR/discover.json")
+          held=$(node -e 'const d=require(process.argv[1]);for(const s of d.sessions.filter(s=>s.state==="new"&&(s.attachCandidates||[]).length))console.log(`- ${s.date} ${s.event} — ${s.session}: may be ${s.attachCandidates.map(r=>`${r.name} (${r.raceId})`).join("; ")}`)' "$INTAKE_WORK_DIR/discover.json")
+          if [ -n "$held" ]; then
+            { echo "## Waiting for the owner (possible duplicates of races already on the site)"; echo "$held"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$n" = "0" ]; then
+            echo "Nothing to import." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          status=0
+          npx tsx scripts/intake.ts pull --from "$INTAKE_WORK_DIR/discover.json" --skip-attach-candidates || status=1
+          dirs=()
+          for m in "$INTAKE_WORK_DIR"/*/manifest.json; do [ -f "$m" ] && dirs+=("$(dirname "$m")"); done
+          if [ ${#dirs[@]} -gt 0 ]; then
+            npx tsx scripts/intake.ts push "${dirs[@]}" | tee "$RUNNER_TEMP/push.txt" || status=1
+            { echo "## Imported as drafts"; echo '```'; cat "$RUNNER_TEMP/push.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $status

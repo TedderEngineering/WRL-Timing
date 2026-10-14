@@ -147,7 +147,7 @@ export function speedhiveVersion(event: ShEvent, session: ShSession): string {
   return sha256(JSON.stringify([event.updatedAt ?? null, session.id, session.startTime ?? null, session.name ?? null])).slice(0, 16);
 }
 
-export function buildSpeedhiveSession(event: ShEvent, session: ShSession, seriesId = "wrl"): RaceSession | null {
+export function buildSpeedhiveSession(event: ShEvent, session: ShSession, seriesId = "wrl-speedhive"): RaceSession | null {
   const raceDate = isoDatePart(session.startTime) ?? isoDatePart(event.startDate);
   if (!raceDate) return null;
   const eventName = (event.name ?? `Event ${event.id}`).replace(/\s+/g, " ").trim();

@@ -271,3 +271,47 @@ describe("Speedhive end to end (fixtures → work folder → push body → real 
     }
   });
 });
+
+describe("attach a session to a race imported before source keys", () => {
+  const legacy = (over: Record<string, unknown> = {}) => {
+    const r = { id: "old1", name: "GT4 Indy R1 (hand upload)", date: new Date("2026-10-10T00:00:00Z"), series: "SRO", status: "PUBLISHED", sourceKey: null, sourceVersion: null, resultsStatus: null, sourceFiles: { lapsCsv: "imports/hand/laps.csv" }, eventId: "eventX", ...over };
+    store.races.set(r.id, r);
+    return r;
+  };
+
+  it("claims the race: same id, name and status; data replaced; source key set; audited as an attach", async () => {
+    legacy();
+    const r = await intakeRace(body({ attachToRaceId: "old1" }), actor, deps);
+    expect(r).toMatchObject({ action: "updated", attached: true, raceId: "old1" });
+    expect(store.races.size).toBe(1);
+    expect(store.races.get("old1")).toMatchObject({ name: "GT4 Indy R1 (hand upload)", status: "PUBLISHED", eventId: "eventX", sourceKey: KEY, sourceVersion: "v1", resultsStatus: "provisional" });
+    expect(store.laps.filter((l) => l.raceId === "old1")).toHaveLength(3);
+    expect(store.audit[0]).toMatchObject({ action: "INTAKE_ATTACH_RACE", targetId: "old1", details: { attached: true, previousSourceFiles: { lapsCsv: "imports/hand/laps.csv" } } });
+    // From then on the source key finds it; repeating the attach is harmless.
+    const again = await intakeRace(body({ attachToRaceId: "old1", sourceVersion: "v2" }), actor, deps);
+    expect(again).toMatchObject({ action: "updated", raceId: "old1" });
+    expect(again.attached).toBeUndefined();
+  });
+
+  it("refuses a race that does not exist, already has a source key, or does not look like the session", async () => {
+    await expect(intakeRace(body({ attachToRaceId: "nope" }), actor, deps)).rejects.toMatchObject({ statusCode: 404, code: "ATTACH_NOT_FOUND" });
+    legacy({ id: "keyed", sourceKey: "sro:other" });
+    await expect(intakeRace(body({ attachToRaceId: "keyed" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_KEYED" });
+    legacy({ id: "wrl", series: "WRL" });
+    await expect(intakeRace(body({ attachToRaceId: "wrl" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_MISMATCH" });
+    legacy({ id: "far", date: new Date("2026-10-03T00:00:00Z") });
+    await expect(intakeRace(body({ attachToRaceId: "far" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_MISMATCH" });
+    expect(store.audit).toHaveLength(0);
+    // force overrides the look-alike check (owner's decision)
+    const r = await intakeRace(body({ attachToRaceId: "far", force: true }), actor, deps);
+    expect(r).toMatchObject({ attached: true, raceId: "far" });
+  });
+
+  it("refuses to attach when the source key already belongs to another race", async () => {
+    const first = await intakeRace(body(), actor, deps);
+    legacy();
+    await expect(intakeRace(body({ attachToRaceId: "old1", sourceVersion: "v2" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_CONFLICT" });
+    expect(store.races.get(first.raceId).sourceKey).toBe(KEY);
+    expect(store.races.get("old1").sourceKey).toBeNull();
+  });
+});

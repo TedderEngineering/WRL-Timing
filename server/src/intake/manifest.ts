@@ -51,7 +51,7 @@ export function metadataFor(s: RaceSession): IntakeMetadata {
   const def = seriesById(s.seriesId);
   const prefix = def?.namePrefix ?? s.seriesLabel;
   const name =
-    s.site === "speedhive"
+    s.site === "speedhive" || s.site === "redmist"
       ? `${/\bwrl\b|world racing league/i.test(s.event) ? "" : "WRL "}${s.event} — ${s.sessionName}`
       : `${prefix} ${s.sessionName} — ${s.event}`;
   return {
@@ -86,6 +86,7 @@ export function newManifest(s: RaceSession, now: Date, prev: Manifest | null): M
     missing: [],
     warnings: [],
     ...(s.ids ? { ids: s.ids } : {}),
+    ...(prev?.attachToRaceId && prev.sourceKey === s.sourceKey ? { attachToRaceId: prev.attachToRaceId } : {}),
   };
 }
 
@@ -119,7 +120,7 @@ export async function downloadAlkamelSession(
   http: HttpClient,
   opts: DownloadOptions = {}
 ): Promise<DownloadReport> {
-  if (s.site === "speedhive" || s.legacyFormat === "speedhive" || s.legacyFormat === "wrl-website") {
+  if (s.site === "speedhive" || s.site === "redmist" || s.legacyFormat === "speedhive" || s.legacyFormat === "wrl-website") {
     throw new Error("downloadAlkamelSession: not an Alkamel session");
   }
   const log = opts.log ?? (() => undefined);

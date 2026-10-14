@@ -5,6 +5,8 @@ import { api } from "../lib/api";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { cn } from "../lib/utils";
+import { useSiteConfig } from "../lib/site-config";
+import { FreePlans } from "../features/support/FreePlans";
 
 const PRICE_IDS: Record<string, string | undefined> = {
   PRO: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
@@ -77,6 +79,19 @@ function CellValue({ value }: { value: string | boolean }) {
 }
 
 export function PricingPage() {
+  const { freeMode } = useSiteConfig();
+  if (freeMode) {
+    return (
+      <div className="container-page py-16">
+        <FreePlans />
+      </div>
+    );
+  }
+  return <PaidPricingPage />;
+}
+
+/** The Free / Pro / Team page, used when RACETRACE_FREE is off. */
+function PaidPricingPage() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
   const [error, setError] = useState<string | null>(null);

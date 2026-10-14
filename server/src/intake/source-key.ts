@@ -10,6 +10,8 @@
  *     sro:06_SRO/26_2026/09_Indianapolis Motor Speedway RC/03_Pirelli GT4 America/202610101000_Race 1
  *   speedhive:session:<session id>
  *     speedhive:session:11748965
+ *   redmist:event:<event id>/session:<session id>
+ *     redmist:event:405/session:3
  *
  * The Alkamel keys are the site's own folder names, decoded and whitespace-
  * normalised, so the same session gives the same key whether it was found in a
@@ -20,7 +22,7 @@
 import { safeDecode } from "./http.js";
 import type { SiteId } from "./types.js";
 
-export const SOURCE_KEY_PATTERN = /^(imsa|sro):[^/\s][^\n]{0,400}$|^speedhive:session:\d{1,12}$/;
+export const SOURCE_KEY_PATTERN = /^(imsa|sro):[^/\s][^\n]{0,400}$|^speedhive:session:\d{1,12}$|^redmist:event:\d{1,9}\/session:\d{1,9}$/;
 
 export function normalizeSegment(seg: string): string {
   const s = safeDecode(seg).normalize("NFC").replace(/\s+/g, " ").trim();
@@ -49,10 +51,18 @@ export function speedhiveSourceKey(sessionId: string | number): string {
   return `speedhive:session:${Number(id)}`;
 }
 
+export function redmistSourceKey(eventId: string | number, sessionId: string | number): string {
+  const e = String(eventId).trim();
+  const s = String(sessionId).trim();
+  if (!/^\d{1,9}$/.test(e) || !/^\d{1,9}$/.test(s)) throw new Error(`Not a RedMist event/session id: "${eventId}" / "${sessionId}"`);
+  return `redmist:event:${Number(e)}/session:${Number(s)}`;
+}
+
 export type ParsedSourceKey =
   | { site: "imsa"; season: string; event: string; championship: string; sessionFolder: string }
   | { site: "sro"; siteSeries: string; season: string; event: string; subSeries: string; sessionFolder: string }
-  | { site: "speedhive"; sessionId: number };
+  | { site: "speedhive"; sessionId: number }
+  | { site: "redmist"; eventId: number; sessionId: number };
 
 export function parseSourceKey(key: string): ParsedSourceKey {
   const k = key.trim();
@@ -63,6 +73,11 @@ export function parseSourceKey(key: string): ParsedSourceKey {
     const m = rest.match(/^session:(\d{1,12})$/);
     if (!m) throw new Error(`Bad Speedhive source key "${key}" (expected speedhive:session:<id>)`);
     return { site, sessionId: Number(m[1]) };
+  }
+  if (site === "redmist") {
+    const m = rest.match(/^event:(\d{1,9})\/session:(\d{1,9})$/);
+    if (!m) throw new Error(`Bad RedMist source key "${key}" (expected redmist:event:<id>/session:<id>)`);
+    return { site, eventId: Number(m[1]), sessionId: Number(m[2]) };
   }
   const segs = rest.split("/").map(normalizeSegment);
   if (site === "imsa") {
@@ -75,7 +90,7 @@ export function parseSourceKey(key: string): ParsedSourceKey {
     const [siteSeries, season, event, subSeries, sessionFolder] = segs;
     return { site, siteSeries, season, event, subSeries, sessionFolder };
   }
-  throw new Error(`Unknown source key site in "${key}" (expected imsa:, sro: or speedhive:)`);
+  throw new Error(`Unknown source key site in "${key}" (expected imsa:, sro:, speedhive: or redmist:)`);
 }
 
 /** Re-serialise a key in canonical form (decoding, whitespace). */
@@ -88,7 +103,25 @@ export function canonicalSourceKey(key: string): string {
       return sroSourceKey(p.siteSeries, p.season, p.event, p.subSeries, p.sessionFolder);
     case "speedhive":
       return speedhiveSourceKey(p.sessionId);
+    case "redmist":
+      return redmistSourceKey(p.eventId, p.sessionId);
   }
+}
+
+/**
+ * RedMist web or API URL → ids. Accepts https://redmist.racing/event/405 (event),
+ * …/event/405/session/3, any API URL with eventId=…&sessionId=…, "405/3" or "405".
+ */
+export function parseRedmistRef(ref: string): { eventId: number; sessionId: number | null } {
+  const s = ref.trim();
+  let m = s.match(/^(\d{1,9})(?:\/(\d{1,9}))?$/);
+  if (m) return { eventId: Number(m[1]), sessionId: m[2] ? Number(m[2]) : null };
+  m = s.match(/^redmist:event:(\d{1,9})\/session:(\d{1,9})$/);
+  if (m) return { eventId: Number(m[1]), sessionId: Number(m[2]) };
+  const ev = s.match(/[?&]eventId=(\d{1,9})/i) ?? s.match(/\/events?\/(\d{1,9})(?:[/?#]|$)/i);
+  if (!ev) throw new Error(`Not a RedMist event or session reference: "${ref}"`);
+  const se = s.match(/[?&]sessionId=(\d{1,9})/i) ?? s.match(/\/sessions?\/(\d{1,9})(?:[/?#]|$)/i);
+  return { eventId: Number(ev[1]), sessionId: se ? Number(se[1]) : null };
 }
 
 /**

@@ -3,7 +3,8 @@
  *
  *   npx tsx scripts/build-facts.ts <format> <file…> --out pkg.json [options]
  *
- * format: speedhive | wrl-website | alkamel-sro | alkamel-grcup | alkamel-imsa
+ * format: speedhive | wrl-website | alkamel-sro | alkamel-grcup | alkamel-imsa | redmist
+ * (redmist: <event>_<session>_laps.json [+ _pits.json _results.json _flags.json _control.json])
  * File roles are detected from the timing-provider file names; override one with role=path
  * (e.g. results=/path/x.csv). Options:
  *   --date YYYY-MM-DD        race date (required for wrl-website; must agree with a dated file otherwise)

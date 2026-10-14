@@ -8,13 +8,13 @@
  */
 
 /** Timing site a session comes from. */
-export type SiteId = "imsa" | "sro" | "speedhive";
+export type SiteId = "imsa" | "sro" | "speedhive" | "redmist";
 
 /** Legacy parser id (src/utils/parsers): the format the admin import uses. */
 export type LegacyFormat = "imsa" | "sro" | "grcup" | "speedhive" | "wrl-website";
 
 /** Fact-engine format id (G2 build-facts). */
-export type FactFormat = "alkamel-imsa" | "alkamel-sro" | "alkamel-grcup" | "speedhive" | "wrl-website";
+export type FactFormat = "alkamel-imsa" | "alkamel-sro" | "alkamel-grcup" | "speedhive" | "wrl-website" | "redmist";
 
 /** The mark a results file carries. "unknown" = a results file without a mark. */
 export type ResultsMark = "official" | "provisional" | "unofficial" | "unknown";
@@ -85,8 +85,8 @@ export interface RaceSession {
   version: string;
   legacyFormat: LegacyFormat;
   factFormat: FactFormat;
-  /** Source-specific ids (Speedhive). */
-  ids?: Record<string, string | number>;
+  /** Source-specific ids (Speedhive, RedMist). */
+  ids?: Record<string, string | number | boolean>;
 }
 
 /** One file in a work folder. */
@@ -112,7 +112,7 @@ export interface ManifestFile {
   listedSize?: string;
   /** Added by hand (e.g. a Redmist flags export), not fetched. */
   manual?: boolean;
-  /** Generated locally from fetched data (Speedhive CSVs built from API JSON). */
+  /** Generated locally from fetched data (Speedhive and RedMist CSVs built from API JSON). */
   derivedFrom?: string[];
 }
 
@@ -148,7 +148,12 @@ export interface Manifest {
   /** Roles the formats use that the site did not offer. */
   missing: { role: FileRole; note: string }[];
   warnings: string[];
-  ids?: Record<string, string | number>;
+  ids?: Record<string, string | number | boolean>;
+  /**
+   * An existing race on the site (one imported before source keys existed) that this
+   * session should replace instead of creating a new race. Set only by `push --attach`.
+   */
+  attachToRaceId?: string;
 }
 
 export interface DiscoverOptions {

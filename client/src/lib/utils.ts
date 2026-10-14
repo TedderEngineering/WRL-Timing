@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { isFreeMode } from "./site-config";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,6 +14,8 @@ interface AccessUser {
 
 /** True for PRO, TEAM, or ADMIN — use to gate any paid feature. */
 export function hasFullAccess(user: AccessUser | null | undefined): boolean {
+  // While RaceTrace is free, everything is open to everyone.
+  if (isFreeMode()) return true;
   if (!user) return false;
   if (user.role === "ADMIN") return true;
   const plan = user.subscription?.plan;
@@ -21,6 +24,7 @@ export function hasFullAccess(user: AccessUser | null | undefined): boolean {
 
 /** True for TEAM or ADMIN — use to gate Team-only features (strategy, lap times). */
 export function hasTeamAccess(user: AccessUser | null | undefined): boolean {
+  if (isFreeMode()) return true;
   if (!user) return false;
   if (user.role === "ADMIN") return true;
   return user.subscription?.plan === "TEAM";

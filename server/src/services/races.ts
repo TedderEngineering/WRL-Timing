@@ -1,4 +1,5 @@
 import { prisma } from "../models/prisma.js";
+import { freeMode } from "../lib/free-mode.js";
 import { AppError } from "../middleware/error-handler.js";
 import { Prisma } from "@prisma/client";
 import { packagesEnabledFor } from "../packages/flags.js";
@@ -35,6 +36,7 @@ export async function canUserAccessRace(
   userPlan: string | null,
   userRole: string | null
 ): Promise<{ accessible: boolean; reason?: string }> {
+  if (freeMode()) return { accessible: true };
   if (userRole === "ADMIN") return { accessible: true };
   if (userPlan === "PRO" || userPlan === "TEAM") return { accessible: true };
 
@@ -113,7 +115,9 @@ export async function listRaces(params: RaceListParams, userId?: string) {
     prisma.race.count({ where }),
   ]);
 
-  const freeAccessIds = await getFreeAccessRaceIds();
+  // Free mode: every race is open, so skip the "three newest" lookup.
+  const free = freeMode();
+  const freeAccessIds = free ? [] : await getFreeAccessRaceIds();
 
   return {
     races: races.map((r: any) => ({
@@ -130,7 +134,7 @@ export async function listRaces(params: RaceListParams, userId?: string) {
       entryCount: r._count.entries,
       favoriteCount: r._count.favorites,
       isFavorited: userId ? r.favorites?.length > 0 : false,
-      accessibleToFree: freeAccessIds.includes(r.id),
+      accessibleToFree: free || freeAccessIds.includes(r.id),
       createdAt: r.createdAt.toISOString(),
     })),
     total,
@@ -443,6 +447,21 @@ export async function recordView(userId: string, raceId: string) {
   });
 }
 
+/** Fields a race card needs (never chartData / annotationData). */
+const RACE_CARD_SELECT = {
+  id: true,
+  name: true,
+  date: true,
+  track: true,
+  series: true,
+  season: true,
+  status: true,
+  premium: true,
+  maxLap: true,
+  totalCars: true,
+  _count: { select: { entries: true, favorites: true } },
+} as const;
+
 // ─── Recently Viewed ─────────────────────────────────────────────────────────
 
 export async function getRecentlyViewed(userId: string, limit = 8) {
@@ -460,10 +479,11 @@ export async function getRecentlyViewed(userId: string, limit = 8) {
   const sorted = views.sort((a, b) => new Date(b.last_viewed).getTime() - new Date(a.last_viewed).getTime()).slice(0, limit);
   const raceIds = sorted.map((v) => v.race_id);
 
+  // Select only card fields: `include` would load every race's chartData.
   const races = await prisma.race.findMany({
     where: { id: { in: raceIds }, status: "PUBLISHED" },
-    include: {
-      _count: { select: { entries: true, laps: true, favorites: true } },
+    select: {
+      ...RACE_CARD_SELECT,
       favorites: {
         where: { userId },
         select: { userId: true },
@@ -485,10 +505,11 @@ export async function getRecentlyViewed(userId: string, limit = 8) {
         series: r.series,
         season: r.season,
         premium: r.premium,
-        maxLap: r._count.laps > 0 ? r._count.laps : null,
-        totalCars: r._count.entries > 0 ? r._count.entries : null,
+        // maxLap is the race distance; _count.laps counts every car's laps (was shown as e.g. 3505 laps)
+        maxLap: r.maxLap ?? null,
+        totalCars: r.totalCars ?? (r._count.entries > 0 ? r._count.entries : null),
         favoriteCount: r._count.favorites,
-        isFavorited: (r as any).favorites?.length > 0,
+        isFavorited: r.favorites.length > 0,
         lastViewed: v.last_viewed,
       };
     })
@@ -502,13 +523,7 @@ export async function getUserFavorites(userId: string, limit = 12) {
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: {
-      race: {
-        include: {
-          _count: { select: { entries: true, laps: true, favorites: true } },
-        },
-      },
-    },
+    include: { race: { select: RACE_CARD_SELECT } },
   });
 
   return favorites
@@ -521,8 +536,8 @@ export async function getUserFavorites(userId: string, limit = 12) {
       series: f.race.series,
       season: f.race.season,
       premium: f.race.premium,
-      maxLap: f.race._count.laps > 0 ? f.race._count.laps : null,
-      totalCars: f.race._count.entries > 0 ? f.race._count.entries : null,
+      maxLap: f.race.maxLap ?? null,
+      totalCars: f.race.totalCars ?? (f.race._count.entries > 0 ? f.race._count.entries : null),
       favoriteCount: f.race._count.favorites,
       isFavorited: true,
       favoritedAt: f.createdAt,

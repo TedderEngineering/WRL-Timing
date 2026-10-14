@@ -28,9 +28,12 @@ export function buildStints(
     if (!rows.length) continue;
     const plist = [...(byCar.get(car) ?? [])].sort((a, b) => a.sortT - b.sortT);
     const tookFlag = rows[rows.length - 1].endT >= ctx.chequerT - 1e-6;
-    // Segment boundaries. WRL: no pit times, so a stint ends at the in-lap end and restarts at it.
-    const pinOf = (p: Passage) => (wrl ? rows[p.inIdx ?? 0].endT : p.pinT ?? p.sortT);
-    const poutOf = (p: Passage) => (wrl ? rows[p.inIdx ?? 0].endT : p.poutT ?? p.rejoinT ?? p.sortT);
+    // Segment boundaries. WRL (and RedMist passages without pit clocks): no pit times, so a stint ends
+    // at the in-lap end and restarts at it.
+    const lapBased = (p: Passage) => wrl || (ctx.race.format === "redmist" && (p.pinT === null || p.poutT === null));
+    const lapBasedCar = wrl || plist.some((p) => SERVICE.has(p.kind) && lapBased(p));
+    const pinOf = (p: Passage) => (lapBased(p) ? rows[p.inIdx ?? 0].endT : p.pinT ?? p.sortT);
+    const poutOf = (p: Passage) => (lapBased(p) ? rows[p.inIdx ?? 0].endT : p.poutT ?? p.rejoinT ?? p.sortT);
     type Seg = { a: number; b: number; sr: Stint["startReason"]; er: Stint["endReason"]; i0: number; i1: number };
     const segs: Seg[] = [];
     let a = ctx.axis.origin;
@@ -86,7 +89,7 @@ export function buildStints(
         const id = `stint:${car}:${++n}`;
         const notes: string[] = [];
         let conf: Stint["confidence"] = "high";
-        if (wrl) {
+        if (lapBasedCar) {
           notes.push("wrl_boundaries_no_pit_times");
           conf = "medium";
         }
@@ -148,7 +151,7 @@ export function buildStints(
         officialDriveTimeS: off ? rd(off.v) : null,
         stintIds: v.ids,
         source: off ? { kind: "derived", method: "D-DRIVETIME", refs: [off.ref] } : { kind: "derived", method: "D-DRIVETIME" },
-        confidence: wrl ? "medium" : "high",
+        confidence: lapBasedCar ? "medium" : "high",
       };
       driveTimes.push(dt);
     }

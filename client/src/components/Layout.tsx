@@ -3,6 +3,9 @@ import { Outlet, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Button } from "./Button";
 import { UserMenu } from "./UserMenu";
+import { SupportProvider } from "../features/support/SupportContext";
+import { SupportLink } from "../features/support/SupportPrompts";
+import { isFreeMode, useSiteConfig } from "../lib/site-config";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {
@@ -51,11 +54,12 @@ function MobileMenu() {
             <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
               Events
             </Link>
-            {!isAuthenticated && (
+            {!isAuthenticated && !isFreeMode() && (
               <Link to="/pricing" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
                 Pricing
               </Link>
             )}
+            <SupportLink variant="menu" onClick={() => setOpen(false)} />
 
             {isAuthenticated ? (
               <>
@@ -97,8 +101,10 @@ function MobileMenu() {
 
 export function Layout() {
   const { isAuthenticated, isLoading } = useAuth();
+  useSiteConfig(); // re-render when free mode / support settings arrive
 
   return (
+    <SupportProvider>
     <div className="min-h-screen flex flex-col">
       {/* Navigation */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
@@ -120,7 +126,7 @@ export function Layout() {
               >
                 Events
               </Link>
-              {!isAuthenticated && (
+              {!isAuthenticated && !isFreeMode() && (
                 <Link
                   to="/pricing"
                   className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -134,6 +140,7 @@ export function Layout() {
           <div className="flex items-center gap-3">
             {/* Desktop auth */}
             <div className="hidden sm:flex items-center gap-3">
+              <SupportLink />
               {isLoading ? (
                 <div className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
               ) : isAuthenticated ? (
@@ -183,5 +190,6 @@ export function Layout() {
         </div>
       </footer>
     </div>
+    </SupportProvider>
   );
 }
