@@ -46,7 +46,7 @@ const checkoutLimiter = rateLimit({
 });
 
 const bodySchema = z.object({
-  coffees: z.union([z.literal(1), z.literal(3), z.literal(10)]),
+  coffees: z.union([z.literal(1), z.literal(3), z.literal(20)]),
   returnPath: z.string().max(300).optional(),
 });
 
@@ -56,7 +56,7 @@ supportRouter.post("/checkout", checkoutLimiter, optionalAuth, async (req: Reque
       throw new AppError(404, "Support checkout is not set up", "SUPPORT_UNAVAILABLE");
     }
     const parsed = bodySchema.safeParse(req.body);
-    if (!parsed.success) throw new AppError(400, "Choose 1, 3 or 10 coffees", "VALIDATION_ERROR");
+    if (!parsed.success) throw new AppError(400, "Choose 1, 3 or 20 coffees", "VALIDATION_ERROR");
     const { stripe } = await import("../lib/stripe.js");
     const session = await stripe.checkout.sessions.create(
       checkoutParams({

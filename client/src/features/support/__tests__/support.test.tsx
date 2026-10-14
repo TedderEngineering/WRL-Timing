@@ -25,7 +25,7 @@ afterEach(() => {
 
 const DAY = 86_400_000;
 const text = (s: string) => s.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-const SUPPORT = { enabled: true, checkout: true, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 10] };
+const SUPPORT = { enabled: true, checkout: true, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 20] };
 
 describe("when to ask (F9 note 5)", () => {
   it("asks at most once every 30 days, and Not now counts as an answer", () => {
@@ -68,10 +68,15 @@ describe("support sheet (F9-C / F10)", () => {
     const html = renderToStaticMarkup(<SupportSheet support={SUPPORT} onClose={() => {}} />);
     expect(out).toContain("1 coffee $5");
     expect(out).toContain("A race weekend");
-    expect(out).toContain("A full season $50");
+    expect(out).toContain("A full season $100");
     expect(html).toMatch(/aria-checked="true"[^>]*>(?:(?!<button).)*3 coffees/s);
     expect(out).toContain("Buy me 3 coffees · $15");
     expect(dollars(250)).toBe("$2.50");
+  });
+
+  it("the season button says what it is", () => {
+    const html = renderToStaticMarkup(<SupportSheet support={{ ...SUPPORT, options: [20] }} onClose={() => {}} />);
+    expect(html.replace(/<[^>]+>/g, " ")).toContain("Back a full season · $100");
   });
 });
 

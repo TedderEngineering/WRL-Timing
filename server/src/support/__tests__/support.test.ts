@@ -34,7 +34,7 @@ describe("GET /api/site-config", () => {
     process.env.STRIPE_SECRET_KEY = "sk_test_abc";
     const res = await request(app).get("/api/site-config");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ freeMode: true, support: { enabled: true, checkout: true, coffeeCents: 500, options: [1, 3, 10] } });
+    expect(res.body).toMatchObject({ freeMode: true, support: { enabled: true, checkout: true, coffeeCents: 500, options: [1, 3, 20] } });
   });
 
   it("falls back to a Stripe Payment Link when checkout is off", async () => {
@@ -58,7 +58,7 @@ describe("POST /api/support/checkout", () => {
     expect(p.metadata).toMatchObject({ kind: "racetrace_support", coffees: "3" });
   });
 
-  it("only offers 1, 3 or 10 coffees", async () => {
+  it("only offers 1, 3 or 20 coffees", async () => {
     process.env.STRIPE_SECRET_KEY = "sk_test_abc";
     expect((await request(app).post("/api/support/checkout").send({ coffees: 1000 })).status).toBe(400);
   });

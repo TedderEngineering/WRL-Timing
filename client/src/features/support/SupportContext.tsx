@@ -26,5 +26,5 @@ export function SupportProvider({ children }: { children: ReactNode }) {
 export function useSupport(): SupportContextValue {
   const v = useContext(Ctx);
   // Outside the provider (tests, Finding Grip pages): support is simply off.
-  return v ?? { support: { enabled: false, checkout: false, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 10] }, openSupport: () => {} };
+  return v ?? { support: { enabled: false, checkout: false, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 20] }, openSupport: () => {} };
 }
