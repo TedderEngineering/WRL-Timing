@@ -147,9 +147,12 @@ async function sessionsOf(http: HttpClient, eventId: number): Promise<RmSession[
   return (Array.isArray(xs) ? xs : []).filter((s) => s && Number.isFinite(Number(s.sid))).map((s) => ({ ...s, sid: Number(s.sid), eid: Number(s.eid ?? eventId) }));
 }
 
+/** WRL's own races are timed enduros ("Saturday 8 Hour", "14 hour"); support races at the same event ("Radical Cup Race 1") are not WRL. */
+export const WRL_ENDURO = /\b\d{1,2}\s*-?\s*h(?:ou)?rs?\b/i;
+
 function keep(rs: RaceSession | null, opts: DiscoverOptions): rs is RaceSession {
   if (!rs) return false;
-  if (!opts.allSessions && rs.sessionType !== "race") return false;
+  if (!opts.allSessions && (rs.sessionType !== "race" || !WRL_ENDURO.test(rs.sessionName))) return false;
   if (rs.season !== opts.season) return false;
   return !opts.since || rs.raceDate >= opts.since;
 }

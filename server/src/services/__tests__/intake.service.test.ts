@@ -299,12 +299,20 @@ describe("attach a session to a race imported before source keys", () => {
     await expect(intakeRace(body({ attachToRaceId: "keyed" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_KEYED" });
     legacy({ id: "wrl", series: "WRL" });
     await expect(intakeRace(body({ attachToRaceId: "wrl" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_MISMATCH" });
+    legacy({ id: "other", name: "Pirelli GT4 Race 2 (hand upload)" });
+    await expect(intakeRace(body({ attachToRaceId: "other" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_MISMATCH" });
     legacy({ id: "far", date: new Date("2026-10-03T00:00:00Z") });
     await expect(intakeRace(body({ attachToRaceId: "far" }), actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "ATTACH_MISMATCH" });
     expect(store.audit).toHaveLength(0);
     // force overrides the look-alike check (owner's decision)
     const r = await intakeRace(body({ attachToRaceId: "far", force: true }), actor, deps);
     expect(r).toMatchObject({ attached: true, raceId: "far" });
+  });
+
+  it("accepts a race dated on the event's first day, a few days before the session", async () => {
+    legacy({ id: "early", date: new Date("2026-10-07T00:00:00Z") });
+    const r = await intakeRace(body({ attachToRaceId: "early" }), actor, deps);
+    expect(r).toMatchObject({ attached: true, raceId: "early" });
   });
 
   it("refuses to attach when the source key already belongs to another race", async () => {

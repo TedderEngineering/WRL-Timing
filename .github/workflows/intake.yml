@@ -5,8 +5,10 @@
 #   mode = discover   lists what is new or changed; nothing is written anywhere.
 #   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
 #                     New sessions that may be a race already on the site (an older
-#                     upload without a source key) are skipped and listed: the owner
-#                     decides those (`intake push <dir> --attach <raceId>` on the laptop).
+#                     upload without a source key) are skipped and listed, unless the
+#                     owner ticks replace_matched: then a session with exactly one
+#                     matching race replaces that race's data (same id, URL, name and
+#                     status); sessions with several possible matches are still held.
 #
 # Needs repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Admin → API Tokens,
 # scope "intake"); WRL 2025 from Speedhive also needs SPEEDHIVE_WRL_ORG_ID.
@@ -37,6 +39,10 @@ on:
         type: choice
         options: [discover, import]
         default: discover
+      replace_matched:
+        description: "import only: replace races already on the site when exactly one matches (same series, date and session); otherwise they are held"
+        type: boolean
+        default: false
 
 concurrency:
   group: racetrace-intake
@@ -95,10 +101,14 @@ jobs:
 
       - name: Pull and push as drafts
         if: inputs.mode == 'import'
+        env:
+          REPLACE: ${{ inputs.replace_matched }}
         run: |
           set -o pipefail
-          n=$(node -e 'const d=require(process.argv[1]);console.log(d.sessions.filter(s=>["new","changed","results-upgrade"].includes(s.state)&&!(s.state==="new"&&(s.attachCandidates||[]).length)).length)' "$INTAKE_WORK_DIR/discover.json")
-          held=$(node -e 'const d=require(process.argv[1]);for(const s of d.sessions.filter(s=>s.state==="new"&&(s.attachCandidates||[]).length))console.log(`- ${s.date} ${s.event} — ${s.session}: may be ${s.attachCandidates.map(r=>`${r.name} (${r.raceId})`).join("; ")}`)' "$INTAKE_WORK_DIR/discover.json")
+          # replace_matched: a new session with exactly one matching race on the site replaces it; otherwise it is held.
+          lim=0; [ "$REPLACE" = "true" ] && lim=1
+          n=$(node -e 'const d=require(process.argv[1]),L=+process.argv[2];console.log(d.sessions.filter(s=>["new","changed","results-upgrade"].includes(s.state)&&!(s.state==="new"&&(s.attachCandidates||[]).length>L)).length)' "$INTAKE_WORK_DIR/discover.json" "$lim")
+          held=$(node -e 'const d=require(process.argv[1]),L=+process.argv[2];for(const s of d.sessions.filter(s=>s.state==="new"&&(s.attachCandidates||[]).length>L))console.log(`- ${s.date} ${s.event} — ${s.session}: may be ${s.attachCandidates.map(r=>`${r.name} (${r.raceId})`).join("; ")}`)' "$INTAKE_WORK_DIR/discover.json" "$lim")
           if [ -n "$held" ]; then
             { echo "## Waiting for the owner (possible duplicates of races already on the site)"; echo "$held"; } >> "$GITHUB_STEP_SUMMARY"
             node -e 'console.log("::notice title=Waiting for the owner (possible duplicates)::"+process.argv[1].replace(/%/g,"%25").replace(/\n/g,"%0A"))' "$held"
@@ -108,7 +118,8 @@ jobs:
             exit 0
           fi
           status=0
-          npx tsx scripts/intake.ts pull --from "$INTAKE_WORK_DIR/discover.json" --skip-attach-candidates || status=1
+          attach_flag=--skip-attach-candidates; [ "$REPLACE" = "true" ] && attach_flag=--attach-single-candidates
+          npx tsx scripts/intake.ts pull --from "$INTAKE_WORK_DIR/discover.json" "$attach_flag" || status=1
           dirs=()
           for m in "$INTAKE_WORK_DIR"/*/manifest.json; do [ -f "$m" ] && dirs+=("$(dirname "$m")"); done
           if [ ${#dirs[@]} -gt 0 ]; then

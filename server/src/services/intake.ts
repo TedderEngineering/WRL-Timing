@@ -13,8 +13,9 @@
  *     event and round; its chart data, entries, laps, archive paths, version
  *     and results status are replaced. A new race is created as DRAFT.
  *  5. `attachToRaceId` claims a race imported before source keys existed (the
- *     admin upload): the race must have no source key, the same series and a
- *     date within a day (unless `force`); it is then updated as in 4 and keeps
+ *     admin upload): the race must have no source key, the same series, a
+ *     date from a day after to four days before the session, and no clash in
+ *     day or race length (unless `force`); it is then updated as in 4 and keeps
  *     the source key from then on. Only ever sent by `intake push --attach`.
  */
 import { z } from "zod";
@@ -26,6 +27,7 @@ import { raceDataJsonSchema, raceMetadataSchema, type RaceDataJson } from "../ut
 import { findOrCreateEvent, mapSeriesToSanctioningBody } from "./race-ingest.js";
 import { canonicalSourceKey, SOURCE_KEY_PATTERN } from "../intake/source-key.js";
 import { resultsStatusRank } from "../intake/file-select.js";
+import { sameSessionTraits } from "../intake/push.js";
 
 export const RESULTS_STATUSES = ["official", "provisional", "unofficial", "unknown", "none"] as const;
 
@@ -200,8 +202,9 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
       });
       if (!r) throw new AppError(404, `Race ${body.attachToRaceId} not found`, "ATTACH_NOT_FOUND");
       if (r.sourceKey) throw new AppError(409, `Race ${r.id} already has the source key ${r.sourceKey}`, "ATTACH_KEYED");
-      const days = Math.abs(Date.parse(`${body.metadata.date}T00:00:00Z`) - new Date(r.date).getTime()) / 86400000;
-      if (!body.force && (r.series !== body.metadata.series || !(days <= 1.5))) {
+      // The session may be up to four days after the race's date (older uploads carry the event's first day).
+      const days = (Date.parse(`${body.metadata.date}T00:00:00Z`) - new Date(r.date).getTime()) / 86400000;
+      if (!body.force && (r.series !== body.metadata.series || !(days >= -1.5 && days <= 4.5) || !sameSessionTraits(body.metadata.name, r.name))) {
         throw new AppError(
           409,
           `Race ${r.id} ("${r.name}", ${r.series}, ${new Date(r.date).toISOString().slice(0, 10)}) does not look like this session (${body.metadata.series}, ${body.metadata.date}). Send force: true to attach anyway.`,

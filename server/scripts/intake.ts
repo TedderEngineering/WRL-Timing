@@ -6,7 +6,8 @@
  *                                      [--all-sessions] [--redmist <event id|event/session>]…
  *                                      [--json] [--save <file>]
  *   npx tsx scripts/intake.ts discover --series wrl-speedhive --season 2025 [--org <speedhive org id>] [--speedhive <event|session URL>]…
- *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade] [--skip-attach-candidates] [--force]
+ *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade]
+ *                                  [--skip-attach-candidates | --attach-single-candidates] [--force]
  *   npx tsx scripts/intake.ts push <dir…> [--force] [--dry-run] [--no-archive-only]
  *   npx tsx scripts/intake.ts push <dir> --attach <raceId>      replace an existing race that has no source key yet
  *   npx tsx scripts/intake.ts status <dir…>
@@ -181,15 +182,24 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
 
 async function cmdPull(a: ReturnType<typeof parseArgs>) {
   let keys = [...a.pos];
+  const attachTo = new Map<string, string>();
   const from = a.one("from");
   if (from) {
     const states = (a.one("states") ?? "new,changed,results-upgrade").split(",");
     const d = JSON.parse(readFileSync(from, "utf-8")) as { sessions: { state: string; sourceKey: string; attachCandidates?: { raceId: string; name: string }[] }[] };
-    const skipAttach = a.has("skip-attach-candidates");
+    const skipAttach = a.has("skip-attach-candidates") || a.has("attach-single-candidates");
+    const attachSingle = a.has("attach-single-candidates");
     for (const s of d.sessions.filter((x) => states.includes(x.state))) {
-      // A new session that may be a race already on the site (no source key) waits for the owner's attach decision.
-      if (skipAttach && s.state === "new" && (s.attachCandidates ?? []).length > 0) {
-        log(`skipped ${s.sourceKey}: may be ${s.attachCandidates!.map((r) => `${r.raceId} (${r.name})`).join("; ")} — owner decides (push --attach)`);
+      const cands = s.state === "new" ? (s.attachCandidates ?? []) : [];
+      // The owner chose (--attach-single-candidates) to replace races already on the site when exactly one matches.
+      if (attachSingle && cands.length === 1) {
+        attachTo.set(canonicalSourceKey(s.sourceKey), cands[0].raceId);
+        keys.push(s.sourceKey);
+        continue;
+      }
+      // Otherwise a new session that may be a race already on the site waits for the owner (push --attach).
+      if (skipAttach && cands.length > 0) {
+        log(`skipped ${s.sourceKey}: may be ${cands.map((r) => `${r.raceId} (${r.name})`).join("; ")} — owner decides (push --attach)`);
         continue;
       }
       keys.push(s.sourceKey);
@@ -207,6 +217,12 @@ async function cmdPull(a: ReturnType<typeof parseArgs>) {
       const dir = workDirFor(WORK, s.sourceKey);
       const r = await download(h, s, dir, { force: a.has("force"), log });
       const m = r.manifest;
+      const target = attachTo.get(s.sourceKey);
+      if (target) {
+        m.attachToRaceId = target;
+        writeManifest(dir, m);
+        log(`  will replace existing race ${target} on push (owner chose --attach-single-candidates)`);
+      }
       for (const x of m.missing) log(`  missing: ${x.note}`);
       for (const w of m.warnings) log(`  warning: ${w}`);
       for (const f of r.failed) log(`  FAILED: ${f.name}: ${f.error}`);
