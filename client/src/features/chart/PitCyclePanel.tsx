@@ -141,7 +141,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
       {/* Table */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-x-auto overflow-y-auto"
+        className="no-scrollbar flex-1 overflow-x-auto overflow-y-auto"
         style={{ scrollbarWidth: "none", cursor: "grab" }}
         onMouseDown={onDragStart}
         onMouseMove={onDragMove}

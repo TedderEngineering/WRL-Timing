@@ -55,14 +55,13 @@ describe("Position Trace v2", () => {
   it("the control bar shows focus, class counts and the compare cars", () => {
     const t = text(
       renderToStaticMarkup(
-        <TraceControls data={data} focusNum={11} onFocus={() => {}} classView="" setClassView={() => {}} compSet={new Set([5])} toggleComp={() => {}} clearComp={() => {}} makeFilter="" setMakeFilter={() => {}} activeLap={2} navPrev={() => {}} navNext={() => {}} xAxisMode="laps" setXAxisMode={() => {}} />
+        <TraceControls data={data} focusNum={11} onFocus={() => {}} classView="" setClassView={() => {}} compSet={new Set([5])} toggleComp={() => {}} clearComp={() => {}} makeFilter={[]} setMakeFilter={() => {}} xAxisMode="laps" setXAxisMode={() => {}} />
       )
     );
     expect(t).toContain("#11 Synthetic Racing");
     expect(t).toContain("All 3");
     expect(t).toContain("Am 2");
     expect(t).toContain("#5 ×");
-    expect(t).toContain("Lap 2");
   });
 });
 
@@ -75,5 +74,17 @@ describe("makes", () => {
     expect(makeOf("")).toBeNull();
     const d = { cars: { "1": { num: 1, vehicle: "BMW M4 GT4" }, "2": { num: 2, vehicle: "BMW M4 GT4" }, "3": { num: 3, vehicle: "Ford Mustang GT4" }, "4": { num: 4 } } } as unknown as RaceChartData;
     expect(makeGroupsOf(d)).toEqual({ BMW: [1, 2], Ford: [3] });
+  });
+});
+
+describe("make filter", () => {
+  it("several makes can be picked at once", () => {
+    const two = { ...data, cars: { ...data.cars, "5": { ...data.cars["5"], make: "Porsche" }, "7": { ...data.cars["7"], make: "BMW" } } } as RaceChartData;
+    const html = renderToStaticMarkup(
+      <TraceControls data={two} focusNum={11} onFocus={() => {}} classView="" setClassView={() => {}} compSet={new Set()} toggleComp={() => {}} clearComp={() => {}} makeFilter={["Ford", "Porsche"]} setMakeFilter={() => {}} xAxisMode="laps" setXAxisMode={() => {}} />
+    );
+    const pressed = [...html.matchAll(/aria-pressed="true"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
+    expect(pressed).toEqual(expect.arrayContaining(["Ford 1", "Porsche 1"]));
+    expect(pressed).not.toContain("All");
   });
 });

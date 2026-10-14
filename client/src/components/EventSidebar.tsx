@@ -215,7 +215,7 @@ export default function EventSidebar({
   return (
     <>
       {/* ── Desktop sidebar (md and above) ── */}
-      <div className="hidden md:flex h-[calc(100vh-4rem)] shrink-0">
+      <div className="hidden md:flex h-full shrink-0">
         {/* Expanded panel */}
         <aside
           className="bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden transition-[width] duration-200 ease-in-out"

@@ -1,6 +1,6 @@
 export default function EmptyChartState() {
   return (
-    <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] select-none">
+    <div className="flex flex-col items-center justify-center h-full select-none">
       <img
         src="/te-logo-white.png"
         alt=""

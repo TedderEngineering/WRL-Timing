@@ -871,7 +871,7 @@ export function LapTimeChart({
   // ─── RENDER ───────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+    <div className="flex flex-col gap-1 md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* Class filter + Compare controls */}
       <div className="px-1">
         <div>
@@ -971,12 +971,10 @@ export function LapTimeChart({
       <div
         ref={wrapperRef}
         tabIndex={0}
-        className="rounded-lg border relative overflow-hidden outline-none"
+        className="relative h-[calc(100vh-280px)] min-h-[300px] overflow-hidden rounded-lg border outline-none md:h-auto md:min-h-[220px] md:flex-1"
         style={{
           background: CHART_STYLE.card,
           borderColor: CHART_STYLE.border,
-          height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)",
-          minHeight: 300,
         }}
       >
         <canvas

@@ -123,7 +123,7 @@ export function QualifyingDetailPage() {
   ];
 
   return (
-    <div className="px-2 sm:px-4 py-1 sm:py-1.5 overflow-y-auto" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text, minHeight: "calc(100vh - 4rem)" }}>
+    <div className="h-full px-2 sm:px-4 py-1 sm:py-1.5 overflow-y-auto custom-scroll" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
         <div className="flex items-center gap-2 shrink-0">

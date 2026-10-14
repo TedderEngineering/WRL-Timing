@@ -367,7 +367,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
         </div>
 
         {/* Car list */}
-        <div className="overflow-y-auto px-2 pb-1" style={{ maxHeight: 120 }}>
+        <div className="no-scrollbar overflow-y-auto px-2 pb-1" style={{ maxHeight: 120 }}>
           {(() => {
             const q = gapRefSearch.trim().toLowerCase();
             const allCars = Object.keys(data.cars)
