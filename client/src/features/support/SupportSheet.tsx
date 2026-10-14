@@ -7,7 +7,7 @@ import { SupporterAvatar } from "./SupporterAvatar";
 const LABELS: Record<number, { icon: string; title: string; badge?: string }> = {
   1: { icon: "☕", title: "1 coffee" },
   3: { icon: "☕☕☕", title: "3 coffees", badge: "A race weekend" },
-  10: { icon: "🏁", title: "A full season" },
+  20: { icon: "🏁", title: "A full season" },
 };
 
 export const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
@@ -17,7 +17,7 @@ export const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 
  * Centered dialog on wide screens, bottom sheet on phones.
  */
 export function SupportSheet({ support, onClose }: { support: SupportConfig; onClose: () => void }) {
-  const options = support.options?.length ? support.options : [1, 3, 10];
+  const options = support.options?.length ? support.options : [1, 3, 20];
   const [choice, setChoice] = useState(options.includes(3) ? 3 : options[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ export function SupportSheet({ support, onClose }: { support: SupportConfig; onC
           disabled={busy}
           className="mt-4 w-full rounded-lg bg-[var(--rt-accent)] px-4 py-3 font-bold text-[var(--rt-on-accent)] disabled:opacity-60"
         >
-          {busy ? "Opening checkout…" : support.checkout ? `Buy me ${choice === 1 ? "a coffee" : `${choice} coffees`} · ${total}` : "Continue to checkout"}
+          {busy ? "Opening checkout…" : support.checkout ? `${choice === 1 ? "Buy me a coffee" : LABELS[choice]?.title === "A full season" ? "Back a full season" : `Buy me ${choice} coffees`} · ${total}` : "Continue to checkout"}
         </button>
         <div className="mt-2 flex items-center justify-between text-xs text-[var(--rt-text-muted)]">
           <span>Secure checkout by Stripe</span>

@@ -23,7 +23,7 @@ export interface SiteConfig {
 
 const DEFAULT_CONFIG: SiteConfig = {
   freeMode: true,
-  support: { enabled: false, checkout: false, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 10] },
+  support: { enabled: false, checkout: false, paymentLinkUrl: null, coffeeCents: 500, options: [1, 3, 20] },
 };
 
 let current: SiteConfig = DEFAULT_CONFIG;

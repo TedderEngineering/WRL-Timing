@@ -7,8 +7,8 @@
  */
 import { env } from "../config/env.js";
 
-/** The amounts offered: 1 coffee, 3 (a race weekend), 10 (a season). */
-export const SUPPORT_OPTIONS = [1, 3, 10] as const;
+/** The amounts offered: 1 coffee, 3 (a race weekend), 20 (a full season, $100 at the default price). */
+export const SUPPORT_OPTIONS = [1, 3, 20] as const;
 export type SupportCoffees = (typeof SUPPORT_OPTIONS)[number];
 
 export function coffeeCents(): number {
