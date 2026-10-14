@@ -199,15 +199,44 @@ export interface UnkeyedRace {
   status: string;
 }
 
-const dayDiff = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000;
+/** Session date minus race date, in days (site races are often dated on the event's first day). */
+const daysAfter = (session: string, race: string) => (Date.parse(`${session}T00:00:00Z`) - Date.parse(`${race}T00:00:00Z`)) / 86400000;
+
+/**
+ * Day, length and race number from a session or race name: "Saturday - 8 Hour" → { day: "sat", hours: 8 },
+ * "Sunday 7-Hour" → { day: "sun", hours: 7 }, "Pirelli GT4 Race 1" → { race: 1 }.
+ */
+export function sessionTraits(name: string): { day?: string; hours?: number; race?: number } {
+  const n = name.toLowerCase();
+  const day = n.match(/\b(fri|sat|sun)(?:day|urday)?\b/)?.[1];
+  const hours = n.match(/\b(\d{1,2})\s*-?\s*h(?:ou)?rs?\b/)?.[1];
+  const race = n.match(/\brace\s*(\d{1,2})\b/)?.[1];
+  return { ...(day ? { day } : {}), ...(hours ? { hours: Number(hours) } : {}), ...(race ? { race: Number(race) } : {}) };
+}
+
+/** False when both names state a day, a race length or a race number and they differ (Saturday 8 Hour vs Sunday 7-Hour, Race 1 vs Race 2). */
+export function sameSessionTraits(a: string, b: string): boolean {
+  const x = sessionTraits(a);
+  const y = sessionTraits(b);
+  if (x.day && y.day && x.day !== y.day) return false;
+  if (x.hours && y.hours && x.hours !== y.hours) return false;
+  if (x.race && y.race && x.race !== y.race) return false;
+  return true;
+}
 
 /**
  * Races on the site without a source key that a new session may be the same
- * race as: same Race.series and a date within a day, the same date first.
- * A suggestion only; attaching is the owner's call (`push --attach`).
+ * race as: same Race.series, a race date from one day after to four days
+ * before the session (older uploads are dated on the event's first day), and
+ * no conflict in day or race length ("Saturday 8 Hour" never matches
+ * "Sunday 7-Hour"). Closest date first. A suggestion: attaching is the
+ * owner's call (`push --attach`, or `pull --attach-single-candidates`).
  */
-export function attachCandidates(session: Pick<RaceSession, "raceDate">, raceSeries: string, unkeyed: UnkeyedRace[]): UnkeyedRace[] {
+export function attachCandidates(session: Pick<RaceSession, "raceDate" | "sessionName">, raceSeries: string, unkeyed: UnkeyedRace[]): UnkeyedRace[] {
   return unkeyed
-    .filter((r) => r.series === raceSeries && dayDiff(r.date, session.raceDate) <= 1)
-    .sort((a, b) => dayDiff(a.date, session.raceDate) - dayDiff(b.date, session.raceDate) || a.name.localeCompare(b.name));
+    .filter((r) => {
+      const d = daysAfter(session.raceDate, r.date);
+      return r.series === raceSeries && d >= -1 && d <= 4 && sameSessionTraits(session.sessionName, r.name);
+    })
+    .sort((a, b) => Math.abs(daysAfter(session.raceDate, a.date)) - Math.abs(daysAfter(session.raceDate, b.date)) || a.name.localeCompare(b.name));
 }

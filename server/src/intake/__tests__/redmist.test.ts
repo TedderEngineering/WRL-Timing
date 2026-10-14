@@ -27,7 +27,7 @@ import {
   sessionClock,
   type RmLap,
 } from "../parse-redmist.js";
-import { attachCandidates, buildPushBody } from "../push.js";
+import { attachCandidates, buildPushBody, sessionTraits } from "../push.js";
 import { resolveSeries } from "../series.js";
 import { canonicalSourceKey, parseRedmistRef, parseSourceKey, redmistSourceKey, SOURCE_KEY_PATTERN } from "../source-key.js";
 import { paced, redmistPacing, redmistUrls } from "../sources/redmist.js";
@@ -257,6 +257,8 @@ describe("RedMist discovery and download", () => {
     expect(logs.some((l) => /9001\/8 .*no lap data/.test(l))).toBe(true);
     // no availability call for qualifying, the other organisation or the 2025 event's sessions
     expect(http.calls.some((c) => c.url.includes("sessionId=6"))).toBe(false);
+    // a support race at the WRL event (not a timed enduro) is not a WRL race
+    expect(http.calls.some((c) => c.url.includes("sessionId=9"))).toBe(false);
     expect(http.calls.some((c) => c.url.includes("eventId=9002"))).toBe(false);
     expect(http.calls.some((c) => c.url.includes("LoadSessions?eventId=9003"))).toBe(false);
   });
@@ -329,14 +331,26 @@ describe("RedMist discovery and download", () => {
 });
 
 describe("attach candidates", () => {
-  it("suggests races of the same series within a day, the same date first", () => {
-    const unkeyed = [
-      { raceId: "a", name: "WRL Barber Sunday", date: "2026-03-01", track: "Barber", series: "WRL", season: 2026, status: "PUBLISHED" },
-      { raceId: "b", name: "WRL Barber Saturday", date: "2026-02-28", track: "Barber", series: "WRL", season: 2026, status: "PUBLISHED" },
-      { raceId: "c", name: "GT4 Barber", date: "2026-02-28", track: "Barber", series: "SRO", season: 2026, status: "PUBLISHED" },
-      { raceId: "d", name: "WRL COTA", date: "2026-04-10", track: "COTA", series: "WRL", season: 2026, status: "PUBLISHED" },
-    ];
-    expect(attachCandidates({ raceDate: "2026-02-28" }, "WRL", unkeyed).map((r) => r.raceId)).toEqual(["b", "a"]);
+  // Older uploads are dated on the event's first day, with Saturday and Sunday sharing the date.
+  const unkeyed = [
+    { raceId: "sat", name: "Saturday 8-Hour", date: "2026-07-24", track: "Road Atlanta", series: "WRL", season: 2026, status: "PUBLISHED" },
+    { raceId: "sun", name: "Sunday 7-Hour", date: "2026-07-24", track: "Road Atlanta", series: "WRL", season: 2026, status: "PUBLISHED" },
+    { raceId: "gt4", name: "Pirelli GT4 Race 1", date: "2026-07-25", track: "Road Atlanta", series: "SRO", season: 2026, status: "PUBLISHED" },
+    { raceId: "old", name: "Saturday 8-Hour", date: "2026-07-10", track: "Elsewhere", series: "WRL", season: 2026, status: "PUBLISHED" },
+  ];
+  it("matches the same series and session within the event's days", () => {
+    expect(attachCandidates({ raceDate: "2026-07-25", sessionName: "Saturday 8 Hour" }, "WRL", unkeyed).map((r) => r.raceId)).toEqual(["sat"]);
+    expect(attachCandidates({ raceDate: "2026-07-26", sessionName: "Sunday - 7 hour" }, "WRL", unkeyed).map((r) => r.raceId)).toEqual(["sun"]);
+  });
+  it("without day or length in a name, every race of the weekend is a candidate (the owner decides)", () => {
+    expect(attachCandidates({ raceDate: "2026-07-25", sessionName: "Race" }, "WRL", unkeyed).map((r) => r.raceId).sort()).toEqual(["sat", "sun"]);
+  });
+  it("reads day and length from names", () => {
+    expect(sessionTraits("Saturday - 8 Hour")).toEqual({ day: "sat", hours: 8 });
+    expect(sessionTraits("Sunday 7-Hour")).toEqual({ day: "sun", hours: 7 });
+    expect(sessionTraits("Saturday 14 hour")).toEqual({ day: "sat", hours: 14 });
+    expect(sessionTraits("Radical Cup Race 1")).toEqual({ race: 1 });
+    expect(sessionTraits("Qualifying")).toEqual({});
   });
 });
 
