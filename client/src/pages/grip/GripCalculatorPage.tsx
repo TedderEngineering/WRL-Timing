@@ -50,6 +50,7 @@ import {
   mapCorners,
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
+import { SupportAsk } from "@/features/support/SupportPrompts";
 import { gp } from "@/lib/site";
 
 const WEATHER = [
@@ -96,6 +97,9 @@ export function GripCalculatorPage() {
   const [upgrade, setUpgrade] = useState(false);
   /** Phone only: the reference session's full details start folded away. */
   const [referenceOpen, setReferenceOpen] = useState(false);
+  // True once a calculation has been run on this visit (not just opened):
+  // the moment the driver got something useful, so the one place we may ask for a coffee.
+  const [calculatedHere, setCalculatedHere] = useState(false);
 
   // A saved calculation opened from the dashboard (?calc=<id>), or the one
   // just calculated. While one is open, calculating again updates it in place.
@@ -303,17 +307,21 @@ export function GripCalculatorPage() {
         : await gripApi.calculate(input);
       setResult(res.calculation);
       setAccount(res.account);
+      setCalculatedHere(true);
       // Keep this calculation open, so the next change updates it instead of
       // leaving a trail of near-identical copies on the dashboard.
       setEditing(res.calculation);
       rememberSaved(res.calculation, form);
       setParams({ calc: res.calculation.id }, { replace: true });
       toast(updating ? "Calculation updated" : "Calculated and saved");
-      // On a phone the result is below the form; bring it into view.
+      // Bring the result into view: on a phone it sits above the form, and on
+      // desktop the side panel can be scrolled partly under the header.
       requestAnimationFrame(() => {
-        if (window.innerWidth < 1024)
-          resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        // (On a phone the result card sits above the form once there is a result.)
+        const el = resultRef.current;
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        if (window.innerWidth < 1024 || top < 72 || top > window.innerHeight - 160)
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (err) {
       if (err instanceof ApiClientError && err.code === "UPGRADE_REQUIRED")
@@ -577,7 +585,10 @@ export function GripCalculatorPage() {
             reference details below it. On desktop it is a sticky side panel. */}
         <aside className="contents lg:block lg:space-y-4 lg:sticky lg:top-20">
           <Card className={cn("space-y-3", result && "order-first lg:order-none")}>
-            <div ref={resultRef} className="flex items-center justify-between">
+            <div
+              ref={resultRef}
+              className="flex items-center justify-between scroll-mt-24"
+            >
               <h2 className="font-bold text-gray-900 dark:text-gray-50">
                 Cold tire pressure
               </h2>
@@ -614,6 +625,8 @@ export function GripCalculatorPage() {
                     Convert to reference →
                   </Link>
                 </div>
+                {/* At most once every 30 days, never to a supporter (see features/support). */}
+                {calculatedHere && <SupportAsk />}
               </>
             ) : (
               <>

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import type { SupportConfig } from "../../lib/site-config";
+import { stripGripPrefix } from "../../lib/site";
+import { RACETRACE_COPY, type SupportCopy } from "./copy";
 import { markDismissed } from "./storage";
 import { SupporterAvatar } from "./SupporterAvatar";
 
@@ -16,7 +18,7 @@ export const dollars = (cents: number) => `$${(cents / 100).toFixed(cents % 100 
  * F9-C / F10: pick 1, 3 (default) or a season, then go to Stripe Checkout.
  * Centered dialog on wide screens, bottom sheet on phones.
  */
-export function SupportSheet({ support, onClose }: { support: SupportConfig; onClose: () => void }) {
+export function SupportSheet({ support, copy = RACETRACE_COPY, onClose }: { support: SupportConfig; copy?: SupportCopy; onClose: () => void }) {
   const options = support.options?.length ? support.options : [1, 3, 20];
   const [choice, setChoice] = useState(options.includes(3) ? 3 : options[0]);
   const [busy, setBusy] = useState(false);
@@ -45,8 +47,10 @@ export function SupportSheet({ support, onClose }: { support: SupportConfig; onC
     }
     setBusy(true);
     try {
-      const returnPath = `${window.location.pathname}${window.location.search}`;
-      const r = await api.post<{ url: string }>("/support/checkout", { coffees: choice, returnPath });
+      // Finding Grip paths go without the /grip prefix; the server adds Finding Grip's address.
+      const path = copy.site === "grip" ? stripGripPrefix(window.location.pathname) : window.location.pathname;
+      const returnPath = `${path}${window.location.search}`;
+      const r = await api.post<{ url: string }>("/support/checkout", { coffees: choice, returnPath, ...(copy.site === "grip" ? { site: "grip" } : {}) });
       window.location.assign(r.url);
     } catch {
       setBusy(false);
@@ -68,13 +72,13 @@ export function SupportSheet({ support, onClose }: { support: SupportConfig; onC
           <SupporterAvatar size={52} />
           <div>
             <h2 id="support-title" className="m-0 text-[17px] font-semibold">
-              Keep RaceTrace free
+              {copy.sheetTitle}
             </h2>
             <div className="text-[13px] text-[var(--rt-text-muted)]">Brent Tedder · Tedder Engineering</div>
           </div>
         </div>
         <p className="mb-0 mt-3 leading-relaxed text-[var(--rt-text-secondary)]">
-          RaceTrace has no paywall and no ads. Coffees pay for the hosting, the timing data and the analysis Claude writes for every race.
+          {copy.sheetBody}
         </p>
         <div role="radiogroup" aria-label="How many coffees" className="mt-4 grid grid-cols-3 gap-2">
           {options.map((n, i) => {

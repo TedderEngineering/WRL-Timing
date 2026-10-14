@@ -1,13 +1,18 @@
 import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { gp } from "../../lib/site";
+import { useSupport } from "./SupportContext";
 import { markThanked } from "./storage";
 import { SupporterAvatar } from "./SupporterAvatar";
 
 /** Stripe Checkout returns here (F9-E). Remembers the supporter so they aren't asked again. */
 export function SupportThanksPage() {
+  const { copy } = useSupport();
   const [params] = useSearchParams();
   const raw = params.get("return") ?? "/dashboard";
-  const back = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  const safe = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  // Finding Grip return paths come without /grip; put it back when Finding Grip is under RaceTrace.
+  const back = copy.site === "grip" ? gp(safe === "/" ? "" : safe) : safe;
   useEffect(() => {
     markThanked();
   }, []);
@@ -19,11 +24,11 @@ export function SupportThanksPage() {
           <h1 className="m-0 text-xl font-semibold">Thank you 🙏</h1>
         </div>
         <p className="mt-4 leading-relaxed text-[var(--rt-text-secondary)]">
-          That's another race analysed. RaceTrace stays free for everyone, and I won't ask you again this season.
+          {copy.thanksBody}
         </p>
         <p className="text-[13px] text-[var(--rt-text-muted)]">Stripe emails your receipt.</p>
         <Link to={back} className="mt-2 inline-block rounded-md bg-[var(--rt-accent)] px-4 py-2 text-sm font-semibold text-[var(--rt-on-accent)]">
-          Back to RaceTrace
+          Back to {copy.name}
         </Link>
       </div>
     </div>

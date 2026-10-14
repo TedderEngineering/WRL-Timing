@@ -16,6 +16,7 @@ import {
 import { rememberPostAuthRedirect } from "@/lib/postAuthRedirect";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
+import { useSupport } from "@/features/support/SupportContext";
 
 /**
  * Annual price shown on the pricing cards, e.g. "$120". Leave null until the
@@ -85,6 +86,7 @@ const FREE_FEATURES = [
 
 /** Shown in place of the plan cards while Finding Grip is free for everyone. */
 function FreeForAll() {
+  const { support, openSupport } = useSupport();
   return (
     <div className="max-w-xl mx-auto rounded-2xl border border-grip-500 bg-white dark:bg-gray-900 p-6 text-center">
       <div className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
@@ -101,9 +103,20 @@ function FreeForAll() {
           </li>
         ))}
       </ul>
-      <Link {...signUpProps} className={cn(primaryLinkClass, "mt-6 px-6 py-2.5 text-sm")}>
-        Create a free account
-      </Link>
+      <div className="mt-6 flex flex-col items-center gap-3">
+        <Link {...signUpProps} className={cn(primaryLinkClass, "px-6 py-2.5 text-sm")}>
+          Create a free account
+        </Link>
+        {support.enabled && (
+          <button
+            type="button"
+            onClick={() => openSupport("plans")}
+            className="text-sm font-semibold text-grip-600 dark:text-grip-400 hover:underline"
+          >
+            ☕ Want to help? Buy me a coffee
+          </button>
+        )}
+      </div>
     </div>
   );
 }

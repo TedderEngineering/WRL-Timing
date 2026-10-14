@@ -1,5 +1,5 @@
 /**
- * Optional support for RaceTrace ("Buy me a coffee", October 2026).
+ * Optional support for RaceTrace and Finding Grip ("Buy me a coffee", October 2026).
  *
  * A one-off Stripe Checkout payment for N coffees, on the Stripe account the
  * site already uses. It never creates a subscription, so the billing webhook
@@ -36,8 +36,35 @@ export function safeReturnPath(p: unknown): string {
   return p.slice(0, 300);
 }
 
-export function checkoutParams(args: { coffees: SupportCoffees; returnPath: string; userId: string | null; frontendUrl: string }) {
+/** Which site the coffee is for. Each has its own name in Stripe and its own metadata kind. */
+export type SupportSite = "racetrace" | "grip";
+
+const SITE_PRODUCT: Record<SupportSite, { name: string; description: string; kind: string }> = {
+  racetrace: {
+    name: "A coffee for RaceTrace",
+    description: "Optional support. RaceTrace stays free with no ads.",
+    kind: "racetrace_support",
+  },
+  grip: {
+    name: "A coffee for Finding Grip",
+    description: "Optional support. Finding Grip stays free with no ads.",
+    kind: "findinggrip_support",
+  },
+};
+
+/**
+ * `frontendUrl` is the base address of the site the supporter returns to. It always comes
+ * from configuration (FRONTEND_URL, or Finding Grip's address), never from the request.
+ */
+export function checkoutParams(args: {
+  coffees: SupportCoffees;
+  returnPath: string;
+  userId: string | null;
+  frontendUrl: string;
+  site?: SupportSite;
+}) {
   const base = args.frontendUrl.replace(/\/+$/, "");
+  const product = SITE_PRODUCT[args.site ?? "racetrace"];
   return {
     mode: "payment" as const,
     submit_type: "donate" as const,
@@ -47,15 +74,12 @@ export function checkoutParams(args: { coffees: SupportCoffees; returnPath: stri
         price_data: {
           currency: "usd",
           unit_amount: coffeeCents(),
-          product_data: {
-            name: "A coffee for RaceTrace",
-            description: "Optional support. RaceTrace stays free with no ads.",
-          },
+          product_data: { name: product.name, description: product.description },
         },
       },
     ],
     success_url: `${base}/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=${encodeURIComponent(args.returnPath)}`,
     cancel_url: `${base}${args.returnPath}`,
-    metadata: { kind: "racetrace_support", coffees: String(args.coffees), ...(args.userId ? { userId: args.userId } : {}) },
+    metadata: { kind: product.kind, coffees: String(args.coffees), ...(args.userId ? { userId: args.userId } : {}) },
   };
 }

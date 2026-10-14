@@ -76,4 +76,36 @@ describe("POST /api/support/checkout", () => {
     expect(p.success_url).toBe("https://racetrace.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=%2Fx");
     expect(p.cancel_url).toBe("https://racetrace.example/x");
   });
+
+  it("names the coffee for Finding Grip and returns there when site is grip", async () => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_abc";
+    const res = await request(app).post("/api/support/checkout").send({ coffees: 20, returnPath: "/calculate?calc=abc", site: "grip" });
+    expect(res.status).toBe(200);
+    const p = created[0];
+    expect(p.mode).toBe("payment");
+    expect(p.line_items[0]).toMatchObject({ quantity: 20, price_data: { product_data: { name: "A coffee for Finding Grip" } } });
+    expect(p.metadata).toMatchObject({ kind: "findinggrip_support", coffees: "20" });
+    // Without GRIP_PUBLIC_URL (as in tests) Finding Grip lives under /grip on the RaceTrace address.
+    expect(p.success_url).toMatch(/\/grip\/support\/thanks\?session_id=\{CHECKOUT_SESSION_ID\}&return=%2Fcalculate%3Fcalc%3Dabc$/);
+    expect(p.cancel_url).toMatch(/\/grip\/calculate\?calc=abc$/);
+  });
+
+  it("uses Finding Grip's own address for the return links", () => {
+    const p = checkoutParams({ coffees: 3, returnPath: "/dashboard", userId: "u1", frontendUrl: "https://findinggrip.example", site: "grip" });
+    expect(p.success_url).toBe("https://findinggrip.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=%2Fdashboard");
+    expect(p.cancel_url).toBe("https://findinggrip.example/dashboard");
+    expect(p.metadata).toEqual({ kind: "findinggrip_support", coffees: "3", userId: "u1" });
+  });
+
+  it("offers no Finding Grip coffee while Finding Grip is paid", async () => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_abc";
+    process.env.GRIP_PRICING = "paid";
+    expect((await request(app).post("/api/support/checkout").send({ coffees: 1, site: "grip" })).status).toBe(404);
+    expect((await request(app).post("/api/support/checkout").send({ coffees: 1 })).status).toBe(200);
+  });
+
+  it("refuses an unknown site", async () => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_abc";
+    expect((await request(app).post("/api/support/checkout").send({ coffees: 1, site: "evil.example" })).status).toBe(400);
+  });
 });

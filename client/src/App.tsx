@@ -63,6 +63,8 @@ function gripRoutes() {
       <Route element={<GripPublicLayout />}>
         <Route path={gp("")} element={<GripHomePage />} />
         <Route path={gp("/pricing")} element={<GripPricingPage />} />
+        {/* Stripe returns here after a coffee for Finding Grip */}
+        <Route path={gp("/support/thanks")} element={<SupportThanksPage />} />
       </Route>
 
       {/* Signed-in app (login and access are checked in the layout) */}

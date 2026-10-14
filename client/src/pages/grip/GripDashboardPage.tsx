@@ -24,6 +24,7 @@ import {
 import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
+import { SupportCard } from "@/features/support/SupportPrompts";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
@@ -275,6 +276,11 @@ export function GripDashboardPage() {
           </Card>
         )}
       </section>
+
+      {/* Quiet "Finding Grip is free" card; a thank-you after a coffee; nothing for supporters. */}
+      <div className="max-w-md">
+        <SupportCard />
+      </div>
 
       {upgrade && <UpgradeDialog onClose={() => setUpgrade(false)} />}
       {deleting && (

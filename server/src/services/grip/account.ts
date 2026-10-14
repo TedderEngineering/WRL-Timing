@@ -10,11 +10,19 @@ export const FREE_CALCULATION_LIMIT = 3;
 const PAST_DUE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function getOrCreateGripAccount(userId: string): Promise<GripAccount> {
-  return prisma.gripAccount.upsert({
-    where: { userId },
-    create: { userId },
-    update: {},
-  });
+  const existing = await prisma.gripAccount.findUnique({ where: { userId } });
+  if (existing) return existing;
+  try {
+    return await prisma.gripAccount.create({ data: { userId } });
+  } catch (err) {
+    // A new account's first page load sends several requests at once; if
+    // another one created the row first, use that row instead of failing.
+    if ((err as { code?: string })?.code === "P2002") {
+      const created = await prisma.gripAccount.findUnique({ where: { userId } });
+      if (created) return created;
+    }
+    throw err;
+  }
 }
 
 /**

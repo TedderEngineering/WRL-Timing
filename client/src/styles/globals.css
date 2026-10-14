@@ -179,3 +179,30 @@ html.grip-site {
   --rt-info: #7aa2ff;
   --rt-info-soft: rgba(120, 160, 255, 0.18);
 }
+
+/* On the Finding Grip site, the shared pieces drawn with these tokens (the
+   "Buy me a coffee" sheet and asks) use Finding Grip's grays and orange. */
+html.grip-site {
+  --rt-surface: #ffffff; /* white */
+  --rt-surface-2: #f9fafb; /* gray-50 */
+  --rt-border: #e5e7eb; /* gray-200 */
+  --rt-rule: #e5e7eb;
+  --rt-text: #111827; /* gray-900 */
+  --rt-text-secondary: #4b5563; /* gray-600 */
+  --rt-text-muted: #6b7280; /* gray-500 */
+  --rt-accent: #ff6a00; /* grip-500, as on Finding Grip's buttons */
+  --rt-on-accent: #030712; /* gray-950 */
+  --rt-accent-soft: rgba(255, 106, 0, 0.1);
+}
+html.grip-site.dark {
+  --rt-surface: #111827; /* gray-900 */
+  --rt-surface-2: #030712; /* gray-950 */
+  --rt-border: #1f2937; /* gray-800 */
+  --rt-rule: #1f2937;
+  --rt-text: #f3f4f6; /* gray-100 */
+  --rt-text-secondary: #d1d5db; /* gray-300 */
+  --rt-text-muted: #9ca3af; /* gray-400 */
+  --rt-accent: #ff6a00;
+  --rt-on-accent: #030712;
+  --rt-accent-soft: rgba(255, 106, 0, 0.12);
+}

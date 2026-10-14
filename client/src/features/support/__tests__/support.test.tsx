@@ -5,6 +5,7 @@ import { canAsk, isSupporter, markAsked, markDismissed, markThanked, recentlyTha
 import { SupportSheet, dollars } from "../SupportSheet";
 import { SupportAsk, SupportCard, SupportLink } from "../SupportPrompts";
 import { SupportProvider } from "../SupportContext";
+import { GRIP_COPY } from "../copy";
 import { __setSiteConfigForTests } from "../../../lib/site-config";
 import { hasFullAccess, hasTeamAccess } from "../../../lib/utils";
 
@@ -97,6 +98,35 @@ describe("prompts", () => {
     const out = text(renderToStaticMarkup(<MemoryRouter><SupportProvider><SupportCard /><SupportAsk /></SupportProvider></MemoryRouter>));
     expect(out).toContain("Thank you");
     expect(out).not.toContain("Enjoyed this recap?");
+  });
+});
+
+describe("Finding Grip", () => {
+  it("names Finding Grip on the sheet, with the same three amounts", () => {
+    const out = text(renderToStaticMarkup(<SupportSheet support={SUPPORT} copy={GRIP_COPY} onClose={() => {}} />));
+    expect(out).toContain("Keep Finding Grip free");
+    expect(out).toContain("Brent Tedder · Tedder Engineering");
+    expect(out).toContain("calculator and the damper guide");
+    expect(out).not.toContain("RaceTrace");
+    expect(out).toContain("Buy me 3 coffees · $15");
+  });
+
+  it("asks after a calculation, and the card and thanks name Finding Grip", () => {
+    __setSiteConfigForTests({ support: SUPPORT });
+    const ask = text(renderToStaticMarkup(<MemoryRouter><SupportProvider site="grip"><SupportAsk /><SupportCard /></SupportProvider></MemoryRouter>));
+    expect(ask).toContain("Got your pressures?");
+    expect(ask).toContain("Brent, and I build Finding Grip");
+    expect(ask).toContain("Finding Grip is free");
+    expect(ask).not.toContain("RaceTrace");
+    markThanked();
+    const thanks = text(renderToStaticMarkup(<MemoryRouter><SupportProvider site="grip"><SupportCard /></SupportProvider></MemoryRouter>));
+    expect(thanks).toContain("Thanks for backing Finding Grip");
+  });
+
+  it("shows nothing while Finding Grip has paid plans", () => {
+    __setSiteConfigForTests({ support: SUPPORT });
+    const out = text(renderToStaticMarkup(<MemoryRouter><SupportProvider site="grip" enabled={false}><SupportLink /><SupportAsk /><SupportCard /></SupportProvider></MemoryRouter>));
+    expect(out).toBe("");
   });
 });
 
