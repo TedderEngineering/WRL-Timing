@@ -5,6 +5,7 @@ import { LapDetailsPanel } from "../LapDetailsPanel";
 import { TraceControls } from "../TraceControls";
 import { buildLapInfo, getCompColor } from "../chart-renderer";
 import { COMPARE_PALETTE } from "../constants";
+import type { TraceView } from "../trace-view";
 
 const lap = (l: number, p: number, cp: number, pit = 0, flag = "GREEN") => ({ l, p, cp, lt: "1:40.000", ltSec: 100 + (pit ? 60 : 0), flag, pit });
 const data = {
@@ -23,6 +24,17 @@ const data = {
 const annotations = {
   "11": { reasons: { "2": "Pitted under the FCY" }, pits: [{ l: 2, lb: "Pit 1", c: "#fff", yo: 0, da: 0, pitTiming: { pitInTime: null, pitRoadTime: 55.5, pitOutTime: null, isDriveThrough: false, totalPitLoss: 61.25, inLapTime: 130, outLapTime: 120, avgGreenLapTime: 100, splitReliable: true, decompositionLevel: "full_segments" } }], settles: [] },
 } as never;
+const fakeView = (d: RaceChartData, makeFilter: string[]): TraceView => ({
+  makeFilter,
+  setMakeFilter: () => {},
+  compareAll: false,
+  setCompareAll: () => {},
+  fieldCars: Object.keys(d.cars).map(Number),
+  toggleComp: () => {},
+  addComp: () => {},
+  clearComp: () => {},
+  pickClass: () => {},
+});
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("Position Trace v2", () => {
@@ -55,13 +67,15 @@ describe("Position Trace v2", () => {
   it("the control bar shows focus, class counts and the compare cars", () => {
     const t = text(
       renderToStaticMarkup(
-        <TraceControls data={data} focusNum={11} onFocus={() => {}} classView="" setClassView={() => {}} compSet={new Set([5])} toggleComp={() => {}} clearComp={() => {}} makeFilter={[]} setMakeFilter={() => {}} xAxisMode="laps" setXAxisMode={() => {}} />
+        <TraceControls data={data} focusNum={11} onFocus={() => {}} classView="" compSet={new Set([5])} view={fakeView(data, [])} />
       )
     );
     expect(t).toContain("#11 Synthetic Racing");
     expect(t).toContain("All 3");
     expect(t).toContain("Am 2");
-    expect(t).toContain("#5 ×");
+    expect(t).toContain("All cars (3)");
+    // Every car in view is a chip; the compared one is pressed.
+    expect(renderToStaticMarkup(<TraceControls data={data} focusNum={11} onFocus={() => {}} classView="" compSet={new Set([5])} view={fakeView(data, [])} />)).toMatch(/aria-pressed="true"[^>]*>#5</);
   });
 });
 
@@ -81,10 +95,22 @@ describe("make filter", () => {
   it("several makes can be picked at once", () => {
     const two = { ...data, cars: { ...data.cars, "5": { ...data.cars["5"], make: "Porsche" }, "7": { ...data.cars["7"], make: "BMW" } } } as RaceChartData;
     const html = renderToStaticMarkup(
-      <TraceControls data={two} focusNum={11} onFocus={() => {}} classView="" setClassView={() => {}} compSet={new Set()} toggleComp={() => {}} clearComp={() => {}} makeFilter={["Ford", "Porsche"]} setMakeFilter={() => {}} xAxisMode="laps" setXAxisMode={() => {}} />
+      <TraceControls data={two} focusNum={11} onFocus={() => {}} classView="" compSet={new Set()} view={fakeView(two, ["Ford", "Porsche"])} />
     );
     const pressed = [...html.matchAll(/aria-pressed="true"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
     expect(pressed).toEqual(expect.arrayContaining(["Ford 1", "Porsche 1"]));
     expect(pressed).not.toContain("All");
+  });
+});
+
+describe("compare colours with every car in view", () => {
+  it("more than eight cars keep a colour by car number and never use the focus orange", () => {
+    const many = new Set(Array.from({ length: 30 }, (_, i) => i + 1));
+    const c7 = getCompColor(many, 99, 7);
+    const shuffled = new Set([...many].reverse());
+    expect(getCompColor(shuffled, 99, 7)).toBe(c7);
+    const all = [...many].map((n) => getCompColor(many, 99, n));
+    expect(all).not.toContain("#fb923c");
+    expect(all).not.toContain("#fdba74");
   });
 });

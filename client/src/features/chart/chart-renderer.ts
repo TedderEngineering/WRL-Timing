@@ -13,7 +13,7 @@ import type {
   LapData,
 } from "@shared/types";
 import { COMPARE_PALETTE, COMP_PALETTE, CHART_STYLE, TRACE } from "./constants";
-import { deltaText, driverStints, pitDeltas } from "./pit-band";
+import { drawPitTags, pitTagBand, type PitTagBand } from "./pit-band";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,8 +40,8 @@ export interface ChartDimensions {
   MB: number;
   CW: number;
   CH: number;
-  /** Position Trace only: the driver band and the pit row above the plot. */
-  band?: { stripY: number; stripH: number; chipY: number; chipH: number };
+  /** Race charts (Position Trace, Lap Times): room above the plot for the pit and driver tags. */
+  band?: PitTagBand;
 }
 
 export interface LapInfoData {
@@ -117,11 +117,29 @@ export function formatLapTime(lt: string): string {
 }
 
 /** A compare car's colour: by the order it was added (Set insertion order), so colours stay put. */
+/**
+ * Compare-car lines, the same on Position Trace and Lap Times: every car in view (more than
+ * eight) thin and soft in its own colour, as Lap Times always drew them, so the focus car reads
+ * first; a few picked cars a little stronger.
+ */
+export function compareStroke(color: string, many: boolean): { stroke: string; width: number } {
+  return many ? { stroke: hexA(color, 0.28), width: 1.2 } : { stroke: hexA(color, 0.85), width: 1.75 };
+}
+
+/** The 20-colour palette without its oranges, which belong to the focus car. */
+const MANY_PALETTE = COMP_PALETTE.filter((c) => c !== "#fb923c" && c !== "#fdba74");
+
+/**
+ * Up to eight compare cars: the compare palette in the order they were added. More (every car
+ * in view, the default): the 20-colour palette by car number, so each car keeps its colour.
+ */
 export function getCompColor(compSet: Set<number>, focusNum: number, carNum: number): string {
   const ordered = [...compSet].filter((n) => n !== focusNum);
   const idx = ordered.indexOf(carNum);
   if (idx < 0) return "#888";
-  return idx < COMPARE_PALETTE.length ? COMPARE_PALETTE[idx] : COMP_PALETTE[idx % COMP_PALETTE.length];
+  if (ordered.length <= COMPARE_PALETTE.length) return COMPARE_PALETTE[idx];
+  const byNum = ordered.sort((a, b) => a - b);
+  return MANY_PALETTE[byNum.indexOf(carNum) % MANY_PALETTE.length];
 }
 
 export function computeLapElapsedHours(data: RaceChartData): Map<number, number> {
@@ -216,23 +234,18 @@ export function computeDimensions(
   isMobile: boolean,
   xAxisMode?: "laps" | "hours" | "both",
   minWidth?: number,
-  opts?: { driverBand?: boolean }
+  opts?: { pitTags?: boolean }
 ): ChartDimensions {
   const W = Math.max(minWidth ?? 300, Math.floor(containerW));
   // The Position Trace fills whatever height the window leaves it, so it may be shorter.
-  const H = Math.max(opts?.driverBand ? 200 : 300, Math.floor(containerH));
+  const H = Math.max(opts?.pitTags ? 200 : 300, Math.floor(containerH));
 
   const ML = isMobile ? 36 : 44;
   // Right margin holds the car-number labels at the end of each trace.
   const MR = isMobile ? 34 : 44;
-  // With the driver band, the top margin holds two rows: who drove each spell, then the
-  // places gained or lost at each stop. Nothing is written over the plot.
-  const band = opts?.driverBand
-    ? isMobile
-      ? { stripY: 2, stripH: 16, chipY: 21, chipH: 15 }
-      : { stripY: 2, stripH: 19, chipY: 25, chipH: 17 }
-    : undefined;
-  const MT = band ? band.chipY + band.chipH + 6 : isMobile ? 18 : 22;
+  // With pit tags, the top margin holds their labels (two lanes); nothing is written over the plot.
+  const band = opts?.pitTags ? pitTagBand(isMobile) : undefined;
+  const MT = band ? band.tagY + band.lanes * band.laneH + 5 : isMobile ? 18 : 22;
   const baseMB = isMobile ? 26 : 34;
   const MB = xAxisMode === "both" ? baseMB + 14 : baseMB;
   const CW = W - ML - MR;
@@ -401,39 +414,25 @@ export function drawChart(
     }
   });
 
-  // ── 2b. Pit row layout (drawn in 11) and faint leaders from each chip down to its stop ──
+  // ── 2b. The focus car's pit and driver tags (shared with Lap Times) ──
   const band = adjDim.band;
-  const plotL = adjDim.ML;
-  const plotR = adjDim.W - adjDim.MR;
-  const chipFont = `600 ${band && band.chipH < 17 ? 10 : 11}px 'IBM Plex Mono', ui-monospace, monospace`;
-  const chips: Array<{ lap: number; px: number; py: number; cx: number; w: number; text: string; color: string; tip: string }> = [];
   if (band) {
-    ctx.font = chipFont;
-    let right = plotL - 4;
-    for (const pd of pitDeltas(laps, pk, data.fcy || [])) {
-      if (pd.lap < lapStart || pd.lap > lapEnd) continue;
-      const d = laps.find((q) => q.l === pd.lap);
-      if (!d) continue;
-      const text = deltaText(pd.delta);
-      const w = Math.ceil(ctx.measureText(text).width) + 10;
-      const px = xForCar(focusNumStr, pd.lap);
-      const cx = Math.min(plotR + adjDim.MR - w / 2 - 1, Math.max(px, right + 3 + w / 2));
-      right = cx + w / 2;
-      const color = pd.delta > 0 ? TRACE.gain : pd.delta < 0 ? TRACE.loss : TRACE.axis;
-      chips.push({ lap: pd.lap, px, py: y(d[pk]), cx, w, text, color, tip: `P${pd.before} → P${pd.after}` });
-    }
-    ctx.save();
-    ctx.setLineDash([2, 3]);
-    ctx.strokeStyle = TRACE.leader;
-    ctx.lineWidth = 1;
-    for (const c of chips) {
-      ctx.beginPath();
-      ctx.moveTo(c.cx, band.chipY + band.chipH);
-      ctx.lineTo(c.px, adjDim.MT);
-      ctx.lineTo(c.px, c.py - 7);
-      ctx.stroke();
-    }
-    ctx.restore();
+    drawPitTags(ctx, {
+      markers: ann.pits || [],
+      laps,
+      pk,
+      fcy: data.fcy || [],
+      x: (l) => xForCar(focusNumStr, l),
+      lapStart,
+      lapEnd,
+      plotLeft: adjDim.ML,
+      plotRight: adjDim.W - adjDim.MR,
+      plotTop: adjDim.MT,
+      plotBottom: adjDim.MT + adjDim.CH,
+      band,
+      activeLap,
+      background: CHART_STYLE.card,
+    });
   }
 
   // Step path for one car: horizontal to the lap, vertical to the new position.
@@ -503,16 +502,22 @@ export function drawChart(
   }
 
   // ── 4. Compare cars: their own colour, with their pit stops ───
+  // compareStroke: thin and soft for every car in view; a few picked cars stronger, with their
+  // stops and end labels.
   const endLabels: Array<{ y: number; text: string; color: string }> = [];
+  const nCompare = [...compSet].filter((n) => n !== focusNum).length;
+  const many = nCompare > COMPARE_PALETTE.length;
   compSet.forEach((cn) => {
     if (cn === focusNum) return;
     const cnStr = String(cn);
     const cl = data.cars[cnStr]?.laps;
     if (!cl || !cl.length) return;
     const col = getCompColor(compSet, focusNum, cn);
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
+    const cs = compareStroke(col, many);
+    ctx.strokeStyle = cs.stroke;
+    ctx.lineWidth = cs.width;
     if (tracePath(cnStr, cl)) ctx.stroke();
+    if (many) return;
     for (const d of cl) {
       if (d.pit && d.l >= lapStart && d.l <= lapEnd) circle(xForCar(cnStr, d.l), y(d[pk]), 4.5, col);
     }
@@ -591,57 +596,6 @@ export function drawChart(
       ctx.fillText(lb.text, adjDim.W - adjDim.MR + 6, ly);
       prevY = ly;
     }
-  }
-
-  // ── 8b. Driver band and pit row above the plot ──
-  if (band) {
-    const sans = (px: number, w = 600) => `${w} ${px}px 'IBM Plex Sans', system-ui, sans-serif`;
-    // Row captions in the left margin
-    ctx.font = sans(9, 500);
-    ctx.fillStyle = TRACE.axis;
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Driver", plotL - 6, band.stripY + band.stripH / 2);
-    if (chips.length) ctx.fillText("Pits", plotL - 6, band.chipY + band.chipH / 2);
-
-    const stints = driverStints(laps, ann.pits || []);
-    ctx.font = sans(band.stripH < 19 ? 10 : 11);
-    for (const [k, st] of stints.entries()) {
-      if (st.to < lapStart || st.from > lapEnd) continue;
-      const first = st.from === laps[0].l;
-      const x0 = Math.max(plotL, first ? plotL : xForCar(focusNumStr, st.from - 1));
-      const x1 = Math.min(plotR, st.to >= laps[laps.length - 1].l ? plotR : xForCar(focusNumStr, st.to));
-      if (x1 - x0 < 1) continue;
-      // Spells alternate shade, so a change of driver always shows.
-      ctx.fillStyle = !st.driver ? "rgba(255,255,255,0.04)" : hexA(TRACE.focus, k % 2 ? 0.1 : 0.22);
-      ctx.fillRect(x0 + 1, band.stripY, x1 - x0 - 2, band.stripH);
-      if (!st.driver) continue;
-      const tw = ctx.measureText(st.driver).width;
-      const label = tw + 10 <= x1 - x0 ? st.driver : ctx.measureText(st.driver[0]).width + 6 <= x1 - x0 ? st.driver[0] : "";
-      if (!label) continue;
-      ctx.fillStyle = TRACE.driverText;
-      ctx.textAlign = "center";
-      ctx.fillText(label, (x0 + x1) / 2, band.stripY + band.stripH / 2 + 0.5);
-    }
-
-    ctx.font = chipFont;
-    for (const c of chips) {
-      const sel = activeLap === c.lap;
-      const x0 = c.cx - c.w / 2;
-      ctx.beginPath();
-      ctx.roundRect(x0, band.chipY, c.w, band.chipH, 4);
-      ctx.fillStyle = hexA(c.color, sel ? 0.32 : 0.16);
-      ctx.fill();
-      if (sel) {
-        ctx.strokeStyle = c.color;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      ctx.fillStyle = c.color;
-      ctx.textAlign = "center";
-      ctx.fillText(c.text, c.cx, band.chipY + band.chipH / 2 + 0.5);
-    }
-    ctx.textBaseline = "alphabetic";
   }
 
   // ── 9. Axis labels ─────────────────────────────────────────────
