@@ -30,6 +30,8 @@ import { sha256 } from "./names.js";
 import { classifySession } from "./series.js";
 import { redmistSourceKey } from "./source-key.js";
 import { toCsv } from "./parse-speedhive.js";
+import { redmistFlagVisits } from "../analysis/engine/passages.js";
+import type { LapRow } from "../analysis/engine/context.js";
 import type { RaceSession } from "./types.js";
 
 export const REDMIST_API = process.env.INTAKE_REDMIST_API || "https://api.redmist.racing/status";
@@ -147,8 +149,11 @@ export interface RmControlEntry {
 
 /** Event list from LoadArchivedEvents / LoadLiveAndRecentEvents (array, or { events | items }). */
 export function eventsFromResponse(json: unknown): RmEventSummary[] {
-  const arr = Array.isArray(json) ? json : json && typeof json === "object" ? ((json as any).events ?? (json as any).items ?? []) : [];
-  return (arr as any[]).filter((e) => e && typeof e === "object" && Number.isFinite(Number(e.eid))).map((e) => ({ ...e, eid: Number(e.eid) }));
+  const o = json && typeof json === "object" && !Array.isArray(json) ? (json as { events?: unknown; items?: unknown }) : null;
+  const arr: unknown = Array.isArray(json) ? json : (o?.events ?? o?.items ?? []);
+  return (Array.isArray(arr) ? (arr as RmEventSummary[]) : [])
+    .filter((e) => e && typeof e === "object" && Number.isFinite(Number(e.eid)))
+    .map((e) => ({ ...e, eid: Number(e.eid) }));
 }
 
 export function isWrlEvent(e: RmEventSummary): boolean {
@@ -163,20 +168,25 @@ export function eventDisplayName(name: string | undefined, eventId: number): str
   return n.replace(/^(world racing league|wrl)\s*[-–—:@]?\s*/i, "").trim() || n || `RedMist event ${eventId}`;
 }
 
-/** A date YYYY-MM-DD from an ISO-like string, or null for .NET's year-1 "no date". */
+/** A date YYYY-MM-DD from "YYYY-MM-DD…" or LoadEvent's "MM/DD/YYYY hh:mm:ss"; null for .NET's year-1 "no date". */
 export function plausibleDate(s: string | null | undefined): string | null {
-  const m = String(s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m && Number(m[1]) >= 2000 ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  const t = String(s ?? "").trim();
+  const m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return Number(m[1]) >= 2000 ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  const u = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  return u && Number(u[3]) >= 2000 ? `${u[3]}-${u[1].padStart(2, "0")}-${u[2].padStart(2, "0")}` : null;
 }
 
-/** Local calendar date of a session start: `st` is UTC when it says so, else taken as local; `tz` is the UTC offset in hours. */
+/**
+ * Local calendar date of a session start. RedMist sends `st` in UTC without a
+ * zone suffix (West Desert 2026 Saturday: "2026-09-26T13:27:33", tz -6, the
+ * session opening at 07:27 local) and `tz` as the UTC offset in hours.
+ */
 export function sessionLocalDate(s: RmSession, fallback?: string | null): string | null {
-  const st = String(s.st ?? "");
+  const st = String(s.st ?? "").trim();
   if (!plausibleDate(st)) return plausibleDate(fallback);
-  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(st) && Number.isFinite(Number(s.tz))) {
-    const ms = Date.parse(st);
-    if (Number.isFinite(ms)) return new Date(ms + Number(s.tz) * 3600_000).toISOString().slice(0, 10);
-  }
+  const ms = Date.parse(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(st) ? st : `${st}Z`);
+  if (Number.isFinite(ms) && Number.isFinite(Number(s.tz))) return new Date(ms + Number(s.tz) * 3600_000).toISOString().slice(0, 10);
   return plausibleDate(st);
 }
 
@@ -405,15 +415,41 @@ export function buildRedmistSummaryCsv(cars: CarInfo[]): string {
 export const REDMIST_EXTRA_LAP_COLUMNS = ["Driver", "Pit Stop"];
 
 /**
- * All-laps CSV in the Speedhive column set, plus "Driver" and, when the
- * Flagtronics pit report is there, "Pit Stop" (True on each stop's in-lap,
- * which the legacy parser then takes instead of guessing stops from lap times).
- * "In Pit" is RedMist's LapIncludedPit. Diff/speed/leader-lap columns RedMist
- * does not supply are left empty.
+ * In-laps of every pit stop, per car ("car|lap"). With the Flagtronics pit
+ * report: each stop's startLap. Without it: the fact engine's reading of
+ * RedMist's lap pit flags (redmistFlagVisits: LapIncludedPit / IsInPit, a
+ * lone late flag moved back one lap, lap-1 staging ignored), so the chart and
+ * the analysis count the same stops.
+ */
+export function pitInLaps(laps: RmLap[], pits: RmPitsDoc | null): Set<string> {
+  if (pits) return new Set(pits.pitStops.map((p) => `${p.carNumber}|${p.startLap}`));
+  const byCar = new Map<string, Map<number, RmLap>>();
+  for (const l of laps) {
+    const lap = Number(l.llp);
+    if (!l.n || !Number.isInteger(lap) || lap < 1) continue;
+    if (!byCar.has(l.n)) byCar.set(l.n, new Map());
+    byCar.get(l.n)!.set(lap, l);
+  }
+  const out = new Set<string>();
+  for (const [car, m] of byCar) {
+    const rows = [...m.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([lap, l]) => ({ lap, inPit: !!l.lip, crossedInPit: !!l.ip }) as unknown as LapRow);
+    for (const v of redmistFlagVisits(rows)) out.add(`${car}|${rows[v.i0].lap}`);
+  }
+  return out;
+}
+
+/**
+ * All-laps CSV in the Speedhive column set, plus "Driver" and "Pit Stop"
+ * (True on each stop's in-lap, see pitInLaps), which the legacy parser takes
+ * instead of guessing stops from lap times. "In Pit" is RedMist's
+ * LapIncludedPit. Diff/speed/leader-lap columns RedMist does not supply are
+ * left empty.
  */
 export function buildRedmistAllLapsCsv(laps: RmLap[], cars: CarInfo[], clock: SessionClock | null, pits: RmPitsDoc | null): string {
   const info = new Map(cars.map((c) => [c.num, c]));
-  const stops = pits ? new Set(pits.pitStops.map((p) => `${p.carNumber}|${p.startLap}`)) : null;
+  const stops = pitInLaps(laps, pits);
   const byCar = new Map<string, Map<number, RmLap>>();
   for (const l of laps) {
     const n = l.n ? String(l.n) : "";
@@ -433,7 +469,7 @@ export function buildRedmistAllLapsCsv(laps: RmLap[], cars: CarInfo[], clock: Se
     "Gap Ahead (Time)", "Gap Behind (Time)",
     "Status",
     "Driver",
-    ...(stops ? ["Pit Stop"] : []),
+    "Pit Stop",
   ];
   const rows: string[][] = [];
   for (const num of order) {
@@ -454,7 +490,7 @@ export function buildRedmistAllLapsCsv(laps: RmLap[], cars: CarInfo[], clock: Se
         ahead.time, "",
         rmStatus(l.flg),
         String(l.dn ?? "").trim(),
-        ...(stops ? [stops.has(`${num}|${lapNr}`) ? "True" : "False"] : []),
+        stops.has(`${num}|${lapNr}`) ? "True" : "False",
       ]);
     }
   }

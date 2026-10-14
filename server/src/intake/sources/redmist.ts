@@ -56,18 +56,22 @@ export interface RedmistPacing {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   gapMs?: number;
+  /** When the last call started (shared by every client paced with this object). */
+  last?: number;
 }
 
+/** Default pacing for every RedMist call (tests set gapMs: 0 here). */
+export const redmistPacing: RedmistPacing = {};
+
 /** HttpClient wrapper that keeps REDMIST_GAP_MS between calls (on top of the client's own gap). */
-export function paced(http: HttpClient, p: RedmistPacing = {}): HttpClient {
+export function paced(http: HttpClient, p: RedmistPacing = redmistPacing): HttpClient {
   const sleep = p.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const now = p.now ?? Date.now;
   const gap = p.gapMs ?? REDMIST_GAP_MS;
-  let last = -Infinity;
   const wait = async () => {
-    const w = last + gap - now();
+    const w = (p.last ?? -Infinity) + gap - now();
     if (w > 0) await sleep(w);
-    last = now();
+    p.last = now();
   };
   return {
     async get(url, o) {
@@ -93,6 +97,7 @@ const q = (path: string, params: Record<string, string | number>) =>
 export const redmistUrls = {
   archived: (offset: number, take: number) => q("v2/Events/LoadArchivedEvents", { offset, take }),
   liveAndRecent: () => `${REDMIST_API}/v2/Events/LoadLiveAndRecentEvents`,
+  event: (eventId: number) => q("v1/Events/LoadEvent", { eventId }),
   sessions: (eventId: number) => q("v1/Events/LoadSessions", { eventId }),
   availability: (eventId: number, sessionId: number) => q("v1/Exports/GetAvailability", { eventId, sessionId }),
   laps: (eventId: number, sessionId: number) => q("v1/Exports/GetCarLaps", { eventId, sessionId, format: "json" }),
@@ -104,6 +109,12 @@ export const redmistUrls = {
 
 const PAGE = 100;
 
+/** RedMist names tracks briefly ("West Desert"); the known list carries the circuit's full name. */
+function withKnownTrack(e: RmEventSummary): RmEventSummary {
+  const k = REDMIST_KNOWN_EVENTS.find((x) => x.eventId === e.eid);
+  return k ? { ...e, t: k.track } : e;
+}
+
 /** WRL events RedMist lists (archived + live/recent), merged with the known catalogue. */
 export async function listWrlEvents(http: HttpClient, log: (m: string) => void = () => undefined): Promise<RmEventSummary[]> {
   const byId = new Map<number, RmEventSummary>();
@@ -113,10 +124,10 @@ export async function listWrlEvents(http: HttpClient, log: (m: string) => void =
     for (let offset = 0; offset < 5000; offset += PAGE) {
       const page = eventsFromResponse(await http.getJson(redmistUrls.archived(offset, PAGE)));
       listed += page.length;
-      for (const e of page.filter(isWrlEvent)) byId.set(e.eid, { ...byId.get(e.eid), ...e });
+      for (const e of page.filter(isWrlEvent)) byId.set(e.eid, withKnownTrack({ ...byId.get(e.eid), ...e }));
       if (page.length < PAGE) break;
     }
-    for (const e of eventsFromResponse(await http.getJson(redmistUrls.liveAndRecent())).filter(isWrlEvent)) byId.set(e.eid, { ...byId.get(e.eid), ...e });
+    for (const e of eventsFromResponse(await http.getJson(redmistUrls.liveAndRecent())).filter(isWrlEvent)) byId.set(e.eid, withKnownTrack({ ...byId.get(e.eid), ...e }));
   } catch (e) {
     log(`RedMist: could not list events (${(e as Error).message}); using the known-events list only.`);
   }
@@ -168,7 +179,9 @@ export async function discoverRedmist(httpIn: HttpClient, opts: DiscoverOptions,
   const http = paced(httpIn, pacing);
   const events = (await listWrlEvents(http, opts.log)).filter((e) => {
     const y = eventSeason(e);
-    return y === null || y === opts.season || y === opts.season - 1; // an event listed in late December can hold January racing
+    const d = plausibleDate(e.ed);
+    // An event dated late in December can hold racing in the new year (sessions are filtered by their own date).
+    return y === null || y === opts.season || (y === opts.season - 1 && !!d && d.slice(5) >= "12-01");
   });
   const out: RaceSession[] = [];
   const log = opts.log ?? (() => undefined);
@@ -181,7 +194,25 @@ export async function discoverRedmistRef(httpIn: HttpClient, ref: string, opts: 
   const http = paced(httpIn, pacing);
   const r = parseRedmistRef(ref);
   const known = REDMIST_KNOWN_EVENTS.find((k) => k.eventId === r.eventId);
-  const ev: RmEventSummary = { eid: r.eventId, ...(known ? { en: known.name, t: known.track, oid: 1 } : {}) };
+  let ev: RmEventSummary = { eid: r.eventId, ...(known ? { en: known.name, t: known.track, oid: 1, ed: `${known.season}-01-01` } : {}) };
+  try {
+    // LoadEvent: { e, n, d, t, on, organizationId, … } (RedMist.TimingCommon Event).
+    const e = await http.getJson<Record<string, unknown>>(redmistUrls.event(r.eventId));
+    if (e && typeof e === "object") {
+      const str = (k: string) => (typeof e[k] === "string" && (e[k] as string).trim() ? (e[k] as string).trim() : undefined);
+      const oid = e.organizationId ?? e.OrganizationId;
+      ev = {
+        ...ev,
+        ...(str("n") ? { en: str("n") } : {}),
+        ...(str("t") && !known ? { t: str("t") } : {}),
+        ...(str("on") ? { on: str("on") } : {}),
+        ...(plausibleDate(str("d")) ? { ed: str("d") } : {}),
+        ...(Number.isFinite(Number(oid)) && oid !== null ? { oid: Number(oid) } : {}),
+      };
+    }
+  } catch (e) {
+    (opts.log ?? (() => undefined))(`RedMist: could not load event ${r.eventId} (${(e as Error).message})`);
+  }
   const log = opts.log ?? (() => undefined);
   // An explicitly named event is taken whatever its season; a named session whatever its type.
   return sessionsForEvent(http, ev, log, (p, s) => (r.sessionId !== null ? s.sid === r.sessionId : keep(p, { ...opts, season: p.season })));

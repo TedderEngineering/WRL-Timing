@@ -13,7 +13,8 @@
  *
  * Laps CSVs written from RedMist (src/intake/parse-redmist.ts) may add a
  * "Pit Stop" column, True on each stop's in-lap, taken from the Flagtronics
- * pit report. When it is there, it replaces the lap-time pit detection.
+ * pit report or RedMist's pit-lane lap flags. When it is there, it replaces
+ * the lap-time pit detection.
  */
 
 import type { RaceDataParser } from "./types.js";
@@ -197,7 +198,7 @@ export const speedhiveParser: RaceDataParser = {
           n++;
         }
       }
-      warnings.push(`Pit stops from the timing pit report (${n} stops), not from lap times`);
+      warnings.push(`Pit stops from the timing system's pit data (${n} stops), not from lap times`);
     } else {
       const pitResults = detectAllCarPitStops(allCarLapsStr, classMap, flagPeriods);
       for (const [numStr, { pitLaps }] of pitResults) {
