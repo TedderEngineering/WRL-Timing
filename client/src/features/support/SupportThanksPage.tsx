@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { gp } from "../../lib/site";
 import { useSupport } from "./SupportContext";
-import { markThanked } from "./storage";
+import { track } from "../../lib/analytics";
+import { lastThankedAt, markThanked } from "./storage";
 import { SupporterAvatar } from "./SupporterAvatar";
 
 /** Stripe Checkout returns here (F9-E). Remembers the supporter so they aren't asked again. */
@@ -14,7 +15,14 @@ export function SupportThanksPage() {
   // Finding Grip return paths come without /grip; put it back when Finding Grip is under RaceTrace.
   const back = copy.site === "grip" ? gp(safe === "/" ? "" : safe) : safe;
   useEffect(() => {
+    // Count the payment once: a reload within the hour is the same payment.
+    const before = lastThankedAt();
+    const coffees = Number(params.get("coffees"));
+    if (!before || Date.now() - before > 3_600_000) {
+      track("coffee_paid", { coffees: Number.isInteger(coffees) && coffees > 0 ? coffees : null });
+    }
     markThanked();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <div className="container-page flex justify-center py-16 text-left text-[var(--rt-text)]">

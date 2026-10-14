@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useSiteConfig, type SupportConfig } from "../../lib/site-config";
+import { track } from "../../lib/analytics";
 import { RACETRACE_COPY, SUPPORT_COPY, type SupportCopy, type SupportSite } from "./copy";
 import { SupportSheet } from "./SupportSheet";
 
@@ -23,7 +24,11 @@ export function SupportProvider({ children, site = "racetrace", enabled = true }
   const support = enabled ? config : OFF;
   const copy = SUPPORT_COPY[site];
   const [openFrom, setOpenFrom] = useState<string | null>(null);
-  const openSupport = useCallback((from: string) => setOpenFrom(from), []);
+  const openSupport = useCallback((from: string) => {
+    // Same event name on both sites; `from` says which placement opened the sheet.
+    track("coffee_open", { from });
+    setOpenFrom(from);
+  }, []);
   const value = useMemo(() => ({ support, copy, openSupport }), [support, copy, openSupport]);
   return (
     <Ctx.Provider value={value}>
