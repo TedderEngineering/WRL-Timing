@@ -18,8 +18,11 @@ describe("analytics", () => {
   it("uses the shared event names, the same on both sites", () => {
     expect([...ANALYTICS_EVENTS].sort()).toEqual(
       [
+        "alert_open",
         "alert_opt_in",
+        "checklist_step",
         "coffee_open",
+        "coffee_paid",
         "follow_car",
         "on_target",
         "open_story",
@@ -74,5 +77,51 @@ describe("analytics", () => {
       throw new Error("offline");
     });
     expect(() => track("alert_opt_in")).not.toThrow();
+  });
+});
+
+describe("PostHog sender", () => {
+  it("posts an anonymous event to the US capture endpoint, without the page address", async () => {
+    const calls: { url: string; body: any; init: RequestInit }[] = [];
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)), init });
+      return new Response("{}");
+    }) as unknown as typeof fetch;
+    const { postHogSender } = await import("../analytics");
+    const send = postHogSender("phc_test", "https://us.i.posthog.com/", fakeFetch);
+    send({
+      event: "on_target",
+      site: "findinggrip",
+      details: { worstMissPsi: 0.3 },
+      at: Date.UTC(2026, 9, 14),
+    });
+    send({
+      event: "record_hot",
+      site: "findinggrip",
+      details: {},
+      at: Date.UTC(2026, 9, 14),
+    });
+    expect(calls[0].url).toBe("https://us.i.posthog.com/i/v0/e/");
+    expect(calls[0].init.keepalive).toBe(true);
+    expect(calls[0].body).toMatchObject({
+      api_key: "phc_test",
+      event: "on_target",
+      timestamp: "2026-10-14T00:00:00.000Z",
+      properties: {
+        worstMissPsi: 0.3,
+        site: "findinggrip",
+        $process_person_profile: false,
+        $geoip_disable: true,
+      },
+    });
+    expect(calls[0].body.properties).not.toHaveProperty("$current_url");
+    // One random id for the visit, the same for each event, never an account id.
+    expect(calls[0].body.distinct_id).toBe(calls[1].body.distinct_id);
+    expect(calls[0].body.distinct_id).toMatch(/^[0-9a-f-]{36}$|^v-/);
+  });
+
+  it("knows the agreed event names", () => {
+    for (const e of ["alert_open", "checklist_step", "coffee_paid"])
+      expect(ANALYTICS_EVENTS).toContain(e);
   });
 });

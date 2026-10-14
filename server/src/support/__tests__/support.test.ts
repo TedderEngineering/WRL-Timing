@@ -73,7 +73,7 @@ describe("POST /api/support/checkout", () => {
     expect(safeReturnPath("//evil.example")).toBe("/dashboard");
     expect(safeReturnPath("/chart?race=abc")).toBe("/chart?race=abc");
     const p = checkoutParams({ coffees: 1, returnPath: "/x", userId: null, frontendUrl: "https://racetrace.example/" });
-    expect(p.success_url).toBe("https://racetrace.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=%2Fx");
+    expect(p.success_url).toBe("https://racetrace.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&coffees=1&return=%2Fx");
     expect(p.cancel_url).toBe("https://racetrace.example/x");
   });
 
@@ -86,13 +86,13 @@ describe("POST /api/support/checkout", () => {
     expect(p.line_items[0]).toMatchObject({ quantity: 20, price_data: { product_data: { name: "A coffee for Finding Grip" } } });
     expect(p.metadata).toMatchObject({ kind: "findinggrip_support", coffees: "20" });
     // Without GRIP_PUBLIC_URL (as in tests) Finding Grip lives under /grip on the RaceTrace address.
-    expect(p.success_url).toMatch(/\/grip\/support\/thanks\?session_id=\{CHECKOUT_SESSION_ID\}&return=%2Fcalculate%3Fcalc%3Dabc$/);
+    expect(p.success_url).toMatch(/\/grip\/support\/thanks\?session_id=\{CHECKOUT_SESSION_ID\}&coffees=20&return=%2Fcalculate%3Fcalc%3Dabc$/);
     expect(p.cancel_url).toMatch(/\/grip\/calculate\?calc=abc$/);
   });
 
   it("uses Finding Grip's own address for the return links", () => {
     const p = checkoutParams({ coffees: 3, returnPath: "/dashboard", userId: "u1", frontendUrl: "https://findinggrip.example", site: "grip" });
-    expect(p.success_url).toBe("https://findinggrip.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=%2Fdashboard");
+    expect(p.success_url).toBe("https://findinggrip.example/support/thanks?session_id={CHECKOUT_SESSION_ID}&coffees=3&return=%2Fdashboard");
     expect(p.cancel_url).toBe("https://findinggrip.example/dashboard");
     expect(p.metadata).toEqual({ kind: "findinggrip_support", coffees: "3", userId: "u1" });
   });

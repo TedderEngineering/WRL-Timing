@@ -6,7 +6,7 @@ export function PrivacyPage() {
           Privacy Policy
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-10">
-          Last updated: February 2026
+          Last updated: October 2026
         </p>
 
         <section className="space-y-4">
@@ -36,9 +36,10 @@ export function PrivacyPage() {
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             We do not sell your personal information. We share data only with service
             providers necessary to operate the Service: Stripe for payment processing,
-            Resend for transactional email delivery, and cloud infrastructure providers
-            (AWS, Vercel/Railway) for hosting. These providers are bound by their own
-            privacy policies and data processing agreements.
+            Resend for transactional email delivery, PostHog (United States) for product
+            analytics, and cloud infrastructure providers (AWS, Vercel/Railway) for
+            hosting. These providers are bound by their own privacy policies and data
+            processing agreements.
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
@@ -73,7 +74,23 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            7. Your Rights
+            7. Product Analytics
+          </h2>
+          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+            We record a small number of events to learn which parts of RaceTrace and
+            Finding Grip help people, for example when the coffee page is opened, when hot
+            pressures are recorded, or when a share image is made. Each event says which
+            site and feature it came from and may include short facts, such as how many
+            corners came in on target. Events never include your name, email address,
+            notes or anything you type, and they are not linked to your account. We
+            don&apos;t use cookies or advertising identifiers for this, and we don&apos;t
+            record your screen or keystrokes. If your browser sends Global Privacy Control
+            or Do Not Track, we record nothing. We use PostHog to count these events and
+            keep them for 12 months.
+          </p>
+
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
+            8. Your Rights
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             You have the right to: access your personal data; correct inaccurate data;
@@ -83,7 +100,7 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            8. Changes to This Policy
+            9. Changes to This Policy
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             We may update this Privacy Policy from time to time. We will notify you of
@@ -93,7 +110,7 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            9. Contact
+            10. Contact
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             For privacy inquiries, please contact us at{" "}

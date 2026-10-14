@@ -55,3 +55,5 @@ export function isSupporter(now = Date.now()): boolean {
 export const markAsked = (now = Date.now()) => write({ askedAt: now });
 export const markDismissed = (now = Date.now()) => write({ dismissedAt: now });
 export const markThanked = (now = Date.now()) => write({ thankedAt: now });
+/** When this browser last came back from checkout, if ever. */
+export const lastThankedAt = (): number | null => read().thankedAt ?? null;

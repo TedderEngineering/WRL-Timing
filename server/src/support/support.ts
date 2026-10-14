@@ -78,7 +78,8 @@ export function checkoutParams(args: {
         },
       },
     ],
-    success_url: `${base}/support/thanks?session_id={CHECKOUT_SESSION_ID}&return=${encodeURIComponent(args.returnPath)}`,
+    // `coffees` lets the thank-you page count the payment (analytics event coffee_paid).
+    success_url: `${base}/support/thanks?session_id={CHECKOUT_SESSION_ID}&coffees=${args.coffees}&return=${encodeURIComponent(args.returnPath)}`,
     cancel_url: `${base}${args.returnPath}`,
     metadata: { kind: product.kind, coffees: String(args.coffees), ...(args.userId ? { userId: args.userId } : {}) },
   };
