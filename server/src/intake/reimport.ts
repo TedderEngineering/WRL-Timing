@@ -99,7 +99,31 @@ interface Candidate {
   score: number;
 }
 
-export function planReimport(races: SiteRace[], sessions: RaceSession[], prints: Map<string, SessionPrint>): PlanRow[] {
+/** Same cars, same laps, same day: the same race listed twice (two timing sites, or two events on one). */
+function printKey(s: RaceSession, p: SessionPrint | undefined): string | null {
+  return p ? `${s.raceDate}|${p.maxLap}|${p.cars.map(normCar).sort().join(",")}` : null;
+}
+
+/**
+ * Of two listings of the same race, the one the intake uses: WRL from RedMist from 2026 and
+ * from Speedhive for 2025 (as `discover` does); otherwise the first source key, so reruns agree.
+ */
+function preferListing(a: RaceSession, b: RaceSession): RaceSession {
+  const rank = (s: RaceSession) => (s.site === "redmist" ? (s.season >= 2026 ? 0 : 1) : s.site === "speedhive" ? (s.season >= 2026 ? 1 : 0) : 0);
+  return rank(a) !== rank(b) ? (rank(a) < rank(b) ? a : b) : a.sourceKey <= b.sourceKey ? a : b;
+}
+
+export function planReimport(races: SiteRace[], sessionsIn: RaceSession[], prints: Map<string, SessionPrint>): PlanRow[] {
+  // One candidate per race even when it is listed twice with identical results (and names that
+  // do not disagree: two same-day races with one field and one lap count stay apart).
+  const sessions: RaceSession[] = [];
+  for (const s of sessionsIn) {
+    const k = printKey(s, prints.get(s.sourceKey));
+    const i = k === null ? -1 : sessions.findIndex((o) => printKey(o, prints.get(o.sourceKey)) === k && sameSessionTraits(o.sessionName, s.sessionName));
+    if (i < 0) sessions.push(s);
+    else sessions[i] = preferListing(sessions[i], s);
+  }
+
   const rows: PlanRow[] = [];
   const best = new Map<string, Candidate>(); // raceId → its best candidate
   for (const r of races) {
@@ -120,7 +144,11 @@ export function planReimport(races: SiteRace[], sessions: RaceSession[], prints:
         const overlap = p && r.cars?.length ? carOverlap(r.cars, p.cars) : 0;
         const lapsOk = p ? lapsClose(r.maxLap, p.maxLap) : false;
         const traitsOk = sameSessionTraits(r.name, s.sessionName);
-        const score = overlap - (lapsOk ? 0 : 0.25) - (traitsOk ? 0 : 0.6) - 0.01 * Math.abs(daysAfter(s.raceDate, r.date));
+        const d = daysAfter(s.raceDate, r.date);
+        // Between equal fields (a sprint weekend's two races), the same lap count and the same
+        // date tell them apart.
+        const lapsExact = !!p && r.maxLap === p.maxLap;
+        const score = overlap - (lapsOk ? 0 : 0.25) - (traitsOk ? 0 : 0.6) - 0.01 * Math.abs(d) + (lapsExact ? 0.1 : 0) + (d === 0 ? 0.05 : 0);
         return { s, overlap, lapsOk, traitsOk, score };
       })
       .sort((a, b) => b.score - a.score);
