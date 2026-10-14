@@ -9,6 +9,9 @@
 #   mode = reimport   the same, then re-imports every exact pair in place (same id, URL, name
 #                     and status; the old files stay archived). Unsure, duplicate and not-found
 #                     races are left as they are.
+#   mode = analyze    facts + rule checks for every race with a source key that has no analysis
+#                     package yet (newest first), uploaded as a DRAFT package. No stories: a
+#                     package cannot be published until its stories and summary are written.
 #   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
 #                     New sessions that may be a race already on the site (an older
 #                     upload without a source key) are skipped and listed, unless the
@@ -33,7 +36,7 @@ on:
         required: true
         default: "wrl"
       season:
-        description: "Season (year); reimport modes take several, e.g. 2025,2026"
+        description: "Season (year); reimport and analyze take several, e.g. 2025,2026"
         required: true
         default: "2026"
       since:
@@ -41,10 +44,14 @@ on:
         required: false
         default: ""
       mode:
-        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place"
+        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place; analyze = facts + rule checks as draft packages"
         type: choice
-        options: [discover, import, reimport-plan, reimport]
+        options: [discover, import, reimport-plan, reimport, analyze]
         default: discover
+      limit:
+        description: "analyze only: at most this many races per run (newest first); empty = all"
+        required: false
+        default: ""
       replace_matched:
         description: "import only: replace races already on the site when exactly one matches (same series, date and session); otherwise they are held"
         type: boolean
@@ -117,6 +124,33 @@ jobs:
           if [ "$status" -ne 0 ]; then
             node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").split("\n").slice(-25).join("\n");console.log("::error title=Re-import plan failed::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/plan.log"
           fi
+          exit $status
+
+      - name: Analyze (facts + rule checks, draft packages)
+        if: inputs.mode == 'analyze'
+        env:
+          SERIES: ${{ inputs.series }}
+          SEASON: ${{ inputs.season }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          args=(--series "$SERIES" --season "$SEASON" --notes "$RUNNER_TEMP/analyze-notes.txt")
+          [ -n "$LIMIT" ] && args+=(--limit "$LIMIT")
+          status=0
+          npx tsx scripts/intake.ts analyze "${args[@]}" > "$RUNNER_TEMP/analyze.txt" 2> "$RUNNER_TEMP/analyze.log" || status=1
+          tail -n 60 "$RUNNER_TEMP/analyze.log"
+          cat "$RUNNER_TEMP/analyze.txt"
+          { echo "## Analyze: $SERIES $SEASON"; echo '```'; cat "$RUNNER_TEMP/analyze.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          f="$RUNNER_TEMP/analyze-notes.txt"; title="Analyze"
+          if [ ! -s "$f" ]; then f="$RUNNER_TEMP/analyze.log"; title="Analyze failed"; fi
+          node -e '
+            const [file, title] = process.argv.slice(1);
+            const t = require("fs").readFileSync(file, "utf8").split("\n").slice(-400);
+            const parts = []; let cur = "";
+            for (const l of t) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+            if (cur.trim()) parts.push(cur);
+            const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            parts.slice(0, 10).forEach((p, i) => console.log(`::notice title=${title} ${i + 1}/${Math.min(parts.length, 10)}::` + enc(p)));
+          ' "$f" "$title"
           exit $status
 
       - name: Discover

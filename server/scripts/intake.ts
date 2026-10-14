@@ -15,6 +15,9 @@
  *   npx tsx scripts/intake.ts validate <draft.json> [--base <facts.base.json>] [--scope-class <id>] [--publish] [--json]
  *   npx tsx scripts/intake.ts steps                              which pipeline scripts this checkout has
  *   npx tsx scripts/intake.ts speedhive-org --from-session <URL|id>
+ *   npx tsx scripts/intake.ts analyze [--series imsa-*,sro-*,wrl] [--season 2025,2026] [--race <raceId>]… [--force] [--limit N]
+ *                                      [--notes <file>]   facts + rule checks for races with a source key, uploaded as a
+ *                                      DRAFT analysis package (no stories yet; those are written race by race later)
  *   npx tsx scripts/intake.ts reimport-plan --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--save <file>] [--apply]
  *                                      pair races already on the site (no source key) with their timing sessions by
  *                                      their cars; --apply re-imports every exact pair in place (same id, URL, name, status)
@@ -541,6 +544,125 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
   if (failed) process.exitCode = 1;
 }
 
+/** Source-key site of each intake series selector (imsa-*, sro-gt4, wrl, wrl-speedhive…). */
+function sitesFor(selectors: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const sel of selectors.flatMap((x) => x.split(","))) {
+    const x = sel.trim().toLowerCase();
+    if (!x) continue;
+    if (x.startsWith("imsa")) out.add("imsa");
+    else if (x.startsWith("sro")) out.add("sro");
+    else if (x === "wrl-speedhive") out.add("speedhive");
+    else if (x === "wrl") out.add("redmist");
+    else throw new UsageError(`analyze: unknown series "${sel}"`);
+  }
+  return out;
+}
+
+function runTsx(script: string, args: string[]): { status: number | null; out: string } {
+  const tsxCli = createRequire(import.meta.url).resolve("tsx/cli");
+  const r = spawnSync(process.execPath, [tsxCli, script, ...args], { cwd: SERVER, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
+  return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+}
+
+/**
+ * Facts and rule checks for every race that has a source key, uploaded as a DRAFT analysis
+ * package. No stories: the package has no race summary, so it cannot be published until the
+ * Claude pass writes them. Races whose newest package is not rejected are skipped unless --force.
+ */
+async function cmdAnalyze(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("analyze needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  for (const k of ["build-facts (G2)", "run-rule-checks (G3)", "validate-package (G2)"] as const) {
+    if (!existsSync(STEPS[k])) throw new StepMissing(`${k} is not on this branch.`);
+  }
+  const sites = sitesFor(a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"]);
+  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
+  const only = new Set(a.flags.race ?? []);
+  const limit = Number(a.one("limit") ?? "0") || Infinity;
+  const force = a.has("force");
+
+  const all = (await knownRaces()) ?? [];
+  const races = all
+    .filter((r) => (only.size ? only.has(r.raceId) : sites.has(r.sourceKey.split(":")[0]) && (r.season === undefined || seasons.includes(r.season))))
+    // Newest first: stories follow in the same order.
+    .sort((x, y) => (y.date ?? "").localeCompare(x.date ?? ""));
+  const todo = races.filter((r) => force || only.size || !r.latestPackage || r.latestPackage.status === "REJECTED");
+  log(`${races.length} race(s) with a source key; ${races.length - todo.length} already have a package (use --force to rebuild); ${Math.min(todo.length, limit)} to analyze`);
+
+  const validator: any = await import(pathToFileURL(STEPS["validate-package (G2)"]).href);
+  const h = http();
+  const rows: { result: string; race: KnownRace; detail: string }[] = [];
+  for (const [i, r] of todo.slice(0, limit === Infinity ? undefined : limit).entries()) {
+    log(`\n[${i + 1}/${Math.min(todo.length, limit)}] ${r.date ?? ""} ${r.name} (${r.raceId})`);
+    const add = (result: string, detail: string) => {
+      rows.push({ result, race: r, detail });
+      log(`  ${result}: ${detail}`);
+    };
+    try {
+      const s = await resolve(h, r.sourceKey);
+      const dir = workDirFor(WORK, s.sourceKey);
+      const dl = await download(h, s, dir, { log: () => undefined });
+      const m = dl.manifest;
+      if (dl.failed.length) log(`  some files failed: ${dl.failed.map((f) => f.name).join(", ")}`);
+      const runDir = join(dir, "analysis");
+      mkdirSync(runDir, { recursive: true });
+      const facts = join(runDir, "facts.json");
+      const pkgPath = join(runDir, "package.json");
+
+      const bf = runTsx(STEPS["build-facts (G2)"], [...buildFactsArgs(m, (n) => join(dir, n), facts), "--no-validate"]);
+      if (bf.status !== 0 || !existsSync(facts)) {
+        add("facts failed", bf.out.trim().split("\n").slice(-3).join(" / ").slice(0, 300));
+        continue;
+      }
+      const fpkg = JSON.parse(readFileSync(facts, "utf-8"));
+      const blockers = (fpkg.dataQuality ?? []).filter((q: any) => q.severity === "blocker");
+      if (blockers.length) {
+        add("blocked", blockers.map((q: any) => q.code ?? q.id).join(", "));
+        continue;
+      }
+
+      const rc = runTsx(STEPS["run-rule-checks (G3)"], [facts, "--out", pkgPath]);
+      if (rc.status !== 0 || !existsSync(pkgPath)) {
+        add("rule checks failed", rc.out.trim().split("\n").slice(-2).join(" / ").slice(0, 300));
+        continue;
+      }
+      const ruleLine = rc.out.trim().split("\n").find((l) => l.startsWith("checks:") || l.startsWith("no rulebook")) ?? "";
+
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+      const rep = validator.validatePackage(pkg, { stage: "facts" });
+      if (!rep.ok) {
+        add("invalid", `${rep.errors.length} error(s): ${rep.errors.slice(0, 2).join(" / ").slice(0, 300)}`);
+        continue;
+      }
+      const notes = encodeURIComponent(`intake analyze: facts + rule checks, no stories yet (${m.sourceKey})`);
+      const up = await apiRequest<any>(cfg, "POST", `/admin/races/${encodeURIComponent(r.raceId)}/packages?notes=${notes}`, pkg);
+      if (up.status === 201) {
+        const fails = (pkg.ruleChecks ?? []).filter((c: any) => c.status === "fail").length;
+        const unknown = (pkg.ruleChecks ?? []).filter((c: any) => c.status === "unknown").length;
+        add("draft uploaded", `v${up.data.package?.version ?? "?"} · ${(pkg.entries ?? []).length} cars · rule checks ${pkg.ruleChecks?.length ?? 0} (${fails} fail, ${unknown} unknown)${ruleLine.startsWith("no rulebook") ? " · no rulebook" : ""}`);
+      } else {
+        add(`upload ${up.status}`, `${up.data?.code ?? ""} ${String(up.data?.error ?? "").slice(0, 200)}`);
+      }
+    } catch (e) {
+      add("error", (e as Error).message.slice(0, 300));
+    }
+  }
+
+  const table2 = table([["RESULT", "DATE", "RACE", "ID", "DETAIL"], ...rows.map((x) => [x.result, x.race.date ?? "", x.race.name, x.race.raceId, x.detail])]);
+  console.log(table2);
+  const n = (res: string) => rows.filter((x) => x.result === res).length;
+  const summary = `${rows.length} race(s): ${n("draft uploaded")} draft uploaded, ${n("blocked")} blocked, ${rows.length - n("draft uploaded") - n("blocked")} failed.`;
+  console.log(`\n${summary}`);
+  const notes = a.one("notes");
+  if (notes) {
+    mkdirSync(dirname(notes), { recursive: true });
+    const failedFirst = [...rows].sort((x, y) => Number(x.result === "draft uploaded") - Number(y.result === "draft uploaded"));
+    writeFileSync(notes, [summary, "result | date | race | id | detail", ...failedFirst.map((x) => [x.result, x.race.date ?? "", x.race.name, x.race.raceId, x.detail].join(" | "))].join("\n") + "\n");
+  }
+  if (rows.some((x) => x.result !== "draft uploaded" && x.result !== "blocked")) process.exitCode = 1;
+}
+
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const a = parseArgs(rest);
@@ -565,8 +687,10 @@ async function main() {
       return cmdSpeedhiveOrg(a);
     case "reimport-plan":
       return cmdReimportPlan(a);
+    case "analyze":
+      return cmdAnalyze(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze`);
   }
 }
 
