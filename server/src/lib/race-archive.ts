@@ -36,6 +36,8 @@ export interface ArchiveOptions {
   archiveId?: string;
   /** Upload attempts per file (default 2: one retry). */
   attempts?: number;
+  /** Role of the storage key (see supabaseKeyRole), used to explain a refusal. */
+  keyRole?: string;
 }
 
 export interface ArchiveResult {
@@ -58,6 +60,31 @@ export function fileTypeForKey(key: string): { ext: string; contentType: string 
   if (k.includes("pdf")) return { ext: "pdf", contentType: "application/pdf" };
   if (k.includes("json")) return { ext: "json", contentType: "application/json" };
   return { ext: "csv", contentType: "text/csv" };
+}
+
+/**
+ * What kind of Supabase key this is, without revealing it: "service_role", "anon",
+ * "secret" / "publishable" (the newer sb_ keys), or "unknown".
+ * Only a service-role or secret key may write to the archive bucket; any other key is
+ * held to the bucket's row-level security and every upload is refused.
+ */
+export function supabaseKeyRole(key: string | undefined): string {
+  if (!key) return "missing";
+  if (key.startsWith("sb_secret_")) return "secret";
+  if (key.startsWith("sb_publishable_")) return "publishable";
+  const parts = key.split(".");
+  if (parts.length !== 3) return "unknown";
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8")) as { role?: unknown };
+    return typeof payload.role === "string" ? payload.role : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** True when the key can write past storage row-level security. */
+export function canBypassStorageRls(role: string): boolean {
+  return role === "service_role" || role === "secret";
 }
 
 export async function archiveRaceFiles(
@@ -113,10 +140,16 @@ export async function archiveRaceFiles(
     const list = failures
       .map((f) => `${f.key} (${(f.bytes / 1024).toFixed(0)} KB): ${f.error}`)
       .join("; ");
+    const rls = failures.some((f) => /row-level security/i.test(f.error));
+    const hint = rls
+      ? ` Storage refused the upload under row-level security: the server's SUPABASE_SERVICE_ROLE_KEY ` +
+        `is ${opts.keyRole ? `a "${opts.keyRole}" key` : "not"} the service-role (or sb_secret_) key. ` +
+        `Set it to the project's service-role key and redeploy.`
+      : "";
     const err = new AppError(
       502,
       `Import stopped: ${failures.length} of ${entries.length} raw file(s) could not be archived, ` +
-        `so nothing was saved. ${list}`,
+        `so nothing was saved. ${list}${hint}`,
       "ARCHIVE_FAILED"
     );
     (err as AppError & { failures?: ArchiveFailure[] }).failures = failures;

@@ -8,7 +8,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { getParser, getAllParsers } from "../utils/parsers/index.js";
 import { extractPdfText } from "../utils/pdf-extract.js";
 import { suggestRaceDate } from "../utils/suggestRaceDate.js";
-import { downloadRaceFiles, supabase, STORAGE_BUCKET } from "../lib/supabase.js";
+import { downloadRaceFiles, supabase, supabaseKeyKind, STORAGE_BUCKET } from "../lib/supabase.js";
 import { archiveRaceFiles } from "../lib/race-archive.js";
 import { env } from "../config/env.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
@@ -86,6 +86,7 @@ function archive(files: Record<string, unknown>) {
   return archiveRaceFiles(files, {
     bucket: supabase ? supabase.storage.from(STORAGE_BUCKET) : null,
     nodeEnv: env.NODE_ENV,
+    keyRole: supabaseKeyKind,
   });
 }
 
