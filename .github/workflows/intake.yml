@@ -56,7 +56,6 @@ jobs:
       RACETRACE_API_URL: ${{ secrets.RACETRACE_API_URL }}
       RACETRACE_API_TOKEN: ${{ secrets.RACETRACE_API_TOKEN }}
       SPEEDHIVE_WRL_ORG_ID: ${{ secrets.SPEEDHIVE_WRL_ORG_ID }}
-      INTAKE_WORK_DIR: ${{ runner.temp }}/intake-work
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,6 +67,8 @@ jobs:
 
       - name: Check settings
         run: |
+          # Work folder on the runner's temp disk (the runner context is not available in job-level env).
+          echo "INTAKE_WORK_DIR=$RUNNER_TEMP/intake-work" >> "$GITHUB_ENV"
           if [ -z "$RACETRACE_API_URL" ] || [ -z "$RACETRACE_API_TOKEN" ]; then
             echo "::error::Add the repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Settings → Secrets and variables → Actions)."
             exit 1
