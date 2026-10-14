@@ -538,7 +538,7 @@ export function adaptAlkamel(format: SourceFormat, files: SourceFileInfo[]): Ada
   for (const p of race.pitRecords) {
     p.inClockS = roll(p.inClockS)!;
     p.outClockS = roll(p.outClockS);
-    if (p.outClockS !== null && p.outClockS < p.inClockS) p.outClockS += 86400;
+    if (p.outClockS !== null && p.inClockS !== null && p.outClockS < p.inClockS) p.outClockS += 86400;
   }
   for (const d of race.driveStints) {
     d.startClockS = roll(d.startClockS);

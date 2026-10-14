@@ -60,6 +60,12 @@ const MEDIUM_NOTES = new Set([
   "negative_time_lost",
   "out_lap_ends_in_pit_lane",
   "no_rc_penalty_text",
+  "pit_report_laps_corrected",
+  "pit_entry_renumbered",
+  "pit_lane_time_exceeds_passage",
+  "pit_clock_lap_mismatch",
+  "not_in_pit_report",
+  "pit_flag_lap_late",
 ]);
 const LOW_NOTES = new Set([
   "drive_through_by_duration",
@@ -147,7 +153,10 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   const serveWindowS = rb?.serveWindowS ?? 1200;
   const transit = estimateTransit(passages, rb?.pitLaneTransitS, laps);
   const wrl = race.format === "speedhive" || race.format === "wrl-website";
-  if (!wrl) {
+  // Kinds from pit-lane times (Alkamel rules) when the race has any; else the WRL time-lost rules
+  // (Speedhive, WRL website, RedMist without a pit report).
+  const lapOnly = wrl || (race.format === "redmist" && !passages.some((p) => p.official !== null));
+  if (!lapOnly) {
     if (transit.estimated && transit.valueS !== null) {
       issues.push(
         transit.valid
@@ -160,8 +169,8 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   /* D-FCY-STOP for every passage (needs laps.fcy) */
   for (const p of passages) fcyContext(ctx, p, fcy.periods);
 
-  /* M9, M10 (Alkamel) */
-  if (!wrl) {
+  /* M9, M10 (Alkamel; RedMist with a pit report) */
+  if (!lapOnly) {
     classifyAlkamel(ctx, passages, pens, transit, garageS, serveWindowS);
     linkTimeAtStop(passages, pens, serveWindowS);
   }
@@ -170,7 +179,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   markClean(ctx, passages);
   const medians = classMedians(ctx);
   const { groups } = computeTimeLost(ctx, passages);
-  if (wrl) classifyWrl(ctx, passages, groups, garageS);
+  if (lapOnly) classifyWrl(ctx, passages, groups, garageS);
   assignStopNumbers(passages);
   linkServedMessages(pens, served);
 
@@ -448,7 +457,12 @@ function toLapTable(ctx: Ctx, files: SourceFileInfo[]): LapTable {
     lapsDown: derived("D-LAPDOWN"),
     clean: derived("D-REF-PACE"),
   };
-  if (anyDriver) columnSources.driver = { source: { kind: "official", files: lapFiles }, confidence: ctx.race.format === "wrl-website" ? "medium" : "high" };
+  if (anyDriver) {
+    columnSources.driver = {
+      source: { kind: "official", files: lapFiles, ...(ctx.race.format === "redmist" ? { method: "RFID driver at the line crossing" } : {}) },
+      confidence: ctx.race.format === "wrl-website" ? "medium" : "high",
+    };
+  }
   if (anySpeed) {
     columnSources.speedKph = official();
     columnSources.topSpeedKph = official();

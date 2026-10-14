@@ -188,7 +188,7 @@ export interface ClassDef {
   medianCleanGreenLapS?: Seconds | null;
 }
 
-export type SourceFormat = 'speedhive' | 'wrl-website' | 'alkamel-sro' | 'alkamel-grcup' | 'alkamel-imsa';
+export type SourceFormat = 'speedhive' | 'wrl-website' | 'alkamel-sro' | 'alkamel-grcup' | 'alkamel-imsa' | 'redmist';
 export type ResultsStatus = 'official' | 'provisional' | 'unofficial';
 
 export interface Metadata {
