@@ -74,7 +74,6 @@ export function LapChart({
   const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
   const [sidePanel, setSidePanel] = useState<string | null>(null);
   const h2hDefaultCarRef = useRef<number | undefined>(undefined);
-  const clearingRef = useRef(false);
 
   // ── Zoom state ─────────────────────────────────────────────────
   const [lapStart, setLapStart] = useState(1);
@@ -466,20 +465,17 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
-  // Compare starts with the focus car's nearest rivals at the finish (in the class view):
-  // the cars just ahead and just behind. Everyone else stays visible as the faint field.
+  // Compare starts with every car in view, each in its own colour, as RaceTrace always has.
+  // Picking or removing a car switches to the cars picked; a new class, make or race goes
+  // back to every car. "All" in the controls does the same.
+  const [compareAll, setCompareAll] = useState(true);
   useEffect(() => {
-    if (clearingRef.current) {
-      clearingRef.current = false;
-      return;
-    }
-    const inView = getVisibleCars(data, classView).filter((n) => (data.cars[String(n)]?.laps.length ?? 0) > 0);
-    const posOf = (n: number) => (classView ? data.cars[String(n)]?.finishPosClass : data.cars[String(n)]?.finishPos) ?? 999;
-    const ordered = inView.sort((a, b) => posOf(a) - posOf(b));
-    const i = ordered.indexOf(focusNum);
-    const rivals = i < 0 ? ordered.slice(0, 2) : [ordered[i - 1], ordered[i + 1], i === 0 ? ordered[i + 2] : undefined].filter((n): n is number => n !== undefined);
-    setCompSet(new Set(rivals.slice(0, 2)));
-  }, [classView, data, focusNum, setCompSet]);
+    if (!compareAll) return;
+    setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && (data.cars[String(n)]?.laps.length ?? 0) > 0)));
+  }, [compareAll, fieldCars, focusNum, data, setCompSet]);
+  useEffect(() => {
+    setCompareAll(true);
+  }, [classView, makeFilter, data]);
 
   // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
@@ -493,6 +489,7 @@ export function LapChart({
   // ── Comparison toggles ──────────────────────────────────────────
   const toggleComp = useCallback(
     (num: number) => {
+      setCompareAll(false);
       setCompSet((prev) => {
         const next = new Set(prev);
         if (next.has(num)) next.delete(num);
@@ -504,6 +501,7 @@ export function LapChart({
   );
 
   const handleClear = useCallback(() => {
+    setCompareAll(false);
     setCompSet(new Set());
   }, [setCompSet]);
 
@@ -570,6 +568,8 @@ export function LapChart({
         compSet={compSet}
         toggleComp={toggleComp}
         clearComp={handleClear}
+        compareAll={compareAll}
+        onCompareAll={() => setCompareAll(true)}
         makeFilter={makeFilter}
         setMakeFilter={setMakeFilter}
         xAxisMode={xAxisMode}

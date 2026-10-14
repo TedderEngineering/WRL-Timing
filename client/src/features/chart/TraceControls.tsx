@@ -29,6 +29,9 @@ export interface TraceControlsProps {
   compSet: Set<number>;
   toggleComp: (n: number) => void;
   clearComp: () => void;
+  /** Compare is every car in view (the default). */
+  compareAll?: boolean;
+  onCompareAll?: () => void;
   /** Makes picked; empty = all. Several can be picked. */
   makeFilter: string[];
   setMakeFilter: (m: string[]) => void;
@@ -333,7 +336,29 @@ export function TraceControls(p: TraceControlsProps) {
           <span className={labelCls} style={{ color: T.muted }}>
             Compare
           </span>
-          {compare.map((n) => {
+          {/* Every car in view, the default: one chip instead of one per car */}
+          {p.onCompareAll && (
+            <button
+              type="button"
+              aria-pressed={!!p.compareAll}
+              onClick={p.onCompareAll}
+              title="Compare with every car in view, each in its own colour"
+              className="min-h-[32px] rounded-full border px-2.5 text-[13px]"
+              style={{
+                borderColor: p.compareAll ? T.accent : T.border,
+                background: p.compareAll ? "rgba(244,140,52,0.12)" : "transparent",
+                color: p.compareAll ? T.text : T.soft,
+              }}
+            >
+              All cars{p.compareAll ? ` ${compare.length}` : ""}
+            </button>
+          )}
+          {!p.compareAll && compare.length > 8 && (
+            <span className="text-[13px]" style={{ color: T.soft }}>
+              {compare.length} cars
+            </span>
+          )}
+          {!p.compareAll && compare.length <= 8 && compare.map((n) => {
             const col = getCompColor(compSet, focusNum, n);
             return (
               <button

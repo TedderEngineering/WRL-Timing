@@ -88,3 +88,15 @@ describe("make filter", () => {
     expect(pressed).not.toContain("All");
   });
 });
+
+describe("compare colours with every car in view", () => {
+  it("more than eight cars keep a colour by car number and never use the focus orange", () => {
+    const many = new Set(Array.from({ length: 30 }, (_, i) => i + 1));
+    const c7 = getCompColor(many, 99, 7);
+    const shuffled = new Set([...many].reverse());
+    expect(getCompColor(shuffled, 99, 7)).toBe(c7);
+    const all = [...many].map((n) => getCompColor(many, 99, n));
+    expect(all).not.toContain("#fb923c");
+    expect(all).not.toContain("#fdba74");
+  });
+});

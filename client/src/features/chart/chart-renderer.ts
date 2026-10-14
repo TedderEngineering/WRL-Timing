@@ -117,11 +117,20 @@ export function formatLapTime(lt: string): string {
 }
 
 /** A compare car's colour: by the order it was added (Set insertion order), so colours stay put. */
+/** The 20-colour palette without its oranges, which belong to the focus car. */
+const MANY_PALETTE = COMP_PALETTE.filter((c) => c !== "#fb923c" && c !== "#fdba74");
+
+/**
+ * Up to eight compare cars: the compare palette in the order they were added. More (every car
+ * in view, the default): the 20-colour palette by car number, so each car keeps its colour.
+ */
 export function getCompColor(compSet: Set<number>, focusNum: number, carNum: number): string {
   const ordered = [...compSet].filter((n) => n !== focusNum);
   const idx = ordered.indexOf(carNum);
   if (idx < 0) return "#888";
-  return idx < COMPARE_PALETTE.length ? COMPARE_PALETTE[idx] : COMP_PALETTE[idx % COMP_PALETTE.length];
+  if (ordered.length <= COMPARE_PALETTE.length) return COMPARE_PALETTE[idx];
+  const byNum = ordered.sort((a, b) => a - b);
+  return MANY_PALETTE[byNum.indexOf(carNum) % MANY_PALETTE.length];
 }
 
 export function computeLapElapsedHours(data: RaceChartData): Map<number, number> {
@@ -503,16 +512,21 @@ export function drawChart(
   }
 
   // ── 4. Compare cars: their own colour, with their pit stops ───
+  // A few picked cars are drawn bold with their stops and end labels; every car in view (the
+  // default) is drawn thinner and softer so the focus car still reads first.
   const endLabels: Array<{ y: number; text: string; color: string }> = [];
+  const nCompare = [...compSet].filter((n) => n !== focusNum).length;
+  const many = nCompare > COMPARE_PALETTE.length;
   compSet.forEach((cn) => {
     if (cn === focusNum) return;
     const cnStr = String(cn);
     const cl = data.cars[cnStr]?.laps;
     if (!cl || !cl.length) return;
     const col = getCompColor(compSet, focusNum, cn);
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = many ? hexA(col, 0.5) : col;
+    ctx.lineWidth = many ? 1.25 : 2;
     if (tracePath(cnStr, cl)) ctx.stroke();
+    if (many) return;
     for (const d of cl) {
       if (d.pit && d.l >= lapStart && d.l <= lapEnd) circle(xForCar(cnStr, d.l), y(d[pk]), 4.5, col);
     }
