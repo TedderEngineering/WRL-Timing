@@ -4,8 +4,8 @@ import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { StrategyTab } from "../features/chart/StrategyTab";
+import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 
-import { CHART_STYLE } from "../features/chart";
 import { getVisibleCars } from "../features/chart/chart-renderer";
 import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
@@ -38,6 +38,7 @@ export function RaceDetailPage() {
   // Derive event ID from URL param or from the loaded race metadata
   const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
+  const [resultsStatus, setResultsStatus] = useState<"official" | "provisional" | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis).
   const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy" | "pitanalysis">(() => {
     const t = searchParams.get("tab");
@@ -152,12 +153,16 @@ export function RaceDetailPage() {
     []
   );
 
-  // Fetch favorite status from race detail endpoint
+  // Favorite and results status from the race detail endpoint
   useEffect(() => {
-    if (!id || !isAuthenticated) return;
+    if (!id) return;
+    setResultsStatus(null);
     api
-      .get<{ isFavorited: boolean }>(`/races/${id}`)
-      .then((res) => setIsFavorited(res.isFavorited))
+      .get<{ isFavorited: boolean; resultsStatus?: "official" | "provisional" | null }>(`/races/${id}`)
+      .then((res) => {
+        setIsFavorited(!!res.isFavorited);
+        setResultsStatus(res.resultsStatus ?? null);
+      })
       .catch(() => {});
   }, [id, isAuthenticated]);
 
@@ -183,16 +188,6 @@ export function RaceDetailPage() {
 
   const withSidebar = (content: React.ReactNode) => (
     <>
-      {/* Mobile hamburger (below md) */}
-      <button
-        onClick={() => setMobileDrawerOpen(true)}
-        className="fixed top-3 left-3 z-40 md:hidden p-2 rounded-lg bg-gray-900/90 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-        aria-label="Open event sidebar"
-      >
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
 
       {/* Desktop: flex-row layout — sidebar left, chart right */}
       <div className="hidden md:flex h-[calc(100vh-4rem)] overflow-hidden">
@@ -354,171 +349,158 @@ export function RaceDetailPage() {
 
   // ── Format date ────────────────────────────────────────────────
   const dateStr = new Date(raceMeta.date).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
+    weekday: "short",
+    month: "short",
     day: "numeric",
     year: "numeric",
     timeZone: "UTC", // a race date is a calendar day (F5)
   });
 
+  const isTeam = hasTeamAccess(user);
+  const tabs = [
+    { id: "position" as const, label: "Position Trace", locked: false },
+    { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
+    { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
+    { id: "strategy" as const, label: "Strategy", locked: !isTeam },
+  ];
+  const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34" };
+
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
-    <div className="px-2 sm:px-4 py-1 sm:py-1.5 h-full overflow-y-auto">
-      {/* Header — single row: breadcrumb / title / track+date */}
-      <div className="flex items-baseline flex-wrap gap-x-3 gap-y-0.5 py-2 mb-1">
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            to="/races"
-            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+    <div className="h-full overflow-y-auto" style={{ background: "#0b0b18", color: RT.text }}>
+      {/* Header (mockup F1): breadcrumb, race, status, star */}
+      <section className="flex flex-col gap-2 px-3 pt-3 sm:px-6 sm:pt-4">
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: RT.muted }}>
+          {/* Phone: the event list opens as a drawer */}
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(true)}
+            className="-ml-1 flex min-h-[32px] items-center gap-1 rounded px-1 md:hidden"
+            style={{ color: RT.soft }}
+            aria-label="Open the event list"
           >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            Races
+          </button>
+          <span aria-hidden className="md:hidden">·</span>
+          <Link to="/races" className="hover:underline" style={{ color: RT.muted }}>
             Events
           </Link>
-          <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
-          <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">
-            {raceMeta.series} {raceMeta.season}
+          <span aria-hidden>/</span>
+          <span className="rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
+            {raceMeta.series.replace(/_/g, " ")}
           </span>
-          <span className="text-gray-300 dark:text-gray-600 text-xs">/</span>
-        </div>
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-tight">
-          {raceMeta.name}
-        </h1>
-        <span className="text-xs text-gray-500 dark:text-gray-500">
-          {raceMeta.track} · {dateStr}
-        </span>
-      </div>
-
-      {/* Tab bar + dropdowns on one row */}
-      {(() => {
-        const isTeam = hasTeamAccess(user);
-        const showDropdowns = activeTab !== "strategy";
-
-        const tabs = [
-          { id: "position" as const, label: "Position Trace", locked: false },
-          { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
-          { id: "strategy" as const, label: "Strategy", locked: !isTeam },
-        ];
-
-        return (
-          <>
-            <div
-              className="flex items-center gap-1 mb-0.5 border-b"
-              style={{ borderColor: CHART_STYLE.border, padding: "2px 0" }}
+          <span>{raceMeta.season}</span>
+        </nav>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="m-0 text-xl font-semibold sm:text-2xl">{raceMeta.name}</h1>
+          <span className="text-sm" style={{ color: RT.soft }}>
+            {raceMeta.track} · {dateStr}
+          </span>
+          {resultsStatus && (
+            <span
+              className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+              style={resultsStatus === "provisional" ? { borderColor: "#fab219", color: "#fab219" } : { borderColor: "#4ade80", color: "#4ade80" }}
+              title={resultsStatus === "provisional" ? "Finishing positions may still change." : "Official results."}
             >
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      if (tab.locked) {
-                        setLockedMsg(tab.id);
-                        return;
-                      }
-                      setLockedMsg(null);
-                      setActiveTab(tab.id);
-                    }}
-                    className="relative px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-2 shrink-0"
-                    style={{
-                      color: isActive ? "#fff" : CHART_STYLE.muted,
-                      borderBottom: isActive ? "2px solid #5c7cfa" : "2px solid transparent",
-                      marginBottom: "-1px",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.color = CHART_STYLE.text;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.color = CHART_STYLE.muted;
-                    }}
-                  >
-                    {tab.label}
-                    {tab.locked && (
-                      <>
-                        <svg className="h-3.5 w-3.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                        </svg>
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                          style={{ background: CHART_STYLE.border, color: CHART_STYLE.muted }}
-                        >
-                          Team
-                        </span>
-                      </>
-                    )}
-                  </button>
-                );
-              })}
+              {resultsStatus === "provisional" ? "Provisional" : "Official"}
+            </span>
+          )}
+          <span className="flex-1" />
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={handleFavorite}
+              aria-pressed={isFavorited}
+              className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
+              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+            >
+              <span style={{ color: isFavorited ? "#fab219" : RT.muted }}>{isFavorited ? "★" : "☆"}</span>
+              {isFavorited ? "Starred" : "Star race"}
+            </button>
+          )}
+        </div>
+      </section>
 
-              {/* Focus dropdown — shown for Position Trace and Lap Times, hidden for Strategy */}
-              {showDropdowns && (
-                <div className="flex items-center gap-3 ml-4 shrink-0">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: "#cbd5e1" }}>
-                      Focus
-                    </label>
-                    <select
-                      value={focusNum}
-                      onChange={(e) => handleFocusChange(Number(e.target.value))}
-                      className="px-2 py-1 rounded text-xs font-mono text-white border cursor-pointer appearance-none"
-                      style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, minWidth: 180 }}
-                    >
-                      {visibleCars.map((n) => {
-                        const c = data.cars[String(n)];
-                        if (c.laps.length === 0) return null;
-                        const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
-                        const tag = c.make || c.cls;
-                        return (
-                          <option key={n} value={n}>
-                            #{n} {c.team} ({tag}) — {posLabel}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                </div>
+      {/* Race views */}
+      <nav aria-label="Race views" className="mt-1 flex gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => {
+                if (tab.locked) {
+                  setLockedMsg(tab.id);
+                  return;
+                }
+                setLockedMsg(null);
+                setActiveTab(tab.id);
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  if (tab.id === "position") next.delete("tab");
+                  else next.set("tab", tab.id);
+                  return next;
+                }, { replace: true });
+              }}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-sm"
+              style={{
+                color: isActive ? RT.text : RT.muted,
+                fontWeight: isActive ? 600 : 400,
+                borderBottom: `2px solid ${isActive ? RT.accent : "transparent"}`,
+                marginBottom: -1,
+              }}
+            >
+              {tab.label}
+              {tab.locked && (
+                <span className="rounded px-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: RT.line, color: RT.muted }}>
+                  Team
+                </span>
               )}
+            </button>
+          );
+        })}
+      </nav>
 
-              {/* Save button pushed right */}
-              <div className="ml-auto flex items-center">
-                {isAuthenticated && (
-                  <button
-                    onClick={handleFavorite}
-                    className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-300 dark:border-gray-700 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <svg
-                      className={`h-4 w-4 ${
-                        isFavorited ? "text-yellow-500 fill-yellow-500" : "text-gray-400"
-                      }`}
-                      fill={isFavorited ? "currentColor" : "none"}
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
-                      />
-                    </svg>
-                    {isFavorited ? "Saved" : "Save"}
-                  </button>
-                )}
-              </div>
-            </div>
+      {lockedMsg && (
+        <div className="mx-3 mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
+          This view is part of the Team plan.{" "}
+          <Link to="/pricing" className="underline" style={{ color: RT.accent }}>
+            See plans
+          </Link>
+        </div>
+      )}
 
-            {lockedMsg && (
-              <div
-                className="text-sm mb-3 px-3 py-2 rounded-lg inline-flex items-center gap-2"
-                style={{ background: CHART_STYLE.card, border: `1px solid ${CHART_STYLE.border}`, color: CHART_STYLE.muted }}
-              >
-                Upgrade to Team to unlock.{" "}
-                <Link to="/pricing" className="text-brand-400 hover:text-brand-300 underline">
-                  View pricing
-                </Link>
-              </div>
-            )}
-          </>
-        );
-      })()}
+      {/* Lap Times keeps its focus picker above the chart */}
+      {activeTab === "laptimes" && (
+        <div className="flex items-center gap-2 px-3 pt-3 sm:px-6">
+          <label htmlFor="lt-focus" className="text-[11px] uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
+            Focus
+          </label>
+          <select
+            id="lt-focus"
+            value={focusNum}
+            onChange={(e) => handleFocusChange(Number(e.target.value))}
+            className="min-h-[40px] cursor-pointer rounded-md border px-2 font-mono text-sm"
+            style={{ background: RT.card, borderColor: RT.accent, color: RT.text, minWidth: 220 }}
+          >
+            {visibleCars.map((n) => {
+              const c = data.cars[String(n)];
+              if (c.laps.length === 0) return null;
+              const posLabel = classView ? `P${c.finishPosClass} in class` : `P${c.finishPos}`;
+              return (
+                <option key={n} value={n}>
+                  #{n} {c.team} ({c.make || c.cls}) — {posLabel}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
 
       {/* Chart — kept mounted to preserve internal state (focusNum, compSet, classView) */}
       <div className={activeTab !== "position" ? "hidden" : undefined}>
@@ -539,6 +521,12 @@ export function RaceDetailPage() {
           classView={classView} setClassView={setClassView}
           activeLap={activeLap} setActiveLap={setActiveLap}
         />
+      )}
+
+      {activeTab === "pitanalysis" && (
+        <div className="px-2 py-3 sm:px-6">
+          <PitAnalysisTab raceId={id} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
+        </div>
       )}
 
       {activeTab === "strategy" && (

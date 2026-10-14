@@ -228,6 +228,7 @@ export async function getRaceDetail(raceId: string, userId?: string) {
       totalCars: true,
       createdAt: true,
       packagesDisabled: true,
+      resultsStatus: true,
       currentPackage: {
         select: { id: true, version: true, resultsStatus: true, dataQualityGrade: true, publishedAt: true },
       },
@@ -274,7 +275,13 @@ export async function getRaceDetail(raceId: string, userId?: string) {
     createdAt: race.createdAt.toISOString(),
     entries: race.entries,
     ...packageFields(race),
+    // The package's results status when one is served, else what the intake recorded.
+    resultsStatus: packageFields(race).resultsStatus ?? intakeResultsStatus((race as { resultsStatus?: string | null }).resultsStatus),
   };
+}
+
+function intakeResultsStatus(s: string | null | undefined): "official" | "provisional" | null {
+  return s === "official" || s === "provisional" ? s : null;
 }
 
 interface CurrentPackageInfo {

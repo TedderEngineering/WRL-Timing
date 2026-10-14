@@ -27,3 +27,28 @@ export const CHART_STYLE = {
   fcyBand: "rgba(251,191,36,0.07)",
   crosshair: "rgba(255,255,255,0.3)",
 } as const;
+
+/**
+ * Position Trace (RaceTrace 2.0, mockup F1): the focus car is orange, up to a
+ * few compare cars get distinct colours, every other car in view is a faint
+ * "field" line.
+ */
+export const TRACE = {
+  focus: "#F48C34",
+  field: "rgba(224,224,232,0.16)",
+  fieldPit: "rgba(224,224,232,0.45)",
+  fcyFill: "rgba(251,191,36,0.08)",
+  fcyBar: "#fbbf24",
+  fcyText: "#fab219",
+  glyph: "#e0e0e8",
+  garage: "#f97316",
+  penalty: "#e66767",
+  selected: "rgba(255,255,255,0.35)",
+  axis: "#9a9ab4",
+  grid: "#1e1e38",
+} as const;
+
+/** Compare-car colours, in the order cars were added (mockup F1). */
+export const COMPARE_PALETTE = [
+  "#3987e5", "#199e70", "#9085e9", "#e05c9a", "#2bb5c8", "#d4b62c", "#e66767", "#8fb8ff",
+];

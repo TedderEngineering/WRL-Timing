@@ -12,7 +12,7 @@ import type {
   CarAnnotations,
   LapData,
 } from "@shared/types";
-import { CLASS_COLORS, COMP_PALETTE, CHART_STYLE } from "./constants";
+import { COMPARE_PALETTE, COMP_PALETTE, CHART_STYLE, TRACE } from "./constants";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ export interface ChartState {
   lapStart: number;
   lapEnd: number;
   selectionRange?: [number, number] | null;
+  /** Cars drawn as the faint field (usually every car in the class view). */
+  fieldCars?: number[];
 }
 
 export interface ChartDimensions {
@@ -111,11 +113,12 @@ export function formatLapTime(lt: string): string {
   return lt;
 }
 
+/** A compare car's colour: by the order it was added (Set insertion order), so colours stay put. */
 export function getCompColor(compSet: Set<number>, focusNum: number, carNum: number): string {
-  const sorted = [...compSet].filter((n) => n !== focusNum).sort((a, b) => a - b);
-  const idx = sorted.indexOf(carNum);
+  const ordered = [...compSet].filter((n) => n !== focusNum);
+  const idx = ordered.indexOf(carNum);
   if (idx < 0) return "#888";
-  return COMP_PALETTE[idx % COMP_PALETTE.length];
+  return idx < COMPARE_PALETTE.length ? COMPARE_PALETTE[idx] : COMP_PALETTE[idx % COMP_PALETTE.length];
 }
 
 export function computeLapElapsedHours(data: RaceChartData): Map<number, number> {
@@ -214,10 +217,11 @@ export function computeDimensions(
   const W = Math.max(minWidth ?? 300, Math.floor(containerW));
   const H = Math.max(300, Math.floor(containerH));
 
-  const ML = isMobile ? 40 : 50;
-  const MR = isMobile ? 10 : 20;
-  const MT = isMobile ? 40 : 60;
-  const baseMB = isMobile ? 30 : 40;
+  const ML = isMobile ? 36 : 44;
+  // Right margin holds the car-number labels at the end of each trace.
+  const MR = isMobile ? 34 : 44;
+  const MT = isMobile ? 18 : 22;
+  const baseMB = isMobile ? 26 : 34;
   const MB = xAxisMode === "both" ? baseMB + 14 : baseMB;
   const CW = W - ML - MR;
   const CH = H - MT - MB;
@@ -275,7 +279,10 @@ export function drawChart(
 
   let yMin = 1;
   let yMax = maxPos;
-  if (!isAllSelected && selectedCars.size > 0) {
+  // With a field drawn, the axis covers every position in view; the old auto-zoom applied
+  // only when the chart showed the selected cars alone.
+  const hasField = (state.fieldCars?.length ?? 0) > 0;
+  if (!hasField && !isAllSelected && selectedCars.size > 0) {
     let pMin = Infinity;
     let pMax = -Infinity;
     selectedCars.forEach((cn) => {
@@ -350,306 +357,223 @@ export function drawChart(
     return x(hoursToVirtualLap(h, leaderHours!));
   };
 
-  // ── 1. Grid ────────────────────────────────────────────────────
-  ctx.strokeStyle = CHART_STYLE.gridLine;
-  ctx.lineWidth = 0.5;
+  // ── 1. Grid (horizontal position lines only; laps are on the axis) ──
+  ctx.strokeStyle = TRACE.grid;
+  ctx.lineWidth = 1;
   const posCount = yMax - yMin;
   const posStep = posCount <= 20 ? 1 : posCount <= 40 ? 2 : 5;
   const gridYStart = Math.ceil(yMin / posStep) * posStep;
   for (let p = Math.max(gridYStart, yMin); p <= yMax; p += posStep) {
-    const py = y(p);
+    const py = Math.round(y(p)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(adjDim.ML, py);
     ctx.lineTo(adjDim.W - adjDim.MR, py);
     ctx.stroke();
   }
-  const gridStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
-  const gridStart = Math.max(1, Math.ceil(lapStart / gridStep) * gridStep);
-  for (let l = gridStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += gridStep) {
-    const lx = x(l);
-    ctx.beginPath();
-    ctx.moveTo(lx, adjDim.MT);
-    ctx.lineTo(lx, adjDim.H - adjDim.MB);
-    ctx.stroke();
-  }
 
-  // ── 2. FCY bands ───────────────────────────────────────────────
+  // ── 2. FCY bands: soft fill, a bar along the top, "FCY" when there is room ──
   (data.fcy || []).forEach(([s, e]) => {
     if (e < lapStart || s > lapEnd) return;
-    ctx.fillStyle = CHART_STYLE.fcyBand;
-    ctx.fillRect(x(s - 0.4), adjDim.MT, x(e + 0.4) - x(s - 0.4), adjDim.CH);
+    const x0 = Math.max(adjDim.ML, x(s - 0.5));
+    const x1 = Math.min(adjDim.W - adjDim.MR, x(e + 0.5));
+    if (x1 <= x0) return;
+    ctx.fillStyle = TRACE.fcyFill;
+    ctx.fillRect(x0, adjDim.MT, x1 - x0, adjDim.CH);
+    ctx.fillStyle = TRACE.fcyBar;
+    ctx.fillRect(x0, adjDim.MT, x1 - x0, 3);
+    if (x1 - x0 > 30) {
+      ctx.font = "600 11px 'IBM Plex Sans', system-ui, sans-serif";
+      ctx.fillStyle = TRACE.fcyText;
+      ctx.textAlign = "left";
+      ctx.fillText("FCY", x0 + 5, adjDim.MT + 16);
+    }
   });
 
-  // ── 3. Pit stop vertical lines ────────────────────────────────
-  (ann.pits || []).forEach((p: PitMarker) => {
-    if (p.l < lapStart || p.l > lapEnd) return;
-    const px = xForCar(focusNumStr, p.l);
-    const pitTop = adjDim.MT;
-    const pitBot = adjDim.H - adjDim.MB;
-    ctx.save();
+  // Step path for one car: horizontal to the lap, vertical to the new position.
+  const tracePath = (carNum: string, cl: LapData[]) => {
     ctx.beginPath();
-    ctx.setLineDash([]);
-    ctx.strokeStyle = p.c;
-    ctx.lineWidth = 1;
-    ctx.moveTo(px, pitTop);
-    ctx.lineTo(px, pitBot);
-    ctx.stroke();
-    ctx.font = "500 9px system-ui";
-    ctx.fillStyle = p.c;
-    ctx.textAlign = "left";
-    const labelY = pitTop + 10 + (p.yo || 0);
-    ctx.fillText(p.lb, px + 3, labelY);
-
-    // SPC indicator at mid-height of pit vertical line
-    const spc = p.pitTiming?.spcAnalysis?.totalLoss;
-    if (spc && spc.classification !== "normal") {
-      const midY = (pitTop + pitBot) / 2;
-
-      if (spc.classification === "warning") {
-        // Yellow triangle
-        ctx.beginPath();
-        ctx.fillStyle = "#fbbf24";
-        ctx.moveTo(px, midY - 5);
-        ctx.lineTo(px - 4.5, midY + 4);
-        ctx.lineTo(px + 4.5, midY + 4);
-        ctx.closePath();
-        ctx.fill();
-      } else if (spc.classification === "outlier") {
-        // Circle: red for slow, green for fast
-        const color = spc.direction === "fast" ? "#4ade80" : "#f87171";
-        ctx.beginPath();
-        ctx.fillStyle = color;
-        ctx.arc(px, midY, 4, 0, Math.PI * 2);
-        ctx.fill();
+    let started = false;
+    for (let i = 0; i < cl.length; i++) {
+      const d = cl[i];
+      if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
+      const px = xForCar(carNum, d.l);
+      const py = y(d[pk]);
+      if (!started) {
+        ctx.moveTo(px, py);
+        started = true;
+      } else {
+        ctx.lineTo(px, y(cl[i - 1][pk]));
+        ctx.lineTo(px, py);
       }
     }
+    return started;
+  };
 
-    ctx.restore();
-  });
+  const circle = (cx: number, cy: number, r: number, fill: string, stroke: string = CHART_STYLE.card, sw = 2) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = sw;
+    ctx.stroke();
+  };
+  const triangle = (cx: number, cy: number, r: number, fill: string) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy + r * 0.8);
+    ctx.lineTo(cx - r, cy + r * 0.8);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = CHART_STYLE.card;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+  const diamond = (cx: number, cy: number, r: number, fill: string) => {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = CHART_STYLE.card;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
 
-  // ── 4. Comparison car traces ───────────────────────────────────
+  // ── 3. Field: every other car in view, faint ──────────────────
+  const field = state.fieldCars ?? [];
+  ctx.strokeStyle = TRACE.field;
+  ctx.lineWidth = 1;
+  for (const cn of field) {
+    if (cn === focusNum || compSet.has(cn)) continue;
+    const cl = data.cars[String(cn)]?.laps;
+    if (!cl || !cl.length) continue;
+    if (tracePath(String(cn), cl)) ctx.stroke();
+  }
+
+  // ── 4. Compare cars: their own colour, with their pit stops ───
+  const endLabels: Array<{ y: number; text: string; color: string }> = [];
   compSet.forEach((cn) => {
     if (cn === focusNum) return;
     const cnStr = String(cn);
     const cl = data.cars[cnStr]?.laps;
     if (!cl || !cl.length) return;
     const col = getCompColor(compSet, focusNum, cn);
-    ctx.beginPath();
-    ctx.strokeStyle = hexA(col, 0.28);
-    ctx.lineWidth = 1.2;
-    let started = false;
-    for (let i = 0; i < cl.length; i++) {
-      const d = cl[i];
-      if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
-      const cx2 = xForCar(cnStr, d.l);
-      const cy = y(d[pk]);
-      if (!started) {
-        ctx.moveTo(cx2, cy);
-        started = true;
-      } else {
-        ctx.lineTo(cx2, y(cl[i - 1][pk]));
-        ctx.lineTo(cx2, cy);
-      }
-    }
-    ctx.stroke();
-  });
-
-  // ── 5. Focus car position line ─────────────────────────────────
-  const clsColor = CLASS_COLORS[focusCar.cls] || "#4472C4";
-  ctx.beginPath();
-  ctx.strokeStyle = clsColor;
-  ctx.lineWidth = 2.5;
-  let focusStarted = false;
-  for (let i = 0; i < laps.length; i++) {
-    const d = laps[i];
-    if (d.l < lapStart - 1 || d.l > lapEnd + 1) continue;
-    const lx = xForCar(focusNumStr, d.l);
-    const ly = y(d[pk]);
-    if (!focusStarted) {
-      ctx.moveTo(lx, ly);
-      focusStarted = true;
-    } else {
-      ctx.lineTo(lx, y(laps[i - 1][pk]));
-      ctx.lineTo(lx, ly);
-    }
-  }
-  ctx.stroke();
-
-  // ── 6. Settle arrows (pixel collision detection) ──────────────
-  const SETTLE_BOX_W = 100;
-  const SETTLE_BOX_H = 30;
-  const SETTLE_Y_STEP = 32;
-  const BASE_ARROW_LEN = 36;
-
-  // Pre-compute settle positions and sort by x
-  const settleItems: Array<{
-    sp: typeof ann.settles extends (infer T)[] ? T : never;
-    cx: number;
-    cy: number;
-    settlePos: number;
-  }> = [];
-  for (const sp of (ann.settles || [])) {
-    if (sp.l < lapStart || sp.l > lapEnd) continue;
-    let settlePos = sp.p;
-    if (classView) {
-      const ld = laps.find((l) => l.l === sp.l);
-      if (ld) settlePos = ld[pk];
-      else continue;
-    }
-    settleItems.push({ sp, cx: xForCar(focusNumStr, sp.l), cy: y(settlePos), settlePos });
-  }
-  settleItems.sort((a, b) => a.cx - b.cx);
-
-  // Place labels using pixel collision detection
-  interface PlacedBox { x: number; y: number; w: number; h: number }
-  const placed: PlacedBox[] = [];
-
-  function boxOverlaps(bx: number, by: number): boolean {
-    for (const p of placed) {
-      if (bx < p.x + p.w && bx + SETTLE_BOX_W > p.x &&
-          by < p.y + p.h && by + SETTLE_BOX_H > p.y) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  for (const { sp, cx, cy } of settleItems) {
-    // Try stacking upward until no collision
-    let yOff = 0;
-    const bx = cx - SETTLE_BOX_W / 2;
-    while (boxOverlaps(bx, cy - BASE_ARROW_LEN - yOff - SETTLE_BOX_H)) {
-      yOff += SETTLE_Y_STEP;
-      if (yOff > 200) break; // safety limit
-    }
-    placed.push({
-      x: bx,
-      y: cy - BASE_ARROW_LEN - yOff - SETTLE_BOX_H,
-      w: SETTLE_BOX_W,
-      h: SETTLE_BOX_H,
-    });
-
-    const aL = BASE_ARROW_LEN + yOff;
-
-    ctx.save();
-    // Arrow shaft
-    ctx.beginPath();
-    ctx.strokeStyle = sp.c;
-    ctx.lineWidth = 1.5;
-    ctx.moveTo(cx, cy - 6);
-    ctx.lineTo(cx, cy - aL);
-    ctx.stroke();
-    // Arrow head
-    ctx.beginPath();
-    ctx.fillStyle = sp.c;
-    ctx.moveTo(cx, cy - 4);
-    ctx.lineTo(cx - 3.5, cy - 11);
-    ctx.lineTo(cx + 3.5, cy - 11);
-    ctx.closePath();
-    ctx.fill();
-    // Dot
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = sp.c;
-    ctx.fill();
-    ctx.strokeStyle = CHART_STYLE.bg;
+    ctx.strokeStyle = col;
     ctx.lineWidth = 2;
-    ctx.stroke();
-    // Labels
-    ctx.font = "700 10px system-ui";
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "center";
-    ctx.fillText(sp.lb, cx, cy - aL - 14);
-    ctx.font = "500 9px system-ui";
-    ctx.fillStyle = sp.c;
-    ctx.fillText(sp.su, cx, cy - aL - 3);
-    ctx.restore();
-  }
-
-  // ── 7. Pit dots ────────────────────────────────────────────────
-  laps.forEach((d) => {
-    if (d.pit && d.l >= lapStart && d.l <= lapEnd) {
-      const px = xForCar(focusNumStr, d.l);
-      const py = y(d[pk]);
-      const marker = ann.pits.find((p: PitMarker) => p.l === d.l);
-      ctx.beginPath();
-      ctx.arc(px, py, 4, 0, Math.PI * 2);
-      ctx.fillStyle = marker?.isGarage ? "#f97316" : "#fbbf24";
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 1;
-      ctx.fill();
-      ctx.stroke();
+    if (tracePath(cnStr, cl)) ctx.stroke();
+    for (const d of cl) {
+      if (d.pit && d.l >= lapStart && d.l <= lapEnd) circle(xForCar(cnStr, d.l), y(d[pk]), 4.5, col);
     }
+    const last = [...cl].reverse().find((d) => d.l <= lapEnd + 0.5);
+    if (last && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(last[pk]), text: "#" + cn, color: col });
   });
 
-  // ── 8. Crosshair + active dot ─────────────────────────────────
+  // ── 5. Focus car: a dark halo under an orange line ────────────
+  if (tracePath(focusNumStr, laps)) {
+    ctx.strokeStyle = CHART_STYLE.card;
+    ctx.lineWidth = 7;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.strokeStyle = TRACE.focus;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineJoin = "miter";
+  }
+  const focusLast = [...laps].reverse().find((d) => d.l <= lapEnd + 0.5);
+  if (focusLast && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(focusLast[pk]), text: "#" + focusNum, color: TRACE.focus });
+
+  // ── 6. Focus car's stops: ● pit stop, ● orange garage, ▲ drive-through, ◆ penalty ──
+  const pitByLap = new Map((ann.pits || []).map((p: PitMarker) => [p.l, p] as const));
+  const stopLabels: Array<{ x: number; y: number; text: string }> = [];
+  for (const d of laps) {
+    if (d.l < lapStart || d.l > lapEnd) continue;
+    if (!d.pit) continue; // markers without a pit lap (e.g. "Start · driver") are not stops
+    const marker = pitByLap.get(d.l);
+    const px = xForCar(focusNumStr, d.l);
+    const py = y(d[pk]);
+    if (marker?.pitTiming?.isDriveThrough) triangle(px, py, 7, TRACE.glyph);
+    else circle(px, py, 6, marker?.isGarage ? TRACE.garage : TRACE.glyph);
+    if (marker?.lb) stopLabels.push({ x: px, y: py, text: marker.lb });
+  }
+  for (const [lapStr, reason] of Object.entries(ann.reasons || {})) {
+    const l = Number(lapStr);
+    if (!(l >= lapStart && l <= lapEnd) || !/penalt|drive[- ]?through|stop[- ]?and[- ]?go|black flag/i.test(String(reason))) continue;
+    const d = laps.find((q) => q.l === l);
+    if (d) diamond(xForCar(focusNumStr, l), y(d[pk]) + 16, 6, TRACE.penalty);
+  }
+  // Stop labels above their glyphs, skipped where they would overlap.
+  ctx.font = "500 11px 'IBM Plex Sans', system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#cbd5e1";
+  let lastLabelRight = -Infinity;
+  for (const lb of stopLabels.sort((a, b) => a.x - b.x)) {
+    const w = ctx.measureText(lb.text).width;
+    if (lb.x - w / 2 < lastLabelRight + 6) continue;
+    const ty = Math.max(adjDim.MT + 12, lb.y - 12);
+    ctx.fillText(lb.text, lb.x, ty);
+    lastLabelRight = lb.x + w / 2;
+  }
+
+  // ── 7. Selected lap: a light line, the focus car ringed, compare cars dotted ──
   if (activeLap !== null && activeLap >= lapStart && activeLap <= lapEnd) {
     const d = laps.find((l) => l.l === activeLap);
     if (d) {
       const ax = xForCar(focusNumStr, d.l);
       const ay = y(d[pk]);
-
-      // Crosshair
       ctx.beginPath();
-      ctx.strokeStyle = CHART_STYLE.crosshair;
+      ctx.strokeStyle = TRACE.selected;
       ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
       ctx.moveTo(ax, adjDim.MT);
       ctx.lineTo(ax, adjDim.H - adjDim.MB);
       ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Glow
-      ctx.beginPath();
-      ctx.arc(ax, ay, 8, 0, Math.PI * 2);
-      ctx.fillStyle = clsColor + "4D";
-      ctx.fill();
-
-      // Active dot
-      ctx.beginPath();
-      ctx.arc(ax, ay, 5, 0, Math.PI * 2);
-      ctx.fillStyle = clsColor;
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.fill();
-      ctx.stroke();
-
-      // Comparison dots
       compSet.forEach((cn) => {
         if (cn === focusNum) return;
-        const cl = data.cars[String(cn)]?.laps;
-        const cd = cl?.find((l) => l.l === activeLap);
+        const cd = data.cars[String(cn)]?.laps?.find((l) => l.l === activeLap);
         if (!cd) return;
-        // Hrs mode: align all dots at focus car's elapsed time (same vertical line)
-        // Both mode: each car uses its own time mapped to focus car's lap scale
         const cx2 = xAxisMode === "hours" ? ax : xForCar(String(cn), cd.l);
-        const cy2 = y(cd[pk]);
-        const col = getCompColor(compSet, focusNum, cn);
-        ctx.beginPath();
-        ctx.arc(cx2, cy2, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = hexA(col, 0.7);
-        ctx.fill();
-        ctx.strokeStyle = hexA(col, 0.35);
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        circle(cx2, y(cd[pk]), 3.5, getCompColor(compSet, focusNum, cn), CHART_STYLE.card, 1.5);
       });
+      ctx.beginPath();
+      ctx.arc(ax, ay, 9, 0, Math.PI * 2);
+      ctx.fillStyle = hexA(TRACE.focus, 0.25);
+      ctx.fill();
+      circle(ax, ay, 5, TRACE.focus, "#ffffff", 2);
+    }
+  }
+
+  // ── 8. Car numbers at the end of each highlighted trace (nudged apart) ──
+  if (endLabels.length) {
+    ctx.font = "600 11px 'IBM Plex Mono', ui-monospace, monospace";
+    ctx.textAlign = "left";
+    endLabels.sort((a, b) => a.y - b.y);
+    let prevY = -Infinity;
+    for (const lb of endLabels) {
+      const ly = Math.max(lb.y + 4, prevY + 12);
+      ctx.fillStyle = lb.color;
+      ctx.fillText(lb.text, adjDim.W - adjDim.MR + 6, ly);
+      prevY = ly;
     }
   }
 
   // ── 9. Axis labels ─────────────────────────────────────────────
-  ctx.font = "500 10px monospace";
-  ctx.fillStyle = CHART_STYLE.muted;
+  ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
+  ctx.fillStyle = TRACE.axis;
   ctx.textAlign = "right";
   for (let p = Math.max(gridYStart, yMin); p <= yMax; p += posStep) {
-    ctx.fillText("P" + p, adjDim.ML - 6, y(p) + 4);
+    ctx.fillText("P" + p, adjDim.ML - 8, y(p) + 4);
   }
   // Bottom axis: lap numbers, hour markers, or both
   const lapHours = computeLapElapsedHours(data);
 
   ctx.textAlign = "center";
   if (xAxisMode === "laps" || xAxisMode === "both") {
-    ctx.font = "500 10px monospace";
-    ctx.fillStyle = CHART_STYLE.muted;
+    ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
+    ctx.fillStyle = TRACE.axis;
     const lapY = xAxisMode === "both" ? adjDim.H - adjDim.MB + 14 : adjDim.H - adjDim.MB + 16;
     const labelStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
     const labelStart = Math.max(1, Math.ceil(lapStart / labelStep) * labelStep);
@@ -690,15 +614,10 @@ export function drawChart(
   const axisLabel = xAxisMode === "hours" ? "Race Time"
     : xAxisMode === "both" ? "Lap / Time"
     : "Lap";
-  ctx.font = "500 12px system-ui";
-  ctx.fillStyle = CHART_STYLE.muted;
+  ctx.font = "500 11px 'IBM Plex Sans', system-ui, sans-serif";
+  ctx.fillStyle = TRACE.axis;
   ctx.textAlign = "center";
   ctx.fillText(axisLabel, adjDim.ML + adjDim.CW / 2, adjDim.H - 4);
-  ctx.save();
-  ctx.translate(14, adjDim.MT + adjDim.CH / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText(classView ? classView + " Position" : "Overall Position", 0, 0);
-  ctx.restore();
 
   // ── 10. Selection rectangle ───────────────────────────────────
   if (state.selectionRange) {
