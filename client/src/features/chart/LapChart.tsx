@@ -10,18 +10,21 @@ import {
   computeDimensions,
   lapOfX,
   getVisibleCars,
-  getCompColor,
   type ChartState,
   type ChartDimensions,
   type LapInfoData,
 } from "./chart-renderer";
-import { DataPanel } from "./DataPanel";
+import { LapDetailsPanel } from "./LapDetailsPanel";
+import { LapScrubber } from "./LapScrubber";
+import { AxisToggle, TraceControls } from "./TraceControls";
+import { makeGroupsOf } from "./makes";
 import { PitCyclePanel } from "./PitCyclePanel";
 import { GapEvolutionPanel } from "./GapEvolutionPanel";
 import { HeadToHeadPanel } from "./HeadToHeadPanel";
 import { PassEventPanel } from "./PassEventPanel";
-import { CHART_STYLE } from "./constants";
+import { CHART_STYLE, TRACE } from "./constants";
 import { useAuth } from "../../features/auth/AuthContext";
+import { hasTeamAccess } from "../../lib/utils";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -43,11 +46,23 @@ interface LapChartProps {
 
 export function LapChart({
   data, annotations, watermarkEmail,
-  focusNum, compSet, setCompSet,
+  focusNum, setFocusNum, compSet, setCompSet,
   classView, setClassView, activeLap, setActiveLap,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
+  const isTeam = hasTeamAccess(user);
+  const [makeFilter, setMakeFilter] = useState("");
+  const [teamNote, setTeamNote] = useState(false);
+
+  // The faint field: every car in the class view (and make, when one is picked).
+  const fieldCars = useMemo(() => {
+    const base = getVisibleCars(data, classView);
+    if (!makeFilter) return base;
+    const mg = makeGroupsOf(data)[makeFilter] ?? [];
+    const keep = new Set(mg);
+    return base.filter((n) => keep.has(n) || n === focusNum);
+  }, [data, classView, makeFilter, focusNum]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -89,8 +104,8 @@ export function LapChart({
 
   // ── Chart state object for renderer ─────────────────────────────
   const chartState = useMemo<ChartState>(
-    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid, xAxisMode, lapStart, lapEnd, selectionRange }),
-    [focusNum, compSet, activeLap, classView, isPaid, xAxisMode, lapStart, lapEnd, selectionRange]
+    () => ({ focusNum, compSet, activeLap, classView, showWatermark: !isPaid, xAxisMode, lapStart, lapEnd, selectionRange, fieldCars }),
+    [focusNum, compSet, activeLap, classView, isPaid, xAxisMode, lapStart, lapEnd, selectionRange, fieldCars]
   );
 
   // ── Lap elapsed hours for time axis ────────────────────────────
@@ -155,10 +170,11 @@ export function LapChart({
       lapNum = Math.max(valid[0], Math.min(valid[valid.length - 1], lapNum));
       setActiveLap(lapNum);
 
-      const infoData = buildLapInfo(data, annotations, chartState, lapNum);
+      // Pace in the details panel is against the field in view, not just the compare cars.
+      const infoData = buildLapInfo(data, annotations, { ...chartState, compSet: new Set(fieldCars) }, lapNum);
       setInfo(infoData);
     },
-    [data, annotations, chartState, focusNum, setActiveLap]
+    [data, annotations, chartState, focusNum, setActiveLap, fieldCars]
   );
 
   // ── Auto-pan when active lap leaves visible range ──────────────
@@ -449,20 +465,20 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
-  // When class view changes, replace compSet with all cars in that class
+  // Compare starts with the focus car's nearest rivals at the finish (in the class view):
+  // the cars just ahead and just behind. Everyone else stays visible as the faint field.
   useEffect(() => {
     if (clearingRef.current) {
       clearingRef.current = false;
-      return; // skip auto-populate on Clear
-    }
-    if (!classView) {
-      const allCars = Object.keys(data.cars).map(Number);
-      setCompSet(new Set(allCars.filter((n) => n !== focusNum)));
       return;
     }
-    const classCars = data.classGroups[classView] ?? [];
-    setCompSet(new Set(classCars.filter((n) => n !== focusNum)));
-  }, [classView, data, focusNum]);
+    const inView = getVisibleCars(data, classView).filter((n) => (data.cars[String(n)]?.laps.length ?? 0) > 0);
+    const posOf = (n: number) => (classView ? data.cars[String(n)]?.finishPosClass : data.cars[String(n)]?.finishPos) ?? 999;
+    const ordered = inView.sort((a, b) => posOf(a) - posOf(b));
+    const i = ordered.indexOf(focusNum);
+    const rivals = i < 0 ? ordered.slice(0, 2) : [ordered[i - 1], ordered[i + 1], i === 0 ? ordered[i + 2] : undefined].filter((n): n is number => n !== undefined);
+    setCompSet(new Set(rivals.slice(0, 2)));
+  }, [classView, data, focusNum, setCompSet]);
 
   // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
@@ -487,51 +503,8 @@ export function LapChart({
   );
 
   const handleClear = useCallback(() => {
-    clearingRef.current = true;
-    setClassView("");
     setCompSet(new Set());
-  }, [setClassView, setCompSet]);
-
-  const setPreset = useCallback(
-    (cars: number[]) => {
-      const relevant = cars.filter((n) => n !== focusNum);
-      setCompSet((prev) => {
-        const allOn = relevant.every((n) => prev.has(n));
-        const next = new Set(prev);
-        if (allOn) {
-          relevant.forEach((n) => next.delete(n));
-        } else {
-          relevant.forEach((n) => next.add(n));
-        }
-        next.delete(focusNum);
-        return next;
-      });
-    },
-    [focusNum]
-  );
-
-  // ── Visible cars list ───────────────────────────────────────────
-  const visibleCars = useMemo(
-    () => getVisibleCars(data, classView).sort((a, b) => a - b),
-    [data, classView]
-  );
-
-
-  // ── Make presets (only when a class is selected and ≥2 makes exist) ──
-  const makePresets = useMemo(() => {
-    if (!classView) return [];
-    const classCars = data.classGroups[classView] || [];
-    const mg = (data as any).makeGroups as Record<string, number[]> | undefined;
-    if (!mg) return [];
-    const result: Array<{ label: string; cars: number[] }> = [];
-    for (const [make, makeCars] of Object.entries(mg).sort()) {
-      const inClass = makeCars.filter((n) => classCars.includes(n));
-      if (inClass.length > 0) {
-        result.push({ label: make, cars: inClass });
-      }
-    }
-    return result;
-  }, [data, classView]);
+  }, [setCompSet]);
 
   // Cursor style
   const cursorStyle = rangeSelectStart.current !== null
@@ -544,296 +517,173 @@ export function LapChart({
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
+  const openPanel = (panel: "pit" | "gap" | "h2h" | "event") => {
+    if (!isTeam) {
+      setTeamNote(true);
+      return;
+    }
+    h2hDefaultCarRef.current = undefined;
+    setSidePanel(panel);
+  };
+  const panelTitle: Record<string, string> = { pit: "Pit cycle", gap: "Gap evolution", h2h: "Head-to-head", event: "Position change" };
+  const focusCar = data.cars[String(focusNum)];
+  const viewLabel = classView ? `Class position (${classView}) · ${fieldCars.length} cars` : `Overall position · ${fieldCars.length} cars`;
+  const lapFlag = info?.lap ? (info.lap.flag === "FCY" ? "FCY" : "Green") : null;
+
   return (
-    <div className="flex flex-col gap-1" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      {/* ── Class filter + Compare controls ──────────────────────── */}
-      <div className="px-1">
-        <div>
-          {/* Class view filter (only when multiple classes exist) */}
-          {Object.keys(data.classGroups).length > 1 && (
-            <div className="flex flex-wrap items-center gap-1 mb-1">
-              <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
-                Class
-              </span>
-              <button
-                onClick={() => setClassView("")}
-                className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                style={{
-                  background: !classView ? "#4472C4" : CHART_STYLE.card,
-                  borderColor: !classView ? "#4472C4" : CHART_STYLE.border,
-                  color: !classView ? "#fff" : CHART_STYLE.muted,
-                }}
-              >
-                All ({data.totalCars})
-              </button>
-              {Object.entries(data.classGroups).sort().map(([cls, cars]) => (
-                <button
-                  key={cls}
-                  onClick={() => setClassView(classView === cls ? "" : cls)}
-                  className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                  style={{
-                    background: classView === cls ? "#4472C4" : CHART_STYLE.card,
-                    borderColor: classView === cls ? "#4472C4" : CHART_STYLE.border,
-                    color: classView === cls ? "#fff" : CHART_STYLE.muted,
-                  }}
-                >
-                  {cls} ({cars.length})
-                </button>
-              ))}
-              <button
-                onClick={handleClear}
-                className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                style={{
-                  background: CHART_STYLE.card,
-                  borderColor: CHART_STYLE.border,
-                  color: CHART_STYLE.muted,
-                }}
-              >
-                Clear
-              </button>
-              {/* MAKE section — only when a class is selected and ≥2 makes */}
-              {classView && makePresets.length >= 2 && (
-                <>
-                  <div className="mx-3 border-l border-white/20 h-4 self-center" />
-                  <span className="text-[11px] uppercase tracking-wider font-semibold shrink-0 mr-1" style={{ color: "#cbd5e1" }}>
-                    Make
-                  </span>
-                  {makePresets.map((p) => {
-                    const relevant = p.cars.filter((n) => n !== focusNum);
-                    const isActive = relevant.length > 0 && relevant.every((n) => compSet.has(n));
-                    return (
-                      <button
-                        key={p.label}
-                        onClick={() => setPreset(p.cars)}
-                        className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
-                        style={{
-                          background: isActive ? "#4472C4" : CHART_STYLE.card,
-                          borderColor: isActive ? "#4472C4" : CHART_STYLE.border,
-                          color: isActive ? "#fff" : CHART_STYLE.muted,
-                        }}
-                      >
-                        {p.label} ({p.cars.length})
-                      </button>
-                    );
-                  })}
-                </>
-              )}
-            </div>
-          )}
-          {/* Car chips */}
-          <div className="flex flex-wrap gap-1">
-            {visibleCars.map((n) => {
-              const car = data.cars[String(n)];
-              const isDNS = car?.laps.length === 0;
-              const isOn = compSet.has(n);
-              const isFocus = n === focusNum;
-              const col = isOn && !isFocus && !isDNS ? getCompColor(compSet, focusNum, n) : undefined;
-              return (
-                <button
-                  key={n}
-                  onClick={() => !isFocus && !isDNS && toggleComp(n)}
-                  disabled={isFocus || isDNS}
-                  className="px-2 py-0.5 rounded-lg text-[11px] font-mono border transition-all"
-                  style={{
-                    borderColor: isDNS ? "rgba(255,255,255,0.05)" : col || CHART_STYLE.border,
-                    background: isDNS ? "rgba(255,255,255,0.02)" : col ? `${col}33` : "transparent",
-                    color: isDNS ? "rgba(255,255,255,0.2)" : isFocus ? CHART_STYLE.dim : isOn ? "#fff" : CHART_STYLE.dim,
-                    opacity: isFocus ? 0.3 : 1,
-                    cursor: isDNS ? "default" : "pointer",
-                  }}
-                  title={isDNS
-                    ? `${car?.team} (${car?.cls}) — ${car?.status || "DNS"}`
-                    : `${car?.team}${car?.make ? ` · ${car?.make}` : ''} (${car?.cls})`}
-                >
-                  #{n}{isDNS ? ` ${car?.status || "DNS"}` : ""}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+    <div className="flex flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+      <TraceControls
+        data={data}
+        focusNum={focusNum}
+        onFocus={(n) => setFocusNum(n)}
+        classView={classView}
+        setClassView={(c) => {
+          setMakeFilter("");
+          // A class view is about that class: if the focus car is in another class, focus its leader.
+          if (c && data.cars[String(focusNum)]?.cls !== c) {
+            const leader = (data.classGroups[c] ?? [])
+              .map((n) => data.cars[String(n)])
+              .filter((car) => car && car.laps.length > 0)
+              .sort((x, y) => (x.finishPosClass || 999) - (y.finishPosClass || 999))[0];
+            if (leader) setFocusNum(leader.num);
+          }
+          setClassView(c);
+        }}
+        compSet={compSet}
+        toggleComp={toggleComp}
+        clearComp={handleClear}
+        makeFilter={makeFilter}
+        setMakeFilter={setMakeFilter}
+        activeLap={activeLap}
+        navPrev={navPrev}
+        navNext={navNext}
+        xAxisMode={xAxisMode}
+        setXAxisMode={setXAxisMode}
+      />
 
-      </div>
-
-      {/* ── Chart + side panel row ─────────────────────────────── */}
-      <div className="flex" style={{ height: isMobile ? "calc(100vh - 280px)" : "calc(100vh - 340px)", minHeight: 300 }}>
-        {/* Chart canvas */}
-        <div
-          ref={wrapperRef}
-          tabIndex={0}
-          className="rounded-lg border relative overflow-hidden flex-1 min-w-0 outline-none"
-          style={{
-            background: CHART_STYLE.card,
-            borderColor: CHART_STYLE.border,
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onDoubleClick={onDoubleClick}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            onContextMenu={(e) => e.preventDefault()}
-            style={{ display: "block", cursor: cursorStyle }}
-          />
-          {/* X-axis mode toggle + zoom indicator */}
-          <div className="absolute left-0 right-0 flex items-end gap-2 px-1" style={{ bottom: 3, zIndex: 2 }}>
-            {/* Toggle pill */}
+      <div className="flex flex-wrap">
+        <div className="flex min-w-0 flex-[999_1_640px] flex-col gap-3 px-2 py-3 sm:px-6 sm:py-4">
+          <figure className="m-0 rounded-lg border p-2 sm:p-3" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
             <div
-              className="flex rounded-full overflow-hidden shrink-0"
-              style={{
-                marginLeft: (dim?.ML ?? 50) - 6,
-                background: `${CHART_STYLE.card}cc`,
-                border: `1px solid ${CHART_STYLE.border}`,
-              }}
+              ref={wrapperRef}
+              tabIndex={0}
+              aria-label={`Position trace for car ${focusNum}${focusCar ? `, ${focusCar.team}` : ""}. Click a lap for details; arrow keys step laps.`}
+              className="relative overflow-hidden outline-none"
+              style={{ height: isMobile ? 360 : "calc(100vh - 360px)", minHeight: isMobile ? 300 : 380 }}
             >
-              {(["laps", "hours", "both"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setXAxisMode(mode)}
-                  className="px-1.5 py-0.5 text-[10px] font-mono cursor-pointer transition-colors leading-tight"
-                  style={{
-                    background: xAxisMode === mode ? CHART_STYLE.border : "transparent",
-                    color: xAxisMode === mode ? "#fff" : CHART_STYLE.muted,
-                  }}
-                >
-                  {mode === "laps" ? "Laps" : mode === "hours" ? "Hrs" : "Both"}
-                </button>
-              ))}
+              <canvas
+                ref={canvasRef}
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onDoubleClick={onDoubleClick}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ display: "block", cursor: cursorStyle }}
+              />
             </div>
-            {/* Zoom indicator */}
-            {isZoomed && (
-              <div
-                className="text-[10px] font-mono"
-                style={{ color: CHART_STYLE.muted, marginBottom: 1 }}
-              >
-                L{Math.round(lapStart)}-{Math.round(lapEnd)} / {data.maxLap} (W to reset)
-              </div>
-            )}
-          </div>
+            <figcaption className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
+              <span className="flex items-center gap-3">
+                {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
+                {viewLabel}
+              </span>
+              <span>
+                {isZoomed ? (
+                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
+                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
+                  </button>
+                ) : (
+                  isMobile ? "Tap a lap for details · swipe to move along the race" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                )}
+              </span>
+            </figcaption>
+          </figure>
+
+          <LapScrubber
+            maxLap={data.maxLap}
+            fcy={data.fcy || []}
+            activeLap={activeLap}
+            flagLabel={lapFlag}
+            onLap={(l) => { showLapInfo(l); autoPan(l); }}
+            navPrev={navPrev}
+            navNext={navNext}
+          />
+
+          <ul aria-label="Legend" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1.5 p-0 text-xs" style={{ color: "#cbd5e1" }}>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{focusNum}</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-px w-[18px]" style={{ background: "rgba(224,224,232,0.5)" }} />Other cars{classView ? ` in ${classView}` : ""}</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)", borderTop: "2px solid #fbbf24" }} />Full Course Yellow (FCY)</li>
+            <li>● Pit stop</li>
+            <li><span style={{ color: TRACE.garage }}>●</span> Garage</li>
+            <li>▲ Drive-through</li>
+            <li><span style={{ color: TRACE.penalty }}>◆</span> Penalty</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-white" />Selected lap</li>
+          </ul>
+          <p className="m-0 text-xs" style={{ color: TRACE.axis }}>
+            Pace comparisons use green-flag laps only (lap time under {data.greenPaceCutoff.toFixed(1)} s; no FCY laps).
+          </p>
         </div>
 
-        {/* Side panel */}
-        <div
-          className="shrink-0 overflow-hidden border-l rounded-r-lg"
-          style={{
-            width: sidePanel ? 480 : 0,
-            borderColor: sidePanel ? CHART_STYLE.border : "transparent",
-            background: CHART_STYLE.card,
-            transition: "width 0.18s ease-out",
-          }}
+        <aside
+          aria-label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
+          className="flex w-full flex-[1_1_360px] flex-col gap-3 border-t p-4 lg:max-w-[420px] lg:border-l lg:border-t-0"
+          style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
         >
-          {sidePanel && (
-            <div className="w-[480px] h-full flex flex-col">
-              {/* Panel header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: CHART_STYLE.border }}>
-                <span className="text-sm font-semibold text-white">
-                  {sidePanel === "pit" ? "Pit Cycle Comparison" : sidePanel === "gap" ? "Gap Evolution" : sidePanel === "h2h" ? "Head-to-Head" : sidePanel === "event" ? "Position Change" : sidePanel}
-                </span>
-                <button
-                  onClick={() => setSidePanel(null)}
-                  className="text-xs cursor-pointer hover:text-white transition-colors"
-                  style={{ color: CHART_STYLE.muted }}
-                >
-                  ✕
-                </button>
-              </div>
-              {/* Panel content */}
-              {sidePanel === "pit" && activeLap !== null && (
-                <PitCyclePanel
-                  data={data}
-                  annotations={annotations}
-                  focusNum={focusNum}
-                  activeLap={activeLap}
-                />
-              )}
-              {sidePanel === "gap" && activeLap !== null && (
-                <GapEvolutionPanel
-                  data={data}
-                  focusNum={focusNum}
-                  activeLap={activeLap}
-                  compSet={compSet}
-                />
-              )}
-              {sidePanel === "h2h" && activeLap !== null && (
-                <HeadToHeadPanel
-                  data={data}
-                  focusNum={focusNum}
-                  activeLap={activeLap}
-                  defaultCompareNum={h2hDefaultCarRef.current}
-                />
-              )}
-              {sidePanel === "event" && info && (
-                <PassEventPanel
-                  reason={info.reason || ""}
-                  posDelta={info.posDelta}
-                  focusNum={focusNum}
-                  isPit={info.isPit}
-                  data={data}
-                  annotations={annotations}
-                  activeLap={activeLap}
-                  onOpenH2H={(carNum) => {
-                    h2hDefaultCarRef.current = carNum;
-                    setSidePanel("h2h");
-                  }}
-                  onAddToCompare={(carNum) => {
-                    setCompSet((prev) => {
-                      const next = new Set(prev);
-                      next.add(carNum);
-                      return next;
-                    });
-                  }}
-                />
-              )}
+          {teamNote && !sidePanel && (
+            <div className="rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: CHART_STYLE.border, color: TRACE.axis }}>
+              These panels are part of the Team plan.
             </div>
           )}
-        </div>
-      </div>
-
-      {/* ── Data panel ───────────────────────────────────────────── */}
-      <DataPanel info={info} focusNum={focusNum} compSet={compSet} data={data} navPrev={navPrev} navNext={navNext} setSidePanel={(panel) => {
-        h2hDefaultCarRef.current = undefined;
-        setSidePanel(panel);
-      }} />
-
-      {/* ── Legend ────────────────────────────────────────────────── */}
-      <div
-        className="flex flex-wrap gap-3 px-3 py-1 rounded-md text-[11px] border"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
-      >
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-2 rounded-sm" style={{ background: "#fbbf24", opacity: 0.2 }} />
-          FCY
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#fbbf24", border: "1px solid #000" }} />
-          Pit
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-0.5" style={{ background: "#f87171" }} />
-          Penalty/Issue
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full" style={{ background: "#f87171", border: "2px solid " + CHART_STYLE.bg }} />
-          Settle
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-4 h-0.5 rounded-sm" style={{ background: "linear-gradient(90deg,#f87171,#fbbf24,#34d399,#60a5fa,#a78bfa)", opacity: 0.5 }} />
-          Comp. cars
-        </span>
-      </div>
-
-      {/* ── Footnote ─────────────────────────────────────────────── */}
-      <div
-        className="px-3 py-1 rounded-md text-[11px] leading-relaxed border"
-        style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.dim }}
-      >
-        Green-flag laps only for pace comparison (lap time &lt; {data.greenPaceCutoff}s). Comparison average excludes focus car.
-        Use "Class View" to filter by class and see in-class positions with better resolution.
+          {sidePanel ? (
+            <div className="flex min-h-[420px] flex-col">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-semibold">{panelTitle[sidePanel]}</span>
+                <button type="button" onClick={() => setSidePanel(null)} className="min-h-[36px] text-[13px]" style={{ color: TRACE.focus }}>
+                  ‹ Lap details
+                </button>
+              </div>
+              <div className="-mx-4 flex-1 overflow-y-auto" style={{ background: CHART_STYLE.card }}>
+                {sidePanel === "pit" && activeLap !== null && (
+                  <PitCyclePanel data={data} annotations={annotations} focusNum={focusNum} activeLap={activeLap} />
+                )}
+                {sidePanel === "gap" && activeLap !== null && (
+                  <GapEvolutionPanel data={data} focusNum={focusNum} activeLap={activeLap} compSet={compSet} />
+                )}
+                {sidePanel === "h2h" && activeLap !== null && (
+                  <HeadToHeadPanel data={data} focusNum={focusNum} activeLap={activeLap} defaultCompareNum={h2hDefaultCarRef.current} />
+                )}
+                {sidePanel === "event" && info && (
+                  <PassEventPanel
+                    reason={info.reason || ""}
+                    posDelta={info.posDelta}
+                    focusNum={focusNum}
+                    isPit={info.isPit}
+                    data={data}
+                    annotations={annotations}
+                    activeLap={activeLap}
+                    onOpenH2H={(carNum) => {
+                      h2hDefaultCarRef.current = carNum;
+                      setSidePanel("h2h");
+                    }}
+                    onAddToCompare={(carNum) => {
+                      setCompSet((prev) => {
+                        const next = new Set(prev);
+                        next.add(carNum);
+                        return next;
+                      });
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          ) : (
+            <LapDetailsPanel data={data} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
+          )}
+        </aside>
       </div>
     </div>
   );
 }
 
-// InfoPanel replaced by DataPanel component
