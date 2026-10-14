@@ -541,6 +541,16 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
     }
   }
   console.log("\n" + table(out));
+  // The results go into the notes too, failures first, so the workflow's annotations show them.
+  const notesFile = a.one("notes");
+  if (notesFile) {
+    const ok = out.slice(1).filter((r) => !r[0].startsWith("error"));
+    const bad = out.slice(1).filter((r) => r[0].startsWith("error"));
+    // Failures first (top of the first annotation), the re-imported races after the plan.
+    const head = [`APPLIED: ${ok.length} re-imported, ${bad.length} failed`, ...bad.map((r) => r.join(" | ")), ""];
+    const tail = ["", `RE-IMPORTED (${ok.length})`, ...ok.map((r) => `${r[0]} | ${r[1]}`)];
+    writeFileSync(notesFile, head.join("\n") + "\n" + readFileSync(notesFile, "utf-8") + tail.join("\n") + "\n");
+  }
   if (failed) process.exitCode = 1;
 }
 
