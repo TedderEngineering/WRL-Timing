@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { download, resolve } from "../index.js";
 import { readManifest, workDirFor } from "../manifest.js";
 import { sha256 } from "../names.js";
-import { buildPushBody, compareWithKnown, fileContentForKey, pushVersion, apiConfigFromEnv } from "../push.js";
+import { buildPushBody, jsonBytes, compareWithKnown, fileContentForKey, pushVersion, apiConfigFromEnv } from "../push.js";
 import type { RaceSession } from "../types.js";
 import { fakeHttp, fixture } from "./fake-http.js";
 
@@ -188,6 +188,11 @@ describe("push body", () => {
     const withManual = { ...manifest, files: [...manifest.files, { ...manifest.files[0], key: "flagsCsv", name: "x.csv", manual: true, sha256: "abc" }] };
     expect(pushVersion(withManual, { flagsCsv: "x" })).toMatch(/^v1\+[0-9a-f]{8}$/);
     expect(pushVersion(manifest, body.files)).toBe("v1");
+  });
+
+  it("counts the size cap in JSON bytes, so escaped newlines can't push the body past the server limit", () => {
+    expect(jsonBytes("a\nb")).toBe(6);
+    expect(jsonBytes('é"')).toBe(6);
   });
 
   it("decodes text files as UTF-8 without a BOM", () => {

@@ -526,7 +526,8 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
   if (!a.has("apply")) return;
   const out = [["RESULT", "RACE", "SOURCE KEY"]];
   let failed = 0;
-  // The owner can approve an "unsure" pair by race id (--approve id,id): it is applied like an exact one.
+  // The owner can approve an "unsure" pair by race id (--approve id,id): it is applied like an exact
+  // one, with force so the server's name/date check does not refuse it.
   const approved = new Set((a.flags.approve ?? []).flatMap((x) => x.split(",")).map((x) => x.trim()).filter(Boolean));
   for (const id of approved) if (!rows.some((r) => r.raceId === id && r.state === "unsure")) log(`--approve ${id}: no unsure pair with this race id (left alone)`);
   for (const r of rows.filter((x) => x.state === "exact" || (x.state === "unsure" && approved.has(x.raceId)))) {
@@ -535,7 +536,9 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
     const m = readManifest(dir)!;
     m.attachToRaceId = r.raceId;
     writeManifest(dir, m);
-    const { body } = buildPushBody(dir, m, {});
+    // An approved pair is one the server's own check would refuse (different day name, date or
+    // number): the owner's approval is what lets it through, for that race only.
+    const { body } = buildPushBody(dir, m, r.state === "unsure" ? { force: true } : {});
     const res = await apiRequest<any>(cfg, "POST", "/admin/intake/races", body);
     if (res.status >= 200 && res.status < 300) out.push([res.data.attached ? "re-imported" : res.data.action, `${r.raceName} (${r.raceId})`, r.sourceKey!]);
     else {

@@ -44,7 +44,7 @@ export interface IntakePushBody {
 export interface BuildPushOptions {
   /** Include archive-only files (Drive Time, weather, raw API JSON …). Default true. */
   includeArchiveOnly?: boolean;
-  /** Skip archive-only files when the body would exceed this many bytes (server JSON limit is 50 MB). */
+  /** Skip archive-only files when the JSON body would exceed this many bytes (server JSON limit is 50 MB). */
   maxBytes?: number;
   force?: boolean;
 }
@@ -56,9 +56,15 @@ export function fileContentForKey(key: string, buf: Buffer): string {
   return buf.toString("utf-8").replace(/^\uFEFF/, "");
 }
 
+/** Bytes a string takes inside the JSON request body. */
+export function jsonBytes(s: string): number {
+  return Buffer.byteLength(JSON.stringify(s), "utf-8");
+}
+
 export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions = {}): { body: IntakePushBody; skipped: string[] } {
   const includeArchive = opts.includeArchiveOnly ?? true;
-  const maxBytes = opts.maxBytes ?? 45 * 1024 * 1024;
+  // Measured as JSON (escaped newlines and quotes), with room left for the manifest and metadata.
+  const maxBytes = opts.maxBytes ?? 40 * 1024 * 1024;
   const files: Record<string, string> = {};
   const skipped: string[] = [];
   let total = 0;
@@ -74,12 +80,13 @@ export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions =
       continue;
     }
     const content = fileContentForKey(f.key, readFileSync(join(dir, f.name)));
-    if (!f.parserSlot && total + content.length > maxBytes) {
+    const size = jsonBytes(content);
+    if (!f.parserSlot && total + size > maxBytes) {
       skipped.push(`${f.name} (size cap)`);
       continue;
     }
     files[f.key] = content;
-    total += content.length;
+    total += size;
   }
   const meta = m.metadata;
   const body: IntakePushBody = {

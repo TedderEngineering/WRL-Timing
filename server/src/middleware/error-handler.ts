@@ -41,6 +41,17 @@ export function errorHandler(
     return;
   }
 
+  // Request-body errors from express.json (too large, malformed JSON): say so instead of a 500.
+  const status = (err as { status?: unknown }).status;
+  const type = (err as { type?: unknown }).type;
+  if (typeof status === "number" && status >= 400 && status < 500 && typeof type === "string") {
+    res.status(status).json({
+      error: type === "entity.too.large" ? "The request body is larger than the server accepts (50 MB)." : err.message,
+      code: type === "entity.too.large" ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST_BODY",
+    });
+    return;
+  }
+
   // Unknown errors
   console.error("Unhandled error:", err);
   res.status(500).json({
