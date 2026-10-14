@@ -90,6 +90,11 @@ export function LapDetailsPanel({
   const t = pit?.timing ?? null;
   const spc = t?.spcAnalysis?.totalLoss;
   const fcy = lap?.flag === "FCY";
+  // The import drops the out-lap when it cannot split off the pit-lane time (pit box before the
+  // timing line); the lap itself is still known, so show it whole (marked *).
+  const pitLap = lap ? (pitHere ? lap.l : [...car.laps].reverse().find((l) => l.l < lap.l && l.pit === 1)?.l) : undefined;
+  const outLapWhole = !!t && (t.outLapTime === null || t.outLapTime === undefined || t.outLapTime <= 0);
+  const outLap = !t ? null : outLapWhole ? (pitLap !== undefined ? car.laps.find((l) => l.l > pitLap && l.pit === 0)?.ltSec ?? null : null) : t.outLapTime;
 
   return (
     <div className="flex flex-col gap-3">
@@ -149,7 +154,8 @@ export function LapDetailsPanel({
                   )}
                   <dt style={{ color: T.muted }}>In-lap · out-lap</dt>
                   <dd className="m-0 font-mono">
-                    {sec(t.inLapTime)} · {sec(t.outLapTime)}
+                    {sec(t.inLapTime)} · {sec(outLap)}
+                    {outLapWhole ? "*" : ""}
                   </dd>
                   <dt style={{ color: T.muted }}>Time lost</dt>
                   <dd className="m-0 font-mono">
@@ -159,6 +165,11 @@ export function LapDetailsPanel({
                     </span>
                   </dd>
                 </dl>
+              )}
+              {outLapWhole && outLap !== null && (
+                <div className="text-[11px]" style={{ color: T.muted }}>
+                  * The whole out-lap: the pit box is before the timing line here, so the stop falls in the in-lap.
+                </div>
               )}
               {spc && spc.classification !== "normal" && (
                 <div className="text-[13px]" style={{ color: spc.direction === "fast" ? T.good : T.warn }}>
