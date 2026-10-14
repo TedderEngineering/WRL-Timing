@@ -499,7 +499,8 @@ export function LapChart({
       <li><span style={{ color: TRACE.garage }}>●</span> Garage</li>
       <li>▲ Drive-through</li>
       <li><span style={{ color: TRACE.penalty }}>◆</span> Penalty</li>
-      <li><span style={{ color: TRACE.gain }}>▲</span><span style={{ color: TRACE.loss }}>▼</span> Places gained / lost at a stop</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px" style={{ background: TRACE.fcyBar }} />Pit stop · driver out</li>
+      <li><span style={{ color: TRACE.gain }}>↑</span> Settled: where the pit cycle left the car, gained or lost against where it ran before the cycle</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px bg-white" />Selected lap</li>
       <li style={{ color: TRACE.axis }} title={`Lap time under ${data.greenPaceCutoff.toFixed(1)} s; no FCY laps.`}>Pace: green-flag laps only</li>
     </ul>

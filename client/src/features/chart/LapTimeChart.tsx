@@ -157,9 +157,6 @@ function drawLapTimeChart(
   if (dim.band) {
     drawPitTags(ctx, {
       markers: ann.pits || [],
-      laps: focusCar.laps,
-      pk: classView ? "cp" : "p",
-      fcy: data.fcy || [],
       x,
       lapStart,
       lapEnd,
@@ -834,7 +831,6 @@ export function LapTimeChart({
       <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)" }} />Full Course Yellow (FCY)</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px" style={{ background: TRACE.fcyBar }} />Pit stop · driver out</li>
-      <li><span style={{ color: TRACE.gain }}>▲</span><span style={{ color: TRACE.loss }}>▼</span> Places gained / lost at a stop</li>
       <li style={{ color: TRACE.axis }}>Rank 1 = fastest lap; pit and FCY laps are not ranked</li>
     </ul>
   );
