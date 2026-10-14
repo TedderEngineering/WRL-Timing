@@ -123,3 +123,13 @@ describe("re-import plan: telling candidates apart", () => {
   });
 });
 
+describe("re-import plan: near-identical listings", () => {
+  it("the same race on two sites with a car or a lap of difference is still one candidate", () => {
+    const rm = { ...session("redmist:event:9/session:2", "redmist", "2026-07-25", "Saturday 8 Hour", "wrl"), season: 2026 };
+    const sh = { ...session("speedhive:session:77", "speedhive", "2026-07-25", "Saturday 8 Hour", "wrl-speedhive"), season: 2026 };
+    const prints = new Map<string, SessionPrint>([[rm.sourceKey, { cars: cars(40), maxLap: 280 }], [sh.sourceKey, { cars: cars(39), maxLap: 281 }]]);
+    const rows = planReimport([race("w8", "WRL", "2026-07-24", "Saturday 8-Hour", cars(40), 280)], [sh, rm], prints);
+    expect(rows[0]).toMatchObject({ state: "exact", sourceKey: rm.sourceKey });
+  });
+});
+

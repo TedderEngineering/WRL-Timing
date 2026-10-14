@@ -18,7 +18,7 @@
  *   npx tsx scripts/intake.ts analyze [--series imsa-*,sro-*,wrl] [--season 2025,2026] [--race <raceId>]… [--force] [--limit N]
  *                                      [--notes <file>]   facts + rule checks for races with a source key, uploaded as a
  *                                      DRAFT analysis package (no stories yet; those are written race by race later)
- *   npx tsx scripts/intake.ts reimport-plan --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--save <file>] [--apply]
+ *   npx tsx scripts/intake.ts reimport-plan --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--save <file>] [--apply] [--approve <raceId,…>]
  *                                      pair races already on the site (no source key) with their timing sessions by
  *                                      their cars; --apply re-imports every exact pair in place (same id, URL, name, status)
  *
@@ -526,7 +526,10 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
   if (!a.has("apply")) return;
   const out = [["RESULT", "RACE", "SOURCE KEY"]];
   let failed = 0;
-  for (const r of rows.filter((x) => x.state === "exact")) {
+  // The owner can approve an "unsure" pair by race id (--approve id,id): it is applied like an exact one.
+  const approved = new Set((a.flags.approve ?? []).flatMap((x) => x.split(",")).map((x) => x.trim()).filter(Boolean));
+  for (const id of approved) if (!rows.some((r) => r.raceId === id && r.state === "unsure")) log(`--approve ${id}: no unsure pair with this race id (left alone)`);
+  for (const r of rows.filter((x) => x.state === "exact" || (x.state === "unsure" && approved.has(x.raceId)))) {
     const dir = r.sourceKey ? dirs.get(r.sourceKey) : undefined;
     if (!dir) continue;
     const m = readManifest(dir)!;

@@ -99,11 +99,6 @@ interface Candidate {
   score: number;
 }
 
-/** Same cars, same laps, same day: the same race listed twice (two timing sites, or two events on one). */
-function printKey(s: RaceSession, p: SessionPrint | undefined): string | null {
-  return p ? `${s.raceDate}|${p.maxLap}|${p.cars.map(normCar).sort().join(",")}` : null;
-}
-
 /**
  * Of two listings of the same race, the one the intake uses: WRL from RedMist from 2026 and
  * from Speedhive for 2025 (as `discover` does); otherwise the first source key, so reruns agree.
@@ -116,10 +111,17 @@ function preferListing(a: RaceSession, b: RaceSession): RaceSession {
 export function planReimport(races: SiteRace[], sessionsIn: RaceSession[], prints: Map<string, SessionPrint>): PlanRow[] {
   // One candidate per race even when it is listed twice with identical results (and names that
   // do not disagree: two same-day races with one field and one lap count stay apart).
+  // Two listings are the same race when they are on the same day, their names don't disagree,
+  // and their results agree: 90% of cars in common and close lap counts (two timing sites, or
+  // two events on one site, rarely list a race identically).
+  const sameRace = (x: RaceSession, y: RaceSession) => {
+    const px = prints.get(x.sourceKey);
+    const py = prints.get(y.sourceKey);
+    return !!px && !!py && x.raceDate === y.raceDate && sameSessionTraits(x.sessionName, y.sessionName) && carOverlap(px.cars, py.cars) >= 0.9 && lapsClose(px.maxLap, py.maxLap);
+  };
   const sessions: RaceSession[] = [];
   for (const s of sessionsIn) {
-    const k = printKey(s, prints.get(s.sourceKey));
-    const i = k === null ? -1 : sessions.findIndex((o) => printKey(o, prints.get(o.sourceKey)) === k && sameSessionTraits(o.sessionName, s.sessionName));
+    const i = sessions.findIndex((o) => sameRace(o, s));
     if (i < 0) sessions.push(s);
     else sessions[i] = preferListing(sessions[i], s);
   }
