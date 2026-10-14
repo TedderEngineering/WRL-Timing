@@ -13,7 +13,7 @@ import type {
   LapData,
 } from "@shared/types";
 import { COMPARE_PALETTE, COMP_PALETTE, CHART_STYLE, TRACE } from "./constants";
-import { drawPitTags, pitTagBand, type PitTagBand } from "./pit-band";
+import { drawPitTags, drawSettleLeaders, pitTagBand, settleLabels, type PitTagBand } from "./pit-band";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -419,9 +419,6 @@ export function drawChart(
   if (band) {
     drawPitTags(ctx, {
       markers: ann.pits || [],
-      laps,
-      pk,
-      fcy: data.fcy || [],
       x: (l) => xForCar(focusNumStr, l),
       lapStart,
       lapEnd,
@@ -583,6 +580,20 @@ export function drawChart(
       circle(ax, ay, 5, TRACE.focus, "#ffffff", 2);
     }
   }
+
+  // ── 6b. Pit-cycle results: a leader from the lap where each cycle settled to its gain or loss ──
+  drawSettleLeaders(ctx, {
+    labels: settleLabels(ann.settles || [], laps, classView),
+    x: (l) => xForCar(focusNumStr, l),
+    y,
+    lapStart,
+    lapEnd,
+    plotTop: adjDim.MT,
+    plotBottom: adjDim.MT + adjDim.CH,
+    plotLeft: adjDim.ML,
+    plotRight: adjDim.W - adjDim.MR,
+    background: CHART_STYLE.card,
+  });
 
   // ── 8. Car numbers at the end of each highlighted trace (nudged apart) ──
   if (endLabels.length) {

@@ -1,42 +1,10 @@
-import type { LapData, PitMarker } from "@shared/types";
+import type { LapData, PitMarker, SettleMarker } from "@shared/types";
 import { TRACE } from "./constants";
-
-/** Positions before and after one stop: `delta` > 0 is places gained. */
-export interface PitDelta {
-  lap: number;
-  before: number;
-  after: number;
-  delta: number;
-}
 
 /** "Jane Q. Estep" → "ESTEP"; the chart shows surnames, like the timing sheets. */
 export function surname(name: string | undefined): string | undefined {
   const parts = name?.trim().split(/\s+/).filter(Boolean);
   return parts?.length ? parts[parts.length - 1].toUpperCase() : undefined;
-}
-
-/**
- * Places gained or lost at each stop: the position on the lap before the stop against the first
- * green lap after it (within ten laps; failing that, the first lap without a stop), the same rule
- * the "settled" markers use.
- */
-export function pitDeltas(laps: LapData[], pk: "p" | "cp", fcy: [number, number][] = []): PitDelta[] {
-  const yellow = (l: number) => fcy.some(([s, e]) => l >= s && l <= e);
-  const out: PitDelta[] = [];
-  for (let i = 1; i < laps.length; i++) {
-    if (!laps[i].pit) continue;
-    let after: LapData | undefined;
-    for (let j = i + 1; j < laps.length && j <= i + 10 && !after; j++) if (!laps[j].pit && !yellow(laps[j].l)) after = laps[j];
-    for (let j = i + 1; j < laps.length && j <= i + 6 && !after; j++) if (!laps[j].pit) after = laps[j];
-    if (!after) continue;
-    const before = laps[i - 1][pk];
-    out.push({ lap: laps[i].l, before, after: after[pk], delta: before - after[pk] });
-  }
-  return out;
-}
-
-export function deltaText(d: number): string {
-  return d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "±0";
 }
 
 /** Space above the plot for the pit tags (computeDimensions `pitTags`). */
@@ -60,16 +28,14 @@ function rgba(hex: string, a: number): string {
 /**
  * The focus car's pit and driver tags, the same on Position Trace and Lap Times: a thin line in
  * the tag's colour at each stop (and the start) through the plot, and its label ("Pit 2 ·
- * WEISENBERG", "Start · GOODMAN") above the plot with the places gained or lost at that stop.
+ * WEISENBERG", "Start · GOODMAN") above the plot. Places gained or lost belong to the pit cycle,
+ * not the stop: drawSettleLeaders marks them where the cycle settled.
  * Labels go in two lanes so neighbours never overlap and nothing is written over the traces.
  */
 export function drawPitTags(
   ctx: CanvasRenderingContext2D,
   o: {
     markers: PitMarker[];
-    laps: LapData[];
-    pk: "p" | "cp";
-    fcy: [number, number][];
     x: (lap: number) => number;
     lapStart: number;
     lapEnd: number;
@@ -83,12 +49,11 @@ export function drawPitTags(
     background: string;
   }
 ) {
-  const deltas = new Map(pitDeltas(o.laps, o.pk, o.fcy).map((d) => [d.lap, d] as const));
   const small = o.band.laneH < 15;
   const font = `600 ${small ? 9 : 10}px 'IBM Plex Sans', system-ui, sans-serif`;
   const lastRight = Array.from({ length: o.band.lanes }, () => -Infinity);
   const markers = [...o.markers].filter((m) => m.l >= o.lapStart && m.l <= o.lapEnd).sort((a, b) => a.l - b.l);
-  const placed: { m: PitMarker; label: string; px: number; left: number; w: number; wLabel: number; cy: number; color: string; d?: PitDelta; delta: string }[] = [];
+  const placed: { m: PitMarker; label: string; px: number; left: number; w: number; cy: number; color: string }[] = [];
   ctx.save();
   ctx.font = font;
   ctx.textBaseline = "middle";
@@ -96,12 +61,10 @@ export function drawPitTags(
     const px = o.x(m.l);
     if (px < o.plotLeft - 1 || px > o.plotRight + 1) continue;
     const color = m.c || TRACE.fcyBar;
-    const d = deltas.get(m.l);
-    const delta = d ? ` ${deltaText(d.delta)}` : "";
     // Where tags crowd, the driver's name gives way first ("Pit 3 · ESTEP" → "Pit 3"), then the tag moves along.
     const place = (label: string) => {
       const wLabel = ctx.measureText(label).width;
-      const w = wLabel + ctx.measureText(delta).width;
+      const w = wLabel;
       // Left-aligned after the line, as on Lap Times; right-aligned before it near the right edge.
       let left = px + 3;
       if (left + w > o.plotRight) left = px - 3 - w;
@@ -111,7 +74,7 @@ export function drawPitTags(
     const short = m.lb.replace(/\s*·.*$/, "");
     if (pl.lane < 0 && short !== m.lb) pl = place(short);
     let { left, lane } = pl;
-    const { label, wLabel, w } = pl;
+    const { label, w } = pl;
     if (lane < 0) {
       // Every lane is taken here: use the one that frees first and start after its label.
       lane = lastRight.indexOf(Math.min(...lastRight));
@@ -119,7 +82,7 @@ export function drawPitTags(
     }
     lastRight[lane] = left + w;
     const cy = o.band.tagY + lane * o.band.laneH + o.band.laneH / 2;
-    placed.push({ m, label, px, left, w, wLabel, cy, color, d, delta });
+    placed.push({ m, label, px, left, w, cy, color });
   }
 
   // Lines first, then the labels on a backing, so a line never runs through a label.
@@ -142,10 +105,140 @@ export function drawPitTags(
     ctx.textAlign = "left";
     ctx.fillStyle = t.color;
     ctx.fillText(t.label, t.left, t.cy);
-    if (t.d) {
-      ctx.fillStyle = t.d.delta > 0 ? TRACE.gain : t.d.delta < 0 ? TRACE.loss : TRACE.axis;
-      ctx.fillText(t.delta, t.left + t.wLabel, t.cy);
+  }
+  ctx.restore();
+}
+
+export interface SettleLabel {
+  lap: number;
+  pos: number;
+  /** "Settled P12" (class position in a class view). */
+  title: string;
+  /** "Was P5 · Lost 7". */
+  sub: string;
+  color: string;
+}
+
+/**
+ * The pit-cycle results the import computed (annotations `settles`, the existing RaceTrace logic):
+ * where the car ran before the cycle (the pre-pit baseline, from the start of the cycle) and
+ * where it settled once the class's stops in that cycle were done. In a class view the same
+ * marker is given in class positions: the class position at the settle lap, and at the last lap
+ * before the stop where the car held its pre-cycle overall position.
+ */
+export function settleLabels(settles: SettleMarker[], laps: LapData[], classView: string): SettleLabel[] {
+  const out: SettleLabel[] = [];
+  for (const sp of settles) {
+    const at = laps.find((l) => l.l === sp.l);
+    if (!classView) {
+      out.push({ lap: sp.l, pos: sp.p, title: sp.lb, sub: sp.su, color: sp.c });
+      continue;
     }
+    if (!at) continue;
+    const was = Number(/Was P(\d+)/.exec(sp.su)?.[1]);
+    const stop = [...laps].reverse().find((l) => l.l < sp.l && l.pit === 1);
+    const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;
+    if (!before) {
+      out.push({ lap: sp.l, pos: at.cp, title: `Settled P${at.cp} in ${classView}`, sub: `${sp.su} (overall)`, color: sp.c });
+      continue;
+    }
+    const net = before.cp - at.cp;
+    out.push({
+      lap: sp.l,
+      pos: at.cp,
+      title: `Settled P${at.cp} in ${classView}`,
+      sub: `Was P${before.cp} · ${net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held"}`,
+      color: net > 0 ? TRACE.gain : net < 0 ? TRACE.loss : "#888888",
+    });
+  }
+  return out;
+}
+
+/**
+ * A leader from the lap where each pit cycle settled up to a label with the gain or loss, as the
+ * RaceTrace chart always drew them; labels stack so they never cover each other, and flip below
+ * the point near the top of the chart.
+ */
+export function drawSettleLeaders(
+  ctx: CanvasRenderingContext2D,
+  o: {
+    labels: SettleLabel[];
+    x: (lap: number) => number;
+    y: (pos: number) => number;
+    lapStart: number;
+    lapEnd: number;
+    plotTop: number;
+    plotBottom: number;
+    plotLeft: number;
+    plotRight: number;
+    background: string;
+  }
+) {
+  const BOX_H = 30;
+  const STEP = 32;
+  const ARROW = 34;
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  const hits = (bx: number, by: number, w: number) =>
+    by < o.plotTop || by + BOX_H > o.plotBottom || placed.some((p) => bx < p.x + p.w && bx + w > p.x && by < p.y + p.h && by + BOX_H > p.y);
+  ctx.save();
+  const items = o.labels.filter((l) => l.lap >= o.lapStart && l.lap <= o.lapEnd).map((l) => ({ ...l, cx: o.x(l.lap), cy: o.y(l.pos) })).sort((a, b) => a.cx - b.cx);
+  for (const it of items) {
+    ctx.font = "700 11px 'IBM Plex Sans', system-ui, sans-serif";
+    const w1 = ctx.measureText(it.title).width;
+    ctx.font = "500 10px 'IBM Plex Sans', system-ui, sans-serif";
+    const w = Math.max(w1, ctx.measureText(it.sub).width) + 12;
+    const bx = Math.min(o.plotRight - w, Math.max(o.plotLeft, it.cx - w / 2));
+    // Above the point, stacked up past other labels; below it when there is no room above.
+    let off = 0;
+    let up = true;
+    while (hits(bx, it.cy - ARROW - off - BOX_H, w) && off <= 200) off += STEP;
+    if (off > 200 || it.cy - ARROW - off - BOX_H < o.plotTop) {
+      up = false;
+      off = 0;
+      while (hits(bx, it.cy + ARROW + off, w) && off <= 200) off += STEP;
+    }
+    const by = up ? it.cy - ARROW - off - BOX_H : it.cy + ARROW + off;
+    placed.push({ x: bx, y: by, w, h: BOX_H });
+
+    // Leader from the label to the point, arrowhead at the point
+    const tip = up ? it.cy - 6 : it.cy + 6;
+    const end = up ? by + BOX_H : by;
+    ctx.strokeStyle = it.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(it.cx, end);
+    ctx.lineTo(it.cx, tip);
+    ctx.stroke();
+    ctx.fillStyle = it.color;
+    ctx.beginPath();
+    ctx.moveTo(it.cx, up ? it.cy - 4 : it.cy + 4);
+    ctx.lineTo(it.cx - 3.5, up ? it.cy - 11 : it.cy + 11);
+    ctx.lineTo(it.cx + 3.5, up ? it.cy - 11 : it.cy + 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(it.cx, it.cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = o.background;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Label box
+    ctx.fillStyle = o.background;
+    ctx.strokeStyle = rgba(it.color, 0.6);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, w, BOX_H, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "700 11px 'IBM Plex Sans', system-ui, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(it.title, bx + w / 2, by + 13);
+    ctx.font = "500 10px 'IBM Plex Sans', system-ui, sans-serif";
+    ctx.fillStyle = it.color;
+    ctx.fillText(it.sub, bx + w / 2, by + 25);
   }
   ctx.restore();
 }
