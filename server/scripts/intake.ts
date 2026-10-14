@@ -6,7 +6,7 @@
  *                                      [--all-sessions] [--redmist <event id|event/session>]…
  *                                      [--json] [--save <file>]
  *   npx tsx scripts/intake.ts discover --series wrl-speedhive --season 2025 [--org <speedhive org id>] [--speedhive <event|session URL>]…
- *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade] [--force]
+ *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade] [--skip-attach-candidates] [--force]
  *   npx tsx scripts/intake.ts push <dir…> [--force] [--dry-run] [--no-archive-only]
  *   npx tsx scripts/intake.ts push <dir> --attach <raceId>      replace an existing race that has no source key yet
  *   npx tsx scripts/intake.ts status <dir…>
@@ -184,8 +184,16 @@ async function cmdPull(a: ReturnType<typeof parseArgs>) {
   const from = a.one("from");
   if (from) {
     const states = (a.one("states") ?? "new,changed,results-upgrade").split(",");
-    const d = JSON.parse(readFileSync(from, "utf-8")) as { sessions: { state: string; sourceKey: string }[] };
-    keys.push(...d.sessions.filter((s) => states.includes(s.state)).map((s) => s.sourceKey));
+    const d = JSON.parse(readFileSync(from, "utf-8")) as { sessions: { state: string; sourceKey: string; attachCandidates?: { raceId: string; name: string }[] }[] };
+    const skipAttach = a.has("skip-attach-candidates");
+    for (const s of d.sessions.filter((x) => states.includes(x.state))) {
+      // A new session that may be a race already on the site (no source key) waits for the owner's attach decision.
+      if (skipAttach && s.state === "new" && (s.attachCandidates ?? []).length > 0) {
+        log(`skipped ${s.sourceKey}: may be ${s.attachCandidates!.map((r) => `${r.raceId} (${r.name})`).join("; ")} — owner decides (push --attach)`);
+        continue;
+      }
+      keys.push(s.sourceKey);
+    }
   }
   keys = [...new Set(keys.map(canonicalSourceKey))];
   if (keys.length === 0) throw new UsageError("pull needs source keys or --from <discover.json>");
