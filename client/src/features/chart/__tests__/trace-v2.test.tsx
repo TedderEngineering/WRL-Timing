@@ -65,3 +65,15 @@ describe("Position Trace v2", () => {
     expect(t).toContain("Lap 2");
   });
 });
+
+describe("makes", () => {
+  it("reads the make from the vehicle when the import has no make groups", async () => {
+    const { makeGroupsOf, makeOf } = await import("../makes");
+    expect(makeOf("McLaren Artura GT4")).toBe("McLaren");
+    expect(makeOf("Mercedes-AMG GT4")).toBe("Mercedes-AMG");
+    expect(makeOf("Toyota Gazoo Racing GR Supra GT4 EVO2")).toBe("Toyota");
+    expect(makeOf("")).toBeNull();
+    const d = { cars: { "1": { num: 1, vehicle: "BMW M4 GT4" }, "2": { num: 2, vehicle: "BMW M4 GT4" }, "3": { num: 3, vehicle: "Ford Mustang GT4" }, "4": { num: 4 } } } as unknown as RaceChartData;
+    expect(makeGroupsOf(d)).toEqual({ BMW: [1, 2], Ford: [3] });
+  });
+});

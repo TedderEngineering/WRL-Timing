@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { getCompColor } from "./chart-renderer";
 import { TRACE } from "./constants";
+import { makeGroupsOf } from "./makes";
 
 const T = {
   card: "#12122a",
@@ -180,7 +181,7 @@ export function TraceControls(p: TraceControlsProps) {
   const showFilters = !compact || filtersOpen;
   const focus = data.cars[String(focusNum)];
   const classes = Object.entries(data.classGroups).sort(([a], [b]) => a.localeCompare(b));
-  const makeGroups = (data as { makeGroups?: Record<string, number[]> }).makeGroups;
+  const makeGroups = useMemo(() => makeGroupsOf(data), [data]);
   const makes = useMemo(() => {
     if (!makeGroups) return [];
     const inView = new Set(

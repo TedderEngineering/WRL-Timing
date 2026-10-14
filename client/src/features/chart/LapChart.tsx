@@ -17,6 +17,7 @@ import {
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
 import { AxisToggle, TraceControls } from "./TraceControls";
+import { makeGroupsOf } from "./makes";
 import { PitCyclePanel } from "./PitCyclePanel";
 import { GapEvolutionPanel } from "./GapEvolutionPanel";
 import { HeadToHeadPanel } from "./HeadToHeadPanel";
@@ -58,7 +59,7 @@ export function LapChart({
   const fieldCars = useMemo(() => {
     const base = getVisibleCars(data, classView);
     if (!makeFilter) return base;
-    const mg = (data as { makeGroups?: Record<string, number[]> }).makeGroups?.[makeFilter] ?? [];
+    const mg = makeGroupsOf(data)[makeFilter] ?? [];
     const keep = new Set(mg);
     return base.filter((n) => keep.has(n) || n === focusNum);
   }, [data, classView, makeFilter, focusNum]);
@@ -538,6 +539,14 @@ export function LapChart({
         classView={classView}
         setClassView={(c) => {
           setMakeFilter("");
+          // A class view is about that class: if the focus car is in another class, focus its leader.
+          if (c && data.cars[String(focusNum)]?.cls !== c) {
+            const leader = (data.classGroups[c] ?? [])
+              .map((n) => data.cars[String(n)])
+              .filter((car) => car && car.laps.length > 0)
+              .sort((x, y) => (x.finishPosClass || 999) - (y.finishPosClass || 999))[0];
+            if (leader) setFocusNum(leader.num);
+          }
           setClassView(c);
         }}
         compSet={compSet}
