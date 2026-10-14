@@ -52,6 +52,10 @@ on:
         description: "analyze only: at most this many races per run (newest first); empty = all"
         required: false
         default: ""
+      approve:
+        description: "reimport only: race ids of 'unsure' pairs the owner approves, comma-separated"
+        required: false
+        default: ""
       replace_matched:
         description: "import only: replace races already on the site when exactly one matches (same series, date and session); otherwise they are held"
         type: boolean
@@ -100,9 +104,11 @@ jobs:
           SERIES: ${{ inputs.series }}
           SEASON: ${{ inputs.season }}
           APPLY: ${{ inputs.mode == 'reimport' }}
+          APPROVE: ${{ inputs.approve }}
         run: |
           set -o pipefail
           args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/reimport-plan.json" --notes "$RUNNER_TEMP/plan-notes.txt")
+          [ -n "$APPROVE" ] && args+=(--approve "$APPROVE")
           [ "$APPLY" = "true" ] && args+=(--apply)
           status=0
           npx tsx scripts/intake.ts reimport-plan "${args[@]}" > "$RUNNER_TEMP/plan.txt" 2> "$RUNNER_TEMP/plan.log" || status=1
