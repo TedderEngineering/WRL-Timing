@@ -57,8 +57,8 @@ jobs:
       RACETRACE_API_TOKEN: ${{ secrets.RACETRACE_API_TOKEN }}
       SPEEDHIVE_WRL_ORG_ID: ${{ secrets.SPEEDHIVE_WRL_ORG_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -83,7 +83,9 @@ jobs:
         run: |
           args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/discover.json")
           if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
-          npx tsx scripts/intake.ts discover "${args[@]}" | tee "$RUNNER_TEMP/discover.txt"
+          npx tsx scripts/intake.ts discover "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/discover.txt"
+          # Also as an annotation: readable through the checks API and on the run page without signing in.
+          node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Discover::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/discover.txt"
           {
             echo "## Discover: $SERIES $SEASON${SINCE:+ since $SINCE}"
             echo '```'
@@ -99,6 +101,7 @@ jobs:
           held=$(node -e 'const d=require(process.argv[1]);for(const s of d.sessions.filter(s=>s.state==="new"&&(s.attachCandidates||[]).length))console.log(`- ${s.date} ${s.event} — ${s.session}: may be ${s.attachCandidates.map(r=>`${r.name} (${r.raceId})`).join("; ")}`)' "$INTAKE_WORK_DIR/discover.json")
           if [ -n "$held" ]; then
             { echo "## Waiting for the owner (possible duplicates of races already on the site)"; echo "$held"; } >> "$GITHUB_STEP_SUMMARY"
+            node -e 'console.log("::notice title=Waiting for the owner (possible duplicates)::"+process.argv[1].replace(/%/g,"%25").replace(/\n/g,"%0A"))' "$held"
           fi
           if [ "$n" = "0" ]; then
             echo "Nothing to import." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -109,7 +112,8 @@ jobs:
           dirs=()
           for m in "$INTAKE_WORK_DIR"/*/manifest.json; do [ -f "$m" ] && dirs+=("$(dirname "$m")"); done
           if [ ${#dirs[@]} -gt 0 ]; then
-            npx tsx scripts/intake.ts push "${dirs[@]}" | tee "$RUNNER_TEMP/push.txt" || status=1
+            npx tsx scripts/intake.ts push "${dirs[@]}" 2>&1 | tee "$RUNNER_TEMP/push.txt" || status=1
+            node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Imported as drafts::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/push.txt"
             { echo "## Imported as drafts"; echo '```'; cat "$RUNNER_TEMP/push.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit $status
