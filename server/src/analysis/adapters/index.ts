@@ -1,13 +1,14 @@
 import type { SourceFileRole, SourceFormat } from "../schema/package-types.js";
 import type { AdapterResult, SourceFileInfo } from "../types.js";
 import { adaptAlkamel } from "./alkamel.js";
+import { adaptRedmist } from "./redmist.js";
 import { adaptSpeedhive, adaptWrlWebsite } from "./wrl.js";
 
 export { AdapterBlocker } from "./errors.js";
 export { loadPdfPages } from "./pdf.js";
 export { parsePitCardsPdf } from "./pit-cards-pdf.js";
 
-export const SOURCE_FORMATS: SourceFormat[] = ["speedhive", "wrl-website", "alkamel-sro", "alkamel-grcup", "alkamel-imsa"];
+export const SOURCE_FORMATS: SourceFormat[] = ["speedhive", "wrl-website", "alkamel-sro", "alkamel-grcup", "alkamel-imsa", "redmist"];
 
 /** Adapter dispatch (FACT_ENGINE_SPEC.md §4). */
 export function adapt(format: SourceFormat, files: SourceFileInfo[]): AdapterResult {
@@ -20,6 +21,8 @@ export function adapt(format: SourceFormat, files: SourceFileInfo[]): AdapterRes
     case "alkamel-grcup":
     case "alkamel-imsa":
       return adaptAlkamel(format, files);
+    case "redmist":
+      return adaptRedmist(files);
     default:
       throw new Error(`unknown format ${String(format)}`);
   }
@@ -28,6 +31,10 @@ export function adapt(format: SourceFormat, files: SourceFileInfo[]): AdapterRes
 /** Role of a file from its name (timing-provider naming conventions). */
 export function detectRole(name: string): SourceFileRole {
   const n = name.toLowerCase();
+  // RedMist exports (redmist_<event>_<session>_<kind>.json, or <event>_<session>_<kind>.json).
+  if (/_laps\.json$/.test(n)) return "laps";
+  if (/_pits\.json$/.test(n)) return "pit_cards_json";
+  if (/_control\.json$/.test(n)) return "control_log";
   if (/_all_laps\.csv$/.test(n)) return "laps";
   if (/_summary\.csv$/.test(n)) return "summary";
   if (/analysisendurance/.test(n)) return "laps";

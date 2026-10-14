@@ -33,6 +33,8 @@ export interface Passage {
   /** Last row inside the passage when it never rejoined (WRL: every flagged row of a run that reaches the end). */
   lastIdx?: number;
   bOnly: boolean;
+  /** RedMist: a lap-1 pit-report stop whose lap-1 crossing was on track (the car left the pit lane after the start). */
+  pitLaneStart?: boolean;
   pitType: "NORMAL" | "PENALTY" | null;
   inDriverNumber: number | null;
   outDriverNumber: number | null;
@@ -126,6 +128,8 @@ export function buildRawPassages(ctx: Ctx): Passage[] {
   const out: Passage[] = [];
   if (ctx.race.format === "speedhive" || ctx.race.format === "wrl-website") {
     for (const car of ctx.cars) out.push(...wrlPassages(ctx, car));
+  } else if (ctx.race.format === "redmist") {
+    out.push(...redmistPassages(ctx));
   } else {
     out.push(...alkamelPassages(ctx));
   }
@@ -203,8 +207,10 @@ function wrlPassages(ctx: Ctx, car: CarId): Passage[] {
   return out;
 }
 
+type TimedPitRecord = CanonPitRecord & { inClockS: number };
+
 function alkamelPassages(ctx: Ctx): Passage[] {
-  const recs: CanonPitRecord[] = ctx.race.pitRecords.map((r) => ({ ...r }));
+  const recs: TimedPitRecord[] = ctx.race.pitRecords.filter((r): r is TimedPitRecord => r.inClockS !== null).map((r) => ({ ...r }));
   const issues = ctx.issues;
   // Drive Time PIT rows: merge into a card within 1.5 s, else a passage of their own.
   for (const d of ctx.race.driveStints) {
@@ -338,6 +344,284 @@ function alkamelPassages(ctx: Ctx): Passage[] {
   return out;
 }
 
+/* ------------------------------------------------------------------ RedMist passages */
+
+/** A pit visit read from RedMist's lap pit flags: rows i0 (in-lap) … i1 (out-lap; null = never rejoined, last = last row inside). */
+export interface FlagVisit {
+  i0: number;
+  i1: number | null;
+  last: number;
+  /** The pit flag sat on the lap after the visit (see redmistFlagVisits). */
+  lateFlag?: boolean;
+}
+
+/**
+ * RedMist lap pit flags → pit visits. `inPit` = LapIncludedPit (the car was seen in the pit lane during
+ * the lap), `crossedInPit` = IsInPit at the line crossing. A visit opens on the first flagged lap and
+ * stays open while the car crosses the line in the pit lane; the first crossing made on track is the
+ * out-lap (PitStopAnalyzer's rule). A lone LapIncludedPit lap whose crossings on both sides were made
+ * on track is a pit flag that landed one lap late (RedMist tags the lap in progress when the pit
+ * passing is processed): the visit is the previous lap (in-lap) and the flagged lap (out-lap). On
+ * Barber 2026 all 7 such laps sit one lap after Speedhive's In Pit lap; on West Desert 2026 the one
+ * case follows a pit-report stop on the previous lap. A lap-1 flag with a crossing on track is
+ * pre-race pit-lane staging, not a passage.
+ */
+export function redmistFlagVisits(rows: LapRow[]): FlagVisit[] {
+  const n = rows.length;
+  const flagged = (i: number) => (rows[i].inPit || rows[i].crossedInPit) && !(i === 0 && rows[0].lap === 1 && !rows[0].crossedInPit);
+  const out: FlagVisit[] = [];
+  let k = 0;
+  let lastEnd = -1;
+  while (k < n) {
+    if (!flagged(k)) {
+      k++;
+      continue;
+    }
+    const i0 = k;
+    if (!rows[i0].crossedInPit && i0 - 1 > lastEnd && !flagged(i0 - 1) && !(i0 - 1 === 0 && rows[0].lap === 1)) {
+      out.push({ i0: i0 - 1, i1: i0, last: i0, lateFlag: true });
+      lastEnd = i0;
+      k = i0 + 1;
+      continue;
+    }
+    let j = k;
+    while (rows[j].crossedInPit && j + 1 < n) j++;
+    if (rows[j].crossedInPit) {
+      out.push({ i0, i1: null, last: j });
+      break;
+    }
+    if (j > i0) {
+      out.push({ i0, i1: j, last: j });
+      lastEnd = j;
+      k = j + 1;
+    } else if (i0 + 1 < n && !flagged(i0 + 1)) {
+      out.push({ i0, i1: i0 + 1, last: i0 + 1 });
+      lastEnd = i0 + 1;
+      k = i0 + 2;
+    } else {
+      out.push({ i0, i1: i0, last: i0 });
+      lastEnd = i0;
+      k = i0 + 1;
+    }
+  }
+  return out;
+}
+
+function lapRange(p: { inIdx: number | null; outIdx: number | null; lastIdx?: number }): [number, number] | null {
+  if (p.inIdx === null) return null;
+  return [p.inIdx, p.outIdx ?? p.lastIdx ?? p.inIdx];
+}
+
+/**
+ * D-PIT-PASSAGE for RedMist. With the pit report (Flagtronics): one passage per reported stop, laps
+ * from startLap (in-lap) / endLap (out-lap), cross-checked with the lap pit flags; the official
+ * pit-lane time is the reported duration; pit-in / pit-out when the equipment clock was set. Lap-flag
+ * visits that no reported stop covers are added as passages without a pit-lane time. Without the
+ * report: lap-flag visits only (no pit-lane times), as Speedhive.
+ */
+function redmistPassages(ctx: Ctx): Passage[] {
+  const out: Passage[] = [];
+  const reportFile = ctx.race.files.find((f) => f.role === "pit_cards_json") ?? null;
+  const byCar = new Map<string, CanonPitRecord[]>();
+  for (const r of ctx.race.pitRecords) if (r.source === "pit_json") byCar.set(r.car, [...(byCar.get(r.car) ?? []), r]);
+  const corrected: string[] = [];
+  const noFlags: string[] = [];
+  const extra: string[] = [];
+  const clockOff: string[] = [];
+  const staging: string[] = [];
+  for (const car of ctx.cars) {
+    const rows = ctx.laps[car] ?? [];
+    const n = rows.length;
+    const mine: Passage[] = [];
+    const recs = [...(byCar.get(car) ?? [])].sort((a, b) => (a.inLap ?? 0) - (b.inLap ?? 0) || (a.nr ?? 0) - (b.nr ?? 0));
+    let prevEnd = -1;
+    recs.forEach((r, k) => {
+      const lapLabel = `${car} L${r.inLap ?? "?"}-${r.outLap ?? "?"}`;
+      const p: Passage = {
+        ...blank(car),
+        source: "pit_json",
+        files: [r.fileId],
+        refs: [r.ref],
+        pinT: r.inClockS,
+        poutT: r.inClockS !== null ? r.outClockS : null,
+        sortT: r.inClockS ?? 0,
+        rejoinT: r.inClockS !== null ? r.outClockS : null,
+        official: r.pitTimeS,
+        inLap: r.inLap ?? 1,
+        inLapCompleted: false,
+        outLap: null,
+        inIdx: null,
+        outIdx: null,
+        inDriverName: r.inDriver ?? null,
+        outDriverName: r.outDriver ?? null,
+      };
+      if (r.inClockS !== null) {
+        p.notes.push("Pit-in and pit-out from the RedMist pit report (Flagtronics): entry clock to the second, pit-lane time to the millisecond.");
+      } else if (r.pitTimeS !== null) {
+        p.notes.push(
+          r.timePrecision === "s"
+            ? "Pit-lane time from the RedMist pit report without an entry clock (in-car equipment clock not set): whole seconds; pit-in and pit-out are unknown."
+            : "Pit-lane time from the RedMist pit report without an entry clock; pit-in and pit-out are unknown.",
+        );
+      } else {
+        p.reliable = false;
+        p.notes.push("The RedMist pit report lists this stop without a duration (exit never finalised); the pit-lane time is unknown.");
+      }
+      if (r.entryRenumbered) {
+        p.reliable = false;
+        p.confNotes.push("pit_entry_renumbered");
+        p.notes.push(
+          `The in-car equipment reissued the pit entry time during this stop; the reported pit-lane time may cover only part of the stop.${
+            r.estimatedVisitS ? ` From the first to the last entry time on the lap records the visit lasted about ${rd(r.estimatedVisitS, 0)} s (estimate).` : ""
+          }`,
+        );
+      }
+      if (!n) {
+        p.notes.push("The car has no laps in the laps file.");
+        p.confNotes.push("in_lap_not_completed");
+        mine.push(p);
+        return;
+      }
+      let inIdx = idxOfLap(rows, r.inLap ?? null);
+      if (inIdx === null) {
+        const after = rows.findIndex((x) => x.lap >= (r.inLap ?? 0));
+        if (after < 0) {
+          p.inLap = rows[n - 1].lap + 1;
+          p.confNotes.push("in_lap_not_completed");
+          p.notes.push(`The reported in-lap ${r.inLap} is after the car's last lap row.`);
+          mine.push(p);
+          return;
+        }
+        inIdx = after;
+        corrected.push(`${lapLabel}: in-lap row missing, lap ${rows[after].lap} used`);
+      }
+      const next = recs[k + 1];
+      const nextIn = next ? (idxOfLap(rows, next.inLap ?? null) ?? n) : n;
+      let outIdx: number | null = idxOfLap(rows, r.outLap ?? null) ?? inIdx;
+      if (outIdx < inIdx) outIdx = inIdx;
+      let lastIdx: number | undefined;
+      // (a) the car was already in the pit lane at the previous crossing: the visit began a lap earlier.
+      while (inIdx - 1 > prevEnd && rows[inIdx - 1].crossedInPit) inIdx--;
+      // (b) the reported out-lap was itself crossed in the pit lane: the car rejoined later, or never.
+      if (rows[outIdx].crossedInPit) {
+        let j = outIdx;
+        while (rows[j].crossedInPit && j + 1 < n && j + 1 < nextIn) j++;
+        if (rows[j].crossedInPit && j === n - 1) {
+          outIdx = null;
+          lastIdx = j;
+        } else outIdx = j;
+      }
+      // (c) a one-lap report stop whose next lap carries the pit flag: that lap is the out-lap. When the
+      // next reported stop starts there (the equipment split one visit), the two form a pit group (D-PITGROUP).
+      if (outIdx !== null && outIdx === inIdx && inIdx + 1 < n && rows[inIdx + 1].inPit) outIdx = inIdx + 1;
+      p.inIdx = inIdx;
+      p.outIdx = outIdx;
+      if (lastIdx !== undefined) p.lastIdx = lastIdx;
+      // A lap-1 stop with the lap-1 crossing on track: the car sat in the pit lane before the start and
+      // joined after it. The reported duration is the pre-start wait, not a race pit-lane time.
+      if (inIdx === 0 && rows[0].lap === 1 && !rows[0].crossedInPit && outIdx === 0) {
+        p.pitLaneStart = true;
+        p.notes.push(`Pit-lane start: the car was in the pit lane at the start and joined during lap 1; the reported ${r.pitTimeS !== null ? `${rd(r.pitTimeS, 0)} s ` : ""}is the time spent in the pit lane before it left, not a race pit-lane time.`);
+        p.official = null;
+        p.reliable = true;
+        p.rejoinT = rows[0].startT;
+        if (p.pinT === null) p.sortT = rows[0].startT;
+      }
+      p.inLap = rows[inIdx].lap;
+      p.inLapCompleted = true;
+      p.outLap = outIdx !== null ? rows[outIdx].lap : null;
+      if (p.pinT === null) p.sortT = rows[inIdx].startT;
+      if (p.rejoinT === null && outIdx !== null) p.rejoinT = rows[outIdx].endT;
+      if (p.inLap !== r.inLap || p.outLap !== (r.outLap ?? null)) {
+        p.confNotes.push("pit_report_laps_corrected");
+        p.notes.push(
+          `The pit report gives laps ${r.inLap ?? "?"}-${r.outLap ?? "?"}; the lap pit flags (in pit lane at the line) give ${p.inLap}-${p.outLap ?? "no rejoin"}, which is used.`,
+        );
+        corrected.push(`${car} L${r.inLap}-${r.outLap} → L${p.inLap}-${p.outLap ?? "none"}`);
+      }
+      const range = lapRange(p)!;
+      if (!rows.slice(range[0], range[1] + 1).some((x) => x.inPit || x.crossedInPit)) noFlags.push(`${car} L${p.inLap}`);
+      // Pit-report clocks against the lap axis (in-lap must contain pit-in; pit-out before the out-lap ends).
+      if (p.pinT !== null) {
+        const a = rows[range[0]].startT;
+        const b = rows[range[1]].endT;
+        const offIn = p.pinT < a - 30 ? p.pinT - a : p.pinT > rows[range[0]].endT + 30 ? p.pinT - rows[range[0]].endT : 0;
+        const offOut = p.poutT !== null && p.poutT > b + 30 ? p.poutT - b : 0;
+        if (offIn || offOut) {
+          clockOff.push(`${car} L${p.inLap} (${offIn ? `pit-in ${rd(offIn, 1)} s outside the in-lap` : `pit-out ${rd(offOut, 1)} s after the out-lap`})`);
+          p.confNotes.push("pit_clock_lap_mismatch");
+        }
+      }
+      // A pit-lane time longer than the whole passage is impossible.
+      if (p.official !== null) {
+        const el = rows[range[1]].endT - rows[range[0]].startT;
+        if (p.official > el + 1) {
+          p.reliable = false;
+          p.confNotes.push("pit_lane_time_exceeds_passage");
+          p.notes.push(`The reported pit-lane time (${rd(p.official, 3)} s) is longer than the passage laps (${rd(el, 3)} s); it is not reliable.`);
+        }
+      }
+      prevEnd = range[1];
+      mine.push(p);
+    });
+    if (n && rows[0].lap === 1 && rows[0].inPit && !rows[0].crossedInPit && !mine.some((p) => p.inIdx === 0)) staging.push(car);
+    // Lap-flag visits the report does not cover (or all of them, without a report).
+    const claimed = mine.map(lapRange).filter((x): x is [number, number] => x !== null);
+    for (const v of redmistFlagVisits(rows)) {
+      const hi = v.i1 ?? v.last;
+      if (claimed.some(([a, b]) => v.i0 <= b && hi >= a)) continue;
+      const inRow = rows[v.i0];
+      const outRow = v.i1 === null ? null : rows[v.i1];
+      const p: Passage = {
+        ...blank(car),
+        source: "pit_column",
+        files: [inRow.fileId],
+        refs: rows.slice(v.i0, hi + 1).map((x) => `${x.fileId}:L${x.row}`),
+        pinT: null,
+        poutT: null,
+        sortT: inRow.startT,
+        rejoinT: outRow ? outRow.endT : null,
+        official: null,
+        inLap: inRow.lap,
+        inLapCompleted: true,
+        outLap: outRow ? outRow.lap : null,
+        inIdx: v.i0,
+        outIdx: v.i1,
+        ...(v.i1 === null ? { lastIdx: v.last } : {}),
+        inDriverName: v.i0 > 0 ? rows[v.i0 - 1].driverName : inRow.driverName,
+        outDriverName: (v.i1 !== null && v.i1 + 1 < n ? rows[v.i1 + 1] : rows[hi]).driverName,
+        inDriverNumber: v.i0 > 0 ? rows[v.i0 - 1].driver : inRow.driver,
+        outDriverNumber: (v.i1 !== null && v.i1 + 1 < n ? rows[v.i1 + 1] : rows[hi]).driver,
+      };
+      p.reliable = false;
+      if (v.lateFlag) {
+        p.confNotes.push("pit_flag_lap_late");
+        p.notes.push(`Only lap ${outRow!.lap} carries the pit flag and both its crossings were on track: the flag landed one lap late, so the in-lap is lap ${inRow.lap}.`);
+      }
+      if (reportFile) {
+        p.confNotes.push("not_in_pit_report");
+        p.notes.push("RedMist lap pit flags show a pit visit that the pit report does not list; pit-in, pit-out and the pit-lane time are unknown.");
+        extra.push(`${car} L${p.inLap}-${p.outLap ?? "none"}`);
+      } else {
+        p.notes.push("No pit report: the passage comes from RedMist's lap pit flags (lap included a pit visit / in pit lane at the line); pit-in, pit-out and the official pit-lane time are unknown (D-PITLANE).");
+      }
+      mine.push(p);
+    }
+    out.push(...mine);
+  }
+  const list = (xs: string[]) => `${xs.slice(0, 12).join("; ")}${xs.length > 12 ? `; … (${xs.length} in all)` : ""}`;
+  const files = reportFile ? [reportFile.fileId] : [];
+  if (!reportFile) {
+    ctx.issues.push({ severity: "note", code: "REDMIST-NO-PIT-REPORT", message: "No RedMist pit report (no Flagtronics pit data): passages come from the lap pit flags only, with no pit-in/pit-out and no official pit-lane time; time lost is still measured over the in-lap and out-lap." });
+  }
+  if (corrected.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-LAPS-CORRECTED", message: `${corrected.length} pit-report stop(s) re-anchored on the lap pit flags: ${list(corrected)}.`, files });
+  if (noFlags.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-NO-LAP-FLAG", message: `${noFlags.length} pit-report stop(s) have no lap pit flag on their laps: ${list(noFlags)}.`, files });
+  if (extra.length) ctx.issues.push({ severity: "warning", code: "PASSAGE-NOT-IN-PIT-REPORT", message: `${extra.length} pit visit(s) seen in the lap pit flags are missing from the pit report (no pit-lane time): ${list(extra)}.`, files });
+  if (clockOff.length) ctx.issues.push({ severity: "warning", code: "PIT-CLOCK-LAP-MISMATCH", message: `${clockOff.length} pit-report clock(s) do not fit the passage laps by more than 30 s: ${list(clockOff)}.`, files });
+  if (staging.length) ctx.issues.push({ severity: "note", code: "REDMIST-LAP1-PIT-FLAG", message: `Lap 1 carries the pit flag with a crossing on track for ${staging.length} car(s) (${staging.join(", ")}): pre-race pit-lane staging or a pit-lane start; not counted as a passage.` });
+  return out;
+}
+
 /* ------------------------------------------------------------------ M7 penalties */
 
 const PEN_RE = /^Car\s+#?(\w+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
@@ -360,7 +644,7 @@ export function penaltyType(decision: string): { type: PenaltyType; amount: numb
   if (/disqualif|\bdsq\b|black flag/i.test(d)) return { type: "disqualification", amount: null };
   if (/grid/i.test(d)) return { type: "grid", amount: null };
   if (/position/i.test(d)) return { type: "position", amount: null };
-  if (/\blap\b/i.test(d) && !/lap time/i.test(d)) return { type: "lap", amount: null };
+  if (/\blaps?\b/i.test(d) && !/lap time/i.test(d)) return { type: "lap", amount: null };
   return { type: "other", amount: null };
 }
 
@@ -468,7 +752,7 @@ export interface Transit {
 
 export function estimateTransit(passages: Passage[], configured: number | null | undefined, laps: Ctx["laps"]): Transit {
   if (configured !== null && configured !== undefined) return { valueS: configured, estimated: false, valid: true, fromPassageId: null };
-  const pls = passages.filter((p) => p.official !== null && !p.bOnly && !isPitLaneStart(p, laps) && p.outLap !== null);
+  const pls = passages.filter((p) => p.official !== null && p.reliable && !p.bOnly && !isPitLaneStart(p, laps) && p.outLap !== null);
   if (!pls.length) return { valueS: null, estimated: true, valid: false, fromPassageId: null };
   const best = pls.reduce((a, b) => (b.official! < a.official! ? b : a));
   const med = median(pls.map((p) => p.official!))!;
@@ -476,6 +760,7 @@ export function estimateTransit(passages: Passage[], configured: number | null |
 }
 
 export function isPitLaneStart(p: Passage, laps: Ctx["laps"]): boolean {
+  if (p.pitLaneStart) return true;
   if (p.pinT === null || p.bOnly) return false;
   const rows = laps[p.car] ?? [];
   const l1 = rows.find((r) => r.lap === 1);
@@ -488,7 +773,8 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
   const T = transit.valueS;
   const sorted = [...passages].sort((a, b) => a.sortT - b.sortT || carOrder(a.car, b.car));
   for (const p of sorted) {
-    const pl = p.official;
+    // RedMist: a duration the report itself flags as partial (entry reissued) is not used for kinds.
+    const pl = ctx.race.format === "redmist" && !p.reliable ? null : p.official;
     const pin = p.pinT ?? p.sortT;
     const set = (kind: PassageKind, basis: KindBasis[]) => {
       p.kind = kind;
@@ -542,7 +828,7 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       set("garage", ["garage_threshold"]);
     } else {
       set("stop", ["default_stop"]);
-      if (pl !== null && T !== null && pl > 1.15 * T && pl <= 1.5 * T && !cand.length) p.confNotes.push("ambiguous_short_stop");
+      if (transit.valid && pl !== null && T !== null && pl > 1.15 * T && pl <= 1.5 * T && !cand.length) p.confNotes.push("ambiguous_short_stop");
     }
   }
 }

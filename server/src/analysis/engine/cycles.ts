@@ -129,7 +129,8 @@ export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[],
       notes.push("cycle_model_defaulted");
       conf = "medium";
     }
-    if (wrl) {
+    const outLapBasis = wrl || (ctx.race.format === "redmist" && cy.members.some((p) => p.poutT === null));
+    if (outLapBasis) {
       notes.push("close_basis_out_lap_end");
       conf = "medium";
     }
@@ -154,7 +155,7 @@ export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[],
       fcyPeriodIds: fcyIds,
       opens: tp(ctx, cy.opens),
       closes: tp(ctx, cy.closes),
-      closeBasis: wrl ? "out_lap_end" : "pit_out",
+      closeBasis: outLapBasis ? "out_lap_end" : "pit_out",
       splitRule: {
         gapThresholdS: cy.model === "rounds" ? rd(threshold) : null,
         windowS: cy.model === "windows" ? rd(threshold) : null,

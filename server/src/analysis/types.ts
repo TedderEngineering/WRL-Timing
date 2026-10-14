@@ -99,7 +99,8 @@ export interface CanonPitRecord {
   fileId: string;
   ref: string;
   nr?: number | null;
-  inClockS: number;
+  /** Official pit-in clock; null when the record has a duration only (RedMist: in-car clock not set). */
+  inClockS: number | null;
   outClockS: number | null;
   pitTimeS: number | null;
   inDriver?: string | null;
@@ -109,6 +110,17 @@ export interface CanonPitRecord {
   pitType?: "NORMAL" | "PENALTY" | null;
   /** Drive Time row that was merged into this card (|START - in| <= 1.5 s). */
   driveTimeRef?: string | null;
+  /** In-lap / out-lap as the record states them (RedMist pit report startLap / endLap). */
+  inLap?: number | null;
+  outLap?: number | null;
+  /** Precision of pitTimeS: 'ms', or 's' for whole-second durations (RedMist stops without an entry clock). */
+  timePrecision?: "ms" | "s";
+  /** RedMist: the equipment's clock was not set, so entry/exit are unknown. */
+  entryUnavailable?: boolean;
+  /** RedMist: the equipment reissued the entry time during the stop; the duration may cover part of it. */
+  entryRenumbered?: boolean;
+  /** RedMist renumbered stop: first entry to last entry plus the final duration, from the lap snapshots (estimate). */
+  estimatedVisitS?: number | null;
 }
 
 export interface CanonDriveStint {
