@@ -21,7 +21,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { prisma } from "../models/prisma.js";
 import { getParser } from "../utils/parsers/index.js";
 import { archiveRaceFiles } from "../lib/race-archive.js";
-import { supabase, STORAGE_BUCKET } from "../lib/supabase.js";
+import { supabase, supabaseKeyKind, STORAGE_BUCKET } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { intakeRace, listIntakeRaces, listUnkeyedRaces } from "../services/intake.js";
 import { API_TOKEN_SCOPES, generateApiToken, toPublicToken } from "../services/api-tokens.js";
@@ -68,6 +68,7 @@ intakeRouter.post("/races", async (req: Request, res: Response, next: NextFuncti
           archiveRaceFiles(files, {
             bucket: supabase ? supabase.storage.from(STORAGE_BUCKET) : null,
             nodeEnv: env.NODE_ENV,
+            keyRole: supabaseKeyKind,
           }),
       }
     );

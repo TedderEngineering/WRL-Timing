@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { archiveRaceFiles, fileTypeForKey, type StorageBucketClient } from "../race-archive.js";
+import { archiveRaceFiles, canBypassStorageRls, fileTypeForKey, supabaseKeyRole, type StorageBucketClient } from "../race-archive.js";
 
 function fakeBucket(failKeys: string[] = [], failTimes = Infinity) {
   const calls: string[] = [];
@@ -73,5 +73,24 @@ describe("archiveRaceFiles (F7)", () => {
     expect(fileTypeForKey("pitStopPdf")).toEqual({ ext: "pdf", contentType: "application/pdf" });
     expect(fileTypeForKey("timeCardsJson").ext).toBe("json");
     expect(fileTypeForKey("lapsCsv").ext).toBe("csv");
+  });
+
+  it("names the key kind when storage refuses uploads under row-level security", async () => {
+    const bucket: StorageBucketClient = { upload: async () => ({ error: { message: "new row violates row-level security policy" } }) };
+    await expect(archiveRaceFiles(files, { bucket, nodeEnv: "production", keyRole: "anon" })).rejects.toThrow(
+      /SUPABASE_SERVICE_ROLE_KEY is a "anon" key/
+    );
+  });
+
+  it("tells key kinds apart without needing the key's secret", () => {
+    const jwt = (role: string) => `x.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.y`;
+    expect(supabaseKeyRole(jwt("service_role"))).toBe("service_role");
+    expect(supabaseKeyRole(jwt("anon"))).toBe("anon");
+    expect(supabaseKeyRole("sb_secret_abc")).toBe("secret");
+    expect(supabaseKeyRole("sb_publishable_abc")).toBe("publishable");
+    expect(supabaseKeyRole("garbage")).toBe("unknown");
+    expect(supabaseKeyRole(undefined)).toBe("missing");
+    expect(canBypassStorageRls("service_role") && canBypassStorageRls("secret")).toBe(true);
+    expect(canBypassStorageRls("anon") || canBypassStorageRls("publishable")).toBe(false);
   });
 });

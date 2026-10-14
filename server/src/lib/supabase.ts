@@ -1,5 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { env } from "../config/env.js";
+import { canBypassStorageRls, supabaseKeyRole } from "./race-archive.js";
+
+/** The kind of key in SUPABASE_SERVICE_ROLE_KEY (never the key itself). */
+export const supabaseKeyKind = supabaseKeyRole(env.SUPABASE_SERVICE_ROLE_KEY);
+
+if (env.SUPABASE_SERVICE_ROLE_KEY && !canBypassStorageRls(supabaseKeyKind)) {
+  console.warn(
+    `⚠ SUPABASE_SERVICE_ROLE_KEY is a "${supabaseKeyKind}" key, not the service-role key — ` +
+      "raw-file archive uploads will be refused by storage row-level security"
+  );
+}
 
 if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
   console.warn("⚠ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — storage uploads disabled");
