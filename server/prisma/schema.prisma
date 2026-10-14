@@ -593,6 +593,14 @@ model GripCalculation {
   refColdLr          Float       @map("ref_cold_lr")
   refColdRr          Float       @map("ref_cold_rr")
   convertedToRef     Boolean     @default(false) @map("converted_to_ref")
+  // How the run came in: the hot pressures measured afterwards (PSI), when
+  // they were recorded, or that the driver said there is nothing to record.
+  actualHotLf        Float?      @map("actual_hot_lf")
+  actualHotRf        Float?      @map("actual_hot_rf")
+  actualHotLr        Float?      @map("actual_hot_lr")
+  actualHotRr        Float?      @map("actual_hot_rr")
+  outcomeAt          DateTime?   @map("outcome_at")
+  outcomeSkipped     Boolean     @default(false) @map("outcome_skipped")
   createdAt          DateTime    @default(now()) @map("created_at")
 
   user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)

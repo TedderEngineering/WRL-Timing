@@ -43,9 +43,11 @@ export const GRIP_COPY: SupportCopy = {
   sheetTitle: "Keep Finding Grip free",
   sheetBody:
     "Finding Grip has no paywall and no ads. Coffees pay for the hosting and the time I spend improving the calculator and the damper guide.",
-  askLead: "Got your pressures?",
+  // Shown once, right after a run is recorded as on target (GripOutcomePage),
+  // under the verdict "Came in within 0.3 PSI on all four corners".
+  askLead: "On target.",
   askBody:
-    "I'm Brent, and I build Finding Grip. It's free, with no ads. If it saves you a session of guessing, a coffee keeps it running.",
+    "I'm Brent, and I build Finding Grip. It's free, with no ads. If it helped you get there, a coffee keeps it running.",
   cardTitle: "Finding Grip is free",
   cardBody:
     "No paywall, no ads. If it helps you come in on target, a coffee keeps it running.",

@@ -25,6 +25,7 @@ import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 import { SupportCard } from "@/features/support/SupportPrompts";
+import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
@@ -138,6 +139,9 @@ export function GripDashboardPage() {
         </Banner>
       )}
 
+      {/* Open items: recent runs waiting for their hot pressures. */}
+      {calcs.data && <AwaitingOutcomes calcs={calcs.data} />}
+
       {sessions.loading ? (
         <Spinner />
       ) : sessions.error ? (
@@ -221,7 +225,11 @@ export function GripDashboardPage() {
                         {c.name}
                       </span>
                       <WeatherPill weather={c.weather} />
-                      {c.convertedToRef && <Pill tone="ok">Converted</Pill>}
+                      {c.outcome ? (
+                        <OutcomePill calc={c} units={units} />
+                      ) : (
+                        c.convertedToRef && <Pill tone="ok">Converted</Pill>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       {formatDate(c.sessionDate)} · from {c.referenceName}
@@ -258,13 +266,13 @@ export function GripDashboardPage() {
                   >
                     Open
                   </GripButton>
-                  {!c.convertedToRef && (
+                  {(!c.convertedToRef || c.outcome) && (
                     <GripButton
                       size="sm"
-                      variant="secondary"
-                      onClick={() => navigate(gp(`/calculations/${c.id}/convert`))}
+                      variant={awaitingOutcome(c) ? "primary" : "secondary"}
+                      onClick={() => navigate(gp(`/calculations/${c.id}/outcome`))}
                     >
-                      Convert to reference
+                      {c.outcome ? "How it came in" : "How did it come in?"}
                     </GripButton>
                   )}
                   <GripButton size="sm" variant="ghost" onClick={() => setDeleting(c)}>
