@@ -124,7 +124,49 @@ export function GripSessionsPage() {
                     </div>
                   </div>
                 </div>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs tabular-nums">
+                {/* Phone: a small table with the corners named across the top. */}
+                <div
+                  role="table"
+                  aria-label={`Pressures, ${pressureUnit(units)}`}
+                  className="md:hidden grid grid-cols-[auto_repeat(4,1fr)] gap-x-2 gap-y-1 items-baseline rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-3 py-2 tabular-nums"
+                >
+                  <div role="row" className="contents">
+                    <span role="columnheader" className="text-[10px] text-gray-500">
+                      {pressureUnit(units)}
+                    </span>
+                    {(["lf", "rf", "lr", "rr"] as const).map((k) => (
+                      <span
+                        key={k}
+                        role="columnheader"
+                        className="text-center text-[10px] font-bold tracking-widest text-gray-500"
+                      >
+                        {k.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                  {(
+                    [
+                      ["Cold", s.cold, true],
+                      ["Hot", s.hot, s.ready],
+                    ] as const
+                  ).map(([label, values, known]) => (
+                    <div key={label} role="row" className="contents">
+                      <span role="rowheader" className="text-xs text-gray-500">
+                        {label}
+                      </span>
+                      {(["lf", "rf", "lr", "rr"] as const).map((k) => (
+                        <span
+                          key={k}
+                          role="cell"
+                          className="text-center text-sm font-semibold text-gray-900 dark:text-gray-100"
+                        >
+                          {known ? formatPressure(values[k], units) : "–"}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <dl className="hidden md:grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs tabular-nums">
                   <dt className="text-gray-500">Cold</dt>
                   <dd className="text-gray-700 dark:text-gray-300">
                     {four(s.cold)} {pressureUnit(units)}

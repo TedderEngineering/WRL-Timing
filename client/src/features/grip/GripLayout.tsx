@@ -10,6 +10,8 @@ import { GripProvider, useGrip } from "./GripContext";
 import { GripButton, Pill, Spinner, primaryLinkClass } from "./components";
 import { useGripStatus } from "./hooks";
 import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
+import { SupportProvider } from "@/features/support/SupportContext";
+import { SupportLink } from "@/features/support/SupportPrompts";
 
 const APP_NAV = [
   { to: gp("/dashboard"), label: "Dashboard", short: "Home" },
@@ -106,6 +108,10 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
 
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-3">
+            {/* The only always-on support entry; lg+ so the name never gets squeezed. */}
+            <div className="hidden lg:block">
+              <SupportLink />
+            </div>
             {isAuthenticated ? (
               <>
                 {signedInApp && <PlanPill />}
@@ -177,6 +183,11 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
                 {l.label}
               </Link>
             ))}
+            <SupportLink
+              variant="menu"
+              onClick={() => setMenuOpen(false)}
+              className="py-2.5 text-left text-gray-700 dark:text-gray-300"
+            />
             {isAuthenticated ? (
               <>
                 {signedInApp && (
@@ -510,7 +521,13 @@ function GripSiteGate({ children }: { children: React.ReactNode }) {
     if (target) window.location.replace(target);
   }, [target]);
 
-  if (IS_GRIP_SITE) return <>{children}</>;
+  // Optional "Buy me a coffee" support, only while Finding Grip is free.
+  const page = (
+    <SupportProvider site="grip" enabled={status.free}>
+      {children}
+    </SupportProvider>
+  );
+  if (IS_GRIP_SITE) return page;
   if (status.loading || target) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -518,7 +535,7 @@ function GripSiteGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  return <>{children}</>;
+  return page;
 }
 
 /** Shell for the signed-in app pages: requires login, then loads the Finding Grip account. */
