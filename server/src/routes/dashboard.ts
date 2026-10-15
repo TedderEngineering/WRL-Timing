@@ -3,6 +3,7 @@
  *
  *   GET /api/dashboard/latest?limit=6   newest race weekends with recaps
  *   GET /api/dashboard/season?season=   each calendar series, round by round
+ *   GET /api/dashboard/my-car           the latest race of a car the user follows (plan C)
  */
 import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
@@ -13,6 +14,9 @@ import { packagesEnabledFor } from "../packages/flags.js";
 import { getServedGzip, gunzip } from "../packages/store.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
+import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
+import { carMatchesEntry, listCars } from "../services/my-cars.js";
+import { normCar } from "../intake/reimport.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
 
 export const dashboardRouter = Router();
@@ -37,6 +41,28 @@ async function recapFor(packageId: string): Promise<Recap | null> {
     return recap;
   } catch (err) {
     console.error(`[dashboard] recap for package ${packageId} failed:`, (err as Error).message);
+    return null;
+  }
+}
+
+const storyCache = new Map<string, CarStory | null>();
+
+async function storyFor(packageId: string, carNumber: string): Promise<CarStory | null> {
+  const row = (await prisma.raceAnalysisPackage.findUnique({
+    where: { id: packageId },
+    select: { storagePath: true, sha256: true, status: true },
+  })) as { storagePath: string; sha256: string; status: string } | null;
+  if (!row || row.status !== "PUBLISHED") return null;
+  const key = `${row.sha256}:${normCar(carNumber)}`;
+  if (storyCache.has(key)) return storyCache.get(key) ?? null;
+  try {
+    const gz = await getServedGzip(row, "norules");
+    const story = extractCarStory(JSON.parse(gunzip(gz).toString("utf8")), carNumber);
+    if (storyCache.size >= RECAP_CACHE_MAX) storyCache.delete(storyCache.keys().next().value as string);
+    storyCache.set(key, story);
+    return story;
+  } catch (err) {
+    console.error(`[dashboard] car story for package ${packageId} failed:`, (err as Error).message);
     return null;
   }
 }
@@ -190,6 +216,74 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
       .sort((a, b) => a.start.localeCompare(b.start));
 
     res.json({ season: cal.season, seasons, today: today.toISOString().slice(0, 10), series, suggested, next: nexts[0] ?? null, upcoming: nexts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/dashboard/my-car — "Your car's latest race" (engagement plan C) ──
+
+dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const cars = await listCars(userId);
+    if (cars.length === 0) {
+      res.json({ carCount: 0, car: null, race: null });
+      return;
+    }
+    // Candidate numbers as stored ("7" and "007" are one car).
+    const numbers = [...new Set(cars.flatMap((c) => [c.number, normCar(c.number)]))];
+    const candidates = (await prisma.race.findMany({
+      where: { status: "PUBLISHED", entries: { some: { carNumber: { in: numbers } } } },
+      orderBy: [{ date: "desc" }, { name: "asc" }],
+      take: 40,
+      select: {
+        id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true,
+        premium: true, createdAt: true, currentPackageId: true, packagesDisabled: true, resultsStatus: true,
+        entries: { where: { carNumber: { in: numbers } }, select: { carNumber: true, teamName: true } },
+      },
+    })) as any[];
+
+    let hit: { race: any; car: (typeof cars)[number]; carNumber: string } | null = null;
+    for (const race of candidates) {
+      for (const e of race.entries) {
+        const car = cars.find((c) => carMatchesEntry(c, race, e));
+        if (car) {
+          hit = { race, car, carNumber: e.carNumber };
+          break;
+        }
+      }
+      if (hit) break;
+    }
+    if (!hit) {
+      res.json({ carCount: cars.length, car: cars[0], race: null });
+      return;
+    }
+
+    const { race, car, carNumber } = hit;
+    const viewer = await resolveViewer(req.user ?? undefined);
+    const access = await canUserAccessRace(race, viewer.plan, viewer.role);
+    const raceOut = {
+      id: race.id,
+      name: race.name,
+      date: race.date.toISOString().slice(0, 10),
+      track: race.track,
+      series: race.series,
+      resultsStatus: race.resultsStatus ?? null,
+      locked: !access.accessible,
+      lockReason: access.accessible ? null : access.reason ?? null,
+    };
+    if (!access.accessible) {
+      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false });
+      return;
+    }
+    const [data, viewed] = await Promise.all([
+      prisma.race.findUnique({ where: { id: race.id }, select: { chartData: true, annotationData: true } }) as Promise<any>,
+      prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
+    ]);
+    const facts = data?.chartData ? carFacts(data.chartData, data.annotationData ?? null, carNumber) : null;
+    const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
+    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed });
   } catch (err) {
     next(err);
   }

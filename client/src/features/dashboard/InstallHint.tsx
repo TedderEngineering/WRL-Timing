@@ -7,6 +7,7 @@ import {
   promptInstall,
   type InstallPlatform,
 } from "../../lib/install";
+import { readUi, writeUi } from "./ui-state";
 
 /**
  * A quiet card offering to install RaceTrace (home screen on a phone, its own window on a
@@ -14,30 +15,8 @@ import {
  * hides it for 60 days, never shown inside the installed app or on a computer whose browser
  * has not offered install. Its dismissal lives in RaceTrace's own key.
  */
-const KEY = "racetrace.ui.v1";
 const QUIET_DAYS = 60;
 const DAY = 86_400_000;
-
-interface UiState {
-  installDismissedAt?: number;
-}
-
-function readUi(): UiState {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) || "{}");
-    return v && typeof v === "object" ? v : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeUi(patch: UiState) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ ...readUi(), ...patch }));
-  } catch {
-    // private window or blocked storage: the card just shows again next time
-  }
-}
 
 export type InstallHintMode = "prompt" | "ios" | "menu";
 
