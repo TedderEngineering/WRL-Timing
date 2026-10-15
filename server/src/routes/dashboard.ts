@@ -231,11 +231,16 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
     const userId = req.user!.userId;
     const [cars, alerts] = await Promise.all([listCars(userId), getRaceAlerts(userId)]);
     if (cars.length === 0) {
-      res.json({ carCount: 0, car: null, race: null, alerts });
+      res.json({ carCount: 0, car: null, race: null, alerts, cars: [] });
       return;
     }
+    // The user's cars, for the dashboard's car tabs; ?car=<id> shows that car's latest race,
+    // otherwise the newest race of any of them.
+    const carList = cars.map((c) => ({ id: c.id, number: c.number, label: c.label, series: c.series, teamName: c.teamName }));
+    const chosen = typeof req.query.car === "string" ? cars.find((c) => c.id === req.query.car) ?? null : null;
+    const pool = chosen ? [chosen] : cars;
     // Candidate numbers as stored ("7" and "007" are one car).
-    const numbers = [...new Set(cars.flatMap((c) => [c.number, normCar(c.number)]))];
+    const numbers = [...new Set(pool.flatMap((c) => [c.number, normCar(c.number)]))];
     const candidates = (await prisma.race.findMany({
       where: { status: "PUBLISHED", entries: { some: { carNumber: { in: numbers } } } },
       orderBy: [{ date: "desc" }, { name: "asc" }],
@@ -250,7 +255,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
     let hit: { race: any; car: (typeof cars)[number]; carNumber: string } | null = null;
     for (const race of candidates) {
       for (const e of race.entries) {
-        const car = cars.find((c) => carMatchesEntry(c, race, e));
+        const car = pool.find((c) => carMatchesEntry(c, race, e));
         if (car) {
           hit = { race, car, carNumber: e.carNumber };
           break;
@@ -259,7 +264,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       if (hit) break;
     }
     if (!hit) {
-      res.json({ carCount: cars.length, car: cars[0], race: null, alerts });
+      res.json({ carCount: cars.length, car: chosen ?? cars[0], race: null, alerts, cars: carList });
       return;
     }
 
@@ -277,7 +282,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       lockReason: access.accessible ? null : access.reason ?? null,
     };
     if (!access.accessible) {
-      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false, alerts });
+      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false, alerts, cars: carList });
       return;
     }
     const [data, viewed] = await Promise.all([
@@ -286,7 +291,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
     ]);
     const facts = data?.chartData ? carFacts(data.chartData, data.annotationData ?? null, carNumber) : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
-    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts });
+    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts, cars: carList });
   } catch (err) {
     next(err);
   }

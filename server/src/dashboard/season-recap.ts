@@ -14,6 +14,7 @@
 import { carFacts, type CarFacts } from "./my-car.js";
 import { buildSeason, locateRace, type Calendar } from "./season.js";
 import { raceFamily } from "../intake/reimport.js";
+import { canonicalTrack } from "../lib/weekends.js";
 
 const FAMILY_SERIES: Record<string, string> = { imsa: "imsa-mpc", sro: "sro-gt4", wrl: "wrl" };
 const GRACE_DAYS = 7;
@@ -48,7 +49,19 @@ export interface SeasonRecap {
   pitCycles: { count: number; gained: number | null };
   topThreePitStops: number;
   topThreeFastestLaps: number;
-  raceList: { id: string; name: string; date: string; finishClass: number | null; cls: string }[];
+  raceList: {
+    id: string;
+    name: string;
+    date: string;
+    /** The track's standard name, the race's label in the recap's race tabs. */
+    track: string;
+    finishClass: number | null;
+    finishOverall: number | null;
+    classSize: number | null;
+    laps: number;
+    cls: string;
+    pitCycles: { net: number }[];
+  }[];
 }
 
 /** The calendar series a race belongs to, or its family's. */
@@ -112,6 +125,17 @@ export function buildRecap(
     pitCycles: { count: cycles.length, gained: gained > 0 ? gained : null },
     topThreePitStops: rows.reduce((a, r) => a + r.f.benchmarks.filter((b) => b.startsWith("Pit loss")).length, 0),
     topThreeFastestLaps: rows.filter((r) => r.f.benchmarks.some((b) => b.startsWith("Fastest lap"))).length,
-    raceList: rows.map(({ race, f }) => ({ id: race.id, name: race.name, date: race.date.toISOString().slice(0, 10), finishClass: f.finishClass, cls: f.cls })),
+    raceList: rows.map(({ race, f }) => ({
+      id: race.id,
+      name: race.name,
+      date: race.date.toISOString().slice(0, 10),
+      track: canonicalTrack(race.track),
+      finishClass: f.finishClass,
+      finishOverall: f.finishOverall,
+      classSize: f.classSize,
+      laps: f.laps,
+      cls: f.cls,
+      pitCycles: f.pitCycles.map((c) => ({ net: c.net })),
+    })),
   };
 }

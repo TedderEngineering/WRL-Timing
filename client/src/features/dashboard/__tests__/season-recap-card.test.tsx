@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { SeasonRecapCard, recapStats, type SeasonRecap } from "../SeasonRecapCard";
+import { SeasonRecapCard, raceTabLabels, recapStats, type SeasonRecap } from "../SeasonRecapCard";
 
 const recap: SeasonRecap = {
   key: "c1:2026:imsa-mpc", number: "67", team: "Blackdog Racing", season: 2026, seriesId: "imsa-mpc", seriesLabel: "IMSA Michelin Pilot Challenge",
@@ -40,5 +40,16 @@ describe("Your 2026", () => {
     // No window here, so it renders as on a computer: copy and download.
     expect(t).toContain("Copy your season");
     expect(t).toContain("Download");
+  });
+});
+
+describe("the recap's race tabs", () => {
+  it("are labelled by track, numbering a weekend's races", () => {
+    const r = (track: string) => ({ id: track, name: `X — ${track}`, date: "2026-03-01", track, finishClass: 1, cls: "GS" });
+    expect(raceTabLabels([r("Sebring International Raceway"), r("Road America"), r("Road America")])).toEqual([
+      "Sebring International Raceway",
+      "Road America R1",
+      "Road America R2",
+    ]);
   });
 });

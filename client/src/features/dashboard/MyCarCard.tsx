@@ -49,6 +49,8 @@ export interface MyCarResponse {
   viewed?: boolean;
   /** Race-ready emails are on. */
   alerts?: boolean;
+  /** All the user's cars, for the car tabs. */
+  cars?: { id: string; number: string; label: string | null; series: string; teamName: string | null }[];
 }
 
 const chartHref = (id: string, tab?: string) => `/chart?race=${id}${tab ? `&tab=${tab}` : ""}`;

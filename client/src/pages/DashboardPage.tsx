@@ -9,6 +9,7 @@ import { InstallHint } from "../features/dashboard/InstallHint";
 import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { FirstStepsChecklist, MyCarCard, type MyCarResponse } from "../features/dashboard/MyCarCard";
 import { SeasonRecapCard, type SeasonRecap } from "../features/dashboard/SeasonRecapCard";
+import { CarTabs } from "../features/dashboard/CarTabs";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -35,6 +36,16 @@ export function DashboardPage() {
   const [failed, setFailed] = useState(false);
   const [myCar, setMyCar] = useState<MyCarResponse | null>(null);
   const [recaps, setRecaps] = useState<SeasonRecap[]>([]);
+  // The car tab chosen; null shows the newest race of any car.
+  const [carChoice, setCarChoice] = useState<string | null>(null);
+  const chooseCar = useCallback(async (id: string) => {
+    setCarChoice(id);
+    try {
+      setMyCar(await api.get<MyCarResponse>(`/dashboard/my-car?car=${encodeURIComponent(id)}`));
+    } catch {
+      // keep what is shown
+    }
+  }, []);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
@@ -66,6 +77,9 @@ export function DashboardPage() {
   }, []);
 
   const isFree = !hasFullAccess(user);
+  // With car tabs, the recaps follow the car shown.
+  const shownCarId = myCar?.car?.id ?? null;
+  const shownRecaps = (myCar?.cars?.length ?? 0) > 1 && shownCarId ? recaps.filter((r) => !r.carId || r.carId === shownCarId) : recaps;
 
   const [resendStatus, setResendStatus] = useState<
     "idle" | "sending" | "sent" | "rate-limited" | "error"
@@ -198,17 +212,18 @@ export function DashboardPage() {
             <section aria-labelledby="your-car" className="flex flex-col gap-3">
               <div className="flex items-baseline justify-between">
                 <h2 id="your-car" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
-                  {myCar.carCount > 1 ? "Your cars' latest race" : "Your car"}
+                  {myCar.carCount > 1 ? "Your cars" : "Your car"}
                 </h2>
                 <Link to="/settings/cars" className="text-[13px] text-[var(--rt-accent)]">
                   My cars →
                 </Link>
               </div>
-              <MyCarCard data={myCar} ask={recaps.length === 0} />
+              <CarTabs cars={myCar.cars ?? []} active={carChoice ?? myCar.car.id} onChoose={chooseCar} />
+              <MyCarCard data={myCar} ask={shownRecaps.length === 0} />
             </section>
           )}
-          {/* "Your 2026", series by series as each season ends (plan H). */}
-          {recaps.map((r, i) => (
+          {/* "Your 2026", series by series as each season ends (plan H), for the car shown. */}
+          {shownRecaps.map((r, i) => (
             <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />
           ))}
           <FirstStepsChecklist data={myCar} />
