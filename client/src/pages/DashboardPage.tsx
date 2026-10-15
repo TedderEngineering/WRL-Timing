@@ -4,7 +4,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { Alert } from "../components/Alert";
 import { api } from "../lib/api";
 import { hasFullAccess } from "../lib/utils";
-import { RecapCard, EventRow } from "../features/dashboard/RecapCard";
+import { RecapCard } from "../features/dashboard/RecapCard";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -77,8 +77,8 @@ export function DashboardPage() {
   }, []);
 
   const continueRace = recent[0] ?? null;
-  const cards = (events ?? []).slice(0, 2);
-  const rows = (events ?? []).slice(2);
+  // Every weekend gets the same card (race tabs, one click to Position Trace); only the first is the hero.
+  const cards = events ?? [];
 
   return (
     <div className="container-page py-6 text-left text-[var(--rt-text)] lg:py-8">
@@ -225,18 +225,6 @@ export function DashboardPage() {
                   variant={i === 0 ? "hero" : "compact"}
                 />
               ))}
-              {rows.length > 0 && (
-                <section className="rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)]">
-                  <h3 className="m-0 border-b border-[var(--rt-border)] px-5 py-3 text-[13px] font-semibold text-[var(--rt-text-muted)]">
-                    Earlier races
-                  </h3>
-                  <ul className="m-0 list-none p-0">
-                    {rows.map((ev) => (
-                      <EventRow key={ev.key} event={ev} />
-                    ))}
-                  </ul>
-                </section>
-              )}
             </>
           )}
 
