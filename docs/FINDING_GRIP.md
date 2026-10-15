@@ -1,8 +1,11 @@
 # Finding Grip
 
 Tire pressure and damper tools for race and track cars, by Tedder Engineering.
-Finding Grip lives inside this app under `/grip` and shares RaceTrace's
-accounts, login, Stripe customer and billing portal.
+Finding Grip is part of this app: it is served at
+`https://findinggrip.tedderengineering.com` (and under `/grip` on RaceTrace,
+which forwards there once `GRIP_PUBLIC_URL` is set). It shares RaceTrace's
+accounts, login, Stripe account and support (coffee) code. It is free:
+`GRIP_PRICING` is unset, so every account gets every tool.
 
 ## Confidential data never goes in this repository
 
@@ -27,14 +30,28 @@ be read through Supabase's public API; only the server reads it.
 ```
 server/prisma/schema.prisma                     Grip* models (grip_* tables)
 server/prisma/migrations/20261009000000_add_finding_grip/
+server/prisma/migrations/20261015000000_grip_calculation_outcomes/   measured hot pressures
 server/src/routes/grip.ts                       /api/grip/* (access gate, validation, limits)
 server/src/services/grip/calc.ts                generic calculation engine
 server/src/services/grip/damper.ts              damper lookup + import validation
 server/src/services/grip/account.ts             plan rules, free allowance
 server/src/services/grip/billing.ts             Stripe checkout/portal/webhook sync
+server/src/services/grip/outcome.ts             on target, accuracy over time, season recap
 client/src/features/grip/                       shell, API client, units, components
+  outcome.tsx                                   verdict wording, "How did it come in?" items
+  progress.tsx                                  dashboard "Your accuracy", result-page line
+  season.tsx                                    season recap card and image
+  engagement.tsx                                first-weekend checklist, install hint
+  install.ts                                    add-to-home-screen prompt
+  pressureCard.tsx                              share image of a result
 client/src/pages/grip/                          pages
+client/grip.html, client/public/grip.webmanifest   Finding Grip's page shell and app manifest
 ```
+
+Shared with RaceTrace (change with care, tell the RaceTrace side):
+`client/src/features/support/` and `server/src/support/` (coffee),
+`client/src/features/share/` (share-card template), `client/src/lib/analytics.ts`,
+and the account, terms and privacy pages.
 
 Existing files touched: `server/src/app.ts` (mount router),
 `server/src/config/env.ts` (four optional settings),
@@ -53,10 +70,11 @@ onboarding / auth layout (return visitors to the tool they came from).
   (admins excepted). The check is in `requireGripAccess`; an unverified account
   gets `403 EMAIL_NOT_VERIFIED` and the client shows a "verify your email"
   screen with a resend button in place of the app.
-- Free accounts get 3 calculations for life (`grip_accounts.calc_count`;
-  deleting a calculation does not give one back). The next returns
-  `403 { code: "UPGRADE_REQUIRED", upgrade_required: true }`.
-- The damper tool requires Finding Grip Pro (admins always have access).
+- Only when `GRIP_PRICING=paid`: free accounts get 3 calculations for life
+  (`grip_accounts.calc_count`; deleting a calculation does not give one back),
+  the next returns `403 { code: "UPGRADE_REQUIRED", upgrade_required: true }`,
+  and the damper tool requires Finding Grip Pro (admins always have access).
+  While free (the default) neither limit applies.
 - A reference session needs all four hot pressures before it can be
   calculated from (`422 REFERENCE_INCOMPLETE`).
 - Pressures are PSI and temperatures °F in the API and database. The client
@@ -66,6 +84,45 @@ onboarding / auth layout (return visitors to the tool they came from).
   `subscriptions`. Stripe webhooks are routed by price / metadata, and
   Finding Grip state is always re-read from Stripe rather than taken from one
   event (`services/__tests__/grip.billing.test.ts`).
+
+## After the run: outcomes, accuracy, season
+
+The driver records the hot pressures measured after a run. The server compares
+them with the calculation's hot targets; a run is **on target** when every
+corner is within 0.5 PSI (`ON_TARGET_PSI` in `services/grip/outcome.ts`). All
+of this is the driver's own data only: nothing is compared with other drivers.
+
+| Route | What it does |
+|---|---|
+| `POST /calculations/:id/outcome` | `{ hot, saveAsReference?, referenceName?, notes? }`. Stores the measured hot pressures (`actual_hot_*`, `outcome_at`), returns the comparison; optionally saves the run as a reference session (cold = what was set, hot = what was measured). Recording again corrects it and never makes a second reference. |
+| `POST /calculations/:id/skip-outcome` | "Didn't run it": `outcome_skipped`, so the dashboard stops asking. |
+| `POST /calculations/:id/convert` | Older convert route; also records the outcome. |
+| `GET /progress` | Last 10 recorded runs (on target, average worst-corner miss, one entry per run oldest first), the latest 5 against the 5 before once there are 6, and each track. |
+| `GET /season?year=` | One calendar year: calculations, reference sessions, track days, tracks, recorded and on-target runs, the closest run, first and last day. |
+| `GET /export` | CSV, now including measured hot pressures. |
+
+Where it shows:
+
+- Dashboard: "How did it come in?" for calculations from the last 14 days
+  without an outcome; "Your accuracy" once a run is recorded; the season
+  recap card from 20 November to 31 January (January shows the year before;
+  `?season=YYYY` shows it any time for checking).
+- Result page: the verdict as a fact ("Came in 0.8 PSI high on the right
+  front"), and "On target in 6 of your last 10 recorded runs. At VIR: 4 of 7."
+  from the second recorded run.
+- Share: a result or the season as a 1080×1350 image (shared template).
+
+Wording rules (shared with RaceTrace): state facts the data supports; no
+praise, no streaks, no ranking against other drivers, no guilt wording.
+
+The coffee ask (shared support code, usual caps: one ask per 30 days, none for
+365 days after a payment, "Not now" counts) appears only right after a run is
+recorded on target, and at the end of the opened season recap.
+
+Analytics events (anonymous, `client/src/lib/analytics.ts`, off unless
+`VITE_POSTHOG_KEY` is set): `record_hot`, `on_target`, `checklist_step`,
+`share_card`, `coffee_open`, `coffee_paid`. Per-browser memory (hidden cards,
+install hint) is the `findinggrip.ui.v1` localStorage key.
 
 ## Settings
 
@@ -137,11 +194,17 @@ Available inputs, per corner: `refCold`, `refHot`, `targetHot`, `refTrackTemp`,
 
 ## Not done yet
 
-- Terms of Service and Privacy Policy still describe RaceTrace only.
-- The price label on `/grip/pricing` (`PRO_PRICE_PER_YEAR` in
-  `client/src/pages/grip/GripPublicPages.tsx`).
-- A `findinggrip.tedderengineering.com` domain pointing at `/grip`.
+- Terms of Service and Privacy Policy: Finding Grip wording drafted, awaiting
+  decisions and a legal read; the Terms still carry RaceTrace's
+  subscription section.
+- Cars: once the shared `user_cars` list exists, reference sessions and
+  calculations get a nullable `carId` (on delete SET NULL) and accuracy is
+  split by car.
+- Opt-in email reminder to record hot pressures, through the shared alerts
+  preferences.
 - Track logos (tracks show their short code until `logoUrl` is set).
+- Only if Pro is ever sold: the price label on `/pricing`
+  (`PRO_PRICE_PER_YEAR` in `client/src/pages/grip/GripPublicPages.tsx`).
 
 ## Its own address
 
