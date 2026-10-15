@@ -8,6 +8,7 @@ import { RecapCard } from "../features/dashboard/RecapCard";
 import { InstallHint } from "../features/dashboard/InstallHint";
 import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { FirstStepsChecklist, MyCarCard, type MyCarResponse } from "../features/dashboard/MyCarCard";
+import { SeasonRecapCard, type SeasonRecap } from "../features/dashboard/SeasonRecapCard";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -33,17 +34,19 @@ export function DashboardPage() {
   const [favorites, setFavorites] = useState<RaceItem[]>([]);
   const [failed, setFailed] = useState(false);
   const [myCar, setMyCar] = useState<MyCarResponse | null>(null);
+  const [recaps, setRecaps] = useState<SeasonRecap[]>([]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [latestRes, seasonRes, recentRes, favRes, myCarRes] = await Promise.allSettled([
+      const [latestRes, seasonRes, recentRes, favRes, myCarRes, recapRes] = await Promise.allSettled([
         api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
         api.get<SeasonResponse>("/dashboard/season"),
         api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
         api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
         api.get<MyCarResponse>("/dashboard/my-car"),
+        api.get<{ recaps: SeasonRecap[] }>("/dashboard/season-recap"),
       ]);
       if (!alive) return;
       if (latestRes.status === "fulfilled") setEvents(latestRes.value.events);
@@ -55,6 +58,7 @@ export function DashboardPage() {
       if (recentRes.status === "fulfilled") setRecent(recentRes.value.races);
       if (favRes.status === "fulfilled") setFavorites(favRes.value.races);
       if (myCarRes.status === "fulfilled") setMyCar(myCarRes.value);
+      if (recapRes.status === "fulfilled") setRecaps(recapRes.value.recaps);
     })();
     return () => {
       alive = false;
@@ -200,9 +204,13 @@ export function DashboardPage() {
                   My cars →
                 </Link>
               </div>
-              <MyCarCard data={myCar} />
+              <MyCarCard data={myCar} ask={recaps.length === 0} />
             </section>
           )}
+          {/* "Your 2026", series by series as each season ends (plan H). */}
+          {recaps.map((r, i) => (
+            <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />
+          ))}
           <FirstStepsChecklist data={myCar} />
 
           <div className={`flex items-baseline justify-between ${myCar?.car ? "mt-4" : ""}`}>

@@ -70,7 +70,7 @@ export function pitCycleLine(c: NonNullable<MyCarResponse["facts"]>["pitCycles"]
   return `Pit cycle ${c.cycle} (settled lap ${c.lap}): P${c.before} → P${c.after} in ${cls}, ${change}`;
 }
 
-export function MyCarCard({ data }: { data: MyCarResponse }) {
+export function MyCarCard({ data, ask = true }: { data: MyCarResponse; /** False when the season recap carries the coffee ask. */ ask?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const { car, race, facts, story } = data;
   if (!car) return null;
@@ -188,7 +188,7 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
             </div>
 
             {/* After the peak moment: the one contextual ask, at most every 30 days. */}
-            <SupportAsk />
+            {ask && <SupportAsk />}
           </>
         )}
       </div>

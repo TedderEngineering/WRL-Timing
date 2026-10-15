@@ -18,7 +18,8 @@ const fake = vi.hoisted(() => {
             (!where.status || r.status === where.status) &&
             (!where.season || r.season === where.season) &&
             (!where.createdAt?.lte || r.createdAt <= where.createdAt.lte) &&
-            (!where.entries?.some || (r.entries ?? []).some((e: Row) => where.entries.some.carNumber.in.includes(e.carNumber)))
+            (!where.entries?.some || (r.entries ?? []).some((e: Row) => where.entries.some.carNumber.in.includes(e.carNumber))) &&
+            (!where.id?.in || where.id.in.includes(r.id))
         );
         rows = rows.sort((a, b) => b.date - a.date || a.name.localeCompare(b.name));
         if (take) rows = rows.slice(0, take);
@@ -229,5 +230,46 @@ describe("GET /api/dashboard/my-car", () => {
     fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "imsa", teamName: "Nobody", season: null, label: null, carClass: null }];
     const none = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
     expect(none.body).toMatchObject({ carCount: 1, race: null });
+  });
+});
+
+describe("GET /api/dashboard/season-recap", () => {
+  const lap = (l: number, p: number, cp: number) => ({ l, p, cp, ltSec: 100, pit: 0, flag: "GF", lt: "" });
+  const chart = (cp: number) => ({
+    maxLap: 2, classCarCounts: { GS: 2 },
+    cars: {
+      "67": { num: 67, team: "Blackdog Racing", cls: "GS", finishPos: cp, finishPosClass: cp, laps: [lap(1, cp, cp), lap(2, cp, cp)] },
+      "8": { num: 8, team: "X", cls: "GS", finishPos: 3 - cp, finishPosClass: 3 - cp, laps: [lap(1, 3 - cp, 3 - cp), lap(2, 3 - cp, 3 - cp)] },
+    },
+  });
+  const mpc = (id: string, date: string, track: string, cp: number) => ({
+    ...race(id, date, `Pilot Challenge — ${track}`, track, "IMSA"),
+    subSeries: "Pilot Challenge",
+    entries: [{ carNumber: "67", teamName: "Blackdog Racing" }, { carNumber: "8", teamName: "X" }],
+    chartData: chart(cp),
+    annotationData: {},
+  });
+  beforeEach(() => {
+    fake.state.races = [
+      mpc("seb", "2026-03-20", "Sebring International Raceway", 2),
+      mpc("ra", "2026-10-02", "Michelin Raceway Road Atlanta", 1),
+      { ...race("wrl", "2026-09-26", "WRL Saturday 8 Hour", "Utah Motorsports Campus", "WRL"), entries: [{ carNumber: "67", teamName: "Y" }], chartData: chart(1), annotationData: {} },
+    ];
+  });
+
+  it("gives the IMSA car its season once Pilot Challenge's finale is on the site, and the WRL car nothing yet", async () => {
+    fake.state.cars = [
+      { id: "c1", userId: "u_pro", number: "67", series: "imsa", teamName: null, season: null, label: null, carClass: null },
+      { id: "c2", userId: "u_pro", number: "67", series: "wrl", teamName: null, season: null, label: null, carClass: null },
+    ];
+    const res = await request(app).get("/api/dashboard/season-recap").set("Authorization", bearer(users.pro));
+    expect(res.status).toBe(200);
+    expect(res.body.recaps).toHaveLength(1);
+    expect(res.body.recaps[0]).toMatchObject({ seriesId: "imsa-mpc", number: "67", races: 2, classWins: 1, podiums: 2, best: { finishClass: 1, raceId: "ra" } });
+  });
+
+  it("is empty without followed cars", async () => {
+    const res = await request(app).get("/api/dashboard/season-recap").set("Authorization", bearer(users.pro));
+    expect(res.body).toEqual({ season: 2026, recaps: [] });
   });
 });
