@@ -60,7 +60,10 @@ export function installHintMode(s: {
   return null;
 }
 
-const BENEFIT = "One tap opens the latest races full screen, like an app.";
+const BENEFIT = {
+  phone: "One tap opens the latest races full screen, like an app.",
+  computer: "One click opens the latest races in their own window, like an app.",
+};
 
 export function InstallHint() {
   const [, rerender] = useState(0);
@@ -106,7 +109,7 @@ export function InstallHint() {
           {phone ? "Put RaceTrace on your home screen" : "Install RaceTrace"}
         </div>
         <p className="m-0 mt-1 text-[13px] leading-normal text-[var(--rt-text-secondary)]">
-          {BENEFIT}
+          {phone ? BENEFIT.phone : BENEFIT.computer}
           {how ? ` ${how}` : ""}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-4">
