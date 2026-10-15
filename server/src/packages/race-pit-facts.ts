@@ -70,3 +70,13 @@ export async function withPitFacts<T extends { data: unknown; annotations: unkno
 export function clearPitFactsCache(): void {
   cache.clear();
 }
+
+/** The pit facts of the race's published package, when it has one and the switch is on. */
+export async function publishedPitFacts(race: { currentPackageId?: string | null; packagesDisabled?: boolean | null }): Promise<PitFacts | null> {
+  if (!pitFactsFlagOn() || race.packagesDisabled === true || !race.currentPackageId) return null;
+  const row = (await prisma.raceAnalysisPackage.findUnique({
+    where: { id: race.currentPackageId },
+    select: { id: true, version: true, status: true, storagePath: true, sha256: true, engineVersion: true },
+  })) as Row | null;
+  return row && row.status === "PUBLISHED" ? loadFacts(row) : null;
+}

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { api, ApiClientError } from "../../lib/api";
 import { Link } from "react-router-dom";
+import type { RaceChartData } from "@shared/types";
+import { carKey } from "./car-number";
 
 // ─── API response types ─────────────────────────────────────────────────────
 
@@ -8,16 +10,20 @@ interface PitStop {
   stopNumber: number;
   pitLap: number;
   condition: string;
-  localRef_s: number;
-  vsGlobal_s: number;
+  localRef_s: number | null;
+  vsGlobal_s?: number;
   refSource: string;
-  twoLapActual_s: number;
-  twoLapRef_s: number;
-  serviceTime_s: number;
-  pitRoadTime_s: number;
-  timeLost_s: number;
-  delta_s: number;
-  isCautionContaminated: boolean;
+  twoLapActual_s?: number;
+  twoLapRef_s?: number;
+  /** null when the stops come from the race's analysis package (no transit split). */
+  serviceTime_s: number | null;
+  pitRoadTime_s: number | null;
+  timeLost_s: number | null;
+  /** Legacy: against the car's own reference; analysis package: against the class pit cycle's mean. */
+  delta_s: number | null;
+  isCautionContaminated?: boolean;
+  kind?: string;
+  cycle?: number | null;
 }
 
 interface CarAnalysis {
@@ -30,6 +36,8 @@ interface CarAnalysis {
 }
 
 interface PitAnalysisResponse {
+  /** "facts": the race's analysis package, the same stops as the Position Trace. */
+  source?: "facts";
   raceId: string;
   track: string;
   trackConfig: { trackName: string; transitTime_s: number; transitOverhead_s: number } | null;
@@ -37,8 +45,8 @@ interface PitAnalysisResponse {
   summary: {
     totalStops: number;
     totalCars: number;
-    avgServiceTime_s: number;
-    avgTimeLost_s: number;
+    avgServiceTime_s: number | null;
+    avgTimeLost_s: number | null;
   };
 }
 
@@ -63,8 +71,8 @@ const S = {
 
 // ─── Format helpers ─────────────────────────────────────────────────────────
 
-function fmtTime(s: number): string {
-  if (!s && s !== 0) return "—";
+function fmtTime(s: number | null | undefined): string {
+  if (s === null || s === undefined || !Number.isFinite(s)) return "—";
   const abs = Math.abs(s);
   const m = Math.floor(abs / 60);
   const sec = abs - m * 60;
@@ -74,7 +82,8 @@ function fmtTime(s: number): string {
     : `${sign}${sec.toFixed(1)}`;
 }
 
-function fmtDelta(s: number): string {
+function fmtDelta(s: number | null | undefined): string {
+  if (s === null || s === undefined || !Number.isFinite(s)) return "—";
   const sign = s >= 0 ? "+" : "";
   return `${sign}${s.toFixed(1)}s`;
 }
@@ -87,10 +96,10 @@ interface CarRow {
   carClass: string;
   finishPos: number;
   stopCount: number;
-  avgServiceTime: number;
-  avgTimeLost: number;
-  bestTimeLost: number;
-  worstTimeLost: number;
+  avgServiceTime: number | null;
+  avgTimeLost: number | null;
+  bestTimeLost: number | null;
+  worstTimeLost: number | null;
   greenStops: number;
   cautionStops: number;
   stops: PitStop[];
@@ -102,6 +111,8 @@ type SortKey = "finishPos" | "carNumber" | "teamName" | "stopCount" | "avgServic
 
 interface PitAnalysisTabProps {
   raceId: string;
+  /** The race's chart data, to turn a published car number ("007") into its chart car. */
+  chart?: RaceChartData | null;
   focusNum: number;
   setFocusNum: React.Dispatch<React.SetStateAction<number>>;
   onSwitchToTrace: () => void;
@@ -109,7 +120,7 @@ interface PitAnalysisTabProps {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace }: PitAnalysisTabProps) {
+export function PitAnalysisTab({ raceId, chart, focusNum, setFocusNum, onSwitchToTrace }: PitAnalysisTabProps) {
   const [data, setData] = useState<PitAnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
@@ -140,18 +151,21 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
     if (!data) return [];
     return Object.values(data.cars).map((car): CarRow => {
       const greenStops = car.stops.filter((s) => s.condition === "Full green").length;
-      const serviceTimes = car.stops.map((s) => s.serviceTime_s);
-      const timeLosts = car.stops.map((s) => s.timeLost_s);
+      const nums = (xs: (number | null)[]) => xs.filter((v): v is number => typeof v === "number");
+      const serviceTimes = nums(car.stops.map((s) => s.serviceTime_s));
+      // From the analysis package, averages and best / worst are over green stops (not garage
+      // visits): under a caution, time lost is measured against cars on track and can come out ahead.
+      const timeLosts = nums((data.source === "facts" ? car.stops.filter((s) => s.condition === "Full green" && (s.kind ?? "stop") === "stop") : car.stops).map((s) => s.timeLost_s));
       return {
         carNumber: car.carNumber,
         teamName: car.teamName,
         carClass: car.carClass,
         finishPos: car.finishPos ?? 999,
         stopCount: car.stops.length,
-        avgServiceTime: serviceTimes.length > 0 ? serviceTimes.reduce((a, b) => a + b, 0) / serviceTimes.length : 0,
-        avgTimeLost: timeLosts.length > 0 ? timeLosts.reduce((a, b) => a + b, 0) / timeLosts.length : 0,
-        bestTimeLost: timeLosts.length > 0 ? Math.min(...timeLosts) : 0,
-        worstTimeLost: timeLosts.length > 0 ? Math.max(...timeLosts) : 0,
+        avgServiceTime: serviceTimes.length > 0 ? serviceTimes.reduce((a, b) => a + b, 0) / serviceTimes.length : null,
+        avgTimeLost: timeLosts.length > 0 ? timeLosts.reduce((a, b) => a + b, 0) / timeLosts.length : null,
+        bestTimeLost: timeLosts.length > 0 ? Math.min(...timeLosts) : null,
+        worstTimeLost: timeLosts.length > 0 ? Math.max(...timeLosts) : null,
         greenStops,
         cautionStops: car.stops.length - greenStops,
         stops: car.stops,
@@ -168,9 +182,9 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
         case "carNumber": return dir * (parseInt(a.carNumber) - parseInt(b.carNumber));
         case "teamName": return dir * a.teamName.localeCompare(b.teamName);
         case "stopCount": return dir * (a.stopCount - b.stopCount);
-        case "avgServiceTime": return dir * (a.avgServiceTime - b.avgServiceTime);
-        case "avgTimeLost": return dir * (a.avgTimeLost - b.avgTimeLost);
-        case "bestTimeLost": return dir * (a.bestTimeLost - b.bestTimeLost);
+        case "avgServiceTime": return dir * ((a.avgServiceTime ?? 1e6) - (b.avgServiceTime ?? 1e6));
+        case "avgTimeLost": return dir * ((a.avgTimeLost ?? 1e6) - (b.avgTimeLost ?? 1e6));
+        case "bestTimeLost": return dir * ((a.bestTimeLost ?? 1e6) - (b.bestTimeLost ?? 1e6));
         case "greenStops": return dir * (a.greenStops - b.greenStops);
         default: return 0;
       }
@@ -242,14 +256,15 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
     );
   }
 
+  const facts = data.source === "facts";
   const columns: { key: SortKey; label: string; width?: string }[] = [
     { key: "finishPos", label: "Pos", width: "48px" },
     { key: "carNumber", label: "Car", width: "56px" },
     { key: "teamName", label: "Team" },
     { key: "stopCount", label: "Stops", width: "52px" },
-    { key: "avgServiceTime", label: "Avg Service", width: "90px" },
-    { key: "avgTimeLost", label: "Avg Time Lost", width: "100px" },
-    { key: "bestTimeLost", label: "Best Stop", width: "86px" },
+    ...(facts ? [] : [{ key: "avgServiceTime" as SortKey, label: "Avg Service", width: "90px" }]),
+    { key: "avgTimeLost", label: facts ? "Avg Lost (green)" : "Avg Time Lost", width: "100px" },
+    { key: "bestTimeLost", label: facts ? "Best (green)" : "Best Stop", width: "86px" },
     { key: "greenStops", label: "Green / Caution", width: "110px" },
   ];
 
@@ -259,8 +274,8 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
         <CondCard label="Total Stops" value={String(data.summary.totalStops)} color={S.acc} />
         <CondCard label="Cars" value={String(data.summary.totalCars)} color={S.acc} />
-        <CondCard label="Avg Service Time" value={fmtTime(data.summary.avgServiceTime_s)} color={S.pit} mono />
-        <CondCard label="Avg Time Lost" value={fmtTime(data.summary.avgTimeLost_s)} color={S.red} mono />
+        {!facts && <CondCard label="Avg Service Time" value={fmtTime(data.summary.avgServiceTime_s)} color={S.pit} mono />}
+        <CondCard label={facts ? "Avg Time Lost (green stops)" : "Avg Time Lost"} value={fmtTime(data.summary.avgTimeLost_s)} color={S.red} mono />
         {data.trackConfig && (
           <>
             <CondCard label="Track" value={data.trackConfig.trackName} color={S.acc2} />
@@ -328,7 +343,7 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
           <tbody>
             {sortedRows.map((row) => {
               const isSelected = row.carNumber === selectedCar;
-              const isFocus = parseInt(row.carNumber) === focusNum;
+              const isFocus = carKey(chart, row.carNumber) === focusNum;
               return (
                 <tr
                   key={row.carNumber}
@@ -367,9 +382,11 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
                   <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
                     {row.stopCount}
                   </td>
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>
-                    {fmtTime(row.avgServiceTime)}
-                  </td>
+                  {!facts && (
+                    <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>
+                      {fmtTime(row.avgServiceTime)}
+                    </td>
+                  )}
                   <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.red }}>
                     {fmtTime(row.avgTimeLost)}
                   </td>
@@ -413,9 +430,11 @@ export function PitAnalysisTab({ raceId, focusNum, setFocusNum, onSwitchToTrace 
         <DetailPanel
           row={selectedRow}
           trackConfig={data.trackConfig}
+          facts={facts}
           onClose={() => setSelectedCar(null)}
           onGoToTrace={() => {
-            setFocusNum(parseInt(selectedRow.carNumber));
+            const k = carKey(chart, selectedRow.carNumber);
+            if (k !== null) setFocusNum(k);
             onSwitchToTrace();
           }}
         />
@@ -472,9 +491,10 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DetailPanel({ row, trackConfig, onClose, onGoToTrace }: {
+function DetailPanel({ row, trackConfig, facts, onClose, onGoToTrace }: {
   row: CarRow;
   trackConfig: PitAnalysisResponse["trackConfig"];
+  facts: boolean;
   onClose: () => void;
   onGoToTrace: () => void;
 }) {
@@ -528,7 +548,7 @@ function DetailPanel({ row, trackConfig, onClose, onGoToTrace }: {
       {/* Summary stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 16 }}>
         <MiniCard label="Stops" value={String(row.stopCount)} color={S.acc} />
-        <MiniCard label="Avg Service" value={fmtTime(row.avgServiceTime)} color={S.pit} />
+        {!facts && <MiniCard label="Avg Service" value={fmtTime(row.avgServiceTime)} color={S.pit} />}
         <MiniCard label="Avg Time Lost" value={fmtTime(row.avgTimeLost)} color={S.red} />
         <MiniCard label="Best Stop" value={fmtTime(row.bestTimeLost)} color={S.grn} />
         <MiniCard label="Worst Stop" value={fmtTime(row.worstTimeLost)} color={S.yel} />
@@ -540,7 +560,10 @@ function DetailPanel({ row, trackConfig, onClose, onGoToTrace }: {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
           <thead>
             <tr>
-              {["#", "Lap", "Condition", "Service", "Pit Road", "Time Lost", "Local Ref", "Ref Source", "Delta"].map((h) => (
+              {(facts
+                ? ["#", "Lap", "Condition", "Pit Lane", "Time Lost", "Reference", "Measured against", "vs Cycle Avg"]
+                : ["#", "Lap", "Condition", "Service", "Pit Road", "Time Lost", "Local Ref", "Ref Source", "Delta"]
+              ).map((h) => (
                 <th
                   key={h}
                   style={{
@@ -585,9 +608,11 @@ function DetailPanel({ row, trackConfig, onClose, onGoToTrace }: {
                       {stop.condition}
                     </span>
                   </td>
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>
-                    {fmtTime(stop.serviceTime_s)}
-                  </td>
+                  {!facts && (
+                    <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>
+                      {fmtTime(stop.serviceTime_s)}
+                    </td>
+                  )}
                   <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
                     {fmtTime(stop.pitRoadTime_s)}
                   </td>
@@ -603,7 +628,7 @@ function DetailPanel({ row, trackConfig, onClose, onGoToTrace }: {
                   <td style={{
                     ...tdStyle,
                     fontFamily: "'JetBrains Mono', monospace",
-                    color: stop.delta_s < 0 ? S.grn : S.red,
+                    color: stop.delta_s === null ? S.dim : stop.delta_s < 0 ? S.grn : S.red,
                   }}>
                     {fmtDelta(stop.delta_s)}
                   </td>

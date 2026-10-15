@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPitFacts, extractPitFacts, matchCars } from "../pit-facts.js";
+import { applyPitFacts, extractPitFacts, matchCars, pitStopsFromFacts } from "../pit-facts.js";
 import { carFacts } from "../../dashboard/my-car.js";
 
 // Three GTU cars over 6 laps. The import put #1's stop on lap 4 (a phantom on lap 2 as well);
@@ -133,5 +133,17 @@ describe("pit facts from the analysis package", () => {
     const before = JSON.stringify([c, a]);
     applyPitFacts(c as any, a as any, facts);
     expect(JSON.stringify([c, a])).toBe(before);
+  });
+
+  it("gives the Pit Stops tab the same stops, averaging time lost over green stops", () => {
+    const out = pitStopsFromFacts(facts, [
+      { carNumber: "1", teamName: "Alpha", carClass: "GTU", carColor: null, finishPos: 2 },
+      { carNumber: "2", teamName: "Bravo", carClass: "GTU", carColor: "#f00", finishPos: 1 },
+    ]);
+    expect(out.source).toBe("facts");
+    expect(Object.keys(out.cars)).toEqual(["1", "2"]); // #3's drive-through is not a stop
+    expect(out.cars["1"].stops[0]).toMatchObject({ stopNumber: 1, pitLap: 3, condition: "Full green", timeLost_s: 55.5, refSource: "Green pace", localRef_s: 100, cycle: 1 });
+    expect(out.cars["2"].stops[0]).toMatchObject({ condition: "Caution", timeLost_s: -4, refSource: "Cars on track (caution)", pitRoadTime_s: 40.2 });
+    expect(out.summary).toEqual({ totalStops: 2, totalCars: 2, avgServiceTime_s: null, avgTimeLost_s: 55.5 });
   });
 });

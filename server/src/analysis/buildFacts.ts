@@ -3,6 +3,7 @@
  * (FACT_ENGINE_SPEC.md §2). Pure and deterministic: no I/O, no clock (generatedAt is an input).
  * Prose sections (ruleFindings, carStories, raceSummary) are left empty for the Claude pass.
  */
+import { checkLapChart } from "./engine/lap-chart.js";
 import type {
   Confidence,
   DataQualityNote,
@@ -139,6 +140,8 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
 
   /* M5 */
   const pos = computePositions(laps, classOf);
+  // A-LC: report where the official lap chart, when there is one, disagrees with D-POS.
+  checkLapChart(files, laps, issues);
 
   /* M6, M7, M8 */
   let passages = buildRawPassages(ctx);
