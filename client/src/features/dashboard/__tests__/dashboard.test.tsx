@@ -88,9 +88,11 @@ describe("RecapCard", () => {
     expect(out).toContain("After the race: #77 given a 0:14.018 time penalty, P2 → P7 in Pro-Am");
   });
 
-  it("has a tab per race in the weekend and links into the chart pages", () => {
+  it("has one link per race that opens it on Position Trace, and links into the chart pages", () => {
     const h = html(<RecapCard event={EVENT} variant="hero" />);
-    expect(h).toMatch(/role="tab" aria-selected="true"[^>]*>Race 1</);
+    const raceLinks = (h.match(/<a [^>]*>[^<]*<\/a>/g) ?? []).filter((a) => /data-active/.test(a));
+    expect(raceLinks.length).toBe(EVENT.races.length);
+    expect(raceLinks.find((a) => a.includes('aria-current="true"'))).toMatch(/href="\/chart\?race=[^"]+"[^>]*>Race 1</);
     expect(h).toContain('href="/chart?race=r1&amp;tab=pitanalysis"');
   });
 

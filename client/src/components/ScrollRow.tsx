@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 /**
  * A horizontal row that scrolls without a scroll bar: the edges fade where more is hidden,
  * and a small arrow on each such edge scrolls by most of a width. The mouse wheel scrolls it
- * sideways, touch and trackpads swipe it, and the selected item (`data-active="true"`) is kept
+ * sideways, a mouse can grab and drag it, touch and trackpads swipe it, and the selected item (`data-active="true"`) is kept
  * in view. Used for the race tabs on the dashboard's recap cards.
  */
 export function ScrollRow({
@@ -46,9 +46,54 @@ export function ScrollRow({
       el.scrollLeft += e.deltaY;
     };
     el.addEventListener("wheel", onWheel, { passive: false });
+
+    // Grab to scroll with a mouse (touch already swipes). A drag of more than a few pixels is a
+    // scroll, not a click, so the link under the pointer is not followed when the button is let go.
+    let start: { x: number; left: number; id: number } | null = null;
+    let dragged = false;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || e.button !== 0 || el.scrollWidth <= el.clientWidth) return;
+      start = { x: e.clientX, left: el.scrollLeft, id: e.pointerId };
+      dragged = false;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x;
+      if (!dragged && Math.abs(dx) < 5) return;
+      if (!dragged) {
+        dragged = true;
+        el.setPointerCapture(e.pointerId);
+        el.style.cursor = "grabbing";
+        el.style.userSelect = "none";
+      }
+      el.scrollLeft = start.left - dx;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      start = null;
+      el.style.cursor = "";
+      el.style.userSelect = "";
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!dragged) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragged = false;
+    };
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    el.addEventListener("click", onClick, true);
     return () => {
       ro?.disconnect();
       el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      el.removeEventListener("click", onClick, true);
     };
   }, [measure]);
 
@@ -80,7 +125,7 @@ export function ScrollRow({
 
   return (
     <div className={`relative ${className}`}>
-      <div ref={ref} onScroll={measure} className={`no-scrollbar flex overflow-x-auto overscroll-x-contain ${innerClassName}`} {...rest}>
+      <div ref={ref} onScroll={measure} className={`no-scrollbar flex ${edges.left || edges.right ? "cursor-grab" : ""} overflow-x-auto overscroll-x-contain ${innerClassName}`} {...rest}>
         {children}
       </div>
       {edges.left && (
