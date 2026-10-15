@@ -8,7 +8,7 @@
 
 /** Canonical track names, tried in order against the stored track (and event) name. */
 const TRACKS: [RegExp, string][] = [
-  [/circuit of the americas|^cota\b/i, "Circuit of the Americas"],
+  [/circu?i?t of the americas|^cota\b/i, "Circuit of the Americas"],
   [/sonoma/i, "Sonoma Raceway"],
   [/virginia international/i, "VIRginia International Raceway"],
   [/eagle'?s canyon/i, "Eagles Canyon Raceway"],
@@ -80,6 +80,7 @@ export const CHAMPIONSHIP_WORDS: [RegExp, string][] = [
   [/\btc america\b/i, "TC America"],
   [/mclaren/i, "McLaren Trophy"],
   [/\bgr cup\b|toyota/i, "GR Cup"],
+  [/airbnb endurance/i, "Airbnb Endurance Challenge"],
 ];
 
 /**

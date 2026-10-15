@@ -26,6 +26,18 @@ describe("standard race names", () => {
     );
   });
 
+  it("handles the odd names in the live list", () => {
+    expect(standardRaceName(sess("imsa", "05_IMSA Airbnb Endurance Challenge", "Race", "Sebring International Raceway"), cur("IMSA Airbnb Endurance Challenge — Sebring International Raceway", "IMSA", "Sebring International Raceway"))).toBe(
+      "Airbnb Endurance Challenge — Sebring International Raceway"
+    );
+    expect(standardRaceName(sess("redmist", "WRL", "Sunday 7 Hour", "Circut Of The Americas"), cur("Sunday 7-Hour", "WRL", "COTA"))).toBe("WRL Sunday 7 Hour — Circuit of the Americas");
+    expect(standardRaceName(sess("speedhive", "WRL", "Barber - Sunday - 7 hour", "Barber Motorsports Park"), cur("Sunday 7 Hour", "WRL", "Barber Motorsports Park"))).toBe("WRL Sunday 7 Hour — Barber Motorsports Park");
+    expect(standardRaceName(sess("redmist", "WRL", "Saturday 8", "Utah Motorsports Campus"), cur("Saturday 8 Hour", "WRL", "Utah Motorsports Campus"))).toBe("WRL Saturday 8 Hour — Utah Motorsports Campus");
+    expect(standardRaceName(sess("imsa", "02_IMSA Michelin Pilot Challenge", "Race", "Mid-Ohio"), cur("IMSA MPC — O^RReilly Auto Parts 4 Hours Of Mid-Ohio", "IMSA", "Mid-Ohio"))).toBe("Pilot Challenge — O'Reilly Auto Parts 4 Hours Of Mid-Ohio");
+    expect(standardRaceName(sess("imsa", "02_IMSA Michelin Pilot Challenge", "Race", "Mid-Ohio"), cur("IMSA MPC — O\u0012Reilly Auto Parts 4 Hours Of Mid-Ohio", "IMSA", "Mid-Ohio"))).toBe("Pilot Challenge — O'Reilly Auto Parts 4 Hours Of Mid-Ohio");
+    expect(standardRaceName(sess("imsa", "02_IMSA Michelin Pilot Challenge", "Race", "VIR"), cur("Virgina is For Racing Lovers Grand Prix", "IMSA", "VIR"))).toBe("Pilot Challenge — Virginia is For Racing Lovers Grand Prix");
+  });
+
   it("tidies session names", () => {
     expect(tidySession("Saturday - 8 Hour")).toBe("Saturday 8 Hour");
     expect(tidySession("Sunday 7 hour")).toBe("Sunday 7 Hour");
