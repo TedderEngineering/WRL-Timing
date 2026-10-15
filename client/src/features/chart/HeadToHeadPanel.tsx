@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import type { RaceChartData } from "@shared/types";
 import { CarPicker } from "./CarPicker";
 import { carNo } from "./car-number";
+import { isGreenFlag } from "./flags";
 
 interface HeadToHeadPanelProps {
   data: RaceChartData;
@@ -53,8 +54,8 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum }
       const fl = focusCar?.laps.find((l) => l.l === lap);
       const cl = compareCar.laps.find((l) => l.l === lap);
 
-      const ft = fl?.ltSec && fl.ltSec > 1 && fl.flag === "GREEN" ? fl.ltSec : null;
-      const ct = cl?.ltSec && cl.ltSec > 1 && cl.flag === "GREEN" ? cl.ltSec : null;
+      const ft = fl?.ltSec && fl.ltSec > 1 && isGreenFlag(fl.flag) ? fl.ltSec : null;
+      const ct = cl?.ltSec && cl.ltSec > 1 && isGreenFlag(cl.flag) ? cl.ltSec : null;
 
       const delta = ft !== null && ct !== null ? ft - ct : null;
 
@@ -84,13 +85,10 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum }
   if (showPicker || compareNum === null) {
     return (
       <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Focus car box */}
-        <div className="px-4 py-2 flex items-center gap-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          <div className="px-2.5 py-1 rounded-md" style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)" }}>
-            <span className="font-mono font-bold text-xs" style={{ color: "#818cf8" }}>#{carNo(data, focusNum)}</span>
-            <span className="text-[11px] ml-1.5" style={{ color: "rgba(255,255,255,0.45)" }}>{focusCar?.team}</span>
-          </div>
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>vs</span>
+        {/* Focus car */}
+        <div className="flex flex-col gap-1.5 border-b px-4 py-2" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+          <CarRow data={data} num={focusNum} focus />
+          <span className="pl-1 text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>vs</span>
         </div>
         <div className="px-4 py-2 text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
           Select a car to compare head-to-head
@@ -107,22 +105,11 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum }
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
-      {/* Car boxes */}
-      <div className="px-4 py-2 flex items-center gap-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-        <div className="px-2.5 py-1 rounded-md" style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)" }}>
-          <span className="font-mono font-bold text-xs" style={{ color: "#818cf8" }}>#{carNo(data, focusNum)}</span>
-          <span className="text-[11px] ml-1.5" style={{ color: "rgba(255,255,255,0.45)" }}>{focusCar?.team}</span>
-        </div>
-        <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>vs</span>
-        <button
-          onClick={() => setShowPicker(true)}
-          className="px-2.5 py-1 rounded-md cursor-pointer hover:bg-white/[0.06] transition-colors"
-          style={{ border: "1px solid rgba(255,255,255,0.12)" }}
-        >
-          <span className="font-mono font-bold text-xs text-white">#{compareNum}</span>
-          <span className="text-[11px] ml-1.5 truncate" style={{ color: "rgba(255,255,255,0.45)" }}>{compareCar?.team}</span>
-          <span className="text-[10px] ml-1" style={{ color: "rgba(255,255,255,0.25)" }}>▼</span>
-        </button>
+      {/* The two cars, one full-width row each: number and team, drivers underneath */}
+      <div className="flex flex-col gap-1.5 border-b px-4 py-2" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        <CarRow data={data} num={focusNum} focus />
+        <span className="pl-1 text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>vs</span>
+        <CarRow data={data} num={compareNum} onChange={() => setShowPicker(true)} />
       </div>
 
       {!h2hData ? (
@@ -198,6 +185,53 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
     <div>
       <div className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{label}</div>
       <div className="text-sm font-bold tabular-nums" style={{ color: color || "white" }}>{value}</div>
+    </div>
+  );
+}
+
+/** "Team (Driver / Driver)" as IMSA imports write it → team and drivers. */
+export function splitTeam(team: string | undefined): { team: string; drivers: string | null } {
+  const t = (team ?? "").trim();
+  const m = /^(.*?)\s*\(([^()]+)\)\s*$/.exec(t);
+  return m ? { team: m[1], drivers: m[2] } : { team: t, drivers: null };
+}
+
+/** One car in the head-to-head header: number, team, and drivers on a second line; never wraps. */
+function CarRow({ data, num, focus, onChange }: { data: RaceChartData; num: number; focus?: boolean; onChange?: () => void }) {
+  const car = data.cars[String(num)];
+  const { team, drivers } = splitTeam(car?.team);
+  const body = (
+    <>
+      <span className="shrink-0 font-mono text-xs font-bold" style={{ color: focus ? "#818cf8" : "#fff" }}>
+        #{carNo(data, num)}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col text-left">
+        <span className="truncate text-[12px]" style={{ color: "rgba(255,255,255,0.8)" }}>
+          {team || "—"}
+          {car?.cls ? <span style={{ color: "rgba(255,255,255,0.4)" }}> · {car.cls}</span> : null}
+        </span>
+        {drivers && (
+          <span className="truncate text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            {drivers}
+          </span>
+        )}
+      </span>
+      {onChange && (
+        <span className="shrink-0 text-[11px]" style={{ color: "#F48C34" }}>
+          Change ▾
+        </span>
+      )}
+    </>
+  );
+  const cls = "flex w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5";
+  const title = `#${carNo(data, num)} ${car?.team ?? ""}`;
+  return onChange ? (
+    <button type="button" onClick={onChange} title={title} className={`${cls} cursor-pointer transition-colors hover:bg-white/[0.06]`} style={{ border: "1px solid rgba(255,255,255,0.12)" }}>
+      {body}
+    </button>
+  ) : (
+    <div title={title} className={cls} style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)" }}>
+      {body}
     </div>
   );
 }
