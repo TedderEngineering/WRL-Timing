@@ -326,7 +326,9 @@ describe("RedMist discovery and download", () => {
     expect(buildPushBody(dir, manifest).body.attachToRaceId).toBeUndefined();
     const { body } = buildPushBody(dir, { ...manifest, attachToRaceId: "race_abc" });
     expect(body).toMatchObject({ sourceKey: "redmist:event:9001/session:7", format: "speedhive", attachToRaceId: "race_abc" });
-    expect(Object.keys(body.files)).toEqual(expect.arrayContaining(["summaryCsv", "lapsCsv", "flagsCsv", "controlLogCsv", "redmistLapsJson"]));
+    expect(Object.keys(body.files)).toEqual(expect.arrayContaining(["summaryCsv", "lapsCsv", "flagsCsv", "controlLogCsv"]));
+    // The raw API JSON is archive-only: no longer sent, the site serves it again.
+    expect(Object.keys(body.files)).not.toContain("redmistLapsJson");
   });
 });
 

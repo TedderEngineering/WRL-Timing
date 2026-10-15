@@ -240,6 +240,16 @@ describe("intake upsert by source key", () => {
     expect(store.races.size).toBe(0);
   });
 
+  it("archives only the files added by hand when the push carries a manifest", async () => {
+    const { filesToArchive } = await import("../intake.js");
+    const files = { lapsCsv: "a", resultsCsv: "b", flagsCsv: "c" };
+    const manifest = { files: [{ key: "lapsCsv" }, { key: "resultsCsv" }, { key: "flagsCsv", manual: true }] };
+    expect(filesToArchive(files, manifest, undefined)).toEqual({ flagsCsv: "c" });
+    expect(filesToArchive(files, { files: [{ key: "lapsCsv" }] }, undefined)).toEqual({});
+    expect(filesToArchive(files, undefined, undefined)).toEqual(files);
+    expect(filesToArchive(files, manifest, "all")).toEqual(files);
+  });
+
   it("lists intake races for discovery", async () => {
     await intakeRace(body(), actor, deps);
     const rows = await listIntakeRaces();
@@ -272,7 +282,8 @@ describe("Speedhive end to end (fixtures → work folder → push body → real 
       const r = await intakeRace(b, actor, deps);
       expect(r.action).toBe("created");
       expect(r.warnings.join(" ")).toMatch(/No flagsCsv supplied/);
-      expect(Object.keys(archive.mock.calls[0][0])).not.toContain("flagsCsv");
+      // Every file came from the timing site, so nothing is archived (the manifest is in the audit row).
+      expect(archive).not.toHaveBeenCalled();
       expect(store.races.get(r.raceId)).toMatchObject({ series: "WRL", sourceKey: "speedhive:session:11748965", resultsStatus: "unknown", sanctioningBody: "WRL" });
       expect(store.laps.length).toBe(6);
     } finally {

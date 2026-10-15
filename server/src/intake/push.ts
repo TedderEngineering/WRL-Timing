@@ -63,7 +63,9 @@ export function jsonBytes(s: string): number {
 }
 
 export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions = {}): { body: IntakePushBody; skipped: string[] } {
-  const includeArchive = opts.includeArchiveOnly ?? true;
+  // Archive-only files (weather, drive time, raw API JSON) are not sent: the server no longer keeps
+  // files the site can serve again. Files the owner added by hand always go (they are archived).
+  const includeArchive = opts.includeArchiveOnly ?? false;
   // Measured as JSON (escaped newlines and quotes), with room left for the manifest and metadata.
   const maxBytes = opts.maxBytes ?? 40 * 1024 * 1024;
   const files: Record<string, string> = {};
@@ -76,7 +78,7 @@ export function buildPushBody(dir: string, m: Manifest, opts: BuildPushOptions =
       skipped.push(`${f.name} (duplicate key ${f.key})`);
       continue;
     }
-    if (!f.parserSlot && !includeArchive) {
+    if (!f.parserSlot && !includeArchive && !f.manual) {
       skipped.push(`${f.name} (archive-only)`);
       continue;
     }

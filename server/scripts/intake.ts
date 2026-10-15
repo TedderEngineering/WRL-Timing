@@ -8,7 +8,7 @@
  *   npx tsx scripts/intake.ts discover --series wrl-speedhive --season 2025 [--org <speedhive org id>] [--speedhive <event|session URL>]…
  *   npx tsx scripts/intake.ts pull <sourceKey…> | --from <discover.json> [--states new,changed,results-upgrade]
  *                                  [--skip-attach-candidates | --attach-single-candidates] [--force]
- *   npx tsx scripts/intake.ts push <dir…> [--force] [--dry-run] [--no-archive-only]
+ *   npx tsx scripts/intake.ts push <dir…> [--force] [--dry-run] [--archive-only]
  *   npx tsx scripts/intake.ts push <dir> --attach <raceId>      replace an existing race that has no source key yet
  *   npx tsx scripts/intake.ts status <dir…>
  *   npx tsx scripts/intake.ts facts <dir> [--out <file>]        G2 build-facts on the folder's files (when present)
@@ -286,7 +286,7 @@ async function cmdPush(a: ReturnType<typeof parseArgs>) {
       log(`${dir}: added by hand: ${added.join(", ")}`);
       writeManifest(dir, m);
     }
-    const { body, skipped } = buildPushBody(dir, m, { includeArchiveOnly: !a.has("no-archive-only"), force: a.has("force") });
+    const { body, skipped } = buildPushBody(dir, m, { includeArchiveOnly: a.has("archive-only"), force: a.has("force") });
     for (const s of skipped) log(`  not sent: ${s}`);
     const size = JSON.stringify(body).length;
     if (a.has("dry-run")) {

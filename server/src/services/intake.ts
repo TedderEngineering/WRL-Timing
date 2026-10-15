@@ -148,6 +148,17 @@ function isTransactionTimeout(e: unknown): boolean {
   return !!e && typeof e === "object" && (e as { code?: string }).code === "P2028";
 }
 
+/**
+ * The files an intake push must archive: those marked `manual` in its manifest. A push with no
+ * manifest (origin unknown) archives everything, and INTAKE_ARCHIVE=all restores the old rule.
+ */
+export function filesToArchive(files: Record<string, unknown>, manifest: unknown, mode = process.env.INTAKE_ARCHIVE): Record<string, unknown> {
+  const list = (manifest as { files?: { key?: unknown; manual?: unknown }[] } | null | undefined)?.files;
+  if (mode === "all" || !Array.isArray(list)) return files;
+  const manual = new Set(list.filter((f) => f && f.manual === true).map((f) => String(f.key)));
+  return Object.fromEntries(Object.entries(files).filter(([k]) => manual.has(k)));
+}
+
 function isUniqueViolation(e: unknown): boolean {
   return !!e && typeof e === "object" && (e as { code?: string }).code === "P2002";
 }
@@ -227,7 +238,11 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
   for (const k of placeholders) warnings.push(`No ${k} supplied: the parser used an empty table (FCY from lap status).`);
 
   // Archive BEFORE any DB write (G1 / F7). Throws ARCHIVE_FAILED on any failure.
-  const archived = await deps.archive(body.files);
+  // Files the timing site still serves are not copied: the source key and the manifest (URL and
+  // sha256 of every file, kept in the audit row) are enough to fetch them again and prove they
+  // are the same bytes. Only files the owner added by hand, which no site can give back, are kept.
+  const toArchive = filesToArchive(body.files, body.manifest);
+  const archived = Object.keys(toArchive).length > 0 ? await deps.archive(toArchive) : { paths: {}, warnings: [] };
   warnings.push(...archived.warnings);
   const sourceFiles = Object.keys(archived.paths).length > 0 ? archived.paths : undefined;
   const carCount = Object.keys(data.cars).length;
