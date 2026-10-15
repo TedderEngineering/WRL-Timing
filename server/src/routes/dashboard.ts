@@ -4,6 +4,7 @@
  *   GET /api/dashboard/latest?limit=6   newest race weekends with recaps
  *   GET /api/dashboard/season?season=   each calendar series, round by round
  *   GET /api/dashboard/my-car           the latest race of a car the user follows (plan C)
+ *   GET /api/dashboard/season-recap     "Your 2026", per followed car and series once its season is over (plan H)
  */
 import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
@@ -15,6 +16,7 @@ import { getServedGzip, gunzip } from "../packages/store.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
+import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
 import { carMatchesEntry, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
@@ -285,6 +287,61 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
     const facts = data?.chartData ? carFacts(data.chartData, data.annotationData ?? null, carNumber) : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
     res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/dashboard/season-recap — "Your 2026" (engagement plan H) ────────
+
+dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+    const season = Number(req.query.season) || new Date().getUTCFullYear();
+    const cal = calendarFor(season);
+    const cars = await listCars(userId);
+    if (!cal || cars.length === 0) {
+      res.json({ season, recaps: [] });
+      return;
+    }
+    const numbers = [...new Set(cars.flatMap((c) => [c.number, normCar(c.number)]))];
+    const published = (await prisma.race.findMany({
+      where: { status: "PUBLISHED", season },
+      select: { id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true, entries: { where: { carNumber: { in: numbers } }, select: { carNumber: true, teamName: true } } },
+    })) as any[];
+
+    // Each followed car's races this season, grouped by calendar series.
+    const groups = new Map<string, { car: (typeof cars)[number]; seriesId: string; races: { race: any; carNumber: string }[] }>();
+    for (const car of cars) {
+      if (car.season && car.season !== season) continue;
+      for (const race of published) {
+        const e = race.entries.find((x: any) => carMatchesEntry(car, race, x));
+        if (!e) continue;
+        const seriesId = recapSeriesFor(cal, race);
+        if (!seriesId) continue;
+        const key = `${car.id}:${seriesId}`;
+        if (!groups.has(key)) groups.set(key, { car, seriesId, races: [] });
+        groups.get(key)!.races.push({ race, carNumber: e.carNumber });
+      }
+    }
+    const today = new Date();
+    const done = [...groups.values()].filter((g) => seasonOver(cal, g.seriesId, published, today));
+    const ids = [...new Set(done.flatMap((g) => g.races.map((r) => r.race.id)))];
+    const charts = new Map(
+      ((await prisma.race.findMany({ where: { id: { in: ids } }, select: { id: true, chartData: true, annotationData: true } })) as any[]).map((r) => [r.id, r])
+    );
+    const recaps = [];
+    for (const g of done) {
+      const races: RecapRaceIn[] = g.races.map(({ race, carNumber }) => ({
+        ...race,
+        carNumber,
+        chartData: charts.get(race.id)?.chartData ?? null,
+        annotationData: charts.get(race.id)?.annotationData ?? null,
+      }));
+      const r = buildRecap(cal, g.car, season, g.seriesId, races);
+      if (r) recaps.push(r);
+    }
+    res.json({ season, recaps });
   } catch (err) {
     next(err);
   }

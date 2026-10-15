@@ -10,6 +10,8 @@ export interface UiState {
   checklistHidden?: boolean;
   /** The race-email ask after a follow was answered (never asked again here). */
   alertAskDone?: boolean;
+  /** Season recaps hidden with "Hide", by recap key. */
+  recapsHidden?: string[];
 }
 
 export function readUi(): UiState {
