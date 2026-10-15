@@ -21,7 +21,8 @@ const SERIES_CONFIG: Record<
     color: "#0057B8",
     bg: "rgba(0,87,184,0.12)",
     text: "#60a5fa",
-    logo: "",
+    // Official IMSA logo supplied by the owner (white wordmark, for the dark theme).
+    logo: "/logos/imsa.png",
   },
   SRO: {
     color: "#C41E3A",
