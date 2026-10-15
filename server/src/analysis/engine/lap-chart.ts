@@ -24,7 +24,7 @@ export function checkLapChart(files: SourceFileInfo[], laps: LapRows, issues: Is
   if (!f) return null;
   let doc: LapChartDoc;
   try {
-    doc = JSON.parse(f.text!.replace(/^﻿/, "")) as LapChartDoc;
+    doc = JSON.parse(f.text!.replace(/^\uFEFF/, "")) as LapChartDoc;
   } catch {
     issues.push({ severity: "note", code: "LAP-CHART-UNREAD", message: `${f.name} is not readable JSON; positions were not cross-checked.`, files: [f.fileId] });
     return null;
