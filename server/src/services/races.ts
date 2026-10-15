@@ -1,6 +1,7 @@
 import { adminSearchWords } from "../lib/race-search.js";
 import { prisma } from "../models/prisma.js";
 import { freeMode } from "../lib/free-mode.js";
+import { withPitFacts } from "../packages/race-pit-facts.js";
 import { AppError } from "../middleware/error-handler.js";
 import { Prisma } from "@prisma/client";
 import { packagesEnabledFor } from "../packages/flags.js";
@@ -320,7 +321,11 @@ function packageFields(race: { packagesDisabled?: boolean; currentPackage?: Curr
 
 // ─── Get Chart Data ──────────────────────────────────────────────────────────
 
-export async function getChartData(raceId: string) {
+/**
+ * The race's chart data. When it has a published analysis package, its pit facts replace the
+ * import's (packages/race-pit-facts.ts); `factsVersion` (admins) previews a package version.
+ */
+export async function getChartData(raceId: string, opts: { factsVersion?: number } = {}) {
   const race = await prisma.race.findUnique({
     where: { id: raceId },
     select: {
@@ -335,6 +340,8 @@ export async function getChartData(raceId: string) {
       eventId: true,
       chartData: true,
       annotationData: true,
+      currentPackageId: true,
+      packagesDisabled: true,
     },
   });
 
@@ -346,7 +353,7 @@ export async function getChartData(raceId: string) {
     throw new AppError(404, "No chart data available for this race", "NO_CHART_DATA");
   }
 
-  return {
+  return withPitFacts(race, {
     race: {
       id: race.id,
       name: race.name,
@@ -358,7 +365,7 @@ export async function getChartData(raceId: string) {
     },
     data: race.chartData,
     annotations: race.annotationData || {},
-  };
+  }, { version: opts.factsVersion });
 }
 
 // ─── Get Entries ─────────────────────────────────────────────────────────────

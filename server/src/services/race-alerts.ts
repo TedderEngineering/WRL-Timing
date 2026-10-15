@@ -9,6 +9,7 @@
  *  - One-click unsubscribe: a signed link (no login), and List-Unsubscribe headers.
  *  - The subject states facts: "#67 at VIR: P13 in GS, lost 3 places in pit cycle 2".
  */
+import { withPitFacts } from "../packages/race-pit-facts.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
@@ -127,13 +128,14 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
     where: { id: raceId },
     select: {
       id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true, status: true,
-      resultsStatus: true, chartData: true, annotationData: true,
+      resultsStatus: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true,
       entries: { select: { carNumber: true, teamName: true } },
     },
   })) as any;
   if (!race || race.status !== "PUBLISHED") return { raceId, sent: 0, skipped: "not published" };
   if (now - new Date(race.date).getTime() > RECENT_DAYS * DAY) return { raceId, sent: 0, skipped: "not recent" };
   if (!race.chartData) return { raceId, sent: 0, skipped: "no chart data" };
+  const chart = await withPitFacts(race, { data: race.chartData, annotations: race.annotationData ?? {} });
 
   const followers = (await prisma.userCar.findMany({
     where: { user: { preferences: { raceAlerts: true }, suspendedAt: null } },
@@ -150,7 +152,7 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
     if (already.has(car.userId) || done.has(car.userId)) continue;
     const entry = race.entries.find((e: any) => carMatchesEntry(car, race, e));
     if (!entry) continue;
-    const f = carFacts(race.chartData, race.annotationData ?? null, entry.carNumber);
+    const f = carFacts(chart.data, chart.annotations ?? null, entry.carNumber);
     if (!f) continue;
     done.add(car.userId);
     // Claim the send first: a concurrent trigger for the same race then fails here, not twice in the inbox.

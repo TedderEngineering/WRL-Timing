@@ -213,10 +213,18 @@ export interface PitTimingData {
   pitRoadTime: number | null;
   pitOutTime: number | null;
   isDriveThrough: boolean;
-  totalPitLoss: number;
+  /** Seconds; null when it can't be measured (the analysis package says so). */
+  totalPitLoss: number | null;
   inLapTime: number | null;
   outLapTime: number | null;
-  avgGreenLapTime: number;
+  /** The green-flag lap the loss is measured against; null under a caution. */
+  avgGreenLapTime: number | null;
+  /** From the analysis package: when the stop happened. Under a caution, time lost is against cars on track. */
+  context?: "green" | "fcy" | "mixed";
+  /** From the analysis package: how time lost was measured (D-LOSS). */
+  lossMethod?: "green_reference" | "fcy_neighbours" | "fcy_lap_field" | "see_group" | "none";
+  /** "facts" when the race's analysis package supplied this stop. */
+  source?: "facts";
   splitReliable: boolean;
   decompositionLevel: "total_only" | "full_segments";
   spcAnalysis?: {
@@ -263,6 +271,10 @@ export interface PitMarker {
   strategyType?: "undercut" | "overcut" | "cover" | "scheduled";
   alsoPittingCars?: number[];
   isGarage?: boolean;
+  /** From the analysis package: what the car did in the pit lane. */
+  kind?: "stop" | "drive_through" | "stop_and_go" | "penalty_served" | "garage" | "retirement";
+  /** From the analysis package: the class pit cycle this stop belongs to (alsoPittingCars = its other members). */
+  cycle?: { id: string; ordinal: number; cls: string };
 }
 
 export interface SettleMarker {
@@ -271,6 +283,12 @@ export interface SettleMarker {
   lb: string;
   su: string;
   c: string;
+  /** From the analysis package: class position before the stop and when its pit cycle closed. */
+  cpBefore?: number;
+  cpAfter?: number;
+  cycle?: string;
+  /** The in-lap of the stop this cycle result belongs to. */
+  stopLap?: number | null;
 }
 
 export interface CarAnnotations {
@@ -294,6 +312,8 @@ export interface ChartDataResponse {
   };
   data: RaceChartData;
   annotations: AnnotationData;
+  /** Set when the pit facts come from the race's analysis package (server packages/pit-facts.ts). */
+  pitFacts?: { version: number; status: "published" | "draft" | "superseded" | "rejected"; engineVersion: string; matched: number } | null;
 }
 
 // ─── Qualifying Session Data ─────────────────────────────────────────────────

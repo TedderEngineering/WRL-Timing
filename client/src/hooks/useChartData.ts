@@ -13,6 +13,8 @@ interface UseChartDataResult {
   data: RaceChartData | null;
   annotations: AnnotationData | null;
   raceMeta: ChartDataResponse["race"] | null;
+  /** Set when the pit facts come from the race's analysis package. */
+  pitFacts: ChartDataResponse["pitFacts"] | null;
   isLoading: boolean;
   error: ChartDataError | null;
 }
@@ -22,6 +24,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
   const [data, setData] = useState<RaceChartData | null>(null);
   const [annotations, setAnnotations] = useState<AnnotationData | null>(null);
   const [raceMeta, setRaceMeta] = useState<ChartDataResponse["race"] | null>(null);
+  const [pitFacts, setPitFacts] = useState<ChartDataResponse["pitFacts"] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ChartDataError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -51,15 +54,27 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     setData(null);
     setAnnotations(null);
     setRaceMeta(null);
+    setPitFacts(null);
     setFetchedId(undefined);
 
+    // ?facts=N on the race page: an admin previews package version N's pit facts (the server
+    // ignores it for anyone else).
+    let facts: string | null = null;
+    try {
+      facts = new URLSearchParams(window.location.search).get("facts");
+    } catch {
+      facts = null;
+    }
+    const q = facts && /^\d+$/.test(facts) ? `?facts=${facts}` : "";
+
     api
-      .get<ChartDataResponse>(`/races/${raceId}/chart-data`, { signal: controller.signal })
+      .get<ChartDataResponse>(`/races/${raceId}/chart-data${q}`, { signal: controller.signal })
       .then((response) => {
         if (controller.signal.aborted) return;
         setData(response.data as unknown as RaceChartData);
         setAnnotations((response.annotations || {}) as unknown as AnnotationData);
         setRaceMeta(response.race);
+        setPitFacts(response.pitFacts ?? null);
         setFetchedId(raceId);
         setIsLoading(false);
       })
@@ -86,6 +101,7 @@ export function useChartData(raceId: string | undefined): UseChartDataResult {
     data: isStale ? null : data,
     annotations: isStale ? null : annotations,
     raceMeta: isStale ? null : raceMeta,
+    pitFacts: isStale ? null : pitFacts,
     isLoading: authLoading || isLoading || isStale,
     error: isStale ? null : error,
   };

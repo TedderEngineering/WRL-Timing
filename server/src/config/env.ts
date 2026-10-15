@@ -80,6 +80,9 @@ const envSchema = z.object({
   // src/packages/flags.ts so they can be flipped without a code change.
   // "off" (default) serves the legacy chartData to everyone but admins.
   RACETRACE_PACKAGES: z.enum(["on", "off"]).default("off"),
+  // The chart's pit analysis from the race's published package (packages/pit-facts.ts):
+  // "on" (default) whenever a race has one; "off" keeps the import's own pit analysis.
+  RACETRACE_PIT_FACTS: z.enum(["on", "off"]).default("on"),
   // Rule Flags release stage: R0 admins only, R1 + Team, R2 + every signed-in user.
   RACETRACE_RULE_FLAGS: z.enum(["R0", "R1", "R2"]).default("R0"),
   // Folder with race-analysis-package*.schema.json; default <repo>/shared/race-analysis-package.

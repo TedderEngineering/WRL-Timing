@@ -8,6 +8,7 @@ import { normalizeTrackName } from "../services/pitStopAnalysis.service.js";
 import { assertRaceAccess, resolveViewer } from "../services/race-access.js";
 import { getRacePackage } from "./packages.js";
 import { packagesFlagOn } from "../packages/flags.js";
+import { parseVersion } from "../packages/service.js";
 
 export const racesRouter = Router();
 
@@ -124,7 +125,10 @@ racesRouter.get(
         await assertRaceAccess(await resolveViewer(req.user), race);
       }
 
-      const chartData = await raceSvc.getChartData(raceId);
+      // ?facts=N: an admin previews the pit facts of package version N (e.g. a draft under review).
+      const factsVersion =
+        req.query.facts !== undefined && req.user?.role === "ADMIN" ? parseVersion(req.query.facts) : undefined;
+      const chartData = await raceSvc.getChartData(raceId, { factsVersion });
 
       // Record view
       if (req.user) {
@@ -132,7 +136,7 @@ racesRouter.get(
       }
 
       // Cache privately when authed, publicly for free races
-      res.set("Cache-Control", req.user ? "private, max-age=300" : "public, max-age=300");
+      res.set("Cache-Control", factsVersion ? "private, no-store" : req.user ? "private, max-age=300" : "public, max-age=300");
       res.json(chartData);
     } catch (err) {
       next(err);

@@ -14,10 +14,14 @@ export interface StopRow {
   /** True when outLap is the whole lap (the pit box is before the timing line). */
   outLapWhole: boolean;
   isFocus: boolean;
+  /** The class pit cycle, from the race's analysis package. */
+  cycle?: { id: string; ordinal: number };
 }
 
 export interface StopCycle {
   stopNumber: number;
+  /** The class pit cycle's number when the analysis package gives cycles (the rows are its members). */
+  cycleOrdinal?: number;
   cls: string;
   firstLap: number;
   lastLap: number;
@@ -43,7 +47,10 @@ export function stopsOf(data: RaceChartData, annotations: AnnotationData, carNum
         outLap = next && next.ltSec > 0 ? next.ltSec : null;
         outLapWhole = outLap !== null;
       }
-      return { carNum, team: car.team, cls: car.cls, pitLap: p.l, stopNumber: i + 1, timing: t, outLap, outLapWhole, isFocus: false };
+      return {
+        carNum, team: car.team, cls: car.cls, pitLap: p.l, stopNumber: i + 1, timing: t, outLap, outLapWhole, isFocus: false,
+        ...(p.cycle ? { cycle: { id: p.cycle.id, ordinal: p.cycle.ordinal } } : {}),
+      };
     });
 }
 
@@ -69,9 +76,19 @@ export function classStopCycle(
   if (!near) return null;
   const rows: StopRow[] = [];
   for (const n of data.classGroups[focus.cls] ?? []) {
-    const s = stopsOf(data, annotations, n)[near.stopNumber - 1];
-    if (s) rows.push({ ...s, isFocus: n === focusNum });
+    // The package's class pit cycle when there is one (each car's member stop, wherever it falls
+    // in the car's own count); otherwise every car's same stop.
+    const stops = stopsOf(data, annotations, n);
+    const found = near.cycle ? stops.filter((s) => s.cycle?.id === near.cycle!.id) : [stops[near.stopNumber - 1]];
+    for (const s of found) if (s) rows.push({ ...s, isFocus: n === focusNum });
   }
   const laps = rows.map((r) => r.pitLap);
-  return { stopNumber: near.stopNumber, cls: focus.cls, firstLap: Math.min(...laps), lastLap: Math.max(...laps), rows };
+  return {
+    stopNumber: near.stopNumber,
+    ...(near.cycle ? { cycleOrdinal: near.cycle.ordinal } : {}),
+    cls: focus.cls,
+    firstLap: Math.min(...laps),
+    lastLap: Math.max(...laps),
+    rows,
+  };
 }

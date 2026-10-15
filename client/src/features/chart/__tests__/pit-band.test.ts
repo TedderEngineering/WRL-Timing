@@ -90,3 +90,12 @@ describe("pit cycle panel", () => {
     expect(c.rows[0]).toMatchObject({ outLap: 100, outLapWhole: true });
   });
 });
+
+describe("settle labels with the analysis package's class positions", () => {
+  it("uses cpBefore / cpAfter in the class view", async () => {
+    const { settleLabels } = await import("../pit-band");
+    const laps = [{ l: 1, p: 5, cp: 2, lt: "", ltSec: 100, flag: "GF", pit: 0 }, { l: 4, p: 9, cp: 3, lt: "", ltSec: 100, flag: "GF", pit: 0 }];
+    const [label] = settleLabels([{ l: 4, p: 9, lb: "Settled P9", su: "Was P5 · Lost 4", c: "#f00", cpBefore: 2, cpAfter: 3 }], laps, "GTU");
+    expect(label).toMatchObject({ lap: 4, pos: 3, title: "Settled P3 in GTU", sub: "Was P2 · Lost 1" });
+  });
+});
