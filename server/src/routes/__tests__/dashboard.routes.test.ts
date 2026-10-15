@@ -119,6 +119,14 @@ describe("GET /api/dashboard/latest", () => {
     expect(r2.session).toBe("Pirelli GT4 Race 2");
   });
 
+  it("lists a weekend's longest race first but keeps the weekend's dates in order", async () => {
+    fake.state.races[1] = { ...fake.state.races[1], maxLap: 40 };
+    const res = await request(app).get("/api/dashboard/latest").set("Authorization", bearer(users.pro));
+    const ev = res.body.events[0];
+    expect(ev.races.map((r: any) => r.id)).toEqual(["gt4r2", "gt4r1"]);
+    expect([ev.startDate, ev.endDate]).toEqual(["2026-10-10", "2026-10-11"]);
+  });
+
   it("serves no recap while packages are switched off", async () => {
     process.env.RACETRACE_PACKAGES = "off";
     const res = await request(app).get("/api/dashboard/latest").set("Authorization", bearer(users.pro));

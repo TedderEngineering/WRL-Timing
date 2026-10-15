@@ -104,8 +104,12 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
 
     const events = [];
     for (const g of groups) {
+      // Races are in headline order (feature race first), so the weekend's dates come from the
+      // earliest and latest race, not the first and last listed.
       const first = g.races[0];
-      const last = g.races[g.races.length - 1];
+      const byDate = [...g.races].sort((a, b) => a.date.getTime() - b.date.getTime());
+      const earliest = byDate[0];
+      const last = byDate[byDate.length - 1];
       const races = [];
       for (const r of g.races) {
         const access = await canUserAccessRace(r, viewer.plan, viewer.role);
@@ -132,7 +136,7 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
         seriesLabel: located?.label ?? null,
         round: located ? { number: located.round, of: located.of, name: located.roundName } : null,
         track: first.track,
-        startDate: first.date.toISOString().slice(0, 10),
+        startDate: earliest.date.toISOString().slice(0, 10),
         endDate: last.date.toISOString().slice(0, 10),
         isNew: g.races.some((r) => !viewed.has(r.id) && r.createdAt.getTime() >= fresh),
         races,
