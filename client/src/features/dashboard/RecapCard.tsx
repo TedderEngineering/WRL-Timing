@@ -373,13 +373,35 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
   );
 }
 
+export type RecapVariant = "hero" | "compact" | "mini";
+
+/** The small card's body: the race's size and one link, no recap prose. */
+function MiniBody({ race }: { race: LatestRace }) {
+  const size = [race.totalCars ? `${race.totalCars} cars` : null, race.maxLap ? `${race.maxLap} laps` : null].filter(Boolean).join(" · ");
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-[var(--rt-text-secondary)]">{size}</span>
+      <span className="text-[var(--rt-text-muted)]">{race.locked ? "🔒" : race.recap ? "Recap ready" : "Chart only"}</span>
+      <Link to={chartHref(race.id)} className="ml-auto whitespace-nowrap font-semibold text-[var(--rt-accent)]">
+        Position Trace →
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * A weekend: its races as tabs (hover or focus previews one below, a click opens it on
+ * Position Trace). "hero" and "compact" are the latest weekends, with the recap; "mini" is
+ * the smaller card in the "Earlier races" grid, with the same tabs and links.
+ */
 export function RecapCard({
   event,
   variant,
 }: {
   event: LatestEvent;
-  variant: "hero" | "compact";
+  variant: RecapVariant;
 }) {
+  const mini = variant === "mini";
   const firstWithRecap = Math.max(
     0,
     event.races.findIndex((r) => r.recap)
@@ -387,28 +409,39 @@ export function RecapCard({
   const [tab, setTab] = useState(firstWithRecap);
   const race = event.races[tab] ?? event.races[0];
   const status = race.resultsStatus;
+  const pad = mini ? "px-4" : "px-5";
 
   return (
-    <article className="overflow-hidden rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left">
-      <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3.5">
-        <SeriesBadge series={event.series} size="sm" />
-        <span className="text-sm text-[var(--rt-text-secondary)]">
-          {eventLine(event)}
-        </span>
-        <StatusPill status={status} />
-        {event.isNew && (
-          <span className="ml-auto">
-            <NewPill />
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left">
+      {mini ? (
+        <div className={`flex items-center gap-2 ${pad} pt-3`}>
+          <SeriesBadge series={event.series} size="sm" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--rt-text)]" title={eventLine(event)}>
+            {event.track}
           </span>
-        )}
-      </div>
+          <span className="shrink-0 text-xs text-[var(--rt-text-muted)]">{formatDayRange(event.startDate, event.endDate, false)}</span>
+        </div>
+      ) : (
+        <div className={`flex flex-wrap items-center gap-2.5 ${pad} pt-3.5`}>
+          <SeriesBadge series={event.series} size="sm" />
+          <span className="text-sm text-[var(--rt-text-secondary)]">
+            {eventLine(event)}
+          </span>
+          <StatusPill status={status} />
+          {event.isNew && (
+            <span className="ml-auto">
+              <NewPill />
+            </span>
+          )}
+        </div>
+      )}
       {event.races.length > 1 ? (
         <ScrollRow
           role="navigation"
           aria-label="Races this weekend: open on Position Trace"
           activeKey={tab}
-          className="mt-2.5 border-b border-[var(--rt-border)]"
-          innerClassName="gap-1 px-5"
+          className={`${mini ? "mt-1.5" : "mt-2.5"} border-b border-[var(--rt-border)]`}
+          innerClassName={`gap-1 ${mini ? "px-2" : "px-5"}`}
           onKeyDown={(e) => {
             // Arrows move between races (previewing each); Enter opens it.
             if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -430,7 +463,9 @@ export function RecapCard({
               onMouseEnter={() => setTab(i)}
               onFocus={() => setTab(i)}
               draggable={false}
-              className={`flex min-h-[40px] items-center whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
+              className={`flex items-center whitespace-nowrap border-b-2 transition-colors ${
+                mini ? "min-h-[34px] px-2 text-xs" : "min-h-[40px] px-3 text-sm"
+              } ${
                 i === tab
                   ? "border-[var(--rt-accent)] font-semibold text-[var(--rt-text)]"
                   : "border-transparent text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
@@ -441,15 +476,13 @@ export function RecapCard({
           ))}
         </ScrollRow>
       ) : (
-        <div className="px-5 pt-1 text-sm font-semibold text-[var(--rt-text)]">
+        <div className={`${pad} ${mini ? "pt-1.5 text-xs" : "pt-1 text-sm"} font-semibold text-[var(--rt-text)]`}>
           {race.session}
         </div>
       )}
-      <div className="px-5 pb-4 pt-4">
-        <RaceBody key={race.id} race={race} variant={variant} />
+      <div className={mini ? "mt-auto px-4 pb-3 pt-2.5" : "px-5 pb-4 pt-4"}>
+        {mini ? <MiniBody race={race} /> : <RaceBody key={race.id} race={race} variant={variant as "hero" | "compact"} />}
       </div>
     </article>
   );
 }
-
-/** One line per weekend for the "Earlier this season" list. */

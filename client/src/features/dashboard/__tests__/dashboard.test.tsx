@@ -96,6 +96,18 @@ describe("RecapCard", () => {
     expect(h).toContain('href="/chart?race=r1&amp;tab=pitanalysis"');
   });
 
+  it("the small card for earlier weekends keeps the race tabs, links and size, without the recap", () => {
+    const h = html(<RecapCard event={EVENT} variant="mini" />);
+    const t = text(h);
+    expect(t).toContain("Indianapolis Motor Speedway");
+    expect(t).toContain("Oct 10–11");
+    expect(t).toContain("34 cars · 34 laps");
+    expect(t).not.toContain("RAFA");
+    const raceLinks = (h.match(/<a [^>]*>[^<]*<\/a>/g) ?? []).filter((a) => /data-active/.test(a));
+    expect(raceLinks.map((a) => a.match(/href="([^"]+)"/)?.[1])).toEqual(["/chart?race=r1", "/chart?race=r2"]);
+    expect(h).toContain(">Position Trace →<");
+  });
+
   it("says when a race has no recap yet", () => {
     const ev = { ...EVENT, races: [EVENT.races[1]] };
     expect(text(html(<RecapCard event={ev} variant="compact" />))).toContain("Chart only · recap coming");
