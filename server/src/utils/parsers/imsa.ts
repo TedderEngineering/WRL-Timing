@@ -24,7 +24,7 @@ import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
 import { parseSROResults, type SROEntry } from "../parseSROResults.js";
 import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
-import { findCarNumberCollisions, carNumberCollisionWarnings } from "../carNumberCollisions.js";
+import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -429,7 +429,8 @@ export const imsaParser: RaceDataParser = {
     }
 
     // ── Parse pit stop JSON (optional) ──────────────────────────
-    let pitStopMap: Map<number, any> | null = null;
+    // Keyed by the published car number ("7", "007"); see byCar below.
+    let pitStopMap: Map<string, any> | null = null;
     if (pitStopJson) {
       try {
         const cleanPit = pitStopJson.replace(/^\uFEFF/, "");
@@ -437,8 +438,8 @@ export const imsaParser: RaceDataParser = {
         if (pitData.pit_stop_analysis && Array.isArray(pitData.pit_stop_analysis)) {
           pitStopMap = new Map();
           for (const entry of pitData.pit_stop_analysis) {
-            const num = parseInt(entry.number, 10);
-            if (!isNaN(num)) pitStopMap.set(num, entry);
+            const raw = String(entry.number ?? "").trim();
+            if (raw) pitStopMap.set(raw, entry);
           }
           warnings.push(`Pit stop data loaded for ${pitStopMap.size} cars`);
         }
@@ -795,11 +796,26 @@ export const imsaParser: RaceDataParser = {
     // When 20_Pit_Stops_Time_Cards is available, cross-reference pit entry
     // timestamps against lap completion times instead of relying on
     // crossing_pit_finish_lane (which fires false positives on rolling starts).
+    // Every published number keeps its own car: "23" and "023" are two entries
+    // (utils/carNumbers.ts). The pit time cards are keyed by parseInt, so a car whose number
+    // collides with another's gets no card rather than the other car's.
+    const ids = carNumbering([...carLapsRaw.keys(), ...(resultsMap ? resultsMap.keys() : [])]);
+    warnings.push(...carNumberingWarnings(ids));
+    const collided = new Set(ids.collisions.flat());
+    if (pitTimeCards) {
+      const byNum = new Map<number, PitStopTimeCard[]>();
+      for (const raw of carLapsRaw.keys()) {
+        const n = ids.num(raw);
+        const cards = collided.has(raw) ? undefined : pitTimeCards.get(parseInt(raw, 10));
+        if (n !== null && cards) byNum.set(n, cards);
+      }
+      pitTimeCards = byNum;
+    }
     if (pitTimeCards) {
       let fixedCount = 0;
       for (const [carNumStr, laps] of carLapsRaw) {
-        const carNumInt = parseInt(carNumStr, 10);
-        const stops = pitTimeCards.get(carNumInt) ?? [];
+        const carNumInt = ids.num(carNumStr);
+        const stops = (carNumInt !== null ? pitTimeCards.get(carNumInt) : undefined) ?? [];
         const pitLapSet = buildPitLapSet(laps, stops);
         for (const l of laps) {
           if (l.pit !== pitLapSet.has(l.lapNum)) fixedCount++;
@@ -985,18 +1001,6 @@ export const imsaParser: RaceDataParser = {
     const overallFinishPos = new Map<string, number>();
     carFinishOrder.forEach((c, i) => overallFinishPos.set(c.num, i + 1));
 
-    // Leading zeros are lost when cars are keyed by parseInt below, so distinct
-    // entries such as "023" and "23" collapse onto one another. IMSA WeatherTech
-    // fields use three-digit numbers, so this is not hypothetical there.
-    warnings.push(
-      ...carNumberCollisionWarnings(
-        findCarNumberCollisions(
-          carLapsRaw.keys(),
-          new Map(Array.from(carLapsRaw, ([car, laps]) => [car, laps.length]))
-        )
-      )
-    );
-
     for (const [carNum, rawLaps] of carLapsRaw) {
       const participant = participantMap.get(carNum);
       const csvMeta = csvParticipants.get(carNum);
@@ -1009,11 +1013,11 @@ export const imsaParser: RaceDataParser = {
         continue;
       }
 
-      const num = parseInt(carNum, 10);
-      if (isNaN(num)) continue;
+      const num = ids.num(carNum);
+      if (num === null) continue;
 
       const cls = participant?.class || csvMeta?.cls || resultEntry?.carClass || "Unknown";
-      const pitEntry = pitStopMap?.get(num);
+      const pitEntry = byCar(pitStopMap, carNum, collided);
       const make = pitEntry?.manufacturer || participant?.manufacturer || csvMeta?.manufacturer || "";
       const vehicle = pitEntry?.vehicle || participant?.vehicle || resultEntry?.vehicle || "";
 
@@ -1077,6 +1081,7 @@ export const imsaParser: RaceDataParser = {
 
       cars[String(num)] = {
         num,
+        ...(ids.label(num) ? { label: ids.label(num) } : {}),
         team,
         cls,
         ...(make ? { make } : {}),
@@ -1437,8 +1442,8 @@ export const imsaParser: RaceDataParser = {
 
     // ── Fallback: enrich pit markers not already enriched by time card data ──
     for (const [carNum, rawLaps] of carLapsRaw) {
-      const num = parseInt(carNum, 10);
-      const ann = mergedAnnotations[String(num)];
+      const num = ids.num(carNum);
+      const ann = num === null ? undefined : mergedAnnotations[String(num)];
       if (!ann?.pits?.length) continue;
 
       const participant = participantMap.get(carNum);
@@ -1665,4 +1670,17 @@ function parsePdfFlagPeriods(
   unique.sort((a, b) => a.startLap - b.startLap);
 
   return unique;
+}
+
+/**
+ * A per-car record keyed by the published number: the exact number, else the one record whose
+ * number reduces to the same integer ("7" for "07") unless that integer is shared by two cars.
+ */
+function byCar<T>(map: Map<string, T> | null, raw: string, collided: Set<string>): T | undefined {
+  if (!map) return undefined;
+  const exact = map.get(raw);
+  if (exact !== undefined || collided.has(raw)) return exact;
+  const p = parseInt(raw, 10);
+  const same = [...map.keys()].filter((k) => parseInt(k, 10) === p);
+  return same.length === 1 ? map.get(same[0]) : undefined;
 }

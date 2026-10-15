@@ -21,6 +21,7 @@ import {
   computeLapTimeRankings,
   computeClassLapTimeRankings,
 } from "./lap-time-rankings";
+import { carNo } from "./car-number";
 
 // ─── Coordinate helpers (duplicated for module independence) ─────────────────
 
@@ -396,7 +397,7 @@ function buildLapTimeInfo(
       compDelta = ld.ltSec - avg;
       compDeltaColor = compDelta <= 0 ? "#4ade80" : compDelta < 0.5 ? "#fbbf24" : "#f87171";
       const compNums = [...compSet].filter((n) => n !== focusNum);
-      compLabel = compNums.length <= 3 ? compNums.map((n) => "#" + n).join(", ") : `${compNums.length} cars`;
+      compLabel = compNums.length <= 3 ? compNums.map((n) => "#" + carNo(data, n)).join(", ") : `${compNums.length} cars`;
       compN = cnt;
     }
   }
@@ -827,7 +828,7 @@ export function LapTimeChart({
   const lapFlag = info ? (info.isFcy ? "FCY" : "Green") : null;
   const legend = (
     <ul aria-label="Legend" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs" style={{ color: "#cbd5e1" }}>
-      <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{focusNum}</li>
+      <li className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-[18px]" style={{ background: TRACE.focus }} />Focus car #{carNo(data, focusNum)}</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-[2px] w-[18px]" style={{ background: "#3987e5" }} />Compare cars</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3.5" style={{ background: "rgba(251,191,36,0.3)" }} />Full Course Yellow (FCY)</li>
       <li className="flex items-center gap-1.5"><span className="inline-block h-3 w-px" style={{ background: TRACE.fcyBar }} />Pit stop · driver out</li>

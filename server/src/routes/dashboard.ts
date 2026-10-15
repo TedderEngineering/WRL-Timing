@@ -18,7 +18,7 @@ import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
 import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
-import { carMatchesEntry, listCars } from "../services/my-cars.js";
+import { entryForCar, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
@@ -250,9 +250,9 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
 
     let hit: { race: any; car: (typeof cars)[number]; carNumber: string } | null = null;
     for (const race of candidates) {
-      for (const e of race.entries) {
-        const car = cars.find((c) => carMatchesEntry(c, race, e));
-        if (car) {
+      for (const car of cars) {
+        const e = entryForCar(car, race, race.entries as { carNumber: string; teamName: string | null }[]);
+        if (e) {
           hit = { race, car, carNumber: e.carNumber };
           break;
         }
@@ -318,7 +318,7 @@ dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Resp
     for (const car of cars) {
       if (car.season && car.season !== season) continue;
       for (const race of published) {
-        const e = race.entries.find((x: any) => carMatchesEntry(car, race, x));
+        const e = entryForCar(car, race, race.entries);
         if (!e) continue;
         const seriesId = recapSeriesFor(cal, race);
         if (!seriesId) continue;

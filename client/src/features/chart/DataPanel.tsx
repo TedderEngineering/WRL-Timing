@@ -3,6 +3,7 @@ import { formatLapTime, getCompColor, type LapInfoData } from "./chart-renderer"
 import type { RaceChartData } from "@shared/types";
 import { useAuth } from "../../features/auth/AuthContext";
 import { hasTeamAccess } from "../../lib/utils";
+import { carNo } from "./car-number";
 
 interface DataPanelProps {
   info: LapInfoData | null;
@@ -243,7 +244,7 @@ export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, set
         onClick={() => gatedClick("gap")}
       >
         <ZoneLabel>Car Info</ZoneLabel>
-        <div className="text-[13px] font-semibold text-white">#{focusNum}</div>
+        <div className="text-[13px] font-semibold text-white">#{carNo(data, focusNum)}</div>
         <div className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
           {info.carTeam} · {info.carClass}
         </div>
@@ -398,7 +399,7 @@ function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, 
                     }}>
                       {car.delta < 0 && <span style={{ color: "#34d399", fontSize: 6, lineHeight: 1 }}>▲</span>}
                       {car.delta > 0 && <span style={{ color: "#f87171", fontSize: 6, lineHeight: 1 }}>▼</span>}
-                      #{car.num}
+                      #{carNo(data, car.num)}
                     </span>
                   );
                 })}
@@ -490,7 +491,7 @@ function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, 
     const t = seg.trim().replace(/^passed\s+/i, "");
     if (!t || seen.has(t)) continue;
     seen.add(t);
-    const m = t.match(/^#(\d+)\b.*?\b(on pace|pitted|\(yellow\))$/i);
+    const m = t.match(/^#([0-9A-Za-z]+)\b.*?\b(on pace|pitted|\(yellow\))$/i);
     if (m) items.push(`#${m[1]} ${m[2]}`);
   }
 

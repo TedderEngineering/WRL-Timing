@@ -13,7 +13,7 @@ import { withPitFacts } from "../packages/race-pit-facts.js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
-import { carMatchesEntry } from "./my-cars.js";
+import { entryForCar } from "./my-cars.js";
 import { carFacts, type CarFacts } from "../dashboard/my-car.js";
 import { escapeHtml, sendRaceAlertEmail } from "./email.js";
 import { racetraceSite } from "./site.js";
@@ -150,7 +150,7 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
   const done = new Set<string>();
   for (const car of followers) {
     if (already.has(car.userId) || done.has(car.userId)) continue;
-    const entry = race.entries.find((e: any) => carMatchesEntry(car, race, e));
+    const entry = entryForCar(car, race, race.entries as { carNumber: string; teamName: string | null }[]);
     if (!entry) continue;
     const f = carFacts(chart.data, chart.annotations ?? null, entry.carNumber);
     if (!f) continue;

@@ -9,6 +9,7 @@ import { classBenchmarks } from "./benchmarks";
 import { ShareCarImageButton } from "./raceCard";
 import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
+import { carNo } from "./car-number";
 
 const T = { card: "#12122a", line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", good: "#4ade80", bad: "#e66767", warn: "#fab219" };
 
@@ -94,7 +95,7 @@ export function CarSummary({ data, focusNum, annotations = null }: { data: RaceC
     <div className="flex flex-col gap-1">
       <div className="font-semibold">
         <span className="font-mono" style={{ color: TRACE.focus }}>
-          #{focusNum}
+          #{carNo(data, focusNum)}
         </span>{" "}
         {car.team} · {car.cls}
       </div>
@@ -249,7 +250,7 @@ export function LapDetailsPanel({
               {pitHere && pit.alsoPittingCars?.length ? (
                 <div className="text-[13px]" style={{ color: T.muted }}>
                   {pit.cycle ? `Also in ${pit.cycle.cls} pit cycle ${pit.cycle.ordinal}` : "Also in the pits"}:{" "}
-                  {pit.alsoPittingCars.map((n) => `#${n}`).join(", ")}
+                  {pit.alsoPittingCars.map((n) => `#${carNo(data, n)}`).join(", ")}
                 </div>
               ) : null}
               <LinkButton onClick={() => onOpen("pit")}>Open the pit cycle</LinkButton>

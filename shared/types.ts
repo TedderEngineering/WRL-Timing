@@ -187,6 +187,8 @@ export interface LapData {
 
 export interface CarData {
   num: number;
+  /** The car number as published when it differs from String(num): "4A", "007" (server utils/carNumbers.ts). Show this, never num. */
+  label?: string;
   team: string;
   cls: string;
   make?: string;

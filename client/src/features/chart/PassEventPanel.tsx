@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { CLASS_COLORS, CHART_STYLE } from "./constants";
+import { carKey, carNo } from "./car-number";
 
 interface PassEventPanelProps {
   reason: string;
@@ -33,7 +34,7 @@ const REASON_STYLES: Record<string, { bg: string; border: string; color: string;
   unknown: { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)", label: "—" },
 };
 
-function parseRacingLap(reason: string, posDelta: number): ParsedEvent[] {
+function parseRacingLap(reason: string, posDelta: number, data?: RaceChartData | null): ParsedEvent[] {
   const direction: CarEvent["direction"] = posDelta > 0 ? "gained" : posDelta < 0 ? "lost" : "neutral";
   const rawParts = reason.split(/;\s*/);
   const seen = new Set<string>();
@@ -56,9 +57,10 @@ function parseRacingLap(reason: string, posDelta: number): ParsedEvent[] {
   for (const part of body.split(/;\s*/)) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const m = trimmed.match(/^#(\d+)\s*(.*?)?\s+(on pace|pitted|\(yellow\))$/i);
+    const m = trimmed.match(/^#([0-9A-Za-z]+)\s*(.*?)?\s+(on pace|pitted|\(yellow\))$/i);
     if (m) {
-      const carNum = parseInt(m[1], 10);
+      const carNum = carKey(data, m[1]);
+      if (carNum === null) continue;
       const teamName = (m[2] || "").trim();
       let reasonType: CarEvent["reason"] = "unknown";
       const r = m[3].toLowerCase();
@@ -67,9 +69,10 @@ function parseRacingLap(reason: string, posDelta: number): ParsedEvent[] {
       else if (r === "(yellow)") reasonType = "yellow";
       events.push({ kind: "car", carNum, teamName, reason: reasonType, direction });
     } else {
-      const numMatch = trimmed.match(/^#(\d+)/);
-      if (numMatch) {
-        events.push({ kind: "car", carNum: parseInt(numMatch[1], 10), teamName: trimmed.replace(/^#\d+\s*/, ""), reason: "unknown", direction });
+      const numMatch = trimmed.match(/^#([0-9A-Za-z]+)/);
+      const carNum = numMatch ? carKey(data, numMatch[1]) : null;
+      if (numMatch && carNum !== null) {
+        events.push({ kind: "car", carNum, teamName: trimmed.replace(/^#[0-9A-Za-z]+\s*/, ""), reason: "unknown", direction });
       }
     }
   }
@@ -128,6 +131,7 @@ export function PassEventPanel({ reason, posDelta, focusNum, isPit, data, annota
   // ── Racing lap view (unchanged) ────────────────────────────────
   return (
     <RacingLapView
+      data={data}
       reason={reason}
       posDelta={posDelta}
       focusNum={focusNum}
@@ -263,7 +267,7 @@ function PitCycleView({
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-full"
               style={{ background: clsStyle(focusCar?.cls || "").bg, color: clsStyle(focusCar?.cls || "").text }}>
-              #{focusNum}
+              #{carNo(data, focusNum)}
             </span>
             <ClassBadge cls={focusCar?.cls || ""} />
           </div>
@@ -383,7 +387,7 @@ function PitCycleView({
                     onMouseEnter={(e) => { if (!isExp) e.currentTarget.style.background = CHART_STYLE.card; }}
                     onMouseLeave={(e) => { if (!isExp) e.currentTarget.style.background = "transparent"; }}
                   >
-                    <div className="font-mono text-xs font-bold" style={{ color: cc }}>#{car.num}</div>
+                    <div className="font-mono text-xs font-bold" style={{ color: cc }}>#{carNo(data, car.num)}</div>
                     <div className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.6)" }}>{car.team}</div>
                     <div className="text-center"><ClassBadge cls={car.cls} small /></div>
                     <div className="text-center text-[11px]" style={{ color: CHART_STYLE.muted }}>
@@ -425,7 +429,7 @@ function PitCycleView({
                           className="px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors hover:bg-indigo-500/20 whitespace-nowrap"
                           style={{ background: CHART_STYLE.border, border: `1px solid ${CHART_STYLE.dim}`, color: "#60a5fa" }}
                         >
-                          H2H vs #{car.num}
+                          H2H vs #{carNo(data, car.num)}
                         </button>
                         <button
                           onClick={() => onAddToCompare(car.num)}
@@ -456,7 +460,7 @@ function PitCycleView({
       {/* Footer */}
       <div className="px-5 py-2 mt-auto flex justify-between items-center" style={{ borderTop: `1px solid ${CHART_STYLE.border}` }}>
         <span className="text-[10px]" style={{ color: CHART_STYLE.dim }}>
-          Focus car #{focusNum} is highlighted on the chart above.
+          Focus car #{carNo(data, focusNum)} is highlighted on the chart above.
         </span>
       </div>
     </div>
@@ -466,13 +470,13 @@ function PitCycleView({
 // ── Racing Lap View (existing logic, unchanged) ──────────────────────
 
 function RacingLapView({
-  reason, posDelta, focusNum, isPit, onOpenH2H, onAddToCompare,
+  reason, posDelta, focusNum, isPit, data, onOpenH2H, onAddToCompare,
 }: {
-  reason: string; posDelta: number; focusNum: number; isPit?: boolean;
+  reason: string; posDelta: number; focusNum: number; isPit?: boolean; data?: RaceChartData | null;
   onOpenH2H: (n: number) => void; onAddToCompare: (n: number) => void;
 }) {
   const isGain = posDelta > 0;
-  const carEvents = parseRacingLap(reason, posDelta).filter((e) => e.carNum !== focusNum);
+  const carEvents = parseRacingLap(reason, posDelta, data).filter((e) => e.carNum !== focusNum);
   const dirColor = isGain ? "#4ade80" : posDelta < 0 ? "#f87171" : "rgba(255,255,255,0.5)";
   const isEmpty = carEvents.length === 0;
 
@@ -549,7 +553,7 @@ function RacingLapView({
 
       <div className="px-4 py-3 mt-auto">
         <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
-          Focus car #{focusNum} is highlighted on the chart above.
+          Focus car #{carNo(data, focusNum)} is highlighted on the chart above.
         </div>
       </div>
     </div>

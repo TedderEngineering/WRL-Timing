@@ -9,6 +9,7 @@ import { getCompColor } from "./chart-renderer";
 import { TRACE } from "./constants";
 import { makeGroupsOf } from "./makes";
 import type { TraceView } from "./trace-view";
+import { carNo } from "./car-number";
 
 const T = {
   card: "#12122a",
@@ -98,7 +99,7 @@ function CarMenu({
       const n = Number(k);
       if (
         needle &&
-        !String(n).includes(needle) &&
+        !carNo(data, n).toLowerCase().includes(needle) &&
         !c.team.toLowerCase().includes(needle) &&
         !(c.make ?? "").toLowerCase().includes(needle)
       )
@@ -218,7 +219,11 @@ export function TraceControls(p: TraceControlsProps) {
       .sort((a, b) => b.n - a.n || a.m.localeCompare(b.m));
   }, [makeGroups, classView, data]);
   const compare = [...compSet].filter((n) => n !== focusNum);
-  const chips = [...view.fieldCars].sort((a, b) => a - b);
+  // In published-number order: "007" sits with "7", not after the stand-in key (car-number.ts).
+  const chips = [...view.fieldCars].sort((a, b) => {
+    const [x, y] = [carNo(data, a), carNo(data, b)];
+    return parseInt(x, 10) - parseInt(y, 10) || x.localeCompare(y);
+  });
 
   const seg = (on: boolean) => ({
     background: on ? T.accent : "transparent",
@@ -243,11 +248,11 @@ export function TraceControls(p: TraceControlsProps) {
           onClick={() => setMenu(menu === "focus" ? null : "focus")}
           aria-haspopup="dialog"
           aria-expanded={menu === "focus"}
-          aria-label={`Focus car: #${focusNum} ${focus?.team ?? ""}. Change`}
+          aria-label={`Focus car: #${carNo(data, focusNum)} ${focus?.team ?? ""}. Change`}
           className={`flex min-h-[36px] items-center gap-2 border px-3 text-sm ${compact ? "min-w-0 flex-1 rounded-full" : "max-w-[320px] rounded-md"}`}
           style={{ background: T.card, borderColor: T.accent, color: T.text }}
         >
-          <span className="font-mono font-semibold">#{focusNum}</span>
+          <span className="font-mono font-semibold">#{carNo(data, focusNum)}</span>
           <span className="min-w-0 truncate">{focus?.team}</span>
           <span className="shrink-0 whitespace-nowrap" style={{ color: T.muted }}>· {focus?.cls}</span>
           <span aria-hidden className="ml-auto">
@@ -398,7 +403,7 @@ export function TraceControls(p: TraceControlsProps) {
                   opacity: noLaps ? 0.35 : 1,
                 }}
               >
-                #{n}
+                #{carNo(data, n)}
               </button>
             );
           })}

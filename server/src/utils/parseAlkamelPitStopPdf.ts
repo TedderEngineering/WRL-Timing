@@ -74,7 +74,11 @@ function saveStops(
 /**
  * Parse extracted PDF text into pit stop time cards grouped by car number.
  */
-export function parseAlkamelPitStopPdf(text: string): Map<number, PitStopTimeCard[]> {
+export function parseAlkamelPitStopPdf(
+  text: string,
+  /** The race's integer for a published car number (utils/carNumbers.ts); default parseInt. */
+  numFor: (raw: string) => number | null = (raw) => parseInt(raw, 10)
+): Map<number, PitStopTimeCard[]> {
   const result = new Map<number, PitStopTimeCard[]>();
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
@@ -97,7 +101,7 @@ export function parseAlkamelPitStopPdf(text: string): Map<number, PitStopTimeCar
         if (currentCarNum !== null) {
           saveStops(result, currentCarNum, currentStops);
         }
-        currentCarNum = parseInt(carHeaderMatch[1], 10);
+        currentCarNum = numFor(carHeaderMatch[1]);
         currentStops = [];
         continue;
       }

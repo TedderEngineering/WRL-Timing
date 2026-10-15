@@ -16,7 +16,7 @@ import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
 import { generateAnnotations, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
 import { parseSROResults } from "../parseSROResults.js";
 import { parseAlkamelLaps, derivePositions } from "../parseAlkamelLaps.js";
-import { findCarNumberCollisions, carNumberCollisionWarnings } from "../carNumberCollisions.js";
+import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
 import { extractBase64, extractPdfText } from "../pdf-extract.js";
 import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
 
@@ -90,33 +90,27 @@ export const sroParser: RaceDataParser = {
       if (lap.lapNumber > maxLap) maxLap = lap.lapNumber;
     }
 
-    // Leading zeros are lost when cars are keyed by parseInt below, so distinct
-    // entries such as "007", "07" and "7" collapse onto one another. Report it
-    // rather than under-reporting the field without explanation.
-    warnings.push(
-      ...carNumberCollisionWarnings(
-        findCarNumberCollisions(
-          lapsByCar.keys(),
-          new Map(Array.from(lapsByCar, ([car, laps]) => [car, laps.length]))
-        )
-      )
-    );
+    // Every published number keeps its own car: "7", "07" and "007" are three entries
+    // (utils/carNumbers.ts).
+    const ids = carNumbering([...lapsByCar.keys(), ...entryMap.keys()]);
+    warnings.push(...carNumberingWarnings(ids));
 
     for (const [carNum, carLaps] of lapsByCar) {
       carLaps.sort((a, b) => a.lapNumber - b.lapNumber);
 
       const entry = entryMap.get(carNum);
-      const num = parseInt(carNum, 10);
-      if (isNaN(num)) {
+      const num = ids.num(carNum);
+      if (num === null) {
         warnings.push(`Non-numeric car number "${carNum}" — skipping`);
         continue;
       }
 
       const cls = entry?.carClass || carLaps[0]?.carClass || "Unknown";
-      const team = entry?.teamName || carLaps[0]?.team || `Car #${num}`;
+      const team = entry?.teamName || carLaps[0]?.team || `Car #${carNum}`;
 
       cars[String(num)] = {
         num,
+        ...(ids.label(num) ? { label: ids.label(num) } : {}),
         team,
         cls,
         vehicle: entry?.vehicle,
@@ -142,14 +136,15 @@ export const sroParser: RaceDataParser = {
 
     // Add DNS/DNF entries to roster with empty laps
     for (const [carNum, entry] of entryMap) {
-      const num = parseInt(carNum, 10);
-      if (!isNaN(num) && !cars[String(num)]) {
+      const num = ids.num(carNum);
+      if (num !== null && !cars[String(num)]) {
         const status = entry.lapsCompleted === 0 ? "DNS" : "DNF";
         warnings.push(`Car #${carNum} (${entry.teamName}) — ${status} (${entry.lapsCompleted} laps completed)`);
 
         const cls = entry.carClass || "Unknown";
         cars[String(num)] = {
           num,
+          ...(ids.label(num) ? { label: ids.label(num) } : {}),
           team: entry.teamName,
           cls,
           vehicle: entry.vehicle,
@@ -189,7 +184,7 @@ export const sroParser: RaceDataParser = {
     if (pitStopPdf) {
       try {
         const pdfText = await extractPdfText(pitStopPdf);
-        const parsed = parseAlkamelPitStopPdf(pdfText);
+        const parsed = parseAlkamelPitStopPdf(pdfText, (raw) => ids.num(raw));
         if (parsed.size > 0) {
           pitTimeCards = parsed;
           warnings.push(`Pit time cards built for ${pitTimeCards.size} cars`);
@@ -203,8 +198,8 @@ export const sroParser: RaceDataParser = {
 
     // ── Enrich pit markers with driver names from Alkamel CSV ───
     for (const [carNum, carLaps] of lapsByCar) {
-      const num = parseInt(carNum, 10);
-      const ann = annotations[String(num)];
+      const num = ids.num(carNum);
+      const ann = num === null ? undefined : annotations[String(num)];
       if (!ann?.pits?.length) continue;
 
       const driverLaps = carLaps.map((lap) => ({

@@ -97,7 +97,7 @@ export function drawRaceCarBody(
 export function raceCardText(data: RaceChartData, carNum: number, meta: RaceMeta): { title: string; subtitle: string } {
   const car = data.cars[String(carNum)];
   const date = new Date(meta.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-  return { title: `#${car.num ?? carNum} ${car.team}`, subtitle: `${meta.name} · ${date}` };
+  return { title: `#${car.label ?? car.num ?? carNum} ${car.team}`, subtitle: `${meta.name} · ${date}` };
 }
 
 export function makeRaceCarCard(data: RaceChartData, annotations: AnnotationData | null, carNum: number, meta: RaceMeta): Promise<Blob> {
