@@ -1,3 +1,4 @@
+import { SeriesBadge } from "../../components/SeriesBadge";
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
@@ -215,8 +216,8 @@ export function AdminRacesPage() {
                     <tr key={race.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900 dark:text-gray-100">{race.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {race.series} · {race.season} · {formatRaceDate(race.date)}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          <SeriesBadge series={race.series} size="sm" /> {race.season} · {formatRaceDate(race.date)}
                           {race.premium && <span className="ml-1 text-yellow-600">★ PRO</span>}
                         </div>
                       </td>

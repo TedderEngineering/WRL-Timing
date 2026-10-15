@@ -5,26 +5,16 @@ import { fetchWeekends } from "../lib/api";
 import { SearchBar } from "../components/SearchBar";
 import { useAuth } from "../features/auth/AuthContext";
 import { cn } from "../lib/utils";
+import { SeriesBadge } from "../components/SeriesBadge";
 import { dayName, formatDateRange } from "../lib/race-dates";
 
 type Family = WeekendRace["family"];
 
-/** Text badge per series group (GUI spec §9.1): every series named in words. */
-const FAMILY_STYLE: Record<Family, string> = {
-  IMSA: "text-sky-300 border-sky-400/40 bg-sky-400/10",
-  SRO: "text-rose-300 border-rose-400/40 bg-rose-400/10",
-  "GR Cup": "text-red-300 border-red-400/40 bg-red-400/10",
-  WRL: "text-gray-100 border-gray-300/40 bg-white/5",
-  Other: "text-gray-300 border-gray-500/40 bg-white/5",
-};
 const FAMILIES: Family[] = ["IMSA", "SRO", "GR Cup", "WRL", "Other"];
 
-function FamilyBadge({ family, className }: { family: Family; className?: string }) {
-  return (
-    <span className={cn("inline-flex items-center rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide", FAMILY_STYLE[family], className)}>
-      {family}
-    </span>
-  );
+/** The site's one series badge (logo where the series has one), as on every other page. */
+function FamilyBadge({ family }: { family: Family }) {
+  return <SeriesBadge series={family === "Other" ? "Other" : family} size="sm" />;
 }
 
 function matches(w: Weekend, q: string): boolean {
@@ -133,14 +123,16 @@ export function RaceListPage() {
                 key={f}
                 onClick={() => toggleFamily(f)}
                 aria-pressed={on}
+                aria-label={f}
+                title={f}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-sm transition-colors",
+                  "inline-flex items-center rounded-full border px-2.5 py-1 transition-colors",
                   on
-                    ? "border-brand-500 bg-brand-500/15 font-medium text-gray-900 dark:text-gray-50"
-                    : "border-gray-200 text-gray-500 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:text-gray-100"
+                    ? "border-brand-500 bg-brand-500/15"
+                    : "border-gray-200 opacity-70 hover:opacity-100 dark:border-gray-800"
                 )}
               >
-                {f}
+                <FamilyBadge family={f} />
               </button>
             );
           })}

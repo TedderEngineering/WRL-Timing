@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
+import { ScrollRow } from "../../components/ScrollRow";
 import {
   ProseText,
   formatDuration,
@@ -402,10 +403,21 @@ export function RecapCard({
         )}
       </div>
       {event.races.length > 1 ? (
-        <div
+        <ScrollRow
           role="tablist"
           aria-label="Races this weekend"
-          className="mt-2.5 flex gap-1 overflow-x-auto border-b border-[var(--rt-border)] px-5"
+          activeKey={tab}
+          className="mt-2.5 border-b border-[var(--rt-border)]"
+          innerClassName="gap-1 px-5"
+          onKeyDown={(e) => {
+            // Tabs pattern: arrows move between races.
+            if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+            e.preventDefault();
+            const n = event.races.length;
+            const next = (tab + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
+            setTab(next);
+            (e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[next])?.focus();
+          }}
         >
           {event.races.map((r, i) => (
             <button
@@ -413,6 +425,8 @@ export function RecapCard({
               type="button"
               role="tab"
               aria-selected={i === tab}
+              data-active={i === tab}
+              tabIndex={i === tab ? 0 : -1}
               onClick={() => setTab(i)}
               className={`min-h-[40px] whitespace-nowrap border-b-2 px-3 text-sm ${
                 i === tab
@@ -423,7 +437,7 @@ export function RecapCard({
               {r.session}
             </button>
           ))}
-        </div>
+        </ScrollRow>
       ) : (
         <div className="px-5 pt-1 text-sm font-semibold text-[var(--rt-text)]">
           {race.session}
