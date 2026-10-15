@@ -79,14 +79,17 @@ export function PrivacyPage() {
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             We record a small number of events to learn which parts of RaceTrace and
             Finding Grip help people, for example when the coffee page is opened, when hot
-            pressures are recorded, or when a share image is made. Each event says which
+            pressures are recorded, when a share image is made, or when someone shares a
+            link to the site. Each event says which
             site and feature it came from and may include short facts, such as how many
             corners came in on target. Events never include your name, email address,
             notes or anything you type, and they are not linked to your account. We
             don&apos;t use cookies or advertising identifiers for this, and we don&apos;t
             record your screen or keystrokes. If your browser sends Global Privacy Control
             or Do Not Track, we record nothing. We use PostHog to count these events and
-            keep them for 12 months.
+            keep them for 12 months. A shared link carries a tag saying it came from a share,
+            so we can count visits from shares; the tag is the same for everyone and never
+            says who shared it.
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">

@@ -4,7 +4,6 @@ import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type Prose, type ProseContext } from "../../lib/prose";
 import { track } from "../../lib/analytics";
 import { SupportAsk } from "../support/SupportPrompts";
-import { ShareRaceButton } from "../share/ShareRaceButton";
 import { StatusPill } from "./RecapCard";
 import { formatDayRange } from "./format";
 import { readUi, writeUi } from "./ui-state";
@@ -162,12 +161,6 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
               <Link to={chartHref(race.id, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
-              <ShareRaceButton
-                raceId={race.id}
-                title={`#${car.number} at ${race.track} on RaceTrace`}
-                kind="my_car_race"
-                className="text-[var(--rt-accent)]"
-              />
               {data.carCount > 1 && (
                 <Link to="/settings/cars" className="ml-auto text-[13px] text-[var(--rt-text-muted)]">
                   {data.carCount} cars followed

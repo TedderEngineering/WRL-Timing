@@ -424,7 +424,7 @@ export function RaceDetailPage() {
           <span className="flex-1" />
           <ShareRaceButton
             raceId={id!}
-            title={`${raceMeta.name} on RaceTrace`}
+            raceName={raceMeta.name}
             className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
             style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
           />

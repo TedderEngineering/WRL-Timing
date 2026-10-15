@@ -1,50 +1,80 @@
 import { track } from "@/lib/analytics";
 
-export type LinkShareMethod = "share" | "copy" | "cancelled" | "failed";
-
 /**
- * A race link to send a friend, with `utm_source=share` so a later arrival event can count
- * friends who came from a shared link. Nothing about the sender is in it.
+ * Sharing a link to the site (shared by RaceTrace and Finding Grip; same API as Finding Grip's
+ * `feature/grip-share-app`).
+ *
+ * A shared link carries `?from=share`: the same tag for everyone, never who shared it, so the
+ * two events (`share_app` when someone shares, `share_arrival` when a visit comes from a
+ * share) count sharing without tying a link to an account (Privacy page, "Product analytics").
  */
-export function shareUrl(path: string, origin = window.location.origin): string {
-  const u = new URL(path, origin);
-  u.searchParams.set("utm_source", "share");
+
+export type ShareLinkMethod = "share" | "copy" | "cancelled" | "failed";
+
+const TAG = "from";
+const TAG_VALUE = "share";
+
+/** `base` with `?from=share` added, keeping anything already in it. */
+export function sharedUrl(base: string): string {
+  const u = new URL(base, typeof window !== "undefined" ? window.location.origin : "https://racetrace.tedderengineering.com");
+  u.searchParams.set(TAG, TAG_VALUE);
   return u.toString();
 }
 
 /**
- * Share a link: the phone's share sheet (Messages, WhatsApp…) on a touch device that has
- * one, otherwise copy it. Sends `share_card { kind, method }`, the agreed event on both
- * sites, unless the person cancelled.
+ * Open the share sheet; where there is none, or it refuses, copy `text + " " + url` instead.
+ * Sends `share_app { source, method }` only when something was shared or copied.
  */
-export async function shareLink(args: { url: string; title: string; kind: string }): Promise<LinkShareMethod> {
-  let method: LinkShareMethod;
-  const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
-  let coarse = false;
-  try {
-    coarse = window.matchMedia("(pointer: coarse)").matches;
-  } catch {
-    coarse = false;
-  }
-  if (coarse && typeof nav.share === "function") {
+export async function shareLink(args: { url: string; title: string; text: string; source: string }): Promise<ShareLinkMethod> {
+  const nav = (typeof navigator !== "undefined" ? navigator : undefined) as
+    | (Navigator & { share?: (d: ShareData) => Promise<void> })
+    | undefined;
+  let method: ShareLinkMethod;
+  if (nav && typeof nav.share === "function") {
     try {
-      await nav.share({ title: args.title, text: args.title, url: args.url });
+      await nav.share({ title: args.title, text: args.text, url: args.url });
       method = "share";
     } catch (err) {
-      method = err instanceof DOMException && err.name === "AbortError" ? "cancelled" : await copy(args.url);
+      method = err instanceof DOMException && err.name === "AbortError" ? "cancelled" : await copy(`${args.text} ${args.url}`);
     }
   } else {
-    method = await copy(args.url);
+    method = await copy(`${args.text} ${args.url}`);
   }
-  if (method === "share" || method === "copy") track("share_card", { kind: args.kind, method });
+  if (method === "share" || method === "copy") track("share_app", { source: args.source, method });
   return method;
 }
 
-async function copy(text: string): Promise<LinkShareMethod> {
+async function copy(text: string): Promise<ShareLinkMethod> {
   try {
     await navigator.clipboard.writeText(text);
     return "copy";
   } catch {
     return "failed";
   }
+}
+
+let arrivalNoted = false;
+
+/**
+ * Once per page load: when the address has `?from=share`, send `share_arrival { landing }` and
+ * take the tag out of the address bar, so a reload, bookmark or re-share doesn't count again.
+ * `landing(path)` gives a short code; the page address itself is never sent.
+ */
+export function noteShareArrival(landing: (path: string) => string): void {
+  if (arrivalNoted || typeof window === "undefined") return;
+  arrivalNoted = true;
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get(TAG) !== TAG_VALUE) return;
+    track("share_arrival", { landing: landing(u.pathname) });
+    u.searchParams.delete(TAG);
+    window.history.replaceState(window.history.state, "", `${u.pathname}${u.search}${u.hash}`);
+  } catch {
+    // never break the page for analytics
+  }
+}
+
+/** For tests: forget that this page load's arrival was noted. */
+export function __resetShareArrivalForTests(): void {
+  arrivalNoted = false;
 }

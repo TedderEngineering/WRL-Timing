@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { hasFullAccess } from "../lib/utils";
 import { RecapCard } from "../features/dashboard/RecapCard";
 import { InstallHint } from "../features/dashboard/InstallHint";
+import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { FirstStepsChecklist, MyCarCard, type MyCarResponse } from "../features/dashboard/MyCarCard";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
@@ -291,6 +292,11 @@ export function DashboardPage() {
           <div className="mt-4">
             <SupportCard />
           </div>
+          {/* One quiet line, never a pop-up. */}
+          <p className="m-0 mt-2.5 px-1 text-[13px] text-[var(--rt-text-muted)]">
+            It&apos;s free for your teammates too.{" "}
+            <ShareRaceTraceButton source="dashboard" className="font-semibold text-[var(--rt-accent)]" />
+          </p>
         </div>
       </div>
     </div>
