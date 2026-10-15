@@ -19,6 +19,7 @@ import {
 } from "@/features/grip/components";
 import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
+import { carName } from "@/features/grip/cars";
 import { gp } from "@/lib/site";
 
 type Sort = "date" | "track" | "name";
@@ -121,6 +122,7 @@ export function GripSessionsPage() {
                     </div>
                     <div className="text-xs text-gray-500">
                       {formatDate(s.sessionDate)} · {s.track.name} · {s.durationMin} min
+                      {s.car && <> · {carName(s.car)}</>}
                     </div>
                   </div>
                 </div>

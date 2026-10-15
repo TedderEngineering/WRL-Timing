@@ -29,6 +29,7 @@ import { ShareGripButton } from "@/features/grip/shareApp";
 import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
 import { FirstWeekendChecklist, InstallHint } from "@/features/grip/engagement";
 import { ProgressPanel } from "@/features/grip/progress";
+import { carName } from "@/features/grip/cars";
 import { SeasonRecapCard, previewYear, recapYearFor } from "@/features/grip/season";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
@@ -192,7 +193,11 @@ export function GripDashboardPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {recent.map((s) => (
-                <SessionCard key={s.id} session={s} detail={s.track.name} />
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  detail={s.car ? `${s.track.name} · ${carName(s.car)}` : s.track.name}
+                />
               ))}
             </div>
           </section>
@@ -252,6 +257,7 @@ export function GripDashboardPage() {
                     </div>
                     <div className="text-xs text-gray-500">
                       {formatDate(c.sessionDate)} · from {c.referenceName}
+                      {c.car && <> · {carName(c.car)}</>}
                     </div>
                   </div>
                 </Link>

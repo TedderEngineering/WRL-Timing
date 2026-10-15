@@ -359,6 +359,9 @@ model UserCar {
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   setupCar SetupCar? @relation(fields: [setupCarId], references: [id], onDelete: SetNull)
+  /// Finding Grip records linked to this car (cleared, not deleted, when the car is removed).
+  gripReferenceSessions GripReferenceSession[]
+  gripCalculations      GripCalculation[]
 
   @@index([userId])
   @@index([series, number])
@@ -601,14 +604,18 @@ model GripReferenceSession {
   wheelRr     Float       @map("wheel_rr")
   notes       String?
   useCount    Int         @default(0) @map("use_count")
+  /// The car from the shared My cars list (user_cars), when the driver chose one.
+  userCarId   String?     @map("user_car_id")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   track        GripTrack         @relation(fields: [trackId], references: [id])
+  userCar      UserCar?          @relation(fields: [userCarId], references: [id], onDelete: SetNull)
   calculations GripCalculation[]
 
   @@index([userId, sessionDate(sort: Desc)])
+  @@index([userCarId])
   @@map("grip_reference_sessions")
 }
 
@@ -617,6 +624,8 @@ model GripCalculation {
   userId             String      @map("user_id")
   referenceSessionId String?     @map("reference_session_id")
   referenceName      String      @map("reference_name")
+  /// The reference session's car when the calculation was made (shared My cars list).
+  userCarId          String?     @map("user_car_id")
   trackId            String      @map("track_id")
   name               String
   sessionDate        DateTime    @default(now()) @map("session_date")
@@ -654,8 +663,10 @@ model GripCalculation {
   user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   track            GripTrack             @relation(fields: [trackId], references: [id])
   referenceSession GripReferenceSession? @relation(fields: [referenceSessionId], references: [id], onDelete: SetNull)
+  userCar          UserCar?              @relation(fields: [userCarId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userCarId])
   @@map("grip_calculations")
 }
 

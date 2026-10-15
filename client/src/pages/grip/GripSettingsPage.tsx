@@ -16,6 +16,7 @@ import {
 import type { Units } from "@/features/grip/units";
 import { IS_GRIP_SITE, gp } from "@/lib/site";
 import { ShareGripButton } from "@/features/grip/shareApp";
+import { MyCarsCard } from "@/features/grip/cars";
 
 const UNIT_OPTIONS = [
   ["STANDARD", "PSI · °F"],
@@ -195,6 +196,8 @@ export function GripSettingsPage() {
             </Note>
           </Card>
         )}
+
+        <MyCarsCard />
 
         <Card className="space-y-3">
           <h2 className="font-bold text-gray-900 dark:text-gray-50">

@@ -53,6 +53,7 @@ import { SupportAsk } from "@/features/support/SupportPrompts";
 import { track } from "@/lib/analytics";
 import { SharePressuresButton } from "@/features/grip/pressureCard";
 import { ProgressLine } from "@/features/grip/progress";
+import { carName } from "@/features/grip/cars";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 
@@ -136,7 +137,14 @@ export function GripOutcomePage() {
       ← Dashboard
     </Link>
   );
-  const subtitle = `${c.name} · ${c.track.name} · ${formatDate(c.sessionDate)}`;
+  const subtitle = [
+    c.name,
+    c.track.name,
+    c.car ? carName(c.car) : null,
+    formatDate(c.sessionDate),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // Live comparison while typing (the saved verdict comes from the server).
   const typed = checkCorners(hot, (t) => checkPressure(t, units, true));

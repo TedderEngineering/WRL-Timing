@@ -132,6 +132,27 @@ removed from the address bar. Link previews use `client/public/grip-og.png`
 (1200×630) through the `og:` and `twitter:` tags in `client/grip.html`. Per-browser memory (hidden cards,
 install hint) is the `findinggrip.ui.v1` localStorage key.
 
+## Cars (the shared My cars list)
+
+Finding Grip uses RaceTrace's car list (`user_cars`, `/api/me/cars`, rules in
+`server/src/services/my-cars.ts`): one list per account on every site. A car is
+a race car (`imsa`, `sro`, `wrl`) or a track-day / club car (`other`, never
+matched to a race).
+
+- A reference session can have a car (`user_car_id`, optional; migration
+  `20261016020000_grip_user_cars`). The server checks it is the user's own
+  (`400 INVALID_CAR`). An edit that leaves `userCarId` out keeps the car.
+- A calculation takes its reference session's car. Changing a session's car
+  moves the calculations made from it. A run saved as a reference keeps it.
+- Removing a car clears the link (`ON DELETE SET NULL`); sessions and
+  calculations stay.
+- `GET /progress` adds `cars` (on target, average worst-corner miss, last
+  date per car); the dashboard shows "By car" from two cars. The CSV export
+  has a `car` column.
+- UI: `client/src/features/grip/cars.tsx`: the optional Car picker on the
+  session form with "+ Add a car", and My cars in Settings. Adding a car sends
+  `follow_car { series, source }` with `grip_session_form` or `grip_settings`.
+
 ## Settings
 
 | Variable | Purpose | Default |

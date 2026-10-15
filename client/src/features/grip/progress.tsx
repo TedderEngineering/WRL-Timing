@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { Progress } from "./api";
 import { Card, Eyebrow, formatDate } from "./components";
 import { tolerance } from "./outcome";
+import { carName } from "./cars";
 import { formatPressure, pressureUnit, type Units } from "./units";
 
 const runs = (n: number) => `${n} run${n === 1 ? "" : "s"}`;
@@ -154,6 +155,36 @@ export function ProgressPanel({ progress, units }: { progress: Progress; units: 
               </li>
             ))}
           </ul>
+          {progress.cars.length >= 2 && (
+            <>
+              <div className="mt-4">
+                <Eyebrow>By car</Eyebrow>
+              </div>
+              <ul className="mt-2 divide-y divide-gray-200 dark:divide-gray-800">
+                {progress.cars.slice(0, 6).map((c) => (
+                  <li key={c.car.id} className="flex items-center gap-3 py-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-gray-700 dark:text-gray-300">
+                        {carName(c.car)}
+                      </span>
+                      {c.averageWorstMiss !== null && (
+                        <span className="block text-[11px] text-gray-500">
+                          Worst corner off {formatPressure(c.averageWorstMiss, units)}{" "}
+                          {pu} on average · last {formatDate(c.lastDate)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-right tabular-nums whitespace-nowrap">
+                      <span className="block text-sm text-gray-900 dark:text-gray-100">
+                        <b>{c.onTarget}</b> of {c.recorded}
+                      </span>
+                      <span className="block text-[11px] text-gray-500">on target</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </Card>
     </section>

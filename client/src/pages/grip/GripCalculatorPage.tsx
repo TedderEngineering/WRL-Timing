@@ -52,6 +52,7 @@ import {
 import { cn } from "@/lib/utils";
 import { OutcomePill } from "@/features/grip/outcome";
 import { SharePressuresButton } from "@/features/grip/pressureCard";
+import { carName } from "@/features/grip/cars";
 import { gp } from "@/lib/site";
 
 const WEATHER = [
@@ -469,7 +470,8 @@ export function GripCalculatorPage() {
             >
               {all.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} · {s.track.shortName} · {formatDate(s.sessionDate)}
+                  {s.name} · {s.track.shortName}
+                  {s.car ? ` · ${carName(s.car)}` : ""} · {formatDate(s.sessionDate)}
                   {s.ready ? "" : " (needs hot pressures)"}
                 </option>
               ))}
@@ -736,6 +738,7 @@ export function GripCalculatorPage() {
                 </div>
                 <div className="text-xs text-gray-500">
                   {formatDate(reference.sessionDate)} · {reference.track.name}
+                  {reference.car && <> · {carName(reference.car)}</>}
                 </div>
               </div>
               <WeatherPill weather={reference.weather} />
