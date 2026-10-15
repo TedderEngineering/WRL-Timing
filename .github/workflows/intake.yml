@@ -221,7 +221,8 @@ jobs:
           held=$(node -e 'const d=require(process.argv[1]),L=+process.argv[2];for(const s of d.sessions.filter(s=>s.state==="new"&&(s.attachCandidates||[]).length>L))console.log(`- ${s.date} ${s.event} — ${s.session}: may be ${s.attachCandidates.map(r=>`${r.name} (${r.raceId})`).join("; ")}`)' "$INTAKE_WORK_DIR/discover.json" "$lim")
           if [ -n "$held" ]; then
             { echo "## Waiting for the owner (possible duplicates of races already on the site)"; echo "$held"; } >> "$GITHUB_STEP_SUMMARY"
-            node -e 'console.log("::notice title=Waiting for the owner (possible duplicates)::"+process.argv[1].replace(/%/g,"%25").replace(/\n/g,"%0A"))' "$held"
+            # Through the environment: a list starting with "- " passed as an argument is read by node as an option (exit 9).
+            HELD="$held" node -e 'console.log("::notice title=Waiting for the owner (possible duplicates)::"+process.env.HELD.replace(/%/g,"%25").replace(/\n/g,"%0A"))'
           fi
           if [ "$n" = "0" ]; then
             echo "Nothing to import." | tee -a "$GITHUB_STEP_SUMMARY"

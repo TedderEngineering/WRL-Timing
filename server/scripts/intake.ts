@@ -124,8 +124,18 @@ async function cmdDiscover(a: ReturnType<typeof parseArgs>) {
   if (!Number.isInteger(season)) throw new UsageError("--season must be a year");
   const since = a.one("since");
   if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new UsageError("--since must be YYYY-MM-DD");
-  const org = Number(a.one("org") ?? process.env.SPEEDHIVE_WRL_ORG_ID ?? "") || undefined;
-  const sessions = await discover(http(), {
+  let org = Number(a.one("org") ?? process.env.SPEEDHIVE_WRL_ORG_ID ?? "") || undefined;
+  const h = http();
+  // As reimport-plan does: with no organisation id set, find WRL's from a known WRL session.
+  if (!org && series.some((x) => x.split(",").includes("wrl-speedhive")) && !(a.flags.speedhive ?? []).length) {
+    try {
+      org = (await speedhiveOrgFromSession(h, String(KNOWN_WRL_SPEEDHIVE_SESSION))).id ?? undefined;
+      log(`Speedhive WRL organisation: ${org ?? "not found"}`);
+    } catch (e) {
+      log(`Warning: could not find the Speedhive WRL organisation (${(e as Error).message})`);
+    }
+  }
+  const sessions = await discover(h, {
     series,
     season,
     since,
