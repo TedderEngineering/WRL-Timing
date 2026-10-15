@@ -4,6 +4,7 @@ import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type Prose, type ProseContext } from "../../lib/prose";
 import { track } from "../../lib/analytics";
 import { SupportAsk } from "../support/SupportPrompts";
+import { ShareRaceButton } from "../share/ShareRaceButton";
 import { StatusPill } from "./RecapCard";
 import { formatDayRange } from "./format";
 import { readUi, writeUi } from "./ui-state";
@@ -161,6 +162,12 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
               <Link to={chartHref(race.id, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
+              <ShareRaceButton
+                raceId={race.id}
+                title={`#${car.number} at ${race.track} on RaceTrace`}
+                kind="my_car_race"
+                className="text-[var(--rt-accent)]"
+              />
               {data.carCount > 1 && (
                 <Link to="/settings/cars" className="ml-auto text-[13px] text-[var(--rt-text-muted)]">
                   {data.carCount} cars followed
@@ -184,9 +191,18 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
 export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
   const [hidden, setHidden] = useState(() => !!readUi().checklistHidden);
   if (!data) return null;
-  const steps = [
-    { key: "account", label: "Create your account", done: true, to: null as string | null },
-    { key: "follow", label: "Follow your car: open one of its races and press Follow", done: data.carCount > 0, to: "/races" },
+  type Step = { key: string; label: string; done: boolean; to: string | null; start?: string; alt?: { label: string; to: string; key: string } };
+  const steps: Step[] = [
+    { key: "account", label: "Create your account", done: true, to: null },
+    {
+      key: "follow",
+      label: "Follow your car",
+      done: data.carCount > 0,
+      to: "/races",
+      start: "Find its race →",
+      // Or type the number: no need to find a race first.
+      alt: { key: "follow_by_number", label: "Add it by number →", to: "/settings/cars" },
+    },
     { key: "open_race", label: "Open your car's latest race", done: !!data.viewed, to: data.race ? chartHref(data.race.id) : null },
   ];
   const done = steps.filter((s) => s.done).length;
@@ -242,9 +258,25 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
                 {s.label}
                 <span className="sr-only">{s.done ? " (done)" : ""}</span>
               </span>
-              {isNext && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
+              {isNext && !s.alt && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
             </>
           );
+          if (isNext && s.alt && s.to) {
+            // Two ways to do this step: find a race and press Follow, or type the number.
+            return (
+              <li key={s.key} className="flex min-h-[40px] flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="flex items-center gap-3">{body}</span>
+                <span className="ml-auto flex items-center gap-4 text-sm font-semibold">
+                  <Link to={s.to} onClick={() => track("checklist_step", { step: s.key })} className="text-[var(--rt-accent)]">
+                    {s.start}
+                  </Link>
+                  <Link to={s.alt.to} onClick={() => track("checklist_step", { step: s.alt!.key })} className="text-[var(--rt-accent)]">
+                    {s.alt.label}
+                  </Link>
+                </span>
+              </li>
+            );
+          }
           return (
             <li key={s.key}>
               {s.done || !s.to ? (

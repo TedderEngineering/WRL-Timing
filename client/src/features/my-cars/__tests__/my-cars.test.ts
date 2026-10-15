@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { carTitle, rememberPendingFollow, takePendingFollow, type MyCar } from "../api";
+import { carTitle, hasPendingFollow, rememberPendingFollow, takePendingFollow, type MyCar } from "../api";
 
 // A tiny in-memory sessionStorage (vitest runs these in Node).
 const store = new Map<string, string>();
@@ -15,9 +15,11 @@ beforeEach(() => {
 describe("a follow asked for before signing up", () => {
   it("is done once, on the race it was asked on, within 15 minutes", () => {
     rememberPendingFollow("race1", "67");
+    expect(hasPendingFollow()).toBe(true);
     expect(takePendingFollow("other")).toBeNull();
     expect(takePendingFollow("race1")).toBe("67");
     expect(takePendingFollow("race1")).toBeNull();
+    expect(hasPendingFollow()).toBe(false);
   });
 
   it("expires", () => {

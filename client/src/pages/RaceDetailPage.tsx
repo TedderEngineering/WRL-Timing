@@ -1,5 +1,6 @@
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { FollowCarButton } from "../features/my-cars/FollowCarButton";
+import { ShareRaceButton } from "../features/share/ShareRaceButton";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
@@ -421,6 +422,12 @@ export function RaceDetailPage() {
             </span>
           )}
           <span className="flex-1" />
+          <ShareRaceButton
+            raceId={id!}
+            title={`${raceMeta.name} on RaceTrace`}
+            className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
+            style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+          />
           {focusNum > 0 && data.cars[String(focusNum)] && (
             <FollowCarButton
               raceId={id!}

@@ -47,6 +47,16 @@ export function rememberPendingFollow(raceId: string, carNumber: string): void {
   }
 }
 
+/** A follow is waiting for the visitor to finish signing up (onboarding then skips asking). */
+export function hasPendingFollow(now = Date.now()): boolean {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(KEY) || "null") as { at?: unknown } | null;
+    return !!p && typeof p.at === "number" && now - p.at <= MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 /** The pending follow for this race, removed once read; null when none or too old. */
 export function takePendingFollow(raceId: string, now = Date.now()): string | null {
   try {
