@@ -12,6 +12,10 @@
 #   mode = analyze    facts + rule checks for every race with a source key that has no analysis
 #                     package yet (newest first), uploaded as a DRAFT package. No stories: a
 #                     package cannot be published until its stories and summary are written.
+#   mode = names-plan lists, for every race with a source key, its standard name ("GR Cup Race 1 —
+#                     Circuit of the Americas") and the day it ran from its timing session.
+#                     Nothing is written.
+#   mode = names      the same, then renames and re-dates those races (same id, link and status).
 #   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
 #                     New sessions that may be a race already on the site (an older
 #                     upload without a source key) are skipped and listed, unless the
@@ -44,9 +48,9 @@ on:
         required: false
         default: ""
       mode:
-        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place; analyze = facts + rule checks as draft packages"
+        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place; analyze = facts + rule checks as draft packages; names-plan = list race names/dates to standardise; names = apply them"
         type: choice
-        options: [discover, import, reimport-plan, reimport, analyze]
+        options: [discover, import, reimport-plan, reimport, analyze, names-plan, names]
         default: discover
       limit:
         description: "analyze only: at most this many races per run (newest first); empty = all"
@@ -156,6 +160,33 @@ jobs:
             if (cur.trim()) parts.push(cur);
             const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
             parts.slice(0, 10).forEach((p, i) => console.log(`::notice title=${title} ${i + 1}/${Math.min(parts.length, 10)}::` + enc(p)));
+          ' "$f" "$title"
+          exit $status
+
+      - name: Names and dates
+        if: inputs.mode == 'names-plan' || inputs.mode == 'names'
+        env:
+          SERIES: ${{ inputs.series }}
+          SEASON: ${{ inputs.season }}
+          APPLY: ${{ inputs.mode == 'names' }}
+        run: |
+          args=(--series "$SERIES" --season "$SEASON" --notes "$RUNNER_TEMP/names-notes.txt")
+          [ "$APPLY" = "true" ] && args+=(--apply)
+          status=0
+          npx tsx scripts/intake.ts names "${args[@]}" > "$RUNNER_TEMP/names.txt" 2> "$RUNNER_TEMP/names.log" || status=1
+          tail -n 30 "$RUNNER_TEMP/names.log"
+          cat "$RUNNER_TEMP/names.txt"
+          { echo "## Names and dates: $SERIES $SEASON"; echo '```'; cat "$RUNNER_TEMP/names.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          f="$RUNNER_TEMP/names-notes.txt"; title="Names"
+          if [ ! -s "$f" ]; then f="$RUNNER_TEMP/names.log"; title="Names failed"; fi
+          node -e '
+            const [file, title] = process.argv.slice(1);
+            const t = require("fs").readFileSync(file, "utf8").split("\n");
+            const parts = []; let cur = "";
+            for (const l of t) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+            if (cur.trim()) parts.push(cur);
+            const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            parts.slice(0, 10).forEach((p, i) => console.log(`::notice title=${title} ${i + 1}/${Math.min(parts.length, 10)}${parts.length > 10 ? " (more in the job summary)" : ""}::` + enc(p)));
           ' "$f" "$title"
           exit $status
 

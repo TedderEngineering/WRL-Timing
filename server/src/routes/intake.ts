@@ -5,6 +5,7 @@
  *   GET    /api/admin/intake/races?site=     races with a source key, for `intake discover`
  *   GET    /api/admin/intake/races?unkeyed=1&series=&season=[&cars=1]   races without one (attach candidates; cars=1 adds car numbers)
  *   POST   /api/admin/intake/races           idempotent upsert by source key (services/intake.ts)
+ *   POST   /api/admin/intake/races/:id/identity   name, date and season from the race's session (intake `names`)
  *
  *   GET    /api/admin/api-tokens             list tokens (never the token or its hash)
  *   POST   /api/admin/api-tokens             create; the token is in this response only
@@ -23,7 +24,7 @@ import { getParser } from "../utils/parsers/index.js";
 import { archiveRaceFiles } from "../lib/race-archive.js";
 import { supabase, supabaseKeyKind, STORAGE_BUCKET } from "../lib/supabase.js";
 import { env } from "../config/env.js";
-import { intakeRace, listIntakeRaces, listUnkeyedRaces } from "../services/intake.js";
+import { intakeRace, listIntakeRaces, listUnkeyedRaces, setRaceIdentity } from "../services/intake.js";
 import { API_TOKEN_SCOPES, generateApiToken, toPublicToken } from "../services/api-tokens.js";
 
 // ─── Intake ──────────────────────────────────────────────────────────────────
@@ -77,6 +78,15 @@ intakeRouter.post("/races", async (req: Request, res: Response, next: NextFuncti
       url: `/races/${result.raceId}`,
       adminUrl: `/admin/races`,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+intakeRouter.post("/races/:id/identity", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await setRaceIdentity(String(req.params.id), req.body, { userId: req.user!.userId, ...(req.apiToken ? { apiTokenId: req.apiToken.id } : {}) });
+    res.json(result);
   } catch (err) {
     next(err);
   }
