@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { hasFullAccess } from "../lib/utils";
 import { RecapCard } from "../features/dashboard/RecapCard";
 import { InstallHint } from "../features/dashboard/InstallHint";
+import { FirstStepsChecklist, MyCarCard, type MyCarResponse } from "../features/dashboard/MyCarCard";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -30,16 +31,18 @@ export function DashboardPage() {
   const [recent, setRecent] = useState<RaceItem[]>([]);
   const [favorites, setFavorites] = useState<RaceItem[]>([]);
   const [failed, setFailed] = useState(false);
+  const [myCar, setMyCar] = useState<MyCarResponse | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [latestRes, seasonRes, recentRes, favRes] = await Promise.allSettled([
+      const [latestRes, seasonRes, recentRes, favRes, myCarRes] = await Promise.allSettled([
         api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
         api.get<SeasonResponse>("/dashboard/season"),
         api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
         api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
+        api.get<MyCarResponse>("/dashboard/my-car"),
       ]);
       if (!alive) return;
       if (latestRes.status === "fulfilled") setEvents(latestRes.value.events);
@@ -50,6 +53,7 @@ export function DashboardPage() {
       if (seasonRes.status === "fulfilled") setSeason(seasonRes.value);
       if (recentRes.status === "fulfilled") setRecent(recentRes.value.races);
       if (favRes.status === "fulfilled") setFavorites(favRes.value.races);
+      if (myCarRes.status === "fulfilled") setMyCar(myCarRes.value);
     })();
     return () => {
       alive = false;
@@ -184,7 +188,23 @@ export function DashboardPage() {
       <div className="flex flex-wrap items-start gap-5">
         {/* Latest races */}
         <main className="flex min-w-0 flex-[999_1_640px] flex-col gap-4">
-          <div className="flex items-baseline justify-between">
+          {/* Your car (the peak moment), then the first steps until they are done. */}
+          {myCar?.car && (
+            <section aria-labelledby="your-car" className="flex flex-col gap-3">
+              <div className="flex items-baseline justify-between">
+                <h2 id="your-car" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
+                  {myCar.carCount > 1 ? "Your cars' latest race" : "Your car"}
+                </h2>
+                <Link to="/settings/cars" className="text-[13px] text-[var(--rt-accent)]">
+                  My cars →
+                </Link>
+              </div>
+              <MyCarCard data={myCar} />
+            </section>
+          )}
+          <FirstStepsChecklist data={myCar} />
+
+          <div className={`flex items-baseline justify-between ${myCar?.car ? "mt-4" : ""}`}>
             <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
               Latest races
             </h2>

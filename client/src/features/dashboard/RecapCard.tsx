@@ -10,7 +10,6 @@ import {
 } from "../../lib/prose";
 import { formatDayRange, resultsLabel } from "./format";
 import type { LatestEvent, LatestRace, Recap, RecapMoment } from "./types";
-import { SupportAsk } from "../support/SupportPrompts";
 
 const chartHref = (id: string, tab?: string) =>
   `/chart?race=${id}${tab ? `&tab=${tab}` : ""}`;
@@ -327,8 +326,6 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
               </p>
             ))}
           {!hero && <MomentList recap={recap} ctx={ctx} />}
-          {/* After value: the one contextual ask (F9-B), at most every 30 days. */}
-          <SupportAsk />
         </div>
       )}
 

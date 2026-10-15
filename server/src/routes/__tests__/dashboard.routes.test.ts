@@ -9,7 +9,7 @@ import request from "supertest";
 
 const fake = vi.hoisted(() => {
   type Row = Record<string, any>;
-  const state = { races: [] as Row[], packages: [] as Row[], subs: new Map<string, Row>(), views: [] as Row[] };
+  const state = { races: [] as Row[], packages: [] as Row[], subs: new Map<string, Row>(), views: [] as Row[], cars: [] as Row[] };
   const prisma: Row = {
     race: {
       findMany: async ({ where = {}, take, select }: Row) => {
@@ -17,12 +17,24 @@ const fake = vi.hoisted(() => {
           (r) =>
             (!where.status || r.status === where.status) &&
             (!where.season || r.season === where.season) &&
-            (!where.createdAt?.lte || r.createdAt <= where.createdAt.lte)
+            (!where.createdAt?.lte || r.createdAt <= where.createdAt.lte) &&
+            (!where.entries?.some || (r.entries ?? []).some((e: Row) => where.entries.some.carNumber.in.includes(e.carNumber)))
         );
         rows = rows.sort((a, b) => b.date - a.date || a.name.localeCompare(b.name));
         if (take) rows = rows.slice(0, take);
-        return rows.map((r) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : r));
+        const pick = (r: Row) =>
+          Object.fromEntries(
+            Object.keys(select).map((k) => [
+              k,
+              k === "entries" && select.entries.where ? (r.entries ?? []).filter((e: Row) => select.entries.where.carNumber.in.includes(e.carNumber)) : r[k],
+            ])
+          );
+        return rows.map((r) => (select ? pick(r) : r));
       },
+      findUnique: async ({ where }: Row) => state.races.find((r) => r.id === where.id) ?? null,
+    },
+    userCar: {
+      findMany: async ({ where }: Row) => state.cars.filter((c) => c.userId === where.userId),
     },
     // Pit laps per race (the weekend's feature races are listed first); races may carry `pitLaps`.
     raceLap: {
@@ -34,6 +46,7 @@ const fake = vi.hoisted(() => {
     raceAnalysisPackage: { findUnique: async ({ where }: Row) => state.packages.find((p) => p.id === where.id) ?? null },
     subscription: { findUnique: async ({ where }: Row) => state.subs.get(where.userId) ?? null },
     userRaceView: {
+      findFirst: async ({ where }: Row) => state.views.find((v) => v.userId === where.userId && v.raceId === where.raceId) ?? null,
       findMany: async ({ where }: Row) =>
         state.views
           .filter((v) => v.userId === where.userId && (!where.raceId?.in || where.raceId.in.includes(v.raceId)))
@@ -98,6 +111,7 @@ beforeEach(() => {
   s.packages = [{ id: "pkg1", raceId: "gt4r1", status: "PUBLISHED", sha256: "abc", storagePath: "packages/gt4r1/v1.json.gz" }];
   s.subs = new Map([["u_pro", { plan: "PRO" }]]);
   s.views = [];
+  s.cars = [];
 });
 
 describe("GET /api/dashboard/latest", () => {
@@ -160,5 +174,59 @@ describe("GET /api/dashboard/season", () => {
     expect(res.body.next).toMatchObject({ seriesId: "wrl", name: "Sebring", start: "2026-10-16" });
     const gt4 = res.body.series.find((s: any) => s.id === "sro-gt4");
     expect(gt4.rounds[6].races.map((r: any) => r.id)).toEqual(["gt4r1", "gt4r2"]);
+  });
+});
+
+describe("GET /api/dashboard/my-car", () => {
+  const lap = (l: number, p: number, cp: number, ltSec: number, pit = 0) => ({ l, p, cp, ltSec, pit, flag: "GF", lt: "" });
+  beforeEach(() => {
+    const s = fake.state;
+    const chart = {
+      maxLap: 3,
+      classCarCounts: { Silver: 2 },
+      cars: {
+        "68": { num: 68, team: "RAFA Racing Team", cls: "Silver", finishPos: 1, finishPosClass: 1, laps: [lap(1, 1, 1, 100), lap(2, 1, 1, 99), lap(3, 1, 1, 99.5)] },
+        "131": { num: 131, team: "Other", cls: "Silver", finishPos: 2, finishPosClass: 2, laps: [lap(1, 2, 2, 101), lap(2, 2, 2, 100), lap(3, 2, 2, 100)] },
+      },
+    };
+    for (const r of s.races) {
+      r.subSeries = r.series === "SRO" ? "GT4 America" : null;
+      r.entries = r.id.startsWith("gt4") ? [{ carNumber: "68", teamName: "RAFA Racing Team" }, { carNumber: "131", teamName: "Other" }] : [{ carNumber: "68", teamName: "Someone" }];
+      r.chartData = chart;
+      r.annotationData = {};
+    }
+  });
+
+  it("says when the user follows no car", async () => {
+    const res = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(res.body).toMatchObject({ carCount: 0, race: null });
+  });
+
+  it("finds the newest race of a followed car in its series, with facts and the package story", async () => {
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "sro", teamName: null, season: 2026, label: null, carClass: null }];
+    const res = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(res.status).toBe(200);
+    expect(res.body.race).toMatchObject({ id: "gt4r2", locked: false });
+    expect(res.body.facts).toMatchObject({ number: "68", cls: "Silver", finishClass: 1, classSize: 2, bestLapClassRank: 1 });
+    expect(res.body.viewed).toBe(false);
+  });
+
+  it("uses the package's car story when the race has one", async () => {
+    fake.state.races = fake.state.races.filter((r) => r.id !== "gt4r2");
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "sro", teamName: null, season: null, label: null, carClass: null }];
+    const res = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(res.body.race.id).toBe("gt4r1");
+    const story = PUBLISHABLE.carStories.find((c: any) => c.car === "68");
+    if (story) expect(res.body.story.headline).toEqual(story.headline);
+    else expect(res.body.story).toBeNull();
+  });
+
+  it("does not take another series' car with the same number", async () => {
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "wrl", teamName: null, season: null, label: null, carClass: null }];
+    const res = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(res.body.race.id).toBe("wrlsat");
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "imsa", teamName: "Nobody", season: null, label: null, carClass: null }];
+    const none = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(none.body).toMatchObject({ carCount: 1, race: null });
   });
 });
