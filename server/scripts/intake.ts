@@ -481,7 +481,9 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
     }
   }
 
-  const rows = planReimport(races, uniq, prints);
+  const keyed = await knownRaces();
+  const taken = new Map((keyed ?? []).map((k) => [k.sourceKey, { raceId: k.raceId, name: k.name }]));
+  const rows = planReimport(races, uniq, prints, taken);
   const save = a.one("save") ?? join(WORK, "reimport-plan.json");
   mkdirSync(dirname(save), { recursive: true });
   writeFileSync(save, JSON.stringify({ plannedAt: new Date().toISOString(), seasons, series, rows: rows.map((r) => ({ ...r, dir: r.sourceKey ? dirs.get(r.sourceKey) ?? null : null })) }, null, 2));

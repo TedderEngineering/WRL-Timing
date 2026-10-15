@@ -46,7 +46,7 @@ export function errorHandler(
   const type = (err as { type?: unknown }).type;
   if (typeof status === "number" && status >= 400 && status < 500 && typeof type === "string") {
     res.status(status).json({
-      error: type === "entity.too.large" ? "The request body is larger than the server accepts (50 MB)." : err.message,
+      error: type === "entity.too.large" ? "The request body is larger than the server accepts." : err.message,
       code: type === "entity.too.large" ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST_BODY",
     });
     return;

@@ -59,13 +59,18 @@ export function createApp() {
   );
 
   // ─── Body Parsing ──────────────────────────────────────────────────────────
+  const INTAKE_PUSH_PATH = /^\/api\/admin\/intake\/races\/?$/;
+  const INTAKE_BODY_LIMIT = "160mb";
   // Stripe webhook needs raw body — skip JSON parsing for that route.
   // Race Analysis Package uploads read the raw bytes too (plain or gzip JSON,
   // hashed exactly as sent; see routes/packages.ts).
   app.use((req, res, next) => {
     if (req.path === "/api/billing/webhook") return next();
     if (req.method === "POST" && PACKAGE_UPLOAD_PATH.test(req.path)) return next();
-    express.json({ limit: "50mb" })(req, res, next);
+    // An intake push carries a race's raw timing files; a 24-hour race's lap analysis alone
+    // is over 50 MB. Only that route (intake token required) accepts more.
+    const limit = req.method === "POST" && INTAKE_PUSH_PATH.test(req.path) ? INTAKE_BODY_LIMIT : "50mb";
+    express.json({ limit })(req, res, next);
   });
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
