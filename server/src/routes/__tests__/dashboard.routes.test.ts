@@ -213,6 +213,21 @@ describe("GET /api/dashboard/my-car", () => {
     expect(res.body.viewed).toBe(false);
   });
 
+  it("shows a chosen car's latest race (?car=), and lists the user's cars for the tabs", async () => {
+    fake.state.cars = [
+      { id: "c1", userId: "u_pro", number: "68", series: "sro", teamName: null, season: null, label: null, carClass: null },
+      { id: "c2", userId: "u_pro", number: "68", series: "wrl", teamName: null, season: null, label: "Our WRL car", carClass: null },
+    ];
+    const all = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(all.body.race.id).toBe("gt4r2");
+    expect(all.body.cars.map((c: any) => c.id)).toEqual(["c1", "c2"]);
+    const wrl = await request(app).get("/api/dashboard/my-car?car=c2").set("Authorization", bearer(users.pro));
+    expect(wrl.body.car.id).toBe("c2");
+    expect(wrl.body.race.id).toBe("wrlsat");
+    // Someone else's car id is ignored: the newest race of the user's own cars.
+    expect((await request(app).get("/api/dashboard/my-car?car=nope").set("Authorization", bearer(users.pro))).body.race.id).toBe("gt4r2");
+  });
+
   it("uses the package's car story when the race has one", async () => {
     fake.state.races = fake.state.races.filter((r) => r.id !== "gt4r2");
     fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "sro", teamName: null, season: null, label: null, carClass: null }];

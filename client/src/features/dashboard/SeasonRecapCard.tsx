@@ -4,6 +4,8 @@ import { drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle
 import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { SupportAsk } from "../support/SupportPrompts";
 import { readUi, writeUi } from "./ui-state";
+import { ScrollRow } from "../../components/ScrollRow";
+import { formatDayRange } from "./format";
 
 /**
  * "Your 2026" (engagement plan H): one card per followed car and series, opening when that
@@ -14,6 +16,7 @@ import { readUi, writeUi } from "./ui-state";
 
 export interface SeasonRecap {
   key: string;
+  carId?: string;
   number: string;
   team: string;
   season: number;
@@ -28,7 +31,19 @@ export interface SeasonRecap {
   pitCycles: { count: number; gained: number | null };
   topThreePitStops: number;
   topThreeFastestLaps: number;
-  raceList: { id: string; name: string; date: string; finishClass: number | null; cls: string }[];
+  raceList: {
+    id: string;
+    name: string;
+    date: string;
+    /** Older responses may lack the fields below. */
+    track?: string;
+    finishClass: number | null;
+    finishOverall?: number | null;
+    classSize?: number | null;
+    laps?: number;
+    cls: string;
+    pitCycles?: { net: number }[];
+  }[];
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -77,6 +92,84 @@ function drawSeasonBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyl
   }
 }
 
+/** Tab labels: the track, with the race number when a weekend had more than one race. */
+export function raceTabLabels(list: SeasonRecap["raceList"]): string[] {
+  const base = list.map((r) => r.track || shortName(r.name));
+  return base.map((b, i) => {
+    const same = base.map((x, j) => (x === b ? j : -1)).filter((j) => j >= 0);
+    return same.length > 1 ? `${b} R${same.indexOf(i) + 1}` : b;
+  });
+}
+
+/**
+ * Every race of the season, as the race cards do it: a row of tabs (hover or focus previews the
+ * race below, a click opens it on Position Trace on this car, grab or wheel to scroll).
+ */
+function RaceTabs({ recap }: { recap: SeasonRecap }) {
+  const list = recap.raceList;
+  const bestIdx = Math.max(0, list.findIndex((r) => r.id === recap.best?.raceId));
+  const [tab, setTab] = useState(bestIdx);
+  const labels = raceTabLabels(list);
+  const r = list[tab] ?? list[0];
+  if (!r) return null;
+  const href = (id: string) => `/chart?race=${id}&car=${encodeURIComponent(recap.number)}`;
+  const finish =
+    r.finishClass !== null
+      ? `Finished P${r.finishClass} in ${r.cls}${r.classSize ? ` of ${r.classSize}` : ""}${r.finishOverall ? ` · P${r.finishOverall} overall` : ""}`
+      : "Not classified";
+  const gained = (r.pitCycles ?? []).reduce((a, c) => a + c.net, 0);
+  return (
+    <div className="-mx-5 border-y border-[var(--rt-border)]">
+      <ScrollRow
+        role="navigation"
+        aria-label={`${recap.season} races of #${recap.number}: open on Position Trace`}
+        activeKey={tab}
+        className="border-b border-[var(--rt-border)]"
+        innerClassName="gap-1 px-5"
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          e.preventDefault();
+          const n = list.length;
+          const next = (tab + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
+          setTab(next);
+          e.currentTarget.querySelectorAll<HTMLElement>("a")[next]?.focus();
+        }}
+      >
+        {list.map((x, i) => (
+          <Link
+            key={x.id}
+            to={href(x.id)}
+            aria-current={i === tab ? "true" : undefined}
+            data-active={i === tab}
+            tabIndex={i === tab ? 0 : -1}
+            onMouseEnter={() => setTab(i)}
+            onFocus={() => setTab(i)}
+            draggable={false}
+            title={x.name}
+            className={`flex min-h-[40px] items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
+              i === tab
+                ? "border-[var(--rt-accent)] font-semibold text-[var(--rt-text)]"
+                : "border-transparent text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
+            }`}
+          >
+            <span className="font-mono text-xs">{x.finishClass ? `P${x.finishClass}` : "–"}</span>
+            {labels[i]}
+          </Link>
+        ))}
+      </ScrollRow>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-sm">
+        <span className="text-[var(--rt-text)]">{finish}</span>
+        <span className="text-[var(--rt-text-muted)]">
+          {[r.laps ? `${r.laps} laps` : null, gained > 0 ? `gained ${gained} in pit cycles` : null, formatDayRange(r.date, r.date)].filter(Boolean).join(" · ")}
+        </span>
+        <Link to={href(r.id)} className="ml-auto font-semibold text-[var(--rt-accent)]">
+          Position Trace →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function SeasonRecapCard({ recap, ask = true }: { recap: SeasonRecap; /** Only one coffee ask per page. */ ask?: boolean }) {
   const [hidden, setHidden] = useState(() => (readUi().recapsHidden ?? []).includes(recap.key));
   if (hidden) return null;
@@ -117,23 +210,7 @@ export function SeasonRecapCard({ recap, ask = true }: { recap: SeasonRecap; /**
             </div>
           ))}
         </dl>
-        <div>
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--rt-text-muted)]">Every race</div>
-          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-            {recap.raceList.map((x) => (
-              <li key={x.id}>
-                <Link
-                  to={`/chart?race=${x.id}&car=${encodeURIComponent(recap.number)}`}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--rt-border)] px-2.5 text-xs text-[var(--rt-text-secondary)] hover:border-[var(--rt-accent)] hover:text-[var(--rt-text)]"
-                  title={x.name}
-                >
-                  <span className="font-mono font-semibold text-[var(--rt-text)]">{x.finishClass ? `P${x.finishClass}` : "–"}</span>
-                  {shortName(x.name)}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <RaceTabs recap={recap} />
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <ShareImageActions
             make={() =>
