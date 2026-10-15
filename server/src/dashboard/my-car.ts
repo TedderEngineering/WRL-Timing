@@ -102,7 +102,7 @@ function bestLapOf(laps: LapRow[]): { sec: number; lap: number } | null {
   let best: { sec: number; lap: number } | null = null;
   for (const l of laps) {
     // Green laps only, not the in-lap of a stop.
-    if (l.pit === 1 || (l.flag && l.flag !== "GF") || !(l.ltSec > 0)) continue;
+    if (l.pit === 1 || (l.flag && !["GF", "GREEN", "G"].includes(l.flag.toUpperCase())) || !(l.ltSec > 0)) continue;
     if (!best || l.ltSec < best.sec) best = { sec: l.ltSec, lap: l.l };
   }
   return best;
