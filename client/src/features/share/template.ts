@@ -46,7 +46,7 @@ export const SITE_STYLES: Record<ShareSite, SiteStyle> = {
   racetrace: {
     name: "RaceTrace",
     address: "racetrace.tedderengineering.com",
-    icon: null,
+    icon: "/racetrace-icon-192.png",
     bg: "#0b0b18",
     panel: "#12122a",
     border: "#1e1e38",

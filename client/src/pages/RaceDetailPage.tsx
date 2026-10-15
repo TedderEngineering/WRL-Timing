@@ -1,6 +1,7 @@
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { FollowCarButton } from "../features/my-cars/FollowCarButton";
 import { ShareRaceButton } from "../features/share/ShareRaceButton";
+import { RaceMetaContext } from "../features/chart/raceCard";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
@@ -123,6 +124,10 @@ export function RaceDetailPage() {
       if (car.finishPos === 1) { winner = Number(numStr); break; }
     }
     winner = winner || Number(Object.keys(data.cars)[0]) || 0;
+
+    // A shared link can name the car (?car=67): open on it instead of the winner.
+    const named = Number(new URLSearchParams(window.location.search).get("car"));
+    if (Number.isFinite(named) && named > 0 && data.cars[String(named)]) winner = named;
 
     setFocusNum(winner);
     setClassView("");
@@ -378,8 +383,10 @@ export function RaceDetailPage() {
 
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
-    // Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
-    // parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar.
+    // The race's name, track and date for share images drawn from inside the chart panels.
+    <RaceMetaContext.Provider value={{ id: id!, name: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date) }}>
+    {/* Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
+        parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar. */}
     <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
       {/* Header (mockup F1): breadcrumb, race, status, star */}
       <section className="flex shrink-0 flex-col gap-1.5 px-3 pt-2.5 sm:px-6 sm:pt-3">
@@ -546,6 +553,7 @@ export function RaceDetailPage() {
       )}
 
     </div>
+    </RaceMetaContext.Provider>
   );
 }
 

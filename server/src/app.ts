@@ -10,6 +10,7 @@ import { authRouter } from "./routes/auth.js";
 import { racesRouter } from "./routes/races.js";
 import { meRouter } from "./routes/me.js";
 import { alertsRouter } from "./routes/alerts.js";
+import { shareRouter } from "./routes/share.js";
 import { adminRouter } from "./routes/admin.js";
 import { intakeRouter, apiTokensRouter } from "./routes/intake.js";
 import { dashboardRouter } from "./routes/dashboard.js";
@@ -92,6 +93,7 @@ export function createApp() {
   app.use("/api/races", racesRouter);
   app.use("/api/me", meRouter);
   app.use("/api/alerts", alertsRouter);
+  app.use("/api/share", shareRouter);
   app.use("/api/events", eventsRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/site-config", siteConfigRouter);

@@ -9,6 +9,16 @@
       "destination": "https://wrl-timing-production.up.railway.app/api/:path*"
     },
     {
+      "source": "/r/:path*",
+      "missing": [
+        {
+          "type": "host",
+          "value": "findinggrip.tedderengineering.com"
+        }
+      ],
+      "destination": "https://wrl-timing-production.up.railway.app/api/share/r/:path*"
+    },
+    {
       "source": "/((?!assets/).*)",
       "has": [
         {
