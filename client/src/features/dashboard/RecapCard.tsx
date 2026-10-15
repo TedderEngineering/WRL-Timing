@@ -9,6 +9,7 @@ import {
   type ProseContext,
 } from "../../lib/prose";
 import { formatDayRange, resultsLabel } from "./format";
+import { dayName } from "../../lib/race-dates";
 import type { LatestEvent, LatestRace, Recap, RecapMoment } from "./types";
 import { SupportAsk } from "../support/SupportPrompts";
 
@@ -453,35 +454,58 @@ export function RecapCard({
 }
 
 /** One line per weekend for the "Earlier this season" list. */
+/**
+ * Chip labels for a weekend's races. The series badge already names the series, so a leading
+ * "Pirelli" or series name is dropped; two races that would read the same get their day added.
+ */
+export function raceChipLabels(event: LatestEvent): string[] {
+  const series = event.series.toLowerCase();
+  const base = event.races.map((r) =>
+    (r.session || r.name)
+      .replace(/^pirelli\s+/i, "")
+      .replace(new RegExp(`^${series}\\s+`, "i"), "")
+      .trim()
+  );
+  return base.map((label, i) =>
+    base.filter((b) => b === label).length > 1 ? `${dayName(event.races[i].date.slice(0, 10))} · ${label}` : label
+  );
+}
+
 export function EventRow({ event }: { event: LatestEvent }) {
   const hasRecap = event.races.some((r) => r.recap);
-  const cars = event.races.map((r) => r.totalCars).filter(Boolean);
+  const cars = Math.max(0, ...event.races.map((r) => r.totalCars ?? 0));
+  const title = [event.seriesLabel, event.track].filter(Boolean).join(" · ");
+  const labels = raceChipLabels(event);
+  const races = event.races.length;
   return (
-    <li className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b border-[var(--rt-rule)] px-5 py-2.5 text-left last:border-b-0 sm:grid-cols-[auto_120px_minmax(0,1fr)_auto]">
-      <SeriesBadge series={event.series} size="sm" />
-      <span className="text-[13px] text-[var(--rt-text-muted)] sm:order-none">
-        {formatDayRange(event.startDate, event.endDate)}
-      </span>
-      <span className="col-span-2 min-w-0 truncate sm:col-span-1">
-        {[event.seriesLabel, event.track].filter(Boolean).join(" · ")}
-        <span className="text-[var(--rt-text-muted)]">
-          {" "}
-          · {event.races.map((r) => r.session).join(", ")}
-          {cars.length ? ` · ${cars.join(" / ")} cars` : ""}
+    <li className="border-b border-[var(--rt-rule)] px-5 py-3 text-left last:border-b-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <SeriesBadge series={event.series} size="sm" />
+        <span className="text-[13px] text-[var(--rt-text-muted)]">{formatDayRange(event.startDate, event.endDate)}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-[var(--rt-text)]">{title}</span>
+        <span className="text-xs text-[var(--rt-text-muted)]">
+          {races} {races === 1 ? "race" : "races"}
+          {cars ? ` · up to ${cars} cars` : ""} · {hasRecap ? "Recap ready" : "Chart only"}
         </span>
-      </span>
-      <span className="col-span-2 flex items-center gap-3 text-xs text-[var(--rt-text-muted)] sm:col-span-1">
-        {hasRecap ? "Recap ready" : "Chart only · recap coming"}
-        {event.races.map((r) => (
+      </div>
+      <ScrollRow
+        role="navigation"
+        aria-label={`Races at ${title || "this weekend"}: open on Position Trace`}
+        className="mt-2"
+        innerClassName="gap-1.5"
+      >
+        {event.races.map((r, i) => (
           <Link
             key={r.id}
             to={chartHref(r.id)}
-            className="font-semibold text-[var(--rt-accent)]"
+            draggable={false}
+            title={r.name}
+            className="inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-full border border-[var(--rt-border)] px-3 text-xs font-medium text-[var(--rt-text-secondary)] transition-colors hover:border-[var(--rt-accent)] hover:text-[var(--rt-text)]"
           >
-            {event.races.length > 1 ? r.session : "Chart"} →
+            {labels[i]}
           </Link>
         ))}
-      </span>
+      </ScrollRow>
     </li>
   );
 }
