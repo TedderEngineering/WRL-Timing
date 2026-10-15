@@ -36,6 +36,7 @@ const fake = vi.hoisted(() => {
     userCar: {
       findMany: async ({ where }: Row) => state.cars.filter((c) => c.userId === where.userId),
     },
+    userPreferences: { findUnique: async () => null },
     // Pit laps per race (the weekend's feature races are listed first); races may carry `pitLaps`.
     raceLap: {
       findMany: async ({ where }: Row) =>

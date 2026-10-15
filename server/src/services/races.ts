@@ -4,6 +4,7 @@ import { freeMode } from "../lib/free-mode.js";
 import { AppError } from "../middleware/error-handler.js";
 import { Prisma } from "@prisma/client";
 import { packagesEnabledFor } from "../packages/flags.js";
+import { queueRaceAlerts } from "./race-alerts.js";
 
 interface RaceListParams {
   page: number;
@@ -392,7 +393,10 @@ export async function updateRace(
   const race = await prisma.race.findUnique({ where: { id: raceId } });
   if (!race) throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
 
-  return prisma.race.update({ where: { id: raceId }, data });
+  const updated = await prisma.race.update({ where: { id: raceId }, data });
+  // Race-ready emails for followers of its cars (opt-in, recent races, once per race).
+  if (data.status === "PUBLISHED" && race.status !== "PUBLISHED") queueRaceAlerts(raceId);
+  return updated;
 }
 
 // ─── Delete Race ─────────────────────────────────────────────────────────────

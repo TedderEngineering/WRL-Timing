@@ -30,6 +30,7 @@ import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { AccountSettingsPage } from "./pages/settings/AccountSettingsPage";
 import { PreferencesPage } from "./pages/settings/PreferencesPage";
 import { MyCarsPage } from "./pages/settings/MyCarsPage";
+import { AlertsOffPage } from "./pages/AlertsOffPage";
 import { BillingSettingsPage } from "./pages/settings/BillingSettingsPage";
 
 // Admin pages
@@ -187,6 +188,7 @@ export function App() {
 
         {/* Race routes (public — auth optional for favorites) */}
         <Route path="/races" element={<RaceListPage />} />
+        <Route path="/alerts/off" element={<AlertsOffPage />} />
         <Route path="/chart" element={<RaceDetailPage />} />
         {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
         <Route path="/races/:id" element={<RaceDetailRedirect />} />

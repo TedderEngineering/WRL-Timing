@@ -68,13 +68,18 @@ describe("your car's latest race", () => {
 describe("first steps", () => {
   it("shows the next step until each is done", () => {
     const none = text(<FirstStepsChecklist data={{ carCount: 0, car: null, race: null }} />);
-    expect(none).toContain("1 of 3 done");
+    expect(none).toContain("1 of 4 done");
+    // No email switch before there is a car to be emailed about.
+    expect(none).not.toContain("Turn on");
     expect(none).toContain("Follow your car");
     // Two ways: find a race and press Follow, or type the number.
     expect(none).toContain("Find its race →");
     expect(none).toContain("Add it by number →");
-    expect(text(<FirstStepsChecklist data={base} />)).toContain("2 of 3 done");
-    expect(text(<FirstStepsChecklist data={{ ...base, viewed: true }} />)).toBe("");
+    const followed = text(<FirstStepsChecklist data={base} />);
+    expect(followed).toContain("2 of 4 done");
+    expect(followed).toContain("Get an email when your car&#x27;s race is up Turn on");
+    expect(text(<FirstStepsChecklist data={{ ...base, viewed: true }} />)).toContain("3 of 4 done");
+    expect(text(<FirstStepsChecklist data={{ ...base, viewed: true, alerts: true }} />)).toBe("");
   });
 
   it("stays hidden once hidden", () => {

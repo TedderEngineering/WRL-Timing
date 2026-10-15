@@ -6,7 +6,7 @@ import request from "supertest";
 
 const fake = vi.hoisted(() => {
   type Row = Record<string, any>;
-  const state = { races: [] as Row[], cars: [] as Row[], seq: 0 };
+  const state = { races: [] as Row[], cars: [] as Row[], seq: 0, prefs: new Map<string, boolean>() };
   const pick = (r: Row, select?: Row) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : r);
   const prisma: any = {
     race: {
@@ -14,6 +14,10 @@ const fake = vi.hoisted(() => {
         const r = state.races.find((x) => x.id === where.id);
         return r ? pick(r, select) : null;
       },
+    },
+    userPreferences: {
+      upsert: async ({ where, create, update }: Row) => void state.prefs.set(where.userId, (update ?? create).raceAlerts),
+      findUnique: async ({ where }: Row) => (state.prefs.has(where.userId) ? { raceAlerts: state.prefs.get(where.userId) } : null),
     },
     userCar: {
       findMany: async ({ where, select }: Row) => state.cars.filter((c) => c.userId === where.userId).map((c) => pick(c, select)),
@@ -51,6 +55,7 @@ vi.mock("../../middleware/rate-limit.js", async (importOriginal) => {
 import { createApp } from "../../app.js";
 import { generateAccessToken } from "../../utils/tokens.js";
 import { carMatchesEntry, teamsMatch } from "../../services/my-cars.js";
+import { unsubscribeToken } from "../../services/race-alerts.js";
 
 const app = createApp();
 const auth = (userId: string) => `Bearer ${generateAccessToken({ userId, email: `${userId}@example.com`, role: "USER" })}`;
@@ -60,6 +65,7 @@ const B = auth("u_b");
 beforeEach(() => {
   fake.state.cars = [];
   fake.state.seq = 0;
+  fake.state.prefs = new Map();
   fake.state.races = [
     {
       id: "vir26", series: "IMSA", subSeries: "Pilot Challenge", season: 2026, status: "PUBLISHED",
@@ -142,5 +148,31 @@ describe("/api/me/cars", () => {
     const r = await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "21", series: "sro" });
     expect(r.status).toBe(409);
     expect(r.body.code).toBe("TOO_MANY_CARS");
+  });
+});
+
+describe("race-ready email settings", () => {
+  it("are off until turned on, and per user", async () => {
+    expect((await request(app).get("/api/me/alerts").set("Authorization", A)).body).toEqual({ raceAlerts: false });
+    expect((await request(app).put("/api/me/alerts").set("Authorization", A).send({ raceAlerts: true })).body).toEqual({ raceAlerts: true });
+    expect((await request(app).get("/api/me/alerts").set("Authorization", A)).body).toEqual({ raceAlerts: true });
+    expect((await request(app).get("/api/me/alerts").set("Authorization", B)).body).toEqual({ raceAlerts: false });
+    expect((await request(app).put("/api/me/alerts").set("Authorization", A).send({ raceAlerts: "yes" })).status).toBe(400);
+  });
+
+  it("turn off from the email's link or one-click, without a login; a bad token changes nothing", async () => {
+    fake.state.prefs.set("u_a", true);
+    const one = await request(app).post(`/api/alerts/unsubscribe?t=${unsubscribeToken("u_a")}`);
+    expect(one.status).toBe(200);
+    expect(fake.state.prefs.get("u_a")).toBe(false);
+    fake.state.prefs.set("u_a", true);
+    const link = await request(app).get(`/api/alerts/unsubscribe?t=${unsubscribeToken("u_a")}`);
+    expect(link.status).toBe(302);
+    expect(link.headers.location).toMatch(/\/alerts\/off$/);
+    expect(fake.state.prefs.get("u_a")).toBe(false);
+    fake.state.prefs.set("u_b", true);
+    const bad = await request(app).get("/api/alerts/unsubscribe?t=nope");
+    expect(bad.headers.location).toMatch(/invalid=1/);
+    expect(fake.state.prefs.get("u_b")).toBe(true);
   });
 });

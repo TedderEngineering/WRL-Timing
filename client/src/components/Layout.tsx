@@ -10,6 +10,7 @@ import { isFreeMode, useSiteConfig } from "../lib/site-config";
 import "../lib/install";
 import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { noteShareArrival } from "../features/share/shareLink";
+import { noteAlertArrival } from "../features/my-cars/alerts";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {
@@ -130,7 +131,11 @@ function NavItem({ to, label }: { to: string; label: string }) {
 
 export function Layout() {
   // A visit from a shared link (?from=share) is counted once, and the tag removed.
-  useEffect(() => noteShareArrival((path) => (path === "/" ? "home" : "app")), []);
+  useEffect(() => {
+    noteShareArrival((path) => (path === "/" ? "home" : "app"));
+    // And a visit from a race-ready email (?from=alert).
+    noteAlertArrival();
+  }, []);
   const { isAuthenticated, isLoading, user } = useAuth();
   useSiteConfig(); // re-render when free mode / support settings arrive
   // Race and qualifying pages are apps: they fill the window exactly (no page scroll, no footer)
