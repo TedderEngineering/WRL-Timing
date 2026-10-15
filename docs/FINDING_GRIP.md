@@ -42,7 +42,6 @@ client/src/features/grip/                       shell, API client, units, compon
   progress.tsx                                  dashboard "Your accuracy", result-page line
   season.tsx                                    season recap card and image
   engagement.tsx                                first-weekend checklist, install hint
-  install.ts                                    add-to-home-screen prompt
   pressureCard.tsx                              share image of a result
 client/src/pages/grip/                          pages
 client/grip.html, client/public/grip.webmanifest   Finding Grip's page shell and app manifest
@@ -50,7 +49,8 @@ client/grip.html, client/public/grip.webmanifest   Finding Grip's page shell and
 
 Shared with RaceTrace (change with care, tell the RaceTrace side):
 `client/src/features/support/` and `server/src/support/` (coffee),
-`client/src/features/share/` (share-card template), `client/src/lib/analytics.ts`,
+`client/src/features/share/` (share-card template, share-a-link helper),
+`client/src/lib/install.ts` (add-to-home-screen), `client/src/lib/analytics.ts`,
 and the account, terms and privacy pages.
 
 Existing files touched: `server/src/app.ts` (mount router),
@@ -121,7 +121,15 @@ recorded on target, and at the end of the opened season recap.
 
 Analytics events (anonymous, `client/src/lib/analytics.ts`, off unless
 `VITE_POSTHOG_KEY` is set): `record_hot`, `on_target`, `checklist_step`,
-`share_card`, `coffee_open`, `coffee_paid`. Per-browser memory (hidden cards,
+`share_card`, `share_app`, `share_arrival`, `coffee_open`, `coffee_paid`.
+
+"Share Finding Grip" (menu, footer, Settings, under the dashboard's free card;
+never a pop-up) sends the site's link through the phone's share sheet, or copies
+it on a computer (`features/grip/shareApp.tsx`, using the shared
+`features/share/shareLink.ts`). The link carries `?from=share`, the same for
+everyone; a visit with it sends `share_arrival { landing }` and the tag is
+removed from the address bar. Link previews use `client/public/grip-og.png`
+(1200×630) through the `og:` and `twitter:` tags in `client/grip.html`. Per-browser memory (hidden cards,
 install hint) is the `findinggrip.ui.v1` localStorage key.
 
 ## Settings

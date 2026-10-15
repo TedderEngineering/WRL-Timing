@@ -15,6 +15,7 @@ import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
 import { SupportProvider } from "@/features/support/SupportContext";
 import { SupportLink } from "@/features/support/SupportPrompts";
 import { useSupport } from "@/features/support/SupportContext";
+import { ShareGripButton } from "./shareApp";
 
 const APP_NAV = [
   { to: gp("/dashboard"), label: "Dashboard", short: "Home" },
@@ -195,6 +196,11 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               onClick={() => setMenuOpen(false)}
               className="py-2.5 text-left text-gray-700 dark:text-gray-300"
             />
+            <ShareGripButton
+              source="menu"
+              look="menu"
+              onDone={() => setMenuOpen(false)}
+            />
             {isAuthenticated ? (
               <>
                 {signedInApp && (
@@ -313,6 +319,7 @@ function Footer({ padForTabBar }: { padForTabBar: boolean }) {
           <p>
             &copy; {new Date().getFullYear()} Tedder Engineering. All rights reserved.
           </p>
+          <ShareGripButton source="footer" look="link" />
         </div>
         <div className="flex gap-12">
           <div className="flex flex-col gap-1.5">

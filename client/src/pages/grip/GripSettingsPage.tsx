@@ -15,6 +15,7 @@ import {
 } from "@/features/grip/components";
 import type { Units } from "@/features/grip/units";
 import { IS_GRIP_SITE, gp } from "@/lib/site";
+import { ShareGripButton } from "@/features/grip/shareApp";
 
 const UNIT_OPTIONS = [
   ["STANDARD", "PSI · °F"],
@@ -194,6 +195,19 @@ export function GripSettingsPage() {
             </Note>
           </Card>
         )}
+
+        <Card className="space-y-3">
+          <h2 className="font-bold text-gray-900 dark:text-gray-50">
+            Share Finding Grip
+          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="min-w-0 flex-1 basis-64 text-sm text-gray-600 dark:text-gray-400">
+              Send the link to a teammate or a friend at the track. It&apos;s free for
+              them too.
+            </span>
+            <ShareGripButton source="settings" />
+          </div>
+        </Card>
 
         <Card className="space-y-3">
           <h2 className="font-bold text-gray-900 dark:text-gray-50">Your data</h2>

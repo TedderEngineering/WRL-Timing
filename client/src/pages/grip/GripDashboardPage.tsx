@@ -25,6 +25,7 @@ import { formatPressure, pressureUnit } from "@/features/grip/units";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 import { SupportCard } from "@/features/support/SupportPrompts";
+import { ShareGripButton } from "@/features/grip/shareApp";
 import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
 import { FirstWeekendChecklist, InstallHint } from "@/features/grip/engagement";
 import { ProgressPanel } from "@/features/grip/progress";
@@ -304,8 +305,17 @@ export function GripDashboardPage() {
       </section>
 
       {/* Quiet "Finding Grip is free" card; a thank-you after a coffee; nothing for supporters. */}
-      <div className="max-w-md">
+      <div className="max-w-md space-y-2">
         <SupportCard />
+        {/* The free way to help: pass it on. Quiet, never a pop-up. */}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-gray-500">
+          <span>It&apos;s free for your teammates too.</span>
+          <ShareGripButton
+            source="dashboard"
+            look="link"
+            className="font-medium text-grip-600 dark:text-grip-400 hover:text-grip-700 dark:hover:text-grip-300"
+          />
+        </p>
       </div>
 
       {upgrade && <UpgradeDialog onClose={() => setUpgrade(false)} />}
