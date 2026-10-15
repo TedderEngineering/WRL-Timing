@@ -439,7 +439,6 @@ export function RaceDetailPage() {
             <FollowCarButton
               raceId={id!}
               carNumber={String(data.cars[String(focusNum)].num ?? focusNum)}
-              series={raceMeta.series}
               onFollowed={focusFollowed}
               style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
             />

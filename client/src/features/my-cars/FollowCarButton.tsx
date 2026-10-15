@@ -16,13 +16,11 @@ const norm = (n: string) => (/^\d+$/.test(n) ? String(Number(n)) : n.toUpperCase
 export function FollowCarButton({
   raceId,
   carNumber,
-  series,
   onFollowed,
   style,
 }: {
   raceId: string;
   carNumber: string;
-  series: string;
   onFollowed?: (carNumbers: string[]) => void;
   style?: React.CSSProperties;
 }) {
@@ -45,7 +43,8 @@ export function FollowCarButton({
       if (pending) {
         try {
           const r = await followCar(raceId, pending);
-          track("follow_car", { series, source: "race_page" });
+          // The series family ("imsa" | "sro" | "wrl"), as Settings and onboarding send it.
+          if (r.created) track("follow_car", { series: r.car.series, source: "race_page" });
           if (alive && r.created) setJustFollowed(true);
         } catch {
           // shown as not followed; they can press Follow again
@@ -85,7 +84,7 @@ export function FollowCarButton({
         const r = await followCar(raceId, carNumber);
         setFollowed((f) => [...f, { carNumber, carId: r.car.id }]);
         if (r.created) {
-          track("follow_car", { series, source: "race_page" });
+          track("follow_car", { series: r.car.series, source: "race_page" });
           setJustFollowed(true);
         }
       }
