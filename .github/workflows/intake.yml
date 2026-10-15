@@ -229,7 +229,19 @@ jobs:
           fi
           status=0
           attach_flag=--skip-attach-candidates; [ "$REPLACE" = "true" ] && attach_flag=--attach-single-candidates
-          npx tsx scripts/intake.ts pull --from "$INTAKE_WORK_DIR/discover.json" "$attach_flag" || status=1
+          npx tsx scripts/intake.ts pull --from "$INTAKE_WORK_DIR/discover.json" "$attach_flag" > "$RUNNER_TEMP/pull.txt" 2>&1 || status=1
+          tail -n 200 "$RUNNER_TEMP/pull.txt"
+          # The pull log as notices (errors first), readable through the checks API without signing in.
+          node -e '
+            const t = require("fs").readFileSync(process.argv[1], "utf8").split("\n");
+            const bad = t.filter((l) => /ERROR|FAILED|skipped|Usage|Error:/.test(l));
+            const body = [`${bad.length} problem line(s)`, ...bad.slice(0, 120), "", "--- end of log ---", ...t.slice(-60)];
+            const parts = []; let cur = "";
+            for (const l of body) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+            if (cur.trim()) parts.push(cur);
+            const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            parts.slice(0, 6).forEach((p, i) => console.log(`::notice title=Pull ${i + 1}/${Math.min(parts.length, 6)}::` + enc(p)));
+          ' "$RUNNER_TEMP/pull.txt"
           dirs=()
           for m in "$INTAKE_WORK_DIR"/*/manifest.json; do [ -f "$m" ] && dirs+=("$(dirname "$m")"); done
           if [ ${#dirs[@]} -gt 0 ]; then
