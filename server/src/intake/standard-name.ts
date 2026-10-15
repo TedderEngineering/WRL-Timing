@@ -33,14 +33,31 @@ export interface CurrentRace {
   sourceKey: string;
 }
 
-/** "Saturday - 8 Hour" / "Saturday 8 hour" / "Race1" → "Saturday 8 Hour" / "Race 1". */
+/**
+ * "Saturday - 8 Hour" / "Saturday 8 hour" / "Saturday 8" / "Barber - Sunday - 7 hour" / "Race1"
+ * → "Saturday 8 Hour" / "Sunday 7 Hour" / "Race 1".
+ */
 export function tidySession(name: string): string {
   return name
     .replace(/\s+-\s+/g, " ")
+    // Speedhive puts the track before the day ("Barber Sunday 7 hour"); the name ends with it anyway.
+    .replace(/^.*?\b(?=(Thursday|Friday|Saturday|Sunday)\b)/i, "")
     .replace(/(\d)\s*-?\s*hours?\b/gi, (_m, d: string) => `${d} Hour`)
+    .replace(/^((?:Thursday|Friday|Saturday|Sunday) \d+)$/i, "$1 Hour")
     .replace(/\bRace(\d)/i, "Race $1")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Spelling slips carried in some stored names. */
+const TYPOS: [RegExp, string][] = [
+  [/\^R/g, "'"], // "O^RReilly" (an apostrophe mangled on upload)
+  [/O'RReilly/g, "O'Reilly"],
+  [/\bVirgina\b/g, "Virginia"],
+  [/\bCircut\b/gi, "Circuit"],
+];
+export function fixTypos(s: string): string {
+  return TYPOS.reduce((t, [re, to]) => t.replace(re, to), s);
 }
 
 function championshipOf(s: SessionIdentity, current: CurrentRace): string | null {
@@ -66,8 +83,9 @@ export function standardRaceName(s: SessionIdentity, current: CurrentRace): stri
   // A championship's only race is just "Race": the name says "Pilot Challenge — Fox Factory 120".
   if (/^race$/i.test(session)) session = "";
   const head = [championship, session].filter(Boolean).join(" ") || tidySession(current.name);
-  const tail = eventTitle(current) ?? canonicalTrack(s.track || current.track);
-  return `${head} — ${tail}`.replace(/\s+/g, " ").trim().slice(0, 200);
+  const event = eventTitle(current);
+  const tail = event && event.toLowerCase() !== (championship ?? "").toLowerCase() ? event : canonicalTrack(s.track || current.track);
+  return fixTypos(`${head} — ${tail}`).replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 export interface IdentityChange {
