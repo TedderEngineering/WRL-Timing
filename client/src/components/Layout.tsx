@@ -6,6 +6,8 @@ import { UserMenu } from "./UserMenu";
 import { SupportProvider } from "../features/support/SupportContext";
 import { SupportLink } from "../features/support/SupportPrompts";
 import { isFreeMode, useSiteConfig } from "../lib/site-config";
+// Listens for the browser's install offer from the first page load.
+import "../lib/install";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {

@@ -5,6 +5,7 @@ import { Alert } from "../components/Alert";
 import { api } from "../lib/api";
 import { hasFullAccess } from "../lib/utils";
 import { RecapCard } from "../features/dashboard/RecapCard";
+import { InstallHint } from "../features/dashboard/InstallHint";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -227,6 +228,7 @@ export function DashboardPage() {
                   variant={i === 0 ? "hero" : "compact"}
                 />
               ))}
+              <InstallHint />
               {earlier.length > 0 && (
                 <section aria-labelledby="earlier-races" className="mt-4 flex flex-col gap-3">
                   <h2 id="earlier-races" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
