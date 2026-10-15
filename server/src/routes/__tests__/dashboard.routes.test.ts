@@ -26,10 +26,10 @@ const fake = vi.hoisted(() => {
     },
     // Pit laps per race (the weekend's feature races are listed first); races may carry `pitLaps`.
     raceLap: {
-      groupBy: async ({ where }: Row) =>
+      findMany: async ({ where }: Row) =>
         state.races
-          .filter((r) => where.raceId.in.includes(r.id) && (r.pitLaps ?? 0) > 0)
-          .map((r) => ({ raceId: r.id, _count: { _all: r.pitLaps } })),
+          .filter((r) => where.raceId.in.includes(r.id))
+          .flatMap((r) => Array.from({ length: r.pitLaps ?? 0 }, () => ({ raceId: r.id }))),
     },
     raceAnalysisPackage: { findUnique: async ({ where }: Row) => state.packages.find((p) => p.id === where.id) ?? null },
     subscription: { findUnique: async ({ where }: Row) => state.subs.get(where.userId) ?? null },

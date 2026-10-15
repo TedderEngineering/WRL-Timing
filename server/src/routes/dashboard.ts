@@ -87,12 +87,14 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
     const groups = groupIntoWeekends(rows).slice(0, limit);
     // Feature races first in each weekend: count the pit laps of the races shown.
     const shown = groups.flatMap((g) => g.races.map((r) => r.id));
-    const pits = (await prisma.raceLap.groupBy({
-      by: ["raceId"],
+    // Pit laps are a small share of all laps, so counting them here is cheap and keeps the
+    // query free of Prisma's groupBy generics (which failed the build's type check).
+    const pitLaps = await prisma.raceLap.findMany({
       where: { raceId: { in: shown }, pitStop: true },
-      _count: { _all: true },
-    })) as { raceId: string; _count: { _all: number } }[];
-    const pitCount = new Map(pits.map((p) => [p.raceId, p._count._all]));
+      select: { raceId: true },
+    });
+    const pitCount = new Map<string, number>();
+    for (const l of pitLaps) pitCount.set(l.raceId, (pitCount.get(l.raceId) ?? 0) + 1);
     for (const g of groups) {
       for (const r of g.races) r.pitStops = pitCount.get(r.id) ?? 0;
       g.races.sort(headlineOrder);
