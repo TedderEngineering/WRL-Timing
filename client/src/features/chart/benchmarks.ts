@@ -12,6 +12,7 @@
  */
 import type { AnnotationData, LapData, RaceChartData } from "@shared/types";
 import { stopsOf } from "./pit-stops";
+import { isGreenFlag } from "./flags";
 
 export interface Benchmark {
   kind: "pit_loss" | "fastest_lap" | "pit_cycles";
@@ -30,7 +31,7 @@ export function ordinal(n: number): string {
 export function bestGreenLap(laps: LapData[]): number | null {
   let best: number | null = null;
   for (const l of laps) {
-    if (l.pit === 1 || (l.flag && l.flag !== "GF") || !(l.ltSec > 0)) continue;
+    if (l.pit === 1 || (l.flag && !isGreenFlag(l.flag)) || !(l.ltSec > 0)) continue;
     if (best === null || l.ltSec < best) best = l.ltSec;
   }
   return best;

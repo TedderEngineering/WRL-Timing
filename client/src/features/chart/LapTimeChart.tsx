@@ -22,6 +22,7 @@ import {
   computeClassLapTimeRankings,
 } from "./lap-time-rankings";
 import { carNo } from "./car-number";
+import { isGreenFlag } from "./flags";
 
 // ─── Coordinate helpers (duplicated for module independence) ─────────────────
 
@@ -379,14 +380,14 @@ function buildLapTimeInfo(
   let compLabel = "";
   let compN = 0;
 
-  if (ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && ld.flag === "GREEN") {
+  if (ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && isGreenFlag(ld.flag)) {
     let sum = 0;
     let cnt = 0;
     compSet.forEach((cn) => {
       if (cn === focusNum) return;
       const cl = data.cars[String(cn)]?.laps;
       const cld = cl?.find((l) => l.l === lapNum);
-      if (cld && cld.ltSec > 1 && cld.ltSec < data.greenPaceCutoff && cld.flag === "GREEN") {
+      if (cld && cld.ltSec > 1 && cld.ltSec < data.greenPaceCutoff && isGreenFlag(cld.flag)) {
         sum += cld.ltSec;
         cnt++;
       }

@@ -69,6 +69,7 @@ export interface LapInfoData {
 
 import type { PitMarker, PitTimingData } from "@shared/types";
 import { carNo } from "./car-number";
+import { isGreenFlag } from "./flags";
 
 export interface PitInfoData {
   pitLabel: string;
@@ -743,14 +744,14 @@ export function buildLapInfo(
 
   // Pace comparison
   let paceInfo: LapInfoData["paceInfo"] = null;
-  if (d.ltSec && d.ltSec > 1 && d.ltSec < data.greenPaceCutoff && d.flag === "GREEN") {
+  if (d.ltSec && d.ltSec > 1 && d.ltSec < data.greenPaceCutoff && isGreenFlag(d.flag)) {
     let sum = 0;
     let cnt = 0;
     compSet.forEach((cn) => {
       if (cn === focusNum) return;
       const cl = data.cars[String(cn)]?.laps;
       const ld = cl?.find((l) => l.l === lapNum);
-      if (ld && ld.ltSec && ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && ld.flag === "GREEN") {
+      if (ld && ld.ltSec && ld.ltSec > 1 && ld.ltSec < data.greenPaceCutoff && isGreenFlag(ld.flag)) {
         sum += ld.ltSec;
         cnt++;
       }

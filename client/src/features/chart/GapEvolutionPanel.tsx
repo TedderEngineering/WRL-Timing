@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import type { RaceChartData } from "@shared/types";
 import { carMatchesSearch, carNo } from "./car-number";
+import { isGreenFlag } from "./flags";
 
 interface GapEvolutionPanelProps {
   data: RaceChartData;
@@ -47,7 +48,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
     const laps = data.cars[String(focusNum)]?.laps ?? [];
     const cutoff = data.greenPaceCutoff ?? 130;
     const recent = laps
-      .filter((l) => l.flag === "GF" && l.ltSec > 1 && l.ltSec < cutoff)
+      .filter((l) => isGreenFlag(l.flag) && l.ltSec > 1 && l.ltSec < cutoff)
       .slice(-10);
     if (!recent.length) return null;
     return recent.reduce((sum, l) => sum + l.ltSec, 0) / recent.length;
