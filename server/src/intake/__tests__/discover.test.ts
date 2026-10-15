@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { discover, resolve } from "../index.js";
 import { resolveSeries } from "../series.js";
 import { discoverImsa } from "../sources/imsa.js";
-import { sessionsFromEventPage } from "../sources/sro.js";
+import { sessionsFromEventPage, unlistedSroEvents } from "../sources/sro.js";
 import { fakeHttp, fixture } from "./fake-http.js";
 
 const IMSA = "https://imsa.results.alkamelcloud.com/Results";
@@ -111,6 +111,15 @@ describe("SRO America discovery (event page links)", () => {
     const http = fakeHttp(sroRoutes);
     expect(await resolve(http, found.sourceKey)).toEqual(found);
     expect(http.calls).toHaveLength(1);
+  });
+
+  it("finds events the site leaves out of its event list (2026 Road Atlanta)", async () => {
+    const roadAtlanta = fixture("sro-indy.html").replaceAll("09_Indianapolis Motor Speedway RC", "06_Road Atlanta").replaceAll("_202610", "_202606").replaceAll("/202610", "/202606");
+    const routes = { ...sroRoutes, [`${SRO}?series=06_SRO&season=26_2026&evvent=06_Road Atlanta`]: roadAtlanta };
+    const s = await discover(fakeHttp(routes), { series: ["sro-gt4"], season: 2026 });
+    expect(s.map((x) => x.sourceKey)).toContain("sro:06_SRO/26_2026/06_Road Atlanta/03_Pirelli GT4 America/202606101000_Race 1");
+    expect(unlistedSroEvents("26_2026", "26_2026:07_Elsewhere;25_2025:01_X")).toEqual(["06_Road Atlanta", "07_Elsewhere"]);
+    expect(unlistedSroEvents("24_2024", undefined)).toEqual([]);
   });
 
   it("a page with no links gives no sessions", () => {
