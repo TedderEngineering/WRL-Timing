@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSeason, calendarFor, locateRace, raceInSeries, type SeasonRace } from "../season.js";
-import { groupIntoWeekends, sessionLabel, type LatestRaceRow } from "../latest.js";
+import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../latest.js";
 
 // The published 2026 races on racetrace.tedderengineering.com on 2026-10-13 (date|series|track|name).
 const LIVE_2026 = `2026-08-22|IMSA|Virginia International Raceway|Virgina is For Racing Lovers Grand Prix
@@ -108,6 +108,18 @@ describe("latest races grouped into weekends", () => {
       row("d", "2026-02-26", "Saturday 8-Hour", "Barber Motorsports Park", "WRL"),
     ]);
     expect(g.map((x) => x.races.map((r) => r.id))).toEqual([["a", "b"], ["c"], ["d"]]);
+  });
+
+  it("puts a weekend's feature races first: pit-stop races, then the longest", () => {
+    const r = (id: string, date: string, maxLap: number, totalCars: number, pitStops: number) => ({ ...row(id, date, id), maxLap, totalCars, pitStops });
+    const weekend = [
+      r("mx5-r1", "2026-10-01", 25, 30, 0),
+      r("pccna-r1", "2026-10-01", 18, 20, 1), // one car pitting for damage is still a sprint
+      r("wtsc", "2026-10-03", 380, 50, 400),
+      r("mpc", "2026-10-02", 70, 40, 60),
+      r("mx5-r2", "2026-10-02", 25, 30, 0),
+    ];
+    expect([...weekend].sort(headlineOrder).map((x) => x.id)).toEqual(["wtsc", "mpc", "mx5-r1", "mx5-r2", "pccna-r1"]);
   });
 
   it("labels each race by its session", () => {

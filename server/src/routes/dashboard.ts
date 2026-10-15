@@ -12,7 +12,7 @@ import { resolveViewer } from "../services/race-access.js";
 import { packagesEnabledFor } from "../packages/flags.js";
 import { getServedGzip, gunzip } from "../packages/store.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
-import { groupIntoWeekends, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
+import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
 
 export const dashboardRouter = Router();
@@ -85,6 +85,20 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
     );
 
     const groups = groupIntoWeekends(rows).slice(0, limit);
+    // Feature races first in each weekend: count the pit laps of the races shown.
+    const shown = groups.flatMap((g) => g.races.map((r) => r.id));
+    // Pit laps are a small share of all laps, so counting them here is cheap and keeps the
+    // query free of Prisma's groupBy generics (which failed the build's type check).
+    const pitLaps = await prisma.raceLap.findMany({
+      where: { raceId: { in: shown }, pitStop: true },
+      select: { raceId: true },
+    });
+    const pitCount = new Map<string, number>();
+    for (const l of pitLaps) pitCount.set(l.raceId, (pitCount.get(l.raceId) ?? 0) + 1);
+    for (const g of groups) {
+      for (const r of g.races) r.pitStops = pitCount.get(r.id) ?? 0;
+      g.races.sort(headlineOrder);
+    }
     const cal = calendarFor(new Date().getUTCFullYear());
     const fresh = Date.now() - 14 * 86_400_000;
 

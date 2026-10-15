@@ -17,6 +17,8 @@ export interface LatestRaceRow {
   createdAt: Date;
   maxLap: number | null;
   totalCars: number | null;
+  /** Pit laps recorded for the race, all cars together (optional; used to order a weekend). */
+  pitStops?: number;
 }
 
 export interface RaceGroup<T extends LatestRaceRow = LatestRaceRow> {
@@ -42,6 +44,22 @@ export function groupIntoWeekends<T extends LatestRaceRow>(races: T[]): RaceGrou
     key,
     races: [...rs].sort((a, b) => a.date.getTime() - b.date.getTime() || a.name.localeCompare(b.name, undefined, { numeric: true })),
   }));
+}
+
+/**
+ * The order of a weekend's races on the dashboard: the races with pit stops first (the endurance
+ * and feature races: GT World Challenge, WeatherTech, GT4, WRL), then the rest by length, longest
+ * first; equal races keep date order (Race 1 before Race 2). A race counts as having pit stops when
+ * at least half its cars stopped, so one car pitting for damage in a sprint does not count.
+ */
+export function headlineOrder(a: LatestRaceRow, b: LatestRaceRow): number {
+  const stops = (r: LatestRaceRow) => (r.pitStops ?? 0) >= Math.max(1, (r.totalCars ?? 0) / 2);
+  return (
+    Number(stops(b)) - Number(stops(a)) ||
+    (b.maxLap ?? 0) - (a.maxLap ?? 0) ||
+    a.date.getTime() - b.date.getTime() ||
+    a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
 }
 
 function sameWeekend(a: LatestRaceRow, b: LatestRaceRow): boolean {
