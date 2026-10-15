@@ -1,35 +1,40 @@
-import { useState } from "react";
-import { shareLink, shareUrl } from "./shareLink";
+import { shareLink, sharedUrl } from "./shareLink";
+import { useShareFeedback } from "./ShareRaceTrace";
 
 /**
- * "Share" for a race: the share sheet on a phone, "Link copied" on a computer. The link opens
- * the race on Position Trace for anyone, signed in or not.
+ * "Share" on a race page: the share sheet (or the copied message and link) for this race,
+ * tagged ?from=share like every shared RaceTrace link. Sends share_app { source: "race" }.
  */
 export function ShareRaceButton({
   raceId,
-  title,
-  kind = "race_link",
+  raceName,
   className,
   style,
-  label = "Share",
 }: {
   raceId: string;
-  title: string;
-  kind?: string;
+  raceName: string;
   className?: string;
   style?: React.CSSProperties;
-  label?: string;
 }) {
-  const [note, setNote] = useState<string | null>(null);
-  const click = async () => {
-    const url = shareUrl(`/chart?race=${encodeURIComponent(raceId)}`);
-    const m = await shareLink({ url, title, kind });
-    setNote(m === "copy" ? "Link copied" : m === "failed" ? "Copy failed: use the address bar" : null);
-    if (m === "copy" || m === "failed") setTimeout(() => setNote(null), 2500);
-  };
+  const { note, done } = useShareFeedback();
   return (
-    <button type="button" onClick={click} className={className} style={style} aria-live="polite">
-      <span aria-hidden>↗</span> {note ?? label}
+    <button
+      type="button"
+      aria-live="polite"
+      className={className}
+      style={style}
+      onClick={async () =>
+        done(
+          await shareLink({
+            url: sharedUrl(`${window.location.origin}/chart?race=${encodeURIComponent(raceId)}`),
+            title: "RaceTrace",
+            text: `${raceName}: position trace, pit stops and lap times on RaceTrace, by Tedder Engineering.`,
+            source: "race",
+          })
+        )
+      }
+    >
+      <span aria-hidden>↗</span> {note ?? "Share"}
     </button>
   );
 }

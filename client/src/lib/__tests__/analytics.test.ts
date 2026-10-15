@@ -28,6 +28,8 @@ describe("analytics", () => {
         "open_story",
         "record_hot",
         "share_card",
+        "share_app",
+        "share_arrival",
       ].sort()
     );
   });

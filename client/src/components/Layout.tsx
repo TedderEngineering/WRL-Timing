@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { Button } from "./Button";
@@ -8,6 +8,8 @@ import { SupportLink } from "../features/support/SupportPrompts";
 import { isFreeMode, useSiteConfig } from "../lib/site-config";
 // Listens for the browser's install offer from the first page load.
 import "../lib/install";
+import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
+import { noteShareArrival } from "../features/share/shareLink";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {
@@ -70,6 +72,7 @@ function MobileMenu() {
               </Link>
             )}
             <SupportLink variant="menu" onClick={() => setOpen(false)} />
+            <ShareRaceTraceButton source="menu" className="py-2 text-left text-gray-700 dark:text-gray-300" onShared={() => setOpen(false)} />
 
             {isAuthenticated ? (
               <>
@@ -126,6 +129,8 @@ function NavItem({ to, label }: { to: string; label: string }) {
 }
 
 export function Layout() {
+  // A visit from a shared link (?from=share) is counted once, and the tag removed.
+  useEffect(() => noteShareArrival((path) => (path === "/" ? "home" : "app")), []);
   const { isAuthenticated, isLoading, user } = useAuth();
   useSiteConfig(); // re-render when free mode / support settings arrive
   // Race and qualifying pages are apps: they fill the window exactly (no page scroll, no footer)
@@ -206,7 +211,8 @@ export function Layout() {
             <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6 hidden dark:block" />
             <p>&copy; {new Date().getFullYear()} Tedder Engineering. All rights reserved.</p>
           </a>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <ShareRaceTraceButton source="footer" className="hover:text-gray-700 dark:hover:text-gray-300" />
             <Link to="/terms" className="hover:text-gray-700 dark:hover:text-gray-300">
               Terms
             </Link>

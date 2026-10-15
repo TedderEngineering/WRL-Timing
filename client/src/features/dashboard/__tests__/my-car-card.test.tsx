@@ -42,7 +42,8 @@ describe("your car's latest race", () => {
     expect(t).toContain("Pit cycle 1 (settled lap 15): P5 → P2 in Silver, gained 3");
     expect(t).toContain("Pit cycle 2 (settled lap 28): P2 → P3 in Silver, lost 1");
     expect(t).toContain("Position Trace →");
-    expect(t).toContain("Share");
+    // No share at the peak moment: it carries the coffee ask (shared Finding Grip rule).
+    expect(t).not.toContain("Share");
   });
 
   it("leads with the package's car story when there is one", () => {

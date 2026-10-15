@@ -31,6 +31,8 @@ export const ANALYTICS_EVENTS = [
   "on_target",
   // Both
   "share_card", // { kind, method }
+  "share_app", // { source, method }: someone shared the site's link
+  "share_arrival", // { landing }: a visit came from a shared link (?from=share)
   "alert_opt_in", // { channel, on, source }
   "alert_open", // arrival from an alert email
   "checklist_step", // { step }
