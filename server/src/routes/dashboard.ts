@@ -12,7 +12,7 @@ import { resolveViewer } from "../services/race-access.js";
 import { packagesEnabledFor } from "../packages/flags.js";
 import { getServedGzip, gunzip } from "../packages/store.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
-import { groupIntoWeekends, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
+import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
 
 export const dashboardRouter = Router();
@@ -85,6 +85,18 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
     );
 
     const groups = groupIntoWeekends(rows).slice(0, limit);
+    // Feature races first in each weekend: count the pit laps of the races shown.
+    const shown = groups.flatMap((g) => g.races.map((r) => r.id));
+    const pits = (await prisma.raceLap.groupBy({
+      by: ["raceId"],
+      where: { raceId: { in: shown }, pitStop: true },
+      _count: { _all: true },
+    })) as { raceId: string; _count: { _all: number } }[];
+    const pitCount = new Map(pits.map((p) => [p.raceId, p._count._all]));
+    for (const g of groups) {
+      for (const r of g.races) r.pitStops = pitCount.get(r.id) ?? 0;
+      g.races.sort(headlineOrder);
+    }
     const cal = calendarFor(new Date().getUTCFullYear());
     const fresh = Date.now() - 14 * 86_400_000;
 
