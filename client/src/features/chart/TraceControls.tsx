@@ -2,6 +2,7 @@
  * Control bar of the race charts (Position Trace and Lap Times; mockups F1 / F6): focus car,
  * class, make and the compare cars, the same on both tabs.
  */
+import { finishInfo } from "./finish";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { getCompColor } from "./chart-renderer";
@@ -91,7 +92,7 @@ function CarMenu({
     const needle = q.trim().toLowerCase();
     const byCls = new Map<
       string,
-      Array<{ n: number; team: string; pos: number; make?: string; dns: boolean }>
+      Array<{ n: number; team: string; pos: number; make?: string; dns: boolean; official: string; classified: boolean }>
     >();
     for (const [k, c] of Object.entries(data.cars)) {
       const n = Number(k);
@@ -107,6 +108,8 @@ function CarMenu({
         n,
         team: c.team,
         pos: c.finishPosClass || 999,
+        official: finishInfo(data, n)?.official ?? "",
+        classified: finishInfo(data, n)?.pos != null,
         make: c.make,
         dns: c.laps.length === 0,
       });
@@ -114,7 +117,8 @@ function CarMenu({
     }
     return [...byCls.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([cls, cars]) => ({ cls, cars: cars.sort((a, b) => a.pos - b.pos) }));
+      // Classified cars in class order, then those without a classified position (DSQ, not classified).
+      .map(([cls, cars]) => ({ cls, cars: cars.sort((a, b) => Number(b.classified) - Number(a.classified) || a.pos - b.pos) }));
   }, [data, q]);
 
   return (
@@ -162,7 +166,7 @@ function CarMenu({
                   </span>
                 )}
                 <span className="font-mono text-xs" style={{ color: T.muted }}>
-                  {c.dns ? "DNS" : `P${c.pos}`}
+                  {c.dns ? "DNS" : c.classified ? `P${c.pos}` : c.official}
                 </span>
               </button>
             ))}

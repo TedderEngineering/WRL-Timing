@@ -9,6 +9,7 @@
  * Pit timing tier: total_only (or full when pit stop PDF is provided)
  */
 
+import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
@@ -119,6 +120,7 @@ export const sroParser: RaceDataParser = {
         team,
         cls,
         vehicle: entry?.vehicle,
+        ...(normalizeFinishStatus(entry?.status) ? { status: normalizeFinishStatus(entry?.status)! } : {}),
         finishPos: entry?.finishPosition || carLaps[carLaps.length - 1].overallPosition,
         finishPosClass: entry?.classPosition || carLaps[carLaps.length - 1].classPosition,
         laps: carLaps.map((lap) => ({

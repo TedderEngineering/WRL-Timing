@@ -8,6 +8,7 @@
  * Pit timing tier: total_only (pit-stop-free format; incidental rows stored but not featured)
  */
 
+import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import type { PitMarker } from "./position-analysis.js";
@@ -102,6 +103,7 @@ export const grcupParser: RaceDataParser = {
         team,
         cls,
         vehicle: entry?.vehicle,
+        ...(normalizeFinishStatus(entry?.status) ? { status: normalizeFinishStatus(entry?.status)! } : {}),
         finishPos: entry?.finishPosition || carLaps[carLaps.length - 1].overallPosition,
         finishPosClass: entry?.classPosition || carLaps[carLaps.length - 1].classPosition,
         laps: carLaps.map((lap) => ({

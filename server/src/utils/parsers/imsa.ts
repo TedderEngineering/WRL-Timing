@@ -15,6 +15,7 @@
  * Penalties, incidents, and caution periods from the flags file.
  */
 
+import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser, ParsedResult } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { generateAnnotations, parseIMSAPitStopData, toPitStopTimeCards, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
@@ -1080,6 +1081,7 @@ export const imsaParser: RaceDataParser = {
         cls,
         ...(make ? { make } : {}),
         ...(vehicle ? { vehicle } : {}),
+        ...(normalizeFinishStatus(resultEntry?.status) ? { status: normalizeFinishStatus(resultEntry?.status)! } : {}),
         finishPos,
         finishPosClass: 0, // computed below
         laps: lapEntries,
