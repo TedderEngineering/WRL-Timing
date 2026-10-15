@@ -6,6 +6,7 @@
 import { finishInfo } from "./finish";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { classBenchmarks } from "./benchmarks";
+import { ShareCarImageButton } from "./raceCard";
 import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
 
@@ -139,6 +140,7 @@ export function LapDetailsPanel({
   return (
     <div className="flex flex-col gap-3">
       <CarSummary data={data} focusNum={focusNum} annotations={annotations} />
+      <ShareCarImageButton data={data} annotations={annotations} carNum={focusNum} />
 
       {!lap ? (
         <p className="rounded-lg border p-3 text-[13px]" style={{ background: T.card, borderColor: T.line, color: T.muted }}>
