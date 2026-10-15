@@ -18,7 +18,7 @@ import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
 import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
-import { carMatchesEntry, listCars } from "../services/my-cars.js";
+import { carMatchesEntry, entryForCar, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
@@ -323,7 +323,7 @@ dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Resp
     for (const car of cars) {
       if (car.season && car.season !== season) continue;
       for (const race of published) {
-        const e = race.entries.find((x: any) => carMatchesEntry(car, race, x));
+        const e = entryForCar(car, race, race.entries);
         if (!e) continue;
         const seriesId = recapSeriesFor(cal, race);
         if (!seriesId) continue;

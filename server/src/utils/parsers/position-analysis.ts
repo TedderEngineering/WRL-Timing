@@ -108,6 +108,8 @@ export function generateAnnotations(
   }
 
   const allNums = carList.map((c) => c.num);
+  // The published number for reason text ("#007", "#4A"; utils/carNumbers.ts).
+  const labelOf = (n: number): string => carsRecord[String(n)]?.label ?? String(n);
 
   // ── Process each car ───────────────────────────────────────────
   const annotations: AnnotationJson = {};
@@ -201,7 +203,7 @@ export function generateAnnotations(
       if (isPit) {
         const pitResult = buildPitReason(
           num, cls, lapNum, laps, i,
-          pittersOnLap, fcyLaps, carClass
+          pittersOnLap, fcyLaps, carClass, labelOf
         );
         reason = pitResult.reason;
         // Attach alsoPittingCars to the most recent pit marker
@@ -210,9 +212,9 @@ export function generateAnnotations(
           lastPit.alsoPittingCars = pitResult.alsoPittingCars;
         }
       } else if (posDelta > 0) {
-        reason = buildGainReason(posDelta, gained, teamLookup);
+        reason = buildGainReason(posDelta, gained, teamLookup, labelOf);
       } else if (posDelta < 0) {
-        reason = buildLossReason(posDelta, lost, teamLookup);
+        reason = buildLossReason(posDelta, lost, teamLookup, labelOf);
       }
 
       if (reason) {
@@ -650,21 +652,21 @@ function classifyCrossover(
   return "on pace";
 }
 
-function buildGainReason(posDelta: number, gained: Crossover[], teamLookup: Map<number, string>): string {
+function buildGainReason(posDelta: number, gained: Crossover[], teamLookup: Map<number, string>, labelOf: (n: number) => string = String): string {
   if (gained.length === 0) {
     return `Gained ${posDelta} position${posDelta > 1 ? "s" : ""}`;
   }
   if (gained.length > 6) return `Gained ${posDelta} positions`;
   const parts = gained.map((c) => {
     const tn = shortTeam(teamLookup.get(c.num));
-    if (c.reason === "pitted") return `#${c.num}${tn} pitted`;
-    if (c.reason === "yellow") return `#${c.num}${tn} (yellow)`;
-    return `#${c.num}${tn} on pace`;
+    if (c.reason === "pitted") return `#${labelOf(c.num)}${tn} pitted`;
+    if (c.reason === "yellow") return `#${labelOf(c.num)}${tn} (yellow)`;
+    return `#${labelOf(c.num)}${tn} on pace`;
   });
   return `Gained — passed ${parts.join("; ")}`;
 }
 
-function buildLossReason(posDelta: number, lost: Crossover[], teamLookup: Map<number, string>): string {
+function buildLossReason(posDelta: number, lost: Crossover[], teamLookup: Map<number, string>, labelOf: (n: number) => string = String): string {
   const absD = Math.abs(posDelta);
   if (lost.length === 0) {
     return `Lost ${absD} position${absD > 1 ? "s" : ""}`;
@@ -672,9 +674,9 @@ function buildLossReason(posDelta: number, lost: Crossover[], teamLookup: Map<nu
   if (lost.length > 6) return `Lost ${absD} positions`;
   const parts = lost.map((c) => {
     const tn = shortTeam(teamLookup.get(c.num));
-    if (c.reason === "pitted") return `#${c.num}${tn} pitted`;
-    if (c.reason === "yellow") return `#${c.num}${tn} (yellow)`;
-    return `#${c.num}${tn} on pace`;
+    if (c.reason === "pitted") return `#${labelOf(c.num)}${tn} pitted`;
+    if (c.reason === "yellow") return `#${labelOf(c.num)}${tn} (yellow)`;
+    return `#${labelOf(c.num)}${tn} on pace`;
   });
   return `Lost — ${parts.join("; ")}`;
 }
@@ -687,7 +689,8 @@ function buildPitReason(
   lapIdx: number,
   pittersOnLap: Map<number, number[]>,
   fcyLaps: Set<number>,
-  carClass: Map<number, string>
+  carClass: Map<number, string>,
+  labelOf: (n: number) => string = String
 ): { reason: string; alsoPittingCars: number[] } {
   const details: string[] = [];
 
@@ -723,7 +726,7 @@ function buildPitReason(
 
   if (sameClassPitters.length > 0) {
     details.push(
-      `also pitting: ${sameClassPitters.map((n) => "#" + n).join(", ")}`
+      `also pitting: ${sameClassPitters.map((n) => "#" + labelOf(n)).join(", ")}`
     );
   }
 

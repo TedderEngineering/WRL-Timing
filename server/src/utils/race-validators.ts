@@ -17,6 +17,8 @@ const lapDataSchema = z.object({
 
 const carDataSchema = z.object({
   num: z.number().int().nonnegative(),
+  /** The car number as published when it differs from String(num), e.g. "4A", "007" (utils/carNumbers.ts). */
+  label: z.string().min(1).max(12).optional(),
   team: z.string().min(1),
   cls: z.string().min(1),
   make: z.string().optional(),

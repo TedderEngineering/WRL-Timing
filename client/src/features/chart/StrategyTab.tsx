@@ -49,7 +49,7 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { key: "classPos", label: "Pos", getValue: (m) => m.classPos, fmt: (m) => `P${m.classPos}`, type: "num", defaultDir: "asc", width: "48px" },
-  { key: "carNum", label: "Car", getValue: (m) => m.carNum, fmt: (m) => `#${m.carNum}`, type: "num", defaultDir: "asc", width: "56px" },
+  { key: "carNum", label: "Car", getValue: (m) => m.carNum, fmt: (m) => `#${m.carLabel}`, type: "num", defaultDir: "asc", width: "56px" },
   { key: "team", label: "Team", getValue: (m) => m.team, fmt: (m) => m.team, type: "str", defaultDir: "asc" },
   { key: "lapsCompleted", label: "Laps", getValue: (m) => m.lapsCompleted, fmt: (m) => String(m.lapsCompleted), type: "num", defaultDir: "desc", width: "52px" },
   { key: "stintCount", label: "Stops", getValue: (m) => m.stintCount - 1, fmt: (m) => String(m.stintCount - 1), type: "num", defaultDir: "asc", width: "52px" },

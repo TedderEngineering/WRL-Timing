@@ -68,6 +68,7 @@ export interface LapInfoData {
 }
 
 import type { PitMarker, PitTimingData } from "@shared/types";
+import { carNo } from "./car-number";
 
 export interface PitInfoData {
   pitLabel: string;
@@ -521,7 +522,7 @@ export function drawChart(
       if (d.pit && d.l >= lapStart && d.l <= lapEnd) circle(xForCar(cnStr, d.l), y(d[pk]), 4.5, col);
     }
     const last = [...cl].reverse().find((d) => d.l <= lapEnd + 0.5);
-    if (last && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(last[pk]), text: "#" + cn, color: col });
+    if (last && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(last[pk]), text: "#" + carNo(data, cn), color: col });
   });
 
   // ── 5. Focus car: a dark halo under an orange line ────────────
@@ -536,7 +537,7 @@ export function drawChart(
     ctx.lineJoin = "miter";
   }
   const focusLast = [...laps].reverse().find((d) => d.l <= lapEnd + 0.5);
-  if (focusLast && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(focusLast[pk]), text: "#" + focusNum, color: TRACE.focus });
+  if (focusLast && lapEnd >= maxLap - 0.5) endLabels.push({ y: y(focusLast[pk]), text: "#" + carNo(data, focusNum), color: TRACE.focus });
 
   // ── 6. Focus car's stops: ● pit stop, ● orange garage, ▲ drive-through, ◆ penalty ──
   const pitByLap = new Map((ann.pits || []).map((p: PitMarker) => [p.l, p] as const));
@@ -762,7 +763,7 @@ export function buildLapInfo(
       const compNums = [...compSet].filter((n) => n !== focusNum);
       const compLabel =
         compNums.length <= 3
-          ? compNums.map((n) => "#" + n).join(", ")
+          ? compNums.map((n) => "#" + carNo(data, n)).join(", ")
           : `${compNums.length} cars`;
 
       paceInfo = {

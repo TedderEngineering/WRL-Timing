@@ -94,7 +94,7 @@ export async function insertEntriesAndLaps(tx: Tx, raceId: string, data: RaceDat
     const car = data.cars[numStr];
     return {
       raceId,
-      carNumber: String(car.num),
+      carNumber: car.label ?? String(car.num),
       teamName: car.team,
       driverNames: "",
       carClass: car.cls,
@@ -119,7 +119,7 @@ export async function insertEntriesAndLaps(tx: Tx, raceId: string, data: RaceDat
     for (const lap of car.laps) {
       batch.push({
         raceId,
-        carNumber: String(car.num),
+        carNumber: car.label ?? String(car.num),
         lapNumber: lap.l,
         position: lap.p,
         classPosition: lap.cp,

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { classStopCycle, type StopRow } from "./pit-stops";
+import { carNo } from "./car-number";
 
 interface PitCyclePanelProps {
   data: RaceChartData;
@@ -62,7 +63,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
     return (
       <div className="flex-1 flex items-center justify-center px-4">
         <span className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>
-          #{focusNum} has no stop within 3 laps of lap {activeLap}
+          #{carNo(data, focusNum)} has no stop within 3 laps of lap {activeLap}
         </span>
       </div>
     );
@@ -82,7 +83,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
       <div className="grid grid-cols-4 gap-2 border-b px-4 pb-3" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
         <SummaryBox label="Your pit loss" value={focusRow ? secToDisplay(focusRow.timing.totalPitLoss) : "—"} />
         <SummaryBox label="Cycle avg" value={secToDisplay(avgPitLoss)} />
-        <SummaryBox label="Best stop" value={bestRow ? secToDisplay(bestRow.timing.totalPitLoss) : "—"} sub={bestRow ? `#${bestRow.carNum}` : undefined} />
+        <SummaryBox label="Best stop" value={bestRow ? secToDisplay(bestRow.timing.totalPitLoss) : "—"} sub={bestRow ? `#${carNo(data, bestRow.carNum)}` : undefined} />
         <SummaryBox label="Cars" value={String(rows.length)} />
       </div>
 
@@ -117,7 +118,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
                 typeof mine === "number" && typeof theirs === "number" ? (theirs <= mine ? "#4ade80" : "#f87171") : "rgba(255,255,255,0.9)";
               return (
                 <tr key={`${row.carNum}-${row.pitLap}`} style={{ background: row.isFocus ? "rgba(244,140,52,0.12)" : "transparent", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <td className={`${cell} font-mono font-bold`} style={{ color: row.isFocus ? "#F48C34" : "rgba(255,255,255,0.85)" }}>#{row.carNum}</td>
+                  <td className={`${cell} font-mono font-bold`} style={{ color: row.isFocus ? "#F48C34" : "rgba(255,255,255,0.85)" }}>#{carNo(data, row.carNum)}</td>
                   <td className={cell} style={{ color: "rgba(255,255,255,0.5)" }}>{row.pitLap}</td>
                   <td className={cell} style={{ color: "rgba(255,255,255,0.8)" }}>{secToDisplay(row.timing.inLapTime)}</td>
                   <td className={cell} style={{ color: "rgba(255,255,255,0.8)" }}>{secToDisplay(row.timing.pitRoadTime)}</td>

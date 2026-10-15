@@ -75,7 +75,7 @@ function pkg() {
       { cycleId: "cycle:GTU:1", car: "1", passageId: "pit:1:1", beforeLap: 2, afterLap: 4, classPosBefore: 1, classPosAfter: 2, netClass: -1, overallPosBefore: 1, overallPosAfter: 2 },
       { cycleId: "cycle:GTU:1", car: "2", passageId: "pit:2:1", beforeLap: 2, afterLap: 4, classPosBefore: 2, classPosAfter: 1, netClass: 1, overallPosBefore: 2, overallPosAfter: 1 },
     ],
-    positionChanges: { rows: { lap: [3], winner: ["2"], loser: ["1"], mechanism: ["both_pitted"] } },
+    positionChanges: { rows: { lap: [3, 5], winner: ["2", "3"], loser: ["1", "1"], mechanism: ["both_pitted", "on_track"] } },
   };
 }
 
@@ -111,9 +111,11 @@ describe("pit facts from the analysis package", () => {
     expect(out.annotations["1"].settles).toEqual([
       expect.objectContaining({ l: 4, p: 2, cpBefore: 1, cpAfter: 2, su: "Was P1 · Lost 1", stopLap: 3 }),
     ]);
-    expect(out.annotations["1"].reasons["3"]).toBe(
-      "Pit 1 — P1 in class before; P2 when the cycle closed on lap 4. Lost 1 in class — passed by #2 Bravo in the pit cycle"
-    );
+    // In the format the Lap details and pass panels read.
+    expect(out.annotations["1"].reasons["3"]).toBe("Pit stop — Lost 1 in pit cycle; also pitting: #2");
+    expect(out.annotations["1"].reasons["5"]).toBe("Lost — #3 Charlie (yellow)");
+    // A pit-lane visit leads its lap, as before.
+    expect(out.annotations["3"].reasons["5"]).toBe("Drive-through");
     expect(out.annotations["1"].reasons["2"]).toBeUndefined();
   });
 

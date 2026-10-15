@@ -109,7 +109,7 @@ export async function ingestRaceData(
       const car = data.cars[numStr];
       return {
         raceId: race.id,
-        carNumber: String(car.num),
+        carNumber: car.label ?? String(car.num),
         teamName: car.team,
         driverNames: "", // not in source data
         carClass: car.cls,
@@ -144,7 +144,7 @@ export async function ingestRaceData(
       for (const lap of car.laps) {
         lapBatch.push({
           raceId: race.id,
-          carNumber: String(car.num),
+          carNumber: car.label ?? String(car.num),
           lapNumber: lap.l,
           position: lap.p,
           classPosition: lap.cp,
@@ -208,7 +208,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
       const car = data.cars[numStr];
       return {
         raceId,
-        carNumber: String(car.num),
+        carNumber: car.label ?? String(car.num),
         teamName: car.team,
         driverNames: "",
         carClass: car.cls,
@@ -230,7 +230,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
       for (const lap of car.laps) {
         batch.push({
           raceId,
-          carNumber: String(car.num),
+          carNumber: car.label ?? String(car.num),
           lapNumber: lap.l,
           position: lap.p,
           classPosition: lap.cp,

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { RaceChartData } from "@shared/types";
+import { carNo } from "./car-number";
 
 interface GapEvolutionPanelProps {
   data: RaceChartData;
@@ -70,7 +71,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
     if (gapRefSet.size === 1) {
       const num = [...gapRefSet][0];
       const car = data.cars[String(num)];
-      return `#${num}${car?.team ? " " + car.team : ""}`;
+      return `#${car?.label ?? num}${car?.team ? " " + car.team : ""}`;
     }
     // Check if entire class is selected
     const classes = Object.keys(data.classGroups ?? {});
@@ -376,7 +377,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
               .filter((n) => {
                 const c = data.cars[String(n)];
                 if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                if (q && !String(n).includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
                   return false;
                 return true;
               })
@@ -432,7 +433,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                         style={{ background: swatchColor }}
                       />
                       <span className="font-mono font-bold text-white text-[11px] w-8 shrink-0">
-                        #{n}
+                        #{carNo(data, n)}
                       </span>
                       <span className="text-white/50 text-[10px] flex-1 truncate">
                         {c.team ?? ""}
@@ -464,7 +465,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                   .filter((n) => {
                     const c = data.cars[String(n)];
                     if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !String(n).includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                    if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
                       return false;
                     return true;
                   });
@@ -485,7 +486,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                   .filter((n) => {
                     const c = data.cars[String(n)];
                     if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !String(n).includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                    if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
                       return false;
                     return true;
                   });

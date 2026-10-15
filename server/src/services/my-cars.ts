@@ -44,6 +44,20 @@ export function carMatchesEntry(
   return teamsMatch(car.teamName, entry.teamName);
 }
 
+/**
+ * The race entry a followed car is, when one is. A race can run "7" and "007" as two cars
+ * (utils/carNumbers.ts): the entry with the car's exact number wins over one that only
+ * reduces to the same integer.
+ */
+export function entryForCar<E extends { carNumber: string; teamName?: string | null }>(
+  car: CarRule,
+  race: { series: string; subSeries?: string | null; season: number },
+  entries: E[]
+): E | undefined {
+  const all = entries.filter((e) => carMatchesEntry(car, race, e));
+  return all.find((e) => e.carNumber.trim() === car.number.trim()) ?? all[0];
+}
+
 const carFields = {
   label: z.string().trim().max(60).nullish(),
   number: z.string().trim().min(1).max(8).regex(/^[0-9A-Za-z]+$/, "Car numbers are letters and digits"),
@@ -97,7 +111,9 @@ export async function followFromRace(userId: string, body: unknown) {
     select: { id: true, series: true, subSeries: true, season: true, status: true, entries: { select: { carNumber: true, teamName: true, carClass: true } } },
   });
   if (!race || race.status !== "PUBLISHED") throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
-  const entry = race.entries.find((e) => normCar(e.carNumber) === normCar(carNumber));
+  const entry =
+    race.entries.find((e) => e.carNumber.trim() === carNumber.trim()) ??
+    race.entries.find((e) => normCar(e.carNumber) === normCar(carNumber));
   if (!entry) throw new AppError(404, `Car #${carNumber} is not in this race`, "CAR_NOT_FOUND");
   const series = raceFamily(race.series, race.subSeries);
   if (!series) throw new AppError(400, "This race's series cannot be followed yet", "SERIES_UNKNOWN");
@@ -147,9 +163,9 @@ export async function followedInRace(userId: string, raceId: string) {
   ]);
   if (!race || cars.length === 0) return [];
   const out: { carNumber: string; carId: string }[] = [];
-  for (const e of race.entries) {
-    const c = cars.find((car) => carMatchesEntry(car, race, e));
-    if (c) out.push({ carNumber: e.carNumber, carId: c.id });
+  for (const c of cars) {
+    const e = entryForCar(c, race, race.entries);
+    if (e && !out.some((o) => o.carNumber === e.carNumber)) out.push({ carNumber: e.carNumber, carId: c.id });
   }
   return out;
 }

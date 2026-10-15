@@ -1,3 +1,4 @@
+import { carNo } from "./car-number";
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { RaceChartData } from "@shared/types";
 
@@ -29,7 +30,7 @@ export function CarPicker({ data, focusNum, selectedNum, onSelect }: CarPickerPr
       if (classFilter !== "All" && c.cls !== classFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        return String(c.num).includes(q) || c.team.toLowerCase().includes(q);
+        return carNo(data, c.num).toLowerCase().includes(q) || c.team.toLowerCase().includes(q);
       }
       return true;
     }).sort((a, b) => a.num - b.num);
@@ -81,7 +82,7 @@ export function CarPicker({ data, focusNum, selectedNum, onSelect }: CarPickerPr
               }}
             >
               <span className="font-mono font-bold text-xs" style={{ color: isSelected ? "#818cf8" : "rgba(255,255,255,0.7)" }}>
-                #{c.num}
+                #{carNo(data, c.num)}
               </span>
               <span className="text-[11px] truncate flex-1" style={{ color: "rgba(255,255,255,0.45)" }}>
                 {c.team}

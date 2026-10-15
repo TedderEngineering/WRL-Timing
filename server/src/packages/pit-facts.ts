@@ -162,6 +162,7 @@ interface Lap {
 }
 interface Car {
   num: number;
+  label?: string;
   team: string;
   cls: string;
   laps: Lap[];
@@ -188,8 +189,14 @@ const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 /** Package car → chart key, for the cars the chart can be matched to without doubt. */
 export function matchCars(chart: Chart, facts: PitFacts): Map<string, string> {
   const byKey = new Map<string, string[]>();
+  const keys = Object.keys(chart.cars);
+  const shown = (k: string) => chart.cars[k].label ?? k;
   for (const car of Object.keys(facts.laps)) {
-    const key = chart.cars[car] ? car : Object.keys(chart.cars).find((k) => normCar(k) === normCar(car)) ?? String(parseInt(car, 10));
+    // The published number first ("007" is not "7" when the chart has both), then the same integer.
+    const key =
+      keys.find((k) => shown(k) === car) ??
+      keys.find((k) => !chart.cars[k].label && normCar(k) === normCar(car)) ??
+      String(parseInt(car, 10));
     if (!chart.cars[key]) continue;
     byKey.set(key, [...(byKey.get(key) ?? []), car]);
   }
@@ -360,25 +367,12 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
   return { data, annotations: ann, matched: carKey.size };
 }
 
-// How the subject car gained or lost each place (D-CAUSE), in the words the Lap details panel used.
-const GAINED_HOW: Record<string, string> = {
-  on_track: "on track",
-  loser_pitted: "pitted",
-  winner_pitted: "during this car's stop",
-  both_pitted: "in the pit cycle",
-  penalty: "penalty",
-  retirement: "retired",
-};
-const LOST_HOW: Record<string, string> = {
-  on_track: "on track",
-  loser_pitted: "during this car's stop",
-  winner_pitted: "in its own stop",
-  both_pitted: "in the pit cycle",
-  penalty: "penalty",
-  retirement: "retired",
-};
-
-/** The "What changed" lines: class swaps per lap, and each stop's cycle result on its in-lap. */
+/**
+ * The "What changed" lines in the format the Lap details and pass panels read
+ * ("Gained — passed #12 Team on pace; #7 Team pitted", "Lost — #3 Team (yellow)"), from the
+ * package's class swaps: the other car "pitted" when it was in the pits for the swap, "(yellow)"
+ * under a caution, else "on pace". A pit lap leads with the stop and its cycle result.
+ */
 function reasonsFor(
   car: string,
   facts: PitFacts,
@@ -390,31 +384,34 @@ function reasonsFor(
   const name = (c: string) => {
     const n = keyNum(c);
     const team = n !== null ? chart.cars[String(n)]?.team : facts.entries[c]?.team;
+    // c is the published number ("007"), which is what the panels show and look up.
     return `#${c}${team ? ` ${team}` : ""}`;
   };
+  const fcyLap = new Set<number>();
+  for (const [a, b] of facts.fcy) for (let l = a; l <= b; l++) fcyLap.add(l);
+  const how = (otherPitted: boolean, lap: number) => (otherPitted ? "pitted" : fcyLap.has(lap) ? "(yellow)" : "on pace");
   const gained = new Map<number, string[]>();
   const lost = new Map<number, string[]>();
-  for (const [lap, w, l, how] of facts.swaps) {
-    if (w === car) gained.set(lap, [...(gained.get(lap) ?? []), `${name(l)} ${GAINED_HOW[how] ?? how}`]);
-    if (l === car) lost.set(lap, [...(lost.get(lap) ?? []), `${name(w)} ${LOST_HOW[how] ?? how}`]);
+  for (const [lap, w, l, mech] of facts.swaps) {
+    if (w === car) gained.set(lap, [...(gained.get(lap) ?? []), `${name(l)} ${how(mech === "loser_pitted" || mech === "both_pitted", lap)}`]);
+    if (l === car) lost.set(lap, [...(lost.get(lap) ?? []), `${name(w)} ${how(mech === "winner_pitted" || mech === "both_pitted", lap)}`]);
   }
   const out: Record<string, string> = {};
-  const laps = new Set([...gained.keys(), ...lost.keys()]);
-  for (const lap of laps) {
-    const parts: string[] = [];
-    const g = gained.get(lap);
-    const l = lost.get(lap);
-    if (g) parts.push(`Gained ${g.length} in class — passed ${g.join("; ")}`);
-    if (l) parts.push(`Lost ${l.length} in class — passed by ${l.join("; ")}`);
-    out[String(lap)] = parts.join(". ");
+  for (const lap of new Set([...gained.keys(), ...lost.keys()])) {
+    const g = gained.get(lap) ?? [];
+    const l = lost.get(lap) ?? [];
+    // One direction per lap, as the panels read it: the net change in class.
+    if (g.length >= l.length && g.length) out[String(lap)] = `Gained — passed ${g.join("; ")}`;
+    else if (l.length) out[String(lap)] = `Lost — ${l.join("; ")}`;
   }
   for (const m of pits) {
     const s = settles.find((x) => x.stopLap === m.l);
     const what = m.lb.split(" · ")[0];
-    const line = s
-      ? `${what} — P${s.cpBefore} in class before; P${s.cpAfter} when the cycle closed on lap ${s.l}`
-      : what;
-    out[String(m.l)] = out[String(m.l)] ? `${line}. ${out[String(m.l)]}` : line;
+    const net = s ? s.cpBefore - s.cpAfter : null;
+    const cyc = net === null ? "" : net > 0 ? `Gained ${net} in pit cycle` : net < 0 ? `Lost ${-net} in pit cycle` : "Held position in pit cycle";
+    const others = (m.alsoPittingCars as number[] | undefined)?.map((n) => `#${chart.cars[String(n)]?.label ?? n}`) ?? [];
+    const parts = [cyc, others.length ? `also pitting: ${others.join(", ")}` : ""].filter(Boolean);
+    out[String(m.l)] = `${what === "Pit" || /^Pit \d/.test(what) ? "Pit stop" : what}${parts.length ? ` — ${parts.join("; ")}` : ""}`;
   }
   return out;
 }

@@ -45,6 +45,8 @@ export interface InsightData {
 
 export interface StrategyMetrics {
   carNum: number;
+  /** The car number to show ("4A", "007"); carNum is the chart key. */
+  carLabel: string;
   team: string;
   cls: string;
   classPos: number;
@@ -161,7 +163,7 @@ export function computeInsights(
       insights.push({
         type: "winner_strategy", cls,
         title: `${cls} Winner Strategy`,
-        text: `#${winner.carNum} ${winner.team} won ${cls} with ${stops} pit stop${stops !== 1 ? "s" : ""}, averaging ${winner.avgStintLen.toFixed(1)} laps per stint. Green-flag pace: ${fmtPace(winner.avgGreenPace)}. Total pit time: ${fmtTime(winner.totalPitTime)} (${winner.pitPct.toFixed(1)}% of race).`,
+        text: `#${winner.carLabel} ${winner.team} won ${cls} with ${stops} pit stop${stops !== 1 ? "s" : ""}, averaging ${winner.avgStintLen.toFixed(1)} laps per stint. Green-flag pace: ${fmtPace(winner.avgGreenPace)}. Total pit time: ${fmtTime(winner.totalPitTime)} (${winner.pitPct.toFixed(1)}% of race).`,
       });
     }
 
@@ -361,6 +363,7 @@ export function computeStrategyMetrics(
 
     raw.push({
       carNum,
+      carLabel: car.label ?? String(carNum),
       team: car.team,
       cls: car.cls,
       classPos: car.finishPosClass,

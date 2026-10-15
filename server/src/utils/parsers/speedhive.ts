@@ -19,6 +19,7 @@
 
 import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
+import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV, parseControlLogCSV, enrichAnnotationsFromControlLog } from "./csv-utils.js";
 import type { PitDetectLapRow } from "./csv-utils.js";
@@ -75,6 +76,15 @@ export const speedhiveParser: RaceDataParser = {
     if (summaryRows.length < 2) throw new Error("Summary CSV has no data rows");
     const summaryHdr = mapHeaders(summaryRows[0]);
 
+    // Every published car number in both files, so "4" and "4A", or "7" and "007", stay two
+    // cars (utils/carNumbers.ts).
+    const lapsRows = parseCSV(lapsCsv);
+    const ids = carNumbering([
+      ...summaryRows.slice(1).map((r) => col(r, summaryHdr, "start number")),
+      ...(lapsRows.length > 1 ? lapsRows.slice(1).map((r) => col(r, mapHeaders(lapsRows[0]), "start number")) : []),
+    ]);
+    warnings.push(...carNumberingWarnings(ids));
+
     const carMeta = new Map<
       number,
       { team: string; cls: string; finPos: number; finPosCls: number; status?: string }
@@ -82,11 +92,11 @@ export const speedhiveParser: RaceDataParser = {
 
     for (let i = 1; i < summaryRows.length; i++) {
       const row = summaryRows[i];
-      const num = parseInt(col(row, summaryHdr, "start number"), 10);
-      if (isNaN(num)) continue;
+      const num = ids.num(col(row, summaryHdr, "start number"));
+      if (num === null) continue;
 
       carMeta.set(num, {
-        team: col(row, summaryHdr, "name") || `Car #${num}`,
+        team: col(row, summaryHdr, "name") || `Car #${ids.label(num) ?? num}`,
         cls: col(row, summaryHdr, "class") || "Unknown",
         finPos: parseInt(col(row, summaryHdr, "position"), 10) || 999,
         finPosCls: parseInt(col(row, summaryHdr, "position in class"), 10) || 999,
@@ -95,7 +105,6 @@ export const speedhiveParser: RaceDataParser = {
     }
 
     // ── Parse All Laps CSV ─────────────────────────────────────────
-    const lapsRows = parseCSV(lapsCsv);
     if (lapsRows.length < 2) throw new Error("All Laps CSV has no data rows");
     const lapsHdr = mapHeaders(lapsRows[0]);
 
@@ -120,8 +129,8 @@ export const speedhiveParser: RaceDataParser = {
 
     for (let i = 1; i < lapsRows.length; i++) {
       const row = lapsRows[i];
-      const num = parseInt(col(row, lapsHdr, "start number"), 10);
-      if (isNaN(num)) continue;
+      const num = ids.num(col(row, lapsHdr, "start number"));
+      if (num === null) continue;
 
       const lapNum = parseInt(col(row, lapsHdr, "lap number"), 10);
       if (isNaN(lapNum) || lapNum < 1) continue;
@@ -163,7 +172,7 @@ export const speedhiveParser: RaceDataParser = {
 
       if (!carFromLaps.has(num)) {
         carFromLaps.set(num, {
-          team: col(row, lapsHdr, "team/name") || `Car #${num}`,
+          team: col(row, lapsHdr, "team/name") || `Car #${ids.label(num) ?? num}`,
           cls: col(row, lapsHdr, "class") || "Unknown",
           finPos: parseInt(col(row, lapsHdr, "finish position (overall)"), 10) || 999,
           finPosCls: parseInt(col(row, lapsHdr, "finish position (class)"), 10) || 999,
@@ -258,13 +267,13 @@ export const speedhiveParser: RaceDataParser = {
 
       const meta = carMeta.get(num) || carFromLaps.get(num);
       if (!meta) {
-        warnings.push(`Car #${num} has laps but no metadata — skipping`);
+        warnings.push(`Car #${ids.label(num) ?? num} has laps but no metadata — skipping`);
         continue;
       }
 
       const status = carMeta.get(num)?.status;
       cars[String(num)] = {
-        num, team: meta.team, cls: meta.cls,
+        num, ...(ids.label(num) ? { label: ids.label(num) } : {}), team: meta.team, cls: meta.cls,
         ...(status ? { status } : {}),
         finishPos: meta.finPos, finishPosClass: meta.finPosCls,
         laps,

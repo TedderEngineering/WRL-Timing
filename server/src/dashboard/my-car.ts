@@ -20,6 +20,8 @@ interface LapRow {
 }
 interface ChartCar {
   num: number | string;
+  /** The published number when it differs from num ("4A", "007"). */
+  label?: string;
   team: string;
   cls: string;
   make?: string;
@@ -87,8 +89,13 @@ export interface CarFacts {
 
 /** The chart's key for a race entry's number ("007" and "7" are one car). */
 export function chartKeyFor(data: ChartData, carNumber: string): string | null {
-  if (data.cars[carNumber]) return carNumber;
-  return Object.keys(data.cars).find((k) => normCar(k) === normCar(carNumber)) ?? null;
+  const want = String(carNumber).trim();
+  const keys = Object.keys(data.cars);
+  // The published number first: "007" and "7" can be two cars (utils/carNumbers.ts).
+  const exact = keys.find((k) => (data.cars[k].label ?? k) === want);
+  if (exact) return exact;
+  const same = keys.filter((k) => normCar(data.cars[k].label ?? k) === normCar(want));
+  return same.length === 1 ? same[0] : null;
 }
 
 function bestLapOf(laps: LapRow[]): { sec: number; lap: number } | null {
@@ -197,7 +204,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
   const pitCycles = classPitCycles(car.laps, ann?.[key]?.settles ?? []);
   return {
     carKey: key,
-    number: String(car.num ?? key),
+    number: car.label ?? String(car.num ?? key),
     team: car.team,
     cls: car.cls,
     vehicle: car.vehicle || car.make || null,
