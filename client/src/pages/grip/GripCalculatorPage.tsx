@@ -79,6 +79,8 @@ export function GripCalculatorPage() {
   const { account, units, setAccount, calculatorAvailable, toast } = useGrip();
   const [params, setParams] = useSearchParams();
   const sessions = useLoad(() => gripApi.sessions());
+  // Earlier calculations: the default reference and "Same as last time here".
+  const history = useLoad(() => gripApi.calculations());
   const resultRef = useRef<HTMLDivElement>(null);
 
   const [form, setForm] = useState<FormState>({
@@ -144,13 +146,34 @@ export function GripCalculatorPage() {
   const openCalc = calcId && editing?.id === calcId ? editing : null;
   const reference: ReferenceSession | undefined = useMemo(() => {
     if (all.length === 0) return undefined;
+    // With nothing chosen, remember the last choice: a reference saved since the
+    // last calculation (e.g. from "How did it come in?"), else the one used
+    // last, else the most used.
+    const last = history.data?.[0];
+    const newer = last
+      ? all
+          .filter((s) => s.ready && s.createdAt > last.createdAt)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+      : undefined;
+    const lastUsed = history.data?.find((c) => c.referenceSessionId)?.referenceSessionId;
     return (
       all.find((s) => s.id === refId) ??
       (openCalc ? all.find((s) => s.id === openCalc.referenceSessionId) : undefined) ??
+      newer ??
+      all.find((s) => s.id === lastUsed && s.ready) ??
       [...all].filter((s) => s.ready).sort((a, b) => b.useCount - a.useCount)[0] ??
       all[0]
     );
-  }, [all, refId, openCalc]);
+  }, [all, refId, openCalc, history.data]);
+
+  /** The latest earlier calculation at this reference's track, for "Same as last time here". */
+  const lastHere = useMemo(
+    () =>
+      reference
+        ? history.data?.find((c) => c.track.id === reference.track.id && c.id !== calcId)
+        : undefined,
+    [history.data, reference, calcId]
+  );
 
   const formFromCalculation = (c: Calculation): FormState => ({
     name: c.name,
@@ -239,6 +262,23 @@ export function GripCalculatorPage() {
       [group]: { ...e[group], [corner]: undefined },
       form: undefined,
     }));
+  };
+
+  /** Copy today's conditions and targets from the last calculation at this track. */
+  const fillFromLast = () => {
+    if (!lastHere) return;
+    const from = formFromCalculation(lastHere);
+    setForm((f) => ({ ...from, name: f.name }));
+    // Send the stored values back exactly if the driver leaves a field as filled.
+    loaded.current = {
+      trackTemp: { text: from.trackTemp, value: lastHere.trackTemp },
+      ambientTemp: { text: from.ambientTemp, value: lastHere.ambientTemp },
+      wheel: { texts: from.wheel, values: lastHere.wheel },
+      target: { texts: from.target, values: lastHere.target },
+    };
+    setWheelTouched(true);
+    setErrors({});
+    toast(`Filled from ${lastHere.name}`);
   };
 
   const submit = (e: FormEvent) => {
@@ -332,7 +372,13 @@ export function GripCalculatorPage() {
     }
   };
 
-  if (sessions.loading || (calcId && !openCalc)) return <Spinner />;
+  if (
+    sessions.loading ||
+    (calcId && !openCalc) ||
+    // Wait for history before choosing the default reference, so the form doesn't reset.
+    (!calcId && !refId && history.loading)
+  )
+    return <Spinner />;
   if (!reference) {
     return (
       <div className="container-page">
@@ -451,7 +497,21 @@ export function GripCalculatorPage() {
           </Card>
 
           <Card className="space-y-4">
-            <h2 className="font-bold text-gray-900 dark:text-gray-50">Today's session</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-bold text-gray-900 dark:text-gray-50">
+                Today's session
+              </h2>
+              {!openCalc && lastHere && (
+                <button
+                  type="button"
+                  onClick={fillFromLast}
+                  title={`Copy conditions and targets from ${lastHere.name} (${formatDate(lastHere.sessionDate)})`}
+                  className="min-h-[36px] rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  ↺ Same as last time at {reference.track.shortName}
+                </button>
+              )}
+            </div>
             <Field
               id="calc-name"
               label="Calculation name *"

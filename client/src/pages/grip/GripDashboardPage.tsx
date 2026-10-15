@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 import { SupportCard } from "@/features/support/SupportPrompts";
 import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
+import { FirstWeekendChecklist, InstallHint } from "@/features/grip/engagement";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
@@ -141,6 +142,12 @@ export function GripDashboardPage() {
 
       {/* Open items: recent runs waiting for their hot pressures. */}
       {calcs.data && <AwaitingOutcomes calcs={calcs.data} />}
+      {/* First race weekend: four steps, the first already ticked. */}
+      {sessions.data && calcs.data && (
+        <FirstWeekendChecklist sessions={sessions.data} calcs={calcs.data} />
+      )}
+      {/* Phones only: one tap to open it in the pit lane. */}
+      <InstallHint />
 
       {sessions.loading ? (
         <Spinner />
