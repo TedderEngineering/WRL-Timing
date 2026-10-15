@@ -17,4 +17,4 @@ export {
   type SiteStyle,
 } from "./template";
 export { MONO, SANS, loadShareFonts } from "./fonts";
-export { imageName, shareImage, useShareCard, type ShareMethod } from "./shareImage";
+export { copyImage, downloadImage, imageName, isComputer, shareImage, useShareCard, type ShareMethod } from "./shareImage";

@@ -12,7 +12,8 @@
  */
 import { createContext, useContext } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
-import { drawText, imageName, makeShareCard, roundRect, useShareCard, type Box, type SiteStyle } from "@/features/share";
+import { drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
+import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { classBenchmarks, classCycleNets } from "./benchmarks";
 import { finishInfo } from "./finish";
 
@@ -111,28 +112,19 @@ export function makeRaceCarCard(data: RaceChartData, annotations: AnnotationData
   });
 }
 
-/** "Share image" for the focus car: the phone's share sheet with the PNG, or a download. */
+/** "Share image" for the focus car: the phone's share sheet with the PNG; on a computer, copy or download. */
 export function ShareCarImageButton({ data, annotations, carNum }: { data: RaceChartData; annotations: AnnotationData | null; carNum: number }) {
   const meta = useContext(RaceMetaContext);
-  const { share, busy } = useShareCard();
   if (!meta || !data.cars[String(carNum)]) return null;
   const { title } = raceCardText(data, carNum, meta);
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() =>
-        share({
-          make: () => makeRaceCarCard(data, annotations, carNum, meta),
-          filename: imageName("racetrace", `${title} ${meta.name}`),
-          text: `${title} · ${meta.name} on RaceTrace`,
-          kind: "race_car",
-        })
-      }
-      className="min-h-[36px] self-start text-left text-[13px] hover:underline disabled:opacity-60"
-      style={{ color: "#F48C34" }}
-    >
-      {busy ? "Making the image…" : "Share an image of this car's race ›"}
-    </button>
+    <ShareImageActions
+      make={() => makeRaceCarCard(data, annotations, carNum, meta)}
+      filename={imageName("racetrace", `${title} ${meta.name}`)}
+      text={`${title} · ${meta.name} on RaceTrace`}
+      kind="race_car"
+      label="Share an image of this car's race"
+      className="min-h-[36px] text-left text-[13px] hover:underline disabled:opacity-60"
+    />
   );
 }
