@@ -105,6 +105,15 @@ describe("re-import plan: telling candidates apart", () => {
     expect(rows[0]).toMatchObject({ state: "exact", sourceKey: rm.sourceKey });
   });
 
+  it("a session already attached to another race makes this one a duplicate, not a re-import", () => {
+    const rm = { ...session("redmist:event:9/session:1", "redmist", "2026-07-26", "Sunday 7 Hour", "wrl"), season: 2026 };
+    const prints = new Map<string, SessionPrint>([[rm.sourceKey, { cars: cars(40), maxLap: 240 }]]);
+    const taken = new Map([[rm.sourceKey, { raceId: "keeper", name: "Sunday 7-Hour" }]]);
+    const rows = planReimport([race("w1", "WRL", "2026-07-24", "Sunday 7-Hour", cars(40), 240)], [rm], prints, taken);
+    expect(rows[0]).toMatchObject({ state: "duplicate" });
+    expect(rows[0].note).toMatch(/keeper.*already re-imported/);
+  });
+
   it("a sprint weekend's two races with the same field: the matching lap count and date decide", () => {
     const r1 = session("sro:son-r1", "sro", "2025-03-29", "Race 1");
     const r2 = session("sro:son-r2", "sro", "2025-03-30", "Race 2");

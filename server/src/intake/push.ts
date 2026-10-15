@@ -5,6 +5,7 @@
  * The API token is read by the caller from RACETRACE_API_TOKEN and only ever
  * placed in the Authorization header. Nothing here prints it.
  */
+import { gzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resultsStatusRank } from "./file-select.js";
@@ -184,11 +185,21 @@ export function apiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): ApiConfi
   return { url: /\/api$/.test(url) ? url : `${url}/api`, token };
 }
 
+/** Bodies over this size are sent gzip-compressed (the server inflates them; raw CSVs shrink ~10×). */
+const GZIP_OVER = 1024 * 1024;
+
 export async function apiRequest<T>(cfg: ApiConfig, method: "GET" | "POST", path: string, body?: unknown, fetchImpl: typeof fetch = fetch): Promise<{ status: number; data: T }> {
+  const json = body === undefined ? undefined : JSON.stringify(body);
+  const gzip = json !== undefined && json.length > GZIP_OVER;
   const res = await fetchImpl(`${cfg.url}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${cfg.token}`, ...(body ? { "Content-Type": "application/json" } : {}), Accept: "application/json" },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(gzip ? { "Content-Encoding": "gzip" } : {}),
+      Accept: "application/json",
+    },
+    ...(json !== undefined ? { body: gzip ? gzipSync(json) : json } : {}),
   });
   const text = await res.text();
   let data: unknown = text;

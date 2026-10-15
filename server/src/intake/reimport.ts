@@ -108,7 +108,13 @@ function preferListing(a: RaceSession, b: RaceSession): RaceSession {
   return rank(a) !== rank(b) ? (rank(a) < rank(b) ? a : b) : a.sourceKey <= b.sourceKey ? a : b;
 }
 
-export function planReimport(races: SiteRace[], sessionsIn: RaceSession[], prints: Map<string, SessionPrint>): PlanRow[] {
+export function planReimport(
+  races: SiteRace[],
+  sessionsIn: RaceSession[],
+  prints: Map<string, SessionPrint>,
+  /** Sessions already attached to a race on the site (source key → that race). */
+  taken: Map<string, { raceId: string; name: string }> = new Map()
+): PlanRow[] {
   // One candidate per race even when it is listed twice with identical results (and names that
   // do not disagree: two same-day races with one field and one lap count stay apart).
   // Two listings are the same race when they are on the same day, their names don't disagree,
@@ -199,6 +205,14 @@ export function planReimport(races: SiteRace[], sessionsIn: RaceSession[], print
     for (const dup of group.slice(1)) {
       dup.state = "duplicate";
       dup.note = `Same session as "${keeper.raceName}" (${keeper.raceId}); one of the two can be deleted`;
+    }
+  }
+  // A session already attached to another race: this one is a leftover copy of it.
+  for (const row of rows) {
+    const owner = row.sourceKey && row.state !== "not-found" ? taken.get(row.sourceKey) : undefined;
+    if (owner && owner.raceId !== row.raceId) {
+      row.state = "duplicate";
+      row.note = `Same session as "${owner.name}" (${owner.raceId}), already re-imported; this one can be deleted`;
     }
   }
   const order: Record<PlanState, number> = { exact: 0, unsure: 1, duplicate: 2, "not-found": 3 };

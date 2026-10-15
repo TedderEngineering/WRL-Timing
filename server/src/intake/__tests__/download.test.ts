@@ -195,6 +195,22 @@ describe("push body", () => {
     expect(jsonBytes('é"')).toBe(6);
   });
 
+  it("sends large bodies gzip-compressed and small ones as plain JSON", async () => {
+    const { apiRequest } = await import("../push.js");
+    const { gunzipSync } = await import("node:zlib");
+    const seen: { enc?: string; body: unknown }[] = [];
+    const fake = (async (_url: string, init: RequestInit) => {
+      seen.push({ enc: (init.headers as Record<string, string>)["Content-Encoding"], body: init.body });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const cfg = { url: "https://x/api", token: "t" };
+    await apiRequest(cfg, "POST", "/p", { a: 1 }, fake);
+    await apiRequest(cfg, "POST", "/p", { big: "x".repeat(2 * 1024 * 1024) }, fake);
+    expect(seen[0]).toEqual({ enc: undefined, body: '{"a":1}' });
+    expect(seen[1].enc).toBe("gzip");
+    expect(JSON.parse(gunzipSync(seen[1].body as Buffer).toString()).big).toHaveLength(2 * 1024 * 1024);
+  });
+
   it("decodes text files as UTF-8 without a BOM", () => {
     expect(fileContentForKey("lapsCsv", Buffer.from("﻿a;b\n", "utf-8"))).toBe("a;b\n");
   });
