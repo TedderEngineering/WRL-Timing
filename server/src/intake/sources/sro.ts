@@ -22,6 +22,26 @@ import { buildAlkamelSession, onOrAfter } from "./alkamel-common.js";
 export const SRO_BASE = process.env.INTAKE_SRO_BASE || "https://usac.alkamelna.com";
 export const SRO_SITE_SERIES = process.env.INTAKE_SRO_SERIES || "06_SRO";
 
+/**
+ * Events the site serves but leaves out of its event list. SRO's 2026 Road Atlanta weekend
+ * (June 12–14: GT World Challenge, GT America, GT4, GR Cup, TC America, McLaren Trophy) sits
+ * at "06_Road Atlanta" while the list shows a stray "06_Sebring International Raceway" in
+ * its place. More can be added without a code change: INTAKE_SRO_EXTRA_EVENTS =
+ * "26_2026:06_Road Atlanta;25_2025:05_Somewhere".
+ */
+export const UNLISTED_SRO_EVENTS: Record<string, string[]> = {
+  "26_2026": ["06_Road Atlanta"],
+};
+
+export function unlistedSroEvents(season: string, env = process.env.INTAKE_SRO_EXTRA_EVENTS): string[] {
+  const extra = (env ?? "")
+    .split(";")
+    .map((x) => x.trim().split(/:(.*)/s))
+    .filter(([se, ev]) => se === season && ev)
+    .map(([, ev]) => ev.trim());
+  return [...new Set([...(UNLISTED_SRO_EVENTS[season] ?? []), ...extra])];
+}
+
 export function sroPageUrl(siteSeries: string, season?: string, event?: string): string {
   const u = new URL(`${SRO_BASE}/`);
   u.searchParams.set("series", siteSeries);
@@ -66,13 +86,25 @@ export async function discoverSro(http: HttpClient, sel: SeriesSelection, opts: 
   const seasons = parseSelectOptions(first, "season");
   const season = seasons.find((o) => seasonYear(o.value) === opts.season)?.value ?? seasonFolder(opts.season);
   const seasonHtml = await http.getText(sroPageUrl(SRO_SITE_SERIES, season, ""));
-  const events = parseSelectOptions(seasonHtml, "evvent").filter((o) => o.value);
-  if (events.length === 0) log(`SRO: no events listed for ${season}`);
+  const listed = parseSelectOptions(seasonHtml, "evvent").filter((o) => o.value);
+  if (listed.length === 0) log(`SRO: no events listed for ${season}`);
+  const unlisted = unlistedSroEvents(season)
+    .filter((v) => !listed.some((o) => o.value === v))
+    .map((value) => ({ value, label: `${value.replace(/^\d+_/, "")} (not in the site's event list)`, unlisted: true }));
+  const events: { value: string; label: string; unlisted?: boolean }[] = [...listed, ...unlisted];
   const out: RaceSession[] = [];
   const seen = new Set<string>();
   for (const ev of events) {
     log(`SRO: ${ev.label || ev.value}`);
-    const html = await http.getText(sroPageUrl(SRO_SITE_SERIES, season, ev.value));
+    let html: string;
+    try {
+      html = await http.getText(sroPageUrl(SRO_SITE_SERIES, season, ev.value));
+    } catch (e) {
+      // An unlisted event that is not (or no longer) there is not an error.
+      if (!ev.unlisted) throw e;
+      log(`SRO: ${ev.value} not found (${(e as Error).message})`);
+      continue;
+    }
     for (const s of sessionsFromEventPage(html, sel, opts)) {
       if (seen.has(s.sourceKey)) continue;
       seen.add(s.sourceKey);
