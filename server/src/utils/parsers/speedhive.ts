@@ -169,6 +169,20 @@ export const speedhiveParser: RaceDataParser = {
       }
     }
 
+    // ── One row per car and lap ───────────────────────────────────
+    // RedMist can list a lap twice (a crossing re-sent after a correction). Keep the last row:
+    // a duplicate left a second lap 1 with no class position, and the whole race was refused.
+    let duplicates = 0;
+    for (const [num, laps] of carLaps) {
+      const byLap = new Map<number, (typeof laps)[number]>();
+      for (const lap of laps) {
+        if (byLap.has(lap.l)) duplicates++;
+        byLap.set(lap.l, lap);
+      }
+      if (byLap.size !== laps.length) carLaps.set(num, [...byLap.values()].sort((a, b) => a.l - b.l));
+    }
+    if (duplicates) warnings.push(`${duplicates} repeated lap row(s) in the laps file; the last row of each lap was kept`);
+
     // ── Parse flags into flag periods ──────────────────────────────
     const { periods: flagPeriods, raceStartMs } = parseFlagsCSV(flagsCsv);
     if (flagPeriods.length === 0) {
