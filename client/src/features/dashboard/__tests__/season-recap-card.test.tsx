@@ -37,6 +37,8 @@ describe("Your 2026", () => {
     expect(t).toContain("#67 Blackdog Racing");
     expect(t).toContain("P5 Sebring");
     expect(html).toContain('href="/chart?race=ra&amp;car=67"');
-    expect(t).toContain("Share your season");
+    // No window here, so it renders as on a computer: copy and download.
+    expect(t).toContain("Copy your season");
+    expect(t).toContain("Download");
   });
 });
