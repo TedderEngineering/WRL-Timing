@@ -28,7 +28,7 @@ const fake = vi.hoisted(() => {
         return pick(c, select);
       },
       update: async ({ where, data, select }: Row) => {
-        const c = state.cars.find((x) => x.id === where.id);
+        const c = state.cars.find((x) => x.id === where.id)!;
         Object.assign(c, data);
         return pick(c, select);
       },
