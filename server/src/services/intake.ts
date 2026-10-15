@@ -383,6 +383,7 @@ export async function listIntakeRaces(site?: string) {
       date: true,
       series: true,
       season: true,
+      track: true,
       // The newest analysis package, so the intake can tell which races still need one.
       packages: { select: { version: true, status: true, engineVersion: true, rulebookVersion: true, createdAt: true }, orderBy: { version: "desc" }, take: 1 },
     },
@@ -399,6 +400,41 @@ export async function listIntakeRaces(site?: string) {
     date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date,
     series: r.series,
     season: r.season,
+    track: r.track,
     latestPackage: r.packages?.[0] ?? null,
   }));
+}
+
+const identitySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  season: z.number().int().min(2000).max(2100),
+});
+
+/**
+ * Rename and re-date a race to match its timing session (intake `names`). Only races with a
+ * source key: their session is the authority for the day they ran. Id, link and status stay.
+ */
+export async function setRaceIdentity(raceId: string, bodyIn: unknown, actor: IntakeActor) {
+  const body = identitySchema.parse(bodyIn);
+  const race = await prisma.race.findUnique({ where: { id: raceId }, select: { id: true, name: true, date: true, season: true, sourceKey: true } });
+  if (!race) throw new AppError(404, `Race ${raceId} not found`, "NOT_FOUND");
+  if (!race.sourceKey) throw new AppError(409, `Race ${raceId} has no source key; only races tied to a timing session can be renamed this way.`, "NOT_KEYED");
+  const date = new Date(`${body.date}T00:00:00.000Z`);
+  await prisma.race.update({ where: { id: raceId }, data: { name: body.name, date, season: body.season } });
+  await prisma.auditLog.create({
+    data: {
+      adminUserId: actor.userId,
+      action: "INTAKE_RACE_IDENTITY",
+      targetType: "race",
+      targetId: raceId,
+      details: {
+        sourceKey: race.sourceKey,
+        apiTokenId: actor.apiTokenId ?? null,
+        from: { name: race.name, date: race.date.toISOString().slice(0, 10), season: race.season },
+        to: body,
+      } as any,
+    },
+  });
+  return { raceId, name: body.name, date: body.date, season: body.season };
 }

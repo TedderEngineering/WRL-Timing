@@ -65,7 +65,7 @@ export function raceFamilyLabel(series: string, name: string): Family {
 }
 
 /** Championship names found anywhere in a series name or a timing-site folder name. */
-const CHAMPIONSHIP_WORDS: [RegExp, string][] = [
+export const CHAMPIONSHIP_WORDS: [RegExp, string][] = [
   [/weathertech sportscar|^imsa weathertech/i, "WeatherTech"],
   [/pilot challenge|\bmpc\b/i, "Pilot Challenge"],
   [/vp racing|\bvprc\b/i, "VP Racing Challenge"],

@@ -154,6 +154,7 @@ export interface KnownRace {
   date?: string;
   series?: string;
   season?: number;
+  track?: string;
   /** The newest analysis package of the race, if any. */
   latestPackage?: { version: number; status: string; engineVersion: string; rulebookVersion: string | null; createdAt: string } | null;
 }

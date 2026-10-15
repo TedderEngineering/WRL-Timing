@@ -22,6 +22,10 @@
  *                                      pair races already on the site (no source key) with their timing sessions by
  *                                      their cars; --apply re-imports every exact pair in place (same id, URL, name, status)
  *
+ *   npx tsx scripts/intake.ts names --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--apply] [--notes <file>]
+ *                                      rename races with a source key to the naming standard and set each race's
+ *                                      date to its session's day; nothing changes without --apply
+ *
  * Environment (process env, then server/.env.intake, then <repo>/.env.intake):
  *   RACETRACE_API_URL     e.g. https://<api host>   (the "/api" suffix is optional)
  *   RACETRACE_API_TOKEN   rt_… token from Admin → API Tokens (scope "intake"). Never printed.
@@ -46,6 +50,7 @@ import { apiConfigFromEnv, apiRequest, attachCandidates, buildPushBody, compareW
 import { seriesById } from "../src/intake/series.js";
 import { speedhiveOrgFromSession } from "../src/intake/sources/speedhive.js";
 import { candidateSessions, planReimport, type SessionPrint, type SiteRace } from "../src/intake/reimport.js";
+import { identityChange, type IdentityChange } from "../src/intake/standard-name.js";
 import { parserInput } from "../src/intake/parser-input.js";
 import { getParser } from "../src/utils/parsers/index.js";
 import { canonicalSourceKey } from "../src/intake/source-key.js";
@@ -428,18 +433,9 @@ async function sessionPrint(dir: string, m: Manifest): Promise<SessionPrint | nu
   return { cars, maxLap: parsed.data.maxLap };
 }
 
-async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
-  const cfg = apiConfigFromEnv();
-  if (!cfg) throw new UsageError("reimport-plan needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
-  const series = a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"];
-  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
-  const ur = await apiRequest<{ races: SiteRace[] }>(cfg, "GET", "/admin/intake/races?unkeyed=1&cars=1");
-  if (ur.status !== 200) throw new Error(`GET /admin/intake/races?unkeyed=1&cars=1 → HTTP ${ur.status}`);
-  const races = ur.data.races.filter((r) => seasons.includes(r.season));
-  log(`${races.length} race(s) on the site without a source key in ${seasons.join(", ")}`);
-
-  let org = Number(a.one("org") ?? process.env.SPEEDHIVE_WRL_ORG_ID ?? "") || undefined;
-  const h = http();
+/** Every race session of these series and seasons on the timing sites, one per source key. */
+async function discoverSessions(h: ReturnType<typeof http>, series: string[], seasons: number[], orgFlag?: string): Promise<RaceSession[]> {
+  let org = Number(orgFlag ?? process.env.SPEEDHIVE_WRL_ORG_ID ?? "") || undefined;
   if (!org && series.some((x) => x.split(",").includes("wrl-speedhive"))) {
     try {
       org = (await speedhiveOrgFromSession(h, String(KNOWN_WRL_SPEEDHIVE_SESSION))).id ?? undefined;
@@ -460,7 +456,81 @@ async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
       }
     }
   }
-  const uniq = [...new Map(sessions.map((x) => [x.sourceKey, x])).values()];
+  return [...new Map(sessions.map((x) => [x.sourceKey, x])).values()];
+}
+
+/**
+ * names-plan / names: bring every race with a source key in line with its timing session —
+ * one naming standard (standard-name.ts) and the day the race actually ran. Nothing changes
+ * without --apply; ids, links and status are kept.
+ */
+async function cmdNames(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("names needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const series = a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"];
+  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
+  const keyed = (await knownRaces()) ?? [];
+  const h = http();
+  const sessions = new Map((await discoverSessions(h, series, seasons, a.one("org"))).map((s) => [s.sourceKey, s]));
+
+  const changes: IdentityChange[] = [];
+  const missing: KnownRace[] = [];
+  for (const r of keyed) {
+    const s = sessions.get(r.sourceKey);
+    if (!s) {
+      if (r.season === undefined || seasons.includes(r.season)) missing.push(r);
+      continue;
+    }
+    const c = identityChange(
+      { raceId: r.raceId, name: r.name, series: r.series ?? "", track: r.track ?? "", sourceKey: r.sourceKey, date: r.date ?? "", season: r.season ?? s.season },
+      { site: s.site, championship: s.championship, sessionName: s.sessionName, track: s.track, raceDate: s.raceDate, season: s.season }
+    );
+    if (c) changes.push(c);
+  }
+  changes.sort((x, y) => y.to.date.localeCompare(x.to.date));
+
+  const lines = [
+    `NAMES AND DATES: ${changes.length} race(s) to change, ${keyed.length - changes.length - missing.length} already right, ${missing.length} without a session found`,
+    "",
+    "race id | name now → standard name | date now → session date | season",
+    ...changes.map(
+      (c) =>
+        `${c.raceId} | ${c.from.name} → ${c.to.name} | ${c.from.date === c.to.date ? c.to.date : `${c.from.date} → ${c.to.date}`}${c.from.season === c.to.season ? "" : ` | season ${c.from.season} → ${c.to.season}`}`
+    ),
+    ...(missing.length ? ["", "NO SESSION FOUND (left as they are)", ...missing.map((r) => `${r.raceId} | ${r.name} | ${r.sourceKey}`)] : []),
+  ];
+
+  let applied = 0;
+  const failures: string[] = [];
+  if (a.has("apply")) {
+    for (const c of changes) {
+      const res = await apiRequest<any>(cfg, "POST", `/admin/intake/races/${encodeURIComponent(c.raceId)}/identity`, c.to);
+      if (res.status >= 200 && res.status < 300) applied++;
+      else failures.push(`error ${res.status} ${res.data?.code ?? ""} | ${c.raceId} | ${String(res.data?.error ?? "").slice(0, 160)}`);
+    }
+    lines.unshift(`APPLIED: ${applied} renamed or re-dated, ${failures.length} failed`, ...failures, "");
+  }
+  console.log(lines.join("\n"));
+  const notes = a.one("notes");
+  if (notes) {
+    mkdirSync(dirname(notes), { recursive: true });
+    writeFileSync(notes, lines.join("\n") + "\n");
+  }
+  if (failures.length) process.exitCode = 1;
+}
+
+async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("reimport-plan needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const series = a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"];
+  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
+  const ur = await apiRequest<{ races: SiteRace[] }>(cfg, "GET", "/admin/intake/races?unkeyed=1&cars=1");
+  if (ur.status !== 200) throw new Error(`GET /admin/intake/races?unkeyed=1&cars=1 → HTTP ${ur.status}`);
+  const races = ur.data.races.filter((r) => seasons.includes(r.season));
+  log(`${races.length} race(s) on the site without a source key in ${seasons.join(", ")}`);
+
+  const h = http();
+  const uniq = await discoverSessions(h, series, seasons, a.one("org"));
   const cands = candidateSessions(races, uniq);
   log(`${uniq.length} session(s) found; ${cands.length} could be one of those races — fetching them to compare cars`);
 
@@ -707,8 +777,10 @@ async function main() {
       return cmdReimportPlan(a);
     case "analyze":
       return cmdAnalyze(a);
+    case "names":
+      return cmdNames(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, names`);
   }
 }
 
