@@ -18,6 +18,7 @@
  *     day or race length (unless `force`); it is then updated as in 4 and keeps
  *     the source key from then on. Only ever sent by `intake push --attach`.
  */
+import { DRIVER_SEPARATOR } from "../utils/driverNames.js";
 import { z } from "zod";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -96,7 +97,7 @@ export async function insertEntriesAndLaps(tx: Tx, raceId: string, data: RaceDat
       raceId,
       carNumber: car.label ?? String(car.num),
       teamName: car.team,
-      driverNames: "",
+      driverNames: (car.drivers ?? []).join(DRIVER_SEPARATOR),
       carClass: car.cls,
       finishPos: car.finishPos,
       finishPosClass: car.finishPosClass,

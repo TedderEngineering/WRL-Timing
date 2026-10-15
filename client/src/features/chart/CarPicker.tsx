@@ -1,4 +1,4 @@
-import { carNo } from "./car-number";
+import { carMatchesSearch, carNo } from "./car-number";
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { RaceChartData } from "@shared/types";
 
@@ -29,8 +29,7 @@ export function CarPicker({ data, focusNum, selectedNum, onSelect }: CarPickerPr
     return all.filter((c) => {
       if (classFilter !== "All" && c.cls !== classFilter) return false;
       if (search) {
-        const q = search.toLowerCase();
-        return carNo(data, c.num).toLowerCase().includes(q) || c.team.toLowerCase().includes(q);
+        return carMatchesSearch(data, c.num, search);
       }
       return true;
     }).sort((a, b) => a.num - b.num);
@@ -45,7 +44,7 @@ export function CarPicker({ data, focusNum, selectedNum, onSelect }: CarPickerPr
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search car # or team..."
+          placeholder="Search car #, team or driver..."
           className="w-full px-2.5 py-1.5 rounded-md text-xs bg-white/[0.06] border border-white/[0.1] text-white placeholder:text-white/30 outline-none focus:border-white/25"
         />
       </div>

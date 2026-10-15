@@ -11,6 +11,7 @@
 
 import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
+import { uniqueDrivers } from "../driverNames.js";
 import type { RaceDataJson } from "../race-validators.js";
 import type { PitStopTimeCard, PitMarker } from "./position-analysis.js";
 import { generateAnnotations, enrichPitMarkersWithDrivers, buildKnownDrivers } from "./position-analysis.js";
@@ -114,6 +115,7 @@ export const sroParser: RaceDataParser = {
         team,
         cls,
         vehicle: entry?.vehicle,
+        drivers: uniqueDrivers([...(entry?.driverNames ?? []), ...carLaps.map((l) => l.driverName)]),
         ...(normalizeFinishStatus(entry?.status) ? { status: normalizeFinishStatus(entry?.status)! } : {}),
         finishPos: entry?.finishPosition || carLaps[carLaps.length - 1].overallPosition,
         finishPosClass: entry?.classPosition || carLaps[carLaps.length - 1].classPosition,
@@ -148,6 +150,7 @@ export const sroParser: RaceDataParser = {
           team: entry.teamName,
           cls,
           vehicle: entry.vehicle,
+          drivers: uniqueDrivers(entry.driverNames ?? []),
           status,
           finishPos: entry.finishPosition,
           finishPosClass: entry.classPosition,

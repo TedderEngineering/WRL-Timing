@@ -190,6 +190,8 @@ export interface CarData {
   /** The car number as published when it differs from String(num): "4A", "007" (server utils/carNumbers.ts). Show this, never num. */
   label?: string;
   team: string;
+  /** Driver names as the source gives them (newer imports; IMSA also puts surnames in team). */
+  drivers?: string[];
   cls: string;
   make?: string;
   vehicle?: string;

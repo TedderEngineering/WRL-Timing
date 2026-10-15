@@ -19,6 +19,7 @@
 
 import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
+import { uniqueDrivers } from "../driverNames.js";
 import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV, parseControlLogCSV, enrichAnnotationsFromControlLog } from "./csv-utils.js";
@@ -123,6 +124,8 @@ export const speedhiveParser: RaceDataParser = {
     >();
 
     let maxLap = 0;
+    // Driver names per car, when the export has them (RedMist's "Driver", WRL's Driver_Name).
+    const carDrivers = new Map<number, string[]>();
     // RedMist pit report (Flagtronics): authoritative pit stops when the column is present.
     const pitStopIdx = lapsHdr.get("pit stop");
     const reportedPits = new Map<number, Set<number>>();
@@ -165,6 +168,11 @@ export const speedhiveParser: RaceDataParser = {
       });
 
       if (lapNum > maxLap) maxLap = lapNum;
+      const driverName = col(row, lapsHdr, "driver");
+      if (driverName) {
+        if (!carDrivers.has(num)) carDrivers.set(num, []);
+        carDrivers.get(num)!.push(driverName);
+      }
       if (pitStopIdx !== undefined && /^true$/i.test((row[pitStopIdx] ?? "").trim())) {
         if (!reportedPits.has(num)) reportedPits.set(num, new Set());
         reportedPits.get(num)!.add(lapNum);
@@ -276,6 +284,7 @@ export const speedhiveParser: RaceDataParser = {
         num, ...(ids.label(num) ? { label: ids.label(num) } : {}), team: meta.team, cls: meta.cls,
         ...(status ? { status } : {}),
         finishPos: meta.finPos, finishPosClass: meta.finPosCls,
+        ...(carDrivers.has(num) ? { drivers: uniqueDrivers(carDrivers.get(num)!) } : {}),
         laps,
       };
 
