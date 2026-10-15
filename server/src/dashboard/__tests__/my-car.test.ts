@@ -25,6 +25,22 @@ describe("your car's race facts", () => {
     expect(f.bestLap).toEqual({ sec: 99.5, lap: 2 });
     expect(f.bestLapClassRank).toBe(2);
     expect(f.pitCycles).toEqual([{ cycle: 1, lap: 5, before: 2, after: 1, net: 1 }]);
+    // Only two GS cars: too few to rank, so the class benchmarks are the pit-cycle gain alone.
+    expect(f.benchmarks).toEqual(["Gained 1 place over 1 pit cycle in GS"]);
+  });
+
+  it("states pit-loss and fastest-lap ranks in the class top three, never a weak one", () => {
+    const big = structuredClone(data) as any;
+    const pits = (loss: number, l = 3) => ({ pits: [{ l, pitTiming: { totalPitLoss: loss, isDriveThrough: false } }], settles: [] as any[] });
+    big.cars["20"] = { ...big.cars["12"], num: 20, laps: [lap(1, 4, 3, 98.0), lap(2, 4, 3, 99), lap(3, 4, 3, 140, 1)] };
+    big.cars["21"] = { ...big.cars["12"], num: 21, laps: [lap(1, 5, 4, 103), lap(2, 5, 4, 104), lap(3, 5, 4, 150, 1)] };
+    const a: any = { "7": { ...pits(31), settles: ann["7"].settles }, "12": pits(35, 5), "20": pits(40), "21": pits(50) };
+    expect(carFacts(big, a, "7")!.benchmarks).toEqual([
+      "Pit loss 1st of 4 in GS's 1st stops",
+      "Fastest lap 3rd of 4 in GS",
+      "Gained 1 place over 1 pit cycle in GS",
+    ]);
+    expect(carFacts(big, a, "21")!.benchmarks).toEqual([]);
   });
 
   it("gives no position to a disqualified car", () => {

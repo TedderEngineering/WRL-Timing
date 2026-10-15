@@ -899,7 +899,7 @@ export function LapTimeChart({
           style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
         >
           <div className="no-scrollbar flex flex-col gap-3 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
-            <CarSummary data={data} focusNum={focusNum} />
+            <CarSummary data={data} focusNum={focusNum} annotations={annotations} />
             <LapTimeDetails info={info} classView={classView} />
             <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
           </div>

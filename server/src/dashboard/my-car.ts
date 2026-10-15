@@ -39,7 +39,11 @@ interface Settle {
   p: number;
   su: string;
 }
-type Annotations = Record<string, { settles?: Settle[] } | undefined>;
+interface PitMarker {
+  l: number;
+  pitTiming?: { totalPitLoss?: number | null; isDriveThrough?: boolean } | null;
+}
+type Annotations = Record<string, { settles?: Settle[]; pits?: PitMarker[] } | undefined>;
 
 export interface PitCycleResult {
   /** 1-based order of the car's settled cycles. */
@@ -68,6 +72,12 @@ export interface CarFacts {
   /** Only when 1st–3rd in class (no badge for a weak result). */
   bestLapClassRank: number | null;
   pitCycles: PitCycleResult[];
+  /**
+   * Class benchmarks (engagement plan E), as facts: pit loss and fastest lap ranks in the top
+   * three of the class, and places gained over the pit cycles when that is a gain. The same
+   * rules as the race page (client/src/features/chart/benchmarks.ts).
+   */
+  benchmarks: string[];
 }
 
 /** The chart's key for a race entry's number ("007" and "7" are one car). */
@@ -104,6 +114,46 @@ export function classPitCycles(laps: LapRow[], settles: Settle[]): PitCycleResul
   return out;
 }
 
+const ordinal = (n: number) =>
+  `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
+
+function stopLosses(ann: Annotations | null, key: string): (number | null)[] {
+  return [...(ann?.[key]?.pits ?? [])]
+    .filter((p) => p.pitTiming)
+    .sort((a, b) => a.l - b.l)
+    .map((p) => {
+      const t = p.pitTiming!;
+      return !t.isDriveThrough && typeof t.totalPitLoss === "number" && t.totalPitLoss > 0 ? t.totalPitLoss : null;
+    });
+}
+
+export function classBenchmarks(data: ChartData, ann: Annotations | null, key: string, cycles: PitCycleResult[]): string[] {
+  const car = data.cars[key];
+  const classKeys = Object.keys(data.cars).filter((k) => data.cars[k].cls === car.cls);
+  const out: string[] = [];
+  const rankOf = (mine: number, all: number[]) => all.filter((v) => v < mine).length + 1;
+
+  const mine = stopLosses(ann, key);
+  const others = classKeys.map((k) => stopLosses(ann, k));
+  mine.forEach((loss, i) => {
+    if (loss === null) return;
+    const field = others.map((o) => o[i]).filter((v): v is number => typeof v === "number");
+    const rank = rankOf(loss, field);
+    if (field.length >= 3 && rank <= 3) out.push(`Pit loss ${ordinal(rank)} of ${field.length} in ${car.cls}'s ${ordinal(i + 1)} stops`);
+  });
+
+  const best = bestLapOf(car.laps)?.sec;
+  if (best !== undefined) {
+    const field = classKeys.map((k) => bestLapOf(data.cars[k].laps)?.sec).filter((v): v is number => typeof v === "number");
+    const rank = rankOf(best, field);
+    if (field.length >= 3 && rank <= 3) out.push(`Fastest lap ${ordinal(rank)} of ${field.length} in ${car.cls}`);
+  }
+
+  const gained = cycles.reduce((a, c) => a + c.net, 0);
+  if (gained > 0) out.push(`Gained ${gained} place${gained === 1 ? "" : "s"} over ${cycles.length} pit cycle${cycles.length === 1 ? "" : "s"} in ${car.cls}`);
+  return out;
+}
+
 export function carFacts(data: ChartData, ann: Annotations | null, carNumber: string): CarFacts | null {
   const key = chartKeyFor(data, carNumber);
   if (!key) return null;
@@ -124,6 +174,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     bestLapClassRank = rank <= 3 ? rank : null;
   }
 
+  const pitCycles = classPitCycles(car.laps, ann?.[key]?.settles ?? []);
   return {
     carKey: key,
     number: String(car.num ?? key),
@@ -138,7 +189,8 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     raceLaps: data.maxLap,
     bestLap: best,
     bestLapClassRank,
-    pitCycles: classPitCycles(car.laps, ann?.[key]?.settles ?? []),
+    pitCycles,
+    benchmarks: classBenchmarks(data, ann, key, pitCycles),
   };
 }
 

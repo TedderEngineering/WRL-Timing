@@ -4,7 +4,8 @@
  * and the deeper panels.
  */
 import { finishInfo } from "./finish";
-import type { RaceChartData } from "@shared/types";
+import type { AnnotationData, RaceChartData } from "@shared/types";
+import { classBenchmarks } from "./benchmarks";
 import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
 
@@ -43,11 +44,15 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-/** The focus car: number, team, class, vehicle and finish (top of both charts' side panels). */
-export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: number }) {
+/**
+ * The focus car: number, team, class, vehicle and finish (top of both charts' side panels), and
+ * its class benchmarks as facts (top three only; a weak result gets no badge).
+ */
+export function CarSummary({ data, focusNum, annotations = null }: { data: RaceChartData; focusNum: number; annotations?: AnnotationData | null }) {
   const car = data.cars[String(focusNum)];
   const f = finishInfo(data, focusNum);
   if (!car || !f) return null;
+  const marks = classBenchmarks(data, annotations, focusNum);
   const finish =
     f.pos !== null
       ? `Finished P${f.posClass ?? "?"} in ${car.cls} · P${f.pos} overall`
@@ -72,6 +77,19 @@ export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: 
       <div className="text-[13px]" style={{ color: T.muted }}>
         {finish} · {car.laps.length} laps
       </div>
+      {marks.length > 0 && (
+        <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0" aria-label="Class benchmarks">
+          {marks.map((m) => (
+            <li
+              key={m.text}
+              className="rounded-md border px-2 py-0.5 text-[12px]"
+              style={{ borderColor: "rgba(74,222,128,0.35)", color: T.soft, background: "rgba(74,222,128,0.06)" }}
+            >
+              {m.text}
+            </li>
+          ))}
+        </ul>
+      )}
       {(f.changed || (f.pos === null && f.crossed && f.status !== "dnf")) && f.crossed && (
         <div
           className="mt-1 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug"
@@ -89,12 +107,14 @@ export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: 
 
 export function LapDetailsPanel({
   data,
+  annotations = null,
   info,
   focusNum,
   classView,
   onOpen,
 }: {
   data: RaceChartData;
+  annotations?: AnnotationData | null;
   info: LapInfoData | null;
   focusNum: number;
   classView: string;
@@ -118,7 +138,7 @@ export function LapDetailsPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <CarSummary data={data} focusNum={focusNum} />
+      <CarSummary data={data} focusNum={focusNum} annotations={annotations} />
 
       {!lap ? (
         <p className="rounded-lg border p-3 text-[13px]" style={{ background: T.card, borderColor: T.line, color: T.muted }}>

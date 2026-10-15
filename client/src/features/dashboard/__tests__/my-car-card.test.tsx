@@ -46,6 +46,14 @@ describe("your car's latest race", () => {
     expect(t).not.toContain("Share");
   });
 
+  it("shows the class benchmarks the server stated", () => {
+    const t = text(<MyCarCard data={{ ...base, facts: { ...facts, benchmarks: ["Pit loss 2nd of 14 in Silver's 1st stops", "Fastest lap 2nd of 14 in Silver"] } }} />);
+    expect(t).toContain("Pit loss 2nd of 14 in Silver&#x27;s 1st stops");
+    expect(t).toContain("Fastest lap 2nd of 14 in Silver");
+    // The rank then lives in the benchmark, not repeated on the laps line.
+    expect(t).toContain("best lap 1:28.107 on lap 12 ");
+  });
+
   it("leads with the package's car story when there is one", () => {
     const t = text(<MyCarCard data={{ ...base, story: { headline: { text: "{car:68} finished second in {class:Silver}.", refs: [] }, paragraphs: [], cars: { "68": { team: "RAFA Racing Team" } }, classes: { Silver: "Silver" } } }} />);
     expect(t).toContain("#68 finished second in Silver.");

@@ -620,7 +620,7 @@ export function LapChart({
                   These panels are part of the Team plan.
                 </div>
               )}
-              <LapDetailsPanel data={data} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
+              <LapDetailsPanel data={data} annotations={annotations} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
               <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
             </div>
           )}

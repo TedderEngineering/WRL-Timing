@@ -42,6 +42,8 @@ export interface MyCarResponse {
     bestLap: { sec: number; lap: number } | null;
     bestLapClassRank: number | null;
     pitCycles: { cycle: number; lap: number; before: number; after: number; net: number }[];
+    /** Class benchmarks (plan E), facts in the class top three only. */
+    benchmarks?: string[];
   } | null;
   story?: { headline: Prose; paragraphs: Prose[]; cars: ProseContext["cars"]; classes: Record<string, string> } | null;
   viewed?: boolean;
@@ -124,12 +126,26 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
                   {facts.bestLap && (
                     <>
                       {" · "}best lap <span className="font-mono">{formatDuration(facts.bestLap.sec)}</span> on lap {facts.bestLap.lap}
-                      {facts.bestLapClassRank ? `, ${ORDINAL[facts.bestLapClassRank]} in ${facts.cls}` : ""}
+                      {!facts.benchmarks && facts.bestLapClassRank ? `, ${ORDINAL[facts.bestLapClassRank]} in ${facts.cls}` : ""}
                     </>
                   )}
                 </li>
                 {facts.pitCycles.map((c) => (
                   <li key={c.cycle}>{pitCycleLine(c, facts.cls)}</li>
+                ))}
+              </ul>
+            )}
+
+            {facts?.benchmarks && facts.benchmarks.length > 0 && (
+              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Class benchmarks">
+                {facts.benchmarks.map((b) => (
+                  <li
+                    key={b}
+                    className="rounded-md border px-2 py-0.5 text-[12px] text-[var(--rt-text-secondary)]"
+                    style={{ borderColor: "color-mix(in srgb, var(--rt-good) 40%, transparent)", background: "color-mix(in srgb, var(--rt-good) 7%, transparent)" }}
+                  >
+                    {b}
+                  </li>
                 ))}
               </ul>
             )}

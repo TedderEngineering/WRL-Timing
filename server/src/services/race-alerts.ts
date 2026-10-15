@@ -90,6 +90,7 @@ function alertHtml(p: { subject: string; raceName: string; f: CarFacts; raceUrl:
     ...f.pitCycles.map(
       (c) => `Pit cycle ${c.cycle} (settled lap ${c.lap}): P${c.before} → P${c.after} in ${f.cls}, ${c.net > 0 ? `gained ${c.net}` : c.net < 0 ? `lost ${-c.net}` : "held position"}`
     ),
+    ...(f.benchmarks ?? []),
   ].filter(Boolean) as string[];
   const accent = "#F48C34";
   return `
