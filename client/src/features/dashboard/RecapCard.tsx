@@ -404,38 +404,40 @@ export function RecapCard({
       </div>
       {event.races.length > 1 ? (
         <ScrollRow
-          role="tablist"
-          aria-label="Races this weekend"
+          role="navigation"
+          aria-label="Races this weekend: open on Position Trace"
           activeKey={tab}
           className="mt-2.5 border-b border-[var(--rt-border)]"
           innerClassName="gap-1 px-5"
           onKeyDown={(e) => {
-            // Tabs pattern: arrows move between races.
+            // Arrows move between races (previewing each); Enter opens it.
             if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
             e.preventDefault();
             const n = event.races.length;
             const next = (tab + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
             setTab(next);
-            (e.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[next])?.focus();
+            (e.currentTarget.querySelectorAll<HTMLElement>("a")[next])?.focus();
           }}
         >
           {event.races.map((r, i) => (
-            <button
+            // One click opens the race on Position Trace; hovering or focusing a race previews it below.
+            <Link
               key={r.id}
-              type="button"
-              role="tab"
-              aria-selected={i === tab}
+              to={chartHref(r.id)}
+              aria-current={i === tab ? "true" : undefined}
               data-active={i === tab}
               tabIndex={i === tab ? 0 : -1}
-              onClick={() => setTab(i)}
-              className={`min-h-[40px] whitespace-nowrap border-b-2 px-3 text-sm ${
+              onMouseEnter={() => setTab(i)}
+              onFocus={() => setTab(i)}
+              draggable={false}
+              className={`flex min-h-[40px] items-center whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
                 i === tab
                   ? "border-[var(--rt-accent)] font-semibold text-[var(--rt-text)]"
-                  : "border-transparent text-[var(--rt-text-muted)]"
+                  : "border-transparent text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
               }`}
             >
               {r.session}
-            </button>
+            </Link>
           ))}
         </ScrollRow>
       ) : (
