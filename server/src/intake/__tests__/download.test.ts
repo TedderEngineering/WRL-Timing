@@ -174,14 +174,15 @@ describe("push body", () => {
     const routes = Object.fromEntries(Object.entries(files).map(([n, b]) => [`${BASE}/${n}`, { status: 200, body: b }]));
     const dir = join(root, "w");
     const { manifest } = await download(fakeHttp(routes), sroSession(), dir);
-    const { body, skipped } = buildPushBody(dir, manifest);
+    expect(Object.keys(buildPushBody(dir, manifest).body.files)).not.toContain("weatherCsv");
+    const { body, skipped } = buildPushBody(dir, manifest, { includeArchiveOnly: true });
     expect(skipped).toEqual([]);
     expect(Object.keys(body.files).sort()).toEqual(["lapsCsv", "pitStopPdf", "resultsCsv", "weatherCsv"]);
     expect(body.files.pitStopPdf).toBe(`data:application/pdf;base64,${PDF.toString("base64")}`);
     expect(body).toMatchObject({ sourceKey: manifest.sourceKey, sourceVersion: "v1", resultsStatus: "official", format: "sro", metadata: { date: "2026-10-10", series: "SRO", season: 2026 } });
     expect(body.manifest.files.map((f) => f.sha256)).toHaveLength(4);
 
-    const small = buildPushBody(dir, manifest, { maxBytes: 200 });
+    const small = buildPushBody(dir, manifest, { maxBytes: 200, includeArchiveOnly: true });
     expect(Object.keys(small.body.files).sort()).toEqual(["lapsCsv", "pitStopPdf", "resultsCsv"]);
     expect(small.skipped).toEqual(["26_Weather_Race 1.CSV (size cap)"]);
 
