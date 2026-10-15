@@ -21,8 +21,8 @@ describe("season recap timing, series by series", () => {
   it("places a race in its calendar series, or its family's", () => {
     expect(recapSeriesFor(cal, race("a", "2026-10-03", "Road Atlanta", 1))).toBe("imsa-mpc");
     // A WeatherTech race has no calendar of its own: IMSA's family calendar decides.
-    expect(recapSeriesFor(cal, { name: "WeatherTech — Petit Le Mans", date: new Date("2026-10-03"), track: "Road Atlanta", series: "IMSA", subSeries: "WeatherTech" })).toBe("imsa-mpc");
-    expect(recapSeriesFor(cal, { name: "WRL Saturday 8 Hour — Sebring", date: new Date("2026-10-17"), track: "Sebring", series: "WRL", subSeries: null })).toBe("wrl");
+    expect(recapSeriesFor(cal, { id: "w", name: "WeatherTech — Petit Le Mans", date: new Date("2026-10-03"), track: "Road Atlanta", series: "IMSA", subSeries: "WeatherTech" })).toBe("imsa-mpc");
+    expect(recapSeriesFor(cal, { id: "s", name: "WRL Saturday 8 Hour — Sebring", date: new Date("2026-10-17"), track: "Sebring", series: "WRL", subSeries: null })).toBe("wrl");
   });
 
   it("opens IMSA's once its finale is on the site, WRL's not before December", () => {

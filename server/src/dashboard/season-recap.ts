@@ -52,7 +52,7 @@ export interface SeasonRecap {
 }
 
 /** The calendar series a race belongs to, or its family's. */
-export function recapSeriesFor(cal: Calendar, race: { name: string; date: Date; track: string; series: string; subSeries: string | null }): string | null {
+export function recapSeriesFor(cal: Calendar, race: { id: string; name: string; date: Date; track: string; series: string; subSeries: string | null }): string | null {
   const located = locateRace(cal, race);
   if (located) return located.seriesId;
   const fam = raceFamily(race.series, race.subSeries);
