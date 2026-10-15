@@ -51,8 +51,10 @@ export function tidySession(name: string): string {
 
 /** Spelling slips carried in some stored names. */
 const TYPOS: [RegExp, string][] = [
-  // "O^RReilly": an apostrophe that arrived as a control character (Ctrl-R, U+0012), or as "^R".
-  [/[\u0000-\u001f]/g, "'"],
+  // "O\u0092Reilly": a Windows-1252 apostrophe read as the C1 control U+0092 (shown as "^R"),
+  // or any other control character where a quote was meant.
+  [/[\u0000-\u001f\u0091\u0092]/g, "'"],
+  [/[\u0093\u0094]/g, '"'],
   [/\^R/g, "'"],
   [/O'RReilly/g, "O'Reilly"],
   [/\bVirgina\b/g, "Virginia"],
