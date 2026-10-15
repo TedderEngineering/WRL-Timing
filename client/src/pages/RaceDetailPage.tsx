@@ -1,4 +1,5 @@
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
+import { FollowCarButton } from "../features/my-cars/FollowCarButton";
 import { useAuth } from "../features/auth/AuthContext";
 import { useChartData } from "../hooks/useChartData";
 import { LapChart } from "../features/chart/LapChart";
@@ -162,6 +163,18 @@ export function RaceDetailPage() {
       })
       .catch(() => {});
   }, [id, isAuthenticated]);
+
+  // Open on the user's own car rather than the winner, once per race (the user's later picks win).
+  const followFocused = useRef<string | null>(null);
+  const focusFollowed = useCallback(
+    (nums: string[]) => {
+      if (!data || !id || followFocused.current === id || nums.length === 0) return;
+      followFocused.current = id;
+      const n = Number(nums[0]);
+      if (Number.isFinite(n) && data.cars[String(n)]) setFocusNum(n);
+    },
+    [data, id]
+  );
 
   const handleFavorite = async () => {
     if (!id || !isAuthenticated) return;
@@ -408,6 +421,15 @@ export function RaceDetailPage() {
             </span>
           )}
           <span className="flex-1" />
+          {focusNum > 0 && data.cars[String(focusNum)] && (
+            <FollowCarButton
+              raceId={id!}
+              carNumber={String(data.cars[String(focusNum)].num ?? focusNum)}
+              series={raceMeta.series}
+              onFollowed={focusFollowed}
+              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+            />
+          )}
           {isAuthenticated && (
             <button
               type="button"

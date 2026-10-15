@@ -16,7 +16,10 @@ function RaceTraceUserMenu() {
     <UserMenu
       afterLogout="/"
       groups={[
-        [{ label: "Dashboard", to: "/dashboard" }],
+        [
+          { label: "Dashboard", to: "/dashboard" },
+          { label: "My cars", to: "/settings/cars" },
+        ],
         [
           { label: "Settings", to: "/settings/account" },
           { label: "Billing", to: "/settings/billing" },

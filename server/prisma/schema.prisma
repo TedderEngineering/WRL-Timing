@@ -71,6 +71,7 @@ model User {
   preferences         UserPreferences?
   favorites           UserFavorite[]
   raceViews           UserRaceView[]
+  cars                UserCar[]
   createdRaces        Race[]                   @relation("RaceCreator")
   createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
   auditLogs           AuditLog[]
@@ -333,6 +334,33 @@ model UserFavorite {
 
   @@id([userId, raceId])
   @@map("user_favorites")
+}
+
+/// A car a user follows (engagement plan B, "My cars"). A race entry is this car when the
+/// series family and the car number match, and the team too when one is set; numbers change
+/// between seasons, so `season` limits the car to one year (null = any year). Shared with
+/// Finding Grip later (sessions and calculations link to the same car).
+model UserCar {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  /// The user's own name for it ("Dad's Miata"); the number is shown when empty.
+  label      String?
+  number     String
+  /// Series family: "imsa" | "sro" | "wrl".
+  series     String
+  teamName   String?  @map("team_name")
+  carClass   String?  @map("car_class")
+  season     Int?
+  setupCarId String?  @map("setup_car_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setupCar SetupCar? @relation(fields: [setupCarId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([series, number])
+  @@map("user_cars")
 }
 
 model UserRaceView {
@@ -737,6 +765,7 @@ model SetupCar {
   team     SetupTeam      @relation(fields: [teamId], references: [id], onDelete: Cascade)
   model    SetupCarModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
   sessions SetupSession[]
+  followers UserCar[]
 
   @@index([teamId])
   @@index([modelId])

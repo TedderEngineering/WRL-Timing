@@ -29,6 +29,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { AccountSettingsPage } from "./pages/settings/AccountSettingsPage";
 import { PreferencesPage } from "./pages/settings/PreferencesPage";
+import { MyCarsPage } from "./pages/settings/MyCarsPage";
 import { BillingSettingsPage } from "./pages/settings/BillingSettingsPage";
 
 // Admin pages
@@ -206,6 +207,7 @@ export function App() {
           <Route index element={<Navigate to="account" replace />} />
           <Route path="account" element={<AccountSettingsPage />} />
           <Route path="preferences" element={<PreferencesPage />} />
+          <Route path="cars" element={<MyCarsPage />} />
           <Route path="billing" element={<BillingSettingsPage />} />
         </Route>
 

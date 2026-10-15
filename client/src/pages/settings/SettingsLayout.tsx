@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const LINKS = [
   { to: "/settings/account", label: "Account", icon: "👤" },
+  { to: "/settings/cars", label: "My cars", icon: "🏁" },
   { to: "/settings/preferences", label: "Preferences", icon: "⚙️" },
   { to: "/settings/billing", label: "Billing", icon: "💳" },
 ];

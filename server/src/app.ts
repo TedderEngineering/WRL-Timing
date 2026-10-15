@@ -8,6 +8,7 @@ import { apiLimiter } from "./middleware/rate-limit.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { racesRouter } from "./routes/races.js";
+import { meRouter } from "./routes/me.js";
 import { adminRouter } from "./routes/admin.js";
 import { intakeRouter, apiTokensRouter } from "./routes/intake.js";
 import { dashboardRouter } from "./routes/dashboard.js";
@@ -88,6 +89,7 @@ export function createApp() {
   app.use("/api/health", healthRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/races", racesRouter);
+  app.use("/api/me", meRouter);
   app.use("/api/events", eventsRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/site-config", siteConfigRouter);
