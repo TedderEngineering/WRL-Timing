@@ -13,6 +13,7 @@ import { canUserAccessRace } from "../services/races.js";
 import { resolveViewer } from "../services/race-access.js";
 import { packagesEnabledFor } from "../packages/flags.js";
 import { getServedGzip, gunzip } from "../packages/store.js";
+import { withPitFacts } from "../packages/race-pit-facts.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
@@ -281,10 +282,12 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       return;
     }
     const [data, viewed] = await Promise.all([
-      prisma.race.findUnique({ where: { id: race.id }, select: { chartData: true, annotationData: true } }) as Promise<any>,
+      prisma.race
+        .findUnique({ where: { id: race.id }, select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true } })
+        .then((r: any) => (r?.chartData ? withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null)) as Promise<any>,
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
     ]);
-    const facts = data?.chartData ? carFacts(data.chartData, data.annotationData ?? null, carNumber) : null;
+    const facts = data ? carFacts(data.data, data.annotations ?? null, carNumber) : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
     res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts });
   } catch (err) {
@@ -328,7 +331,15 @@ dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Resp
     const done = [...groups.values()].filter((g) => seasonOver(cal, g.seriesId, published, today));
     const ids = [...new Set(done.flatMap((g) => g.races.map((r) => r.race.id)))];
     const charts = new Map(
-      ((await prisma.race.findMany({ where: { id: { in: ids } }, select: { id: true, chartData: true, annotationData: true } })) as any[]).map((r) => [r.id, r])
+      await Promise.all(
+        ((await prisma.race.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true },
+        })) as any[]).map(async (r) => {
+          const c = r.chartData ? await withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null;
+          return [r.id, { chartData: c?.data ?? null, annotationData: c?.annotations ?? null }] as const;
+        })
+      )
     );
     const recaps = [];
     for (const g of done) {

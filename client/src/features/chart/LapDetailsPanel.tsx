@@ -12,6 +12,34 @@ import { TRACE } from "./constants";
 
 const T = { card: "#12122a", line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", good: "#4ade80", bad: "#e66767", warn: "#fab219" };
 
+/** The pit-lane visit's name, from the analysis package when the race has one. */
+export function pitKindLabel(kind: string | undefined, driveThrough: boolean): string {
+  if (kind === "drive_through" || (!kind && driveThrough)) return "▲ Drive-through";
+  if (kind === "stop_and_go") return "■ Stop and go";
+  if (kind === "penalty_served") return "■ Penalty served";
+  if (kind === "garage") return "● Garage visit";
+  if (kind === "retirement") return "✕ Retired in the pits";
+  return "● Pit stop";
+}
+
+/** What time lost is measured against (D-LOSS), in a few words. */
+export function lossBasis(t: { lossMethod?: string; context?: string; avgGreenLapTime: number | null }): string {
+  switch (t.lossMethod) {
+    case "fcy_neighbours":
+      return "against cars on track under the caution";
+    case "fcy_lap_field":
+      return "against the field's caution laps";
+    case "see_group":
+      return "counted with the stop before it";
+    case "none":
+      return "not measurable from the timing";
+    case "green_reference":
+      return t.avgGreenLapTime !== null ? `vs green pace (${sec(t.avgGreenLapTime)})` : "vs green pace";
+    default:
+      return t.avgGreenLapTime !== null ? `vs green pace (${sec(t.avgGreenLapTime)})` : "";
+  }
+}
+
 function sec(s: number | null | undefined): string {
   if (s === null || s === undefined || !Number.isFinite(s)) return "—";
   const sign = s < 0 ? "−" : "";
@@ -179,7 +207,7 @@ export function LapDetailsPanel({
             <article className="flex flex-col gap-2 rounded-lg border p-3" style={{ background: T.card, borderColor: T.line }}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border px-2 text-[11px]" style={{ borderColor: T.text }}>
-                  {t?.isDriveThrough ? "▲ Drive-through" : "● Pit stop"}
+                  {pitKindLabel(pit.kind, !!t?.isDriveThrough)}
                 </span>
                 <span className="font-semibold">
                   {pit.pitLabel}
@@ -203,7 +231,7 @@ export function LapDetailsPanel({
                   <dd className="m-0 font-mono">
                     {sec(t.totalPitLoss)}{" "}
                     <span className="font-sans text-[11px]" style={{ color: T.muted }}>
-                      vs green pace ({sec(t.avgGreenLapTime)})
+                      {lossBasis(t)}
                     </span>
                   </dd>
                 </dl>
@@ -220,7 +248,8 @@ export function LapDetailsPanel({
               )}
               {pitHere && pit.alsoPittingCars?.length ? (
                 <div className="text-[13px]" style={{ color: T.muted }}>
-                  Also in the pits: {pit.alsoPittingCars.map((n) => `#${n}`).join(", ")}
+                  {pit.cycle ? `Also in ${pit.cycle.cls} pit cycle ${pit.cycle.ordinal}` : "Also in the pits"}:{" "}
+                  {pit.alsoPittingCars.map((n) => `#${n}`).join(", ")}
                 </div>
               ) : null}
               <LinkButton onClick={() => onOpen("pit")}>Open the pit cycle</LinkButton>

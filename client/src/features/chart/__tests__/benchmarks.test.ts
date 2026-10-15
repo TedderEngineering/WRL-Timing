@@ -55,3 +55,31 @@ describe("class benchmarks", () => {
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd"]);
   });
 });
+
+describe("benchmarks from the analysis package's pit facts", () => {
+  // Same race, now with class pit cycles: #1 and #3 in GS cycle 1, #2 and #4 in GS cycle 2 (a
+  // second cycle ten laps later in a real race). #4 stopped under a caution.
+  const withCycle = (a: any, id: string, ordinal: number, context = "green") => ({
+    ...a,
+    pits: a.pits.map((p: any) => ({ ...p, cycle: { id, ordinal, cls: "GS" }, pitTiming: { ...p.pitTiming, context } })),
+    settles: a.settles.map((s: any) => ({ ...s, cpBefore: 3, cpAfter: 1 })),
+  });
+  const facts = {
+    ...ann,
+    "1": withCycle(ann["1"], "c1", 1),
+    "2": withCycle(ann["2"], "c2", 2),
+    "3": withCycle(ann["3"], "c1", 1),
+    "4": withCycle(ann["4"], "c2", 2, "fcy"),
+  } as unknown as AnnotationData;
+
+  it("ranks a stop within its class pit cycle, and only green stops", () => {
+    // Cycle 1 has two green stops, cycle 2 one: no field of three anywhere.
+    expect(classBenchmarks(data, facts, 1).filter((b) => b.kind === "pit_loss")).toEqual([]);
+    const three = { ...facts, "2": withCycle(ann["2"], "c1", 1) } as unknown as AnnotationData;
+    expect(classBenchmarks(data, three, 1).find((b) => b.kind === "pit_loss")?.text).toBe("Pit loss 1st of 3 in GS pit cycle 1");
+  });
+
+  it("counts places gained from the class positions the package gives", () => {
+    expect(classBenchmarks(data, facts, 1).find((b) => b.kind === "pit_cycles")?.text).toBe("Gained 2 places over 1 pit cycle in GS");
+  });
+});

@@ -38,10 +38,15 @@ interface Settle {
   l: number;
   p: number;
   su: string;
+  /** From the race's analysis package: class positions before the stop and after the cycle closed. */
+  cpBefore?: number;
+  cpAfter?: number;
 }
 interface PitMarker {
   l: number;
-  pitTiming?: { totalPitLoss?: number | null; isDriveThrough?: boolean } | null;
+  pitTiming?: { totalPitLoss?: number | null; isDriveThrough?: boolean; context?: string } | null;
+  /** The class pit cycle, from the analysis package. */
+  cycle?: { id: string; ordinal: number } | null;
 }
 type Annotations = Record<string, { settles?: Settle[]; pits?: PitMarker[] } | undefined>;
 
@@ -104,6 +109,10 @@ function bestLapOf(laps: LapRow[]): { sec: number; lap: number } | null {
 export function classPitCycles(laps: LapRow[], settles: Settle[]): PitCycleResult[] {
   const out: PitCycleResult[] = [];
   for (const s of settles) {
+    if (typeof s.cpBefore === "number" && typeof s.cpAfter === "number") {
+      out.push({ cycle: out.length + 1, lap: s.l, before: s.cpBefore, after: s.cpAfter, net: s.cpBefore - s.cpAfter });
+      continue;
+    }
     const at = laps.find((l) => l.l === s.l);
     const was = Number(/Was P(\d+)/.exec(s.su)?.[1]);
     const stop = [...laps].reverse().find((l) => l.l < s.l && l.pit === 1);
@@ -117,14 +126,18 @@ export function classPitCycles(laps: LapRow[], settles: Settle[]): PitCycleResul
 const ordinal = (n: number) =>
   `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
 
-function stopLosses(ann: Annotations | null, key: string): (number | null)[] {
-  return [...(ann?.[key]?.pits ?? [])]
-    .filter((p) => p.pitTiming)
-    .sort((a, b) => a.l - b.l)
-    .map((p) => {
-      const t = p.pitTiming!;
-      return !t.isDriveThrough && typeof t.totalPitLoss === "number" && t.totalPitLoss > 0 ? t.totalPitLoss : null;
-    });
+/**
+ * A stop's time lost when it can be ranked: a stop (not a drive-through) under green, as time
+ * lost under a caution is measured against other cars, not green pace.
+ */
+function rankableLoss(p: PitMarker): number | null {
+  const t = p.pitTiming;
+  if (!t || t.isDriveThrough || (t.context && t.context !== "green")) return null;
+  return typeof t.totalPitLoss === "number" && t.totalPitLoss > 0 ? t.totalPitLoss : null;
+}
+
+function stopsWithTiming(ann: Annotations | null, key: string): PitMarker[] {
+  return [...(ann?.[key]?.pits ?? [])].filter((p) => p.pitTiming).sort((a, b) => a.l - b.l);
 }
 
 export function classBenchmarks(data: ChartData, ann: Annotations | null, key: string, cycles: PitCycleResult[]): string[] {
@@ -133,13 +146,20 @@ export function classBenchmarks(data: ChartData, ann: Annotations | null, key: s
   const out: string[] = [];
   const rankOf = (mine: number, all: number[]) => all.filter((v) => v < mine).length + 1;
 
-  const mine = stopLosses(ann, key);
-  const others = classKeys.map((k) => stopLosses(ann, k));
-  mine.forEach((loss, i) => {
+  const mine = stopsWithTiming(ann, key);
+  const others = classKeys.map((k) => stopsWithTiming(ann, k));
+  mine.forEach((stop, i) => {
+    const loss = rankableLoss(stop);
     if (loss === null) return;
-    const field = others.map((o) => o[i]).filter((v): v is number => typeof v === "number");
+    // The class pit cycle when the package gives one, else the class's same stop (1st, 2nd…).
+    const cycle = stop.cycle;
+    const field = (cycle ? others.map((o) => o.find((p) => p.cycle?.id === cycle.id)) : others.map((o) => o[i]))
+      .map((p) => (p ? rankableLoss(p) : null))
+      .filter((v): v is number => typeof v === "number");
     const rank = rankOf(loss, field);
-    if (field.length >= 3 && rank <= 3) out.push(`Pit loss ${ordinal(rank)} of ${field.length} in ${car.cls}'s ${ordinal(i + 1)} stops`);
+    if (field.length >= 3 && rank <= 3) {
+      out.push(`Pit loss ${ordinal(rank)} of ${field.length} in ${cycle ? `${car.cls} pit cycle ${cycle.ordinal}` : `${car.cls}'s ${ordinal(i + 1)} stops`}`);
+    }
   });
 
   const best = bestLapOf(car.laps)?.sec;

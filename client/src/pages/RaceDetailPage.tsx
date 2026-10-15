@@ -37,7 +37,7 @@ export function RaceDetailPage() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const autoLoadAttempted = useRef(false);
   const { isAuthenticated, user } = useAuth();
-  const { data, annotations, raceMeta, isLoading, error } = useChartData(id);
+  const { data, annotations, raceMeta, pitFacts, isLoading, error } = useChartData(id);
   // Derive event ID from URL param or from the loaded race metadata
   const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
@@ -500,6 +500,12 @@ export function RaceDetailPage() {
         })}
       </nav>
 
+      {pitFacts && user?.role === "ADMIN" && searchParams.get("facts") && (
+        <div className="mx-3 mt-3 inline-flex shrink-0 items-center gap-2 self-start rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
+          Admin preview: pit facts from analysis package v{pitFacts.version} ({pitFacts.status}), {pitFacts.matched} cars matched. Visitors see the
+          published package, or the import's own pit analysis when there is none.
+        </div>
+      )}
       {lockedMsg && (
         <div className="mx-3 mt-3 inline-flex shrink-0 items-center gap-2 self-start rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
           This view is part of the Team plan.{" "}

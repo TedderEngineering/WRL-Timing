@@ -21,10 +21,13 @@ const FLAG_COLORS: Record<string, string> = {
   "RED": "#ef4444",
 };
 
-function secToDisplay(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = sec - m * 60;
-  return m > 0 ? `${m}:${s.toFixed(2).padStart(5, "0")}` : s.toFixed(2);
+function secToDisplay(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined || !Number.isFinite(sec)) return "—";
+  const sign = sec < 0 ? "−" : "";
+  const a = Math.abs(sec);
+  const m = Math.floor(a / 60);
+  const s = a - m * 60;
+  return m > 0 ? `${sign}${m}:${s.toFixed(2).padStart(5, "0")}` : `${sign}${s.toFixed(2)}`;
 }
 
 export function DataPanel({ info, focusNum, compSet, data, navPrev, navNext, setSidePanel }: DataPanelProps) {

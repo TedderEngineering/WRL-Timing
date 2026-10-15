@@ -135,6 +135,18 @@ export function settleLabels(settles: SettleMarker[], laps: LapData[], classView
       continue;
     }
     if (!at) continue;
+    if (typeof sp.cpBefore === "number" && typeof sp.cpAfter === "number") {
+      // From the analysis package: class positions before the stop and when the cycle closed.
+      const net = sp.cpBefore - sp.cpAfter;
+      out.push({
+        lap: sp.l,
+        pos: sp.cpAfter,
+        title: `Settled P${sp.cpAfter} in ${classView}`,
+        sub: `Was P${sp.cpBefore} · ${net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held"}`,
+        color: net > 0 ? TRACE.gain : net < 0 ? TRACE.loss : "#888888",
+      });
+      continue;
+    }
     const was = Number(/Was P(\d+)/.exec(sp.su)?.[1]);
     const stop = [...laps].reverse().find((l) => l.l < sp.l && l.pit === 1);
     const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;

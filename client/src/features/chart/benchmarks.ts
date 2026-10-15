@@ -39,9 +39,12 @@ export function bestGreenLap(laps: LapData[]): number | null {
 /** 1 + the number of values strictly better (lower); ties share the better rank. */
 const rankOf = (mine: number, all: number[]) => all.filter((v) => v < mine).length + 1;
 
-/** A stop's time lost in the pit lane, when it is a normal stop (not a drive-through). */
-function stopLoss(t: { totalPitLoss?: number | null; isDriveThrough?: boolean } | undefined): number | null {
-  if (!t || t.isDriveThrough) return null;
+/**
+ * A stop's time lost, when it can be ranked: a normal stop (not a drive-through) under green.
+ * Under a caution the package measures time lost against cars on track, not green pace.
+ */
+function stopLoss(t: { totalPitLoss?: number | null; isDriveThrough?: boolean; context?: string } | undefined): number | null {
+  if (!t || t.isDriveThrough || (t.context && t.context !== "green")) return null;
   const v = t.totalPitLoss;
   return typeof v === "number" && v > 0 ? v : null;
 }
@@ -51,9 +54,13 @@ function stopLoss(t: { totalPitLoss?: number | null; isDriveThrough?: boolean } 
  * held its pre-cycle overall position, after = class position where the cycle settled (the
  * chart's class view, pit-band.ts settleLabels).
  */
-export function classCycleNets(laps: LapData[], settles: { l: number; su: string }[]): number[] {
+export function classCycleNets(laps: LapData[], settles: { l: number; su: string; cpBefore?: number; cpAfter?: number }[]): number[] {
   const out: number[] = [];
   for (const s of settles) {
+    if (typeof s.cpBefore === "number" && typeof s.cpAfter === "number") {
+      out.push(s.cpBefore - s.cpAfter);
+      continue;
+    }
     const at = laps.find((l) => l.l === s.l);
     const was = Number(/Was P(\d+)/.exec(s.su)?.[1]);
     const stop = [...laps].reverse().find((l) => l.l < s.l && l.pit === 1);
@@ -69,18 +76,26 @@ export function classBenchmarks(data: RaceChartData, annotations: AnnotationData
   const classCars = (data.classGroups[car.cls] ?? Object.keys(data.cars).map(Number)).filter((n) => data.cars[String(n)]?.cls === car.cls);
   const out: Benchmark[] = [];
 
-  // Pit loss in each of the car's stops against the class's same stop.
+  // Pit loss in each of the car's stops against its class pit cycle (from the analysis package),
+  // or, without one, against the class's same stop. Server: dashboard/my-car.ts classBenchmarks.
   if (annotations) {
     const mine = stopsOf(data, annotations, carNum);
+    const others = classCars.map((n) => stopsOf(data, annotations, n));
     mine.forEach((s, i) => {
       const loss = stopLoss(s.timing);
       if (loss === null) return;
-      const field = classCars
-        .map((n) => stopLoss(stopsOf(data, annotations, n)[i]?.timing))
+      const cycle = s.cycle;
+      const field = (cycle ? others.map((o) => o.find((x) => x.cycle?.id === cycle.id)) : others.map((o) => o[i]))
+        .map((x) => stopLoss(x?.timing))
         .filter((v): v is number => v !== null);
       if (field.length < MIN_FIELD) return;
       const rank = rankOf(loss, field);
-      if (rank <= TOP) out.push({ kind: "pit_loss", text: `Pit loss ${ordinal(rank)} of ${field.length} in ${car.cls}'s ${ordinal(i + 1)} stops` });
+      if (rank <= TOP) {
+        out.push({
+          kind: "pit_loss",
+          text: `Pit loss ${ordinal(rank)} of ${field.length} in ${cycle ? `${car.cls} pit cycle ${cycle.ordinal}` : `${car.cls}'s ${ordinal(i + 1)} stops`}`,
+        });
+      }
     });
   }
 

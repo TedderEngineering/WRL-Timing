@@ -79,6 +79,8 @@ export interface PitInfoData {
   strategyTarget?: string;
   timing: PitTimingData | null;
   alsoPittingCars?: number[];
+  kind?: PitMarker["kind"];
+  cycle?: PitMarker["cycle"];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -798,6 +800,8 @@ export function buildLapInfo(
         strategyType: marker.strategyType,
         timing: marker.pitTiming ?? null,
         alsoPittingCars: marker.alsoPittingCars,
+        kind: marker.kind,
+        cycle: marker.cycle,
       };
     }
   }

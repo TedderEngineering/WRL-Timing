@@ -22,6 +22,15 @@ export function packagesEnabledFor(race: { packagesDisabled?: boolean | null }):
   return packagesFlagOn() && race.packagesDisabled !== true;
 }
 
+/**
+ * RACETRACE_PIT_FACTS=on|off (default on): the chart, Your car and the emails take their pit
+ * facts from the race's published package (pit-facts.ts). Separate from RACETRACE_PACKAGES,
+ * which switches the whole race page to the package.
+ */
+export function pitFactsFlagOn(): boolean {
+  return (process.env.RACETRACE_PIT_FACTS ?? "on").trim().toLowerCase() !== "off";
+}
+
 /** RACETRACE_RULE_FLAGS=R0|R1|R2 (GUI_SYSTEM_SPEC OD-3). Unknown values fall back to R0. */
 export function ruleFlagsStage(): RuleFlagsStage {
   const v = (process.env.RACETRACE_RULE_FLAGS ?? "R0").trim().toUpperCase();
