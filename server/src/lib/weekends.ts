@@ -83,6 +83,9 @@ export const CHAMPIONSHIP_WORDS: [RegExp, string][] = [
   [/airbnb endurance/i, "Airbnb Endurance Challenge"],
 ];
 
+/** The labels themselves, longest first, plus WRL (the standard names start with one). */
+const STANDARD_LABELS = [...new Set([...CHAMPIONSHIP_WORDS.map(([, l]) => l), "WRL"])].sort((a, b) => b.length - a.length);
+
 /**
  * The championship from a timing-site source key: its championship folder only, because the
  * event folder can hold a sponsor's name ("WeatherTech Raceway Laguna Seca").
@@ -121,8 +124,15 @@ export function raceLabel(name: string, series: string, sourceKey?: string | nul
   // sanctioning prefix) is taken out: "IMSA VPRC Race 1" → "Race 1"; "Porsche Carrera Cup" → "".
   let championship: string | null = null;
   let remainder = head;
-  const inName = CHAMPIONSHIP_WORDS.find(([re]) => re.test(head));
-  if (inName) {
+  // A name already in the standard form starts with the championship's own label
+  // ("GT4 America Race 1", "WRL Saturday 8 Hour"): take it off whole.
+  const lower = head.toLowerCase();
+  const asLabel = STANDARD_LABELS.find((l) => lower === l.toLowerCase() || lower.startsWith(`${l.toLowerCase()} `));
+  const inName = asLabel ? null : CHAMPIONSHIP_WORDS.find(([re]) => re.test(head));
+  if (asLabel) {
+    championship = asLabel;
+    remainder = head.slice(asLabel.length).trim();
+  } else if (inName) {
     championship = inName[1];
     remainder = head.replace(new RegExp(inName[0].source, "gi"), " ");
     remainder = remainder.replace(/\b(IMSA|Porsche|Lamborghini|Ford|Mazda|Whelen|Pirelli|Toyota|Challenge|Cup|North America)\b/gi, " ");
@@ -139,7 +149,7 @@ export function raceLabel(name: string, series: string, sourceKey?: string | nul
     return x;
   };
   let title: string;
-  if (inName) title = remainder ? tidy(remainder) : eventName ?? "Race";
+  if (asLabel || inName) title = remainder ? tidy(remainder) : eventName ?? "Race";
   else title = tidy(head);
   return { championship, title, eventName };
 }
