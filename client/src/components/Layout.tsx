@@ -56,6 +56,11 @@ function MobileMenu() {
       {open && (
         <div className="absolute top-16 left-0 right-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-lg z-50">
           <nav className="container-page py-4 flex flex-col gap-2">
+            {isAuthenticated && (
+              <Link to="/dashboard" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
+                Dashboard
+              </Link>
+            )}
             <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
               Events
             </Link>
@@ -68,9 +73,6 @@ function MobileMenu() {
 
             {isAuthenticated ? (
               <>
-                <Link to="/dashboard" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
-                  Dashboard
-                </Link>
                 {user?.role === "ADMIN" && (
                   <Link to="/admin" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
                     Admin
@@ -148,8 +150,8 @@ export function Layout() {
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-4">
-              <NavItem to="/races" label="Events" />
               {isAuthenticated && <NavItem to="/dashboard" label="Dashboard" />}
+              <NavItem to="/races" label="Events" />
               {user?.role === "ADMIN" && <NavItem to="/admin" label="Admin" />}
               {!isAuthenticated && !isFreeMode() && (
                 <Link
