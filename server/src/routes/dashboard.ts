@@ -55,7 +55,8 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
     const rows = (await prisma.race.findMany({
       where: { status: "PUBLISHED" },
       orderBy: [{ date: "desc" }, { name: "asc" }],
-      take: limit * 6,
+      // Enough rows for `limit` weekends even when each holds ten races (IMSA, SRO).
+      take: limit * 10,
       select: {
         id: true,
         name: true,

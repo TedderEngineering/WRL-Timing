@@ -35,7 +35,7 @@ export function DashboardPage() {
     let alive = true;
     (async () => {
       const [latestRes, seasonRes, recentRes, favRes] = await Promise.allSettled([
-        api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=6"),
+        api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
         api.get<SeasonResponse>("/dashboard/season"),
         api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
         api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
@@ -77,8 +77,10 @@ export function DashboardPage() {
   }, []);
 
   const continueRace = recent[0] ?? null;
-  // Every weekend gets the same card (race tabs, one click to Position Trace); only the first is the hero.
-  const cards = events ?? [];
+  // The two latest weekends get the full card with the recap; earlier ones a smaller card in a
+  // grid, with the same race tabs and one click to Position Trace.
+  const cards = (events ?? []).slice(0, 2);
+  const earlier = (events ?? []).slice(2);
 
   return (
     <div className="container-page py-6 text-left text-[var(--rt-text)] lg:py-8">
@@ -225,6 +227,18 @@ export function DashboardPage() {
                   variant={i === 0 ? "hero" : "compact"}
                 />
               ))}
+              {earlier.length > 0 && (
+                <section aria-labelledby="earlier-races" className="mt-4 flex flex-col gap-3">
+                  <h2 id="earlier-races" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
+                    Earlier races
+                  </h2>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {earlier.map((ev) => (
+                      <RecapCard key={ev.key} event={ev} variant="mini" />
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
 
