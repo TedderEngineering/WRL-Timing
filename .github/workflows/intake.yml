@@ -16,6 +16,8 @@
 #                     Circuit of the Americas") and the day it ran from its timing session.
 #                     Nothing is written.
 #   mode = names      the same, then renames and re-dates those races (same id, link and status).
+#   mode = refresh    pulls every race that already has a source key again and re-imports it in
+#                     place (same id, link, name and status), so a parser change reaches older races.
 #   mode = import     also pulls those sessions and pushes them to RaceTrace as drafts.
 #                     New sessions that may be a race already on the site (an older
 #                     upload without a source key) are skipped and listed, unless the
@@ -48,12 +50,12 @@ on:
         required: false
         default: ""
       mode:
-        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place; analyze = facts + rule checks as draft packages; names-plan = list race names/dates to standardise; names = apply them"
+        description: "discover = list; import = new/changed races as drafts; reimport-plan = pair races on the site with their sessions; reimport = re-import the exact pairs in place; analyze = facts + rule checks as draft packages; names-plan = list race names/dates to standardise; names = apply them; refresh = re-import every keyed race in place (after a parser change)"
         type: choice
-        options: [discover, import, reimport-plan, reimport, analyze, names-plan, names]
+        options: [discover, import, reimport-plan, reimport, analyze, names-plan, names, refresh]
         default: discover
       limit:
-        description: "analyze only: at most this many races per run (newest first); empty = all"
+        description: "analyze / refresh: at most this many races per run (newest first); empty = all"
         required: false
         default: ""
       approve:
@@ -188,6 +190,34 @@ jobs:
             const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
             parts.slice(0, 10).forEach((p, i) => console.log(`::notice title=${title} ${i + 1}/${Math.min(parts.length, 10)}${parts.length > 10 ? " (more in the job summary)" : ""}::` + enc(p)));
           ' "$f" "$title"
+          exit $status
+
+      - name: Refresh (re-import keyed races in place)
+        if: inputs.mode == 'refresh'
+        env:
+          SERIES: ${{ inputs.series }}
+          SEASON: ${{ inputs.season }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          args=(--series "$SERIES" --season "$SEASON")
+          [ -n "$LIMIT" ] && args+=(--limit "$LIMIT")
+          status=0
+          npx tsx scripts/intake.ts refresh "${args[@]}" > "$RUNNER_TEMP/refresh.txt" 2> "$RUNNER_TEMP/refresh.log" || status=1
+          tail -n 40 "$RUNNER_TEMP/refresh.log"
+          cat "$RUNNER_TEMP/refresh.txt"
+          node -e '
+            const fs = require("fs");
+            const t = fs.readFileSync(process.argv[1], "utf8").split("\n");
+            const log = fs.readFileSync(process.argv[2], "utf8").split("\n").filter((l) => /HTTP \d{3}|ERROR/.test(l));
+            const counts = {};
+            for (const l of t.slice(1)) { const k = l.trim().split(/\s{2,}/)[0]; if (k) counts[k] = (counts[k] || 0) + 1; }
+            const body = [`REFRESH: ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(", ")}`, "", "ERRORS", ...log, "", ...t];
+            const parts = []; let cur = "";
+            for (const l of body) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+            if (cur.trim()) parts.push(cur);
+            const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+            parts.slice(0, 8).forEach((p, i) => console.log(`::notice title=Refresh ${i + 1}/${Math.min(parts.length, 8)}::` + enc(p)));
+          ' "$RUNNER_TEMP/refresh.txt" "$RUNNER_TEMP/refresh.log"
           exit $status
 
       - name: Discover

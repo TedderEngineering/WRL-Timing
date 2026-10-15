@@ -22,6 +22,8 @@
  *                                      pair races already on the site (no source key) with their timing sessions by
  *                                      their cars; --apply re-imports every exact pair in place (same id, URL, name, status)
  *
+ *   npx tsx scripts/intake.ts refresh [--series …] [--season 2025,2026] [--limit N]   pull every keyed race again
+ *                                      and push it with force (a parser change reaching older imports)
  *   npx tsx scripts/intake.ts names --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--apply] [--notes <file>]
  *                                      rename races with a source key to the naming standard and set each race's
  *                                      date to its session's day; nothing changes without --apply
@@ -37,7 +39,7 @@
  *
  * Exit codes: 0 ok · 1 error · 2 usage · 3 a pipeline step is not on this branch.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -529,6 +531,51 @@ async function cmdNames(a: ReturnType<typeof parseArgs>) {
   if (failures.length) process.exitCode = 1;
 }
 
+/**
+ * refresh: pull every race that already has a source key again and push it with force, so a
+ * parser change reaches races imported before it (e.g. the finishing status of each car).
+ * Same id, link, name and status; nothing is created.
+ */
+async function cmdRefresh(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("refresh needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const series = a.flags.series ?? ["imsa-*", "sro-*", "wrl", "wrl-speedhive"];
+  const sites = sitesFor(series);
+  const seasons = (a.one("season") ?? "2025,2026").split(",").map((x) => Number(x.trim())).filter(Number.isInteger);
+  const limit = Number(a.one("limit") ?? "") || Infinity;
+  const keyed = ((await knownRaces()) ?? [])
+    .filter((r) => sites.has(r.sourceKey.split(":")[0]) && (r.season === undefined || seasons.includes(r.season)))
+    .sort((x, y) => (y.date ?? "").localeCompare(x.date ?? ""))
+    .slice(0, limit);
+  log(`${keyed.length} race(s) to refresh`);
+  const h = http();
+  const rows = [["ACTION", "RACE", "RESULTS", "WARNINGS", "DIR"]];
+  let failed = 0;
+  for (const [i, r] of keyed.entries()) {
+    log(`[${i + 1}/${keyed.length}] ${r.date ?? ""} ${r.name}`);
+    try {
+      const s = await resolve(h, r.sourceKey);
+      const dir = workDirFor(WORK, s.sourceKey);
+      const { manifest: m } = await download(h, s, dir, { log: () => undefined });
+      const { body } = buildPushBody(dir, m, { force: true });
+      const res = await apiRequest<any>(cfg, "POST", "/admin/intake/races", body);
+      if (res.status >= 200 && res.status < 300) rows.push([res.data.action, r.raceId, body.resultsStatus, String((res.data.warnings ?? []).length), r.name]);
+      else {
+        failed++;
+        log(`  ${r.name}: HTTP ${res.status} ${res.data?.code ?? ""}: ${String(res.data?.error ?? "").slice(0, 300)}`);
+        rows.push([`error ${res.status}`, r.raceId, res.data?.code ?? "-", "-", r.name]);
+      }
+      rmSync(dir, { recursive: true, force: true }); // keep the runner's disk small
+    } catch (e) {
+      failed++;
+      log(`  ${r.name}: ERROR ${(e as Error).message}`);
+      rows.push(["error", r.raceId, "-", "-", r.name]);
+    }
+  }
+  console.log(table(rows));
+  if (failed) process.exitCode = 1;
+}
+
 async function cmdReimportPlan(a: ReturnType<typeof parseArgs>) {
   const cfg = apiConfigFromEnv();
   if (!cfg) throw new UsageError("reimport-plan needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
@@ -789,8 +836,10 @@ async function main() {
       return cmdAnalyze(a);
     case "names":
       return cmdNames(a);
+    case "refresh":
+      return cmdRefresh(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, names`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, names, refresh`);
   }
 }
 

@@ -3,6 +3,7 @@
  * on a phone): the focus car, the selected lap, its pit stop, what changed,
  * and the deeper panels.
  */
+import { finishInfo } from "./finish";
 import type { RaceChartData } from "@shared/types";
 import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
@@ -45,8 +46,16 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
 /** The focus car: number, team, class, vehicle and finish (top of both charts' side panels). */
 export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: number }) {
   const car = data.cars[String(focusNum)];
-  if (!car) return null;
-  const finish = car.finishPos && car.finishPos < 999 ? `P${car.finishPosClass} in ${car.cls} · P${car.finishPos} overall` : car.status || "Not classified";
+  const f = finishInfo(data, focusNum);
+  if (!car || !f) return null;
+  const finish =
+    f.pos !== null
+      ? `Finished P${f.posClass ?? "?"} in ${car.cls} · P${f.pos} overall`
+      : f.status === "dsq"
+        ? "Disqualified"
+        : f.status === "dns"
+          ? "Did not start"
+          : f.official;
   return (
     <div className="flex flex-col gap-1">
       <div className="font-semibold">
@@ -61,8 +70,19 @@ export function CarSummary({ data, focusNum }: { data: RaceChartData; focusNum: 
         </div>
       )}
       <div className="text-[13px]" style={{ color: T.muted }}>
-        Finished {finish} · {car.laps.length} laps
+        {finish} · {car.laps.length} laps
       </div>
+      {(f.changed || (f.pos === null && f.crossed && f.status !== "dnf")) && f.crossed && (
+        <div
+          className="mt-1 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug"
+          style={{ borderColor: "rgba(250,178,25,0.45)", color: T.soft, background: "rgba(250,178,25,0.06)" }}
+        >
+          Crossed the line <b className="font-mono">P{f.crossed.pos}</b>
+          {f.crossed.lap < data.maxLap ? ` on lap ${f.crossed.lap}` : ""} · official result{" "}
+          <b className="font-mono">{f.official}</b>. The result changed after the race (a penalty,
+          an exclusion or a red-flag count-back); the trace shows the order on track.
+        </div>
+      )}
     </div>
   );
 }

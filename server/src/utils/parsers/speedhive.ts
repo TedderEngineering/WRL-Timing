@@ -17,6 +17,7 @@
  * the lap-time pit detection.
  */
 
+import { normalizeFinishStatus } from "../finish-status.js";
 import type { RaceDataParser } from "./types.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV, parseControlLogCSV, enrichAnnotationsFromControlLog } from "./csv-utils.js";
@@ -76,7 +77,7 @@ export const speedhiveParser: RaceDataParser = {
 
     const carMeta = new Map<
       number,
-      { team: string; cls: string; finPos: number; finPosCls: number }
+      { team: string; cls: string; finPos: number; finPosCls: number; status?: string }
     >();
 
     for (let i = 1; i < summaryRows.length; i++) {
@@ -89,6 +90,7 @@ export const speedhiveParser: RaceDataParser = {
         cls: col(row, summaryHdr, "class") || "Unknown",
         finPos: parseInt(col(row, summaryHdr, "position"), 10) || 999,
         finPosCls: parseInt(col(row, summaryHdr, "position in class"), 10) || 999,
+        status: normalizeFinishStatus(col(row, summaryHdr, "status")) ?? undefined,
       });
     }
 
@@ -260,8 +262,10 @@ export const speedhiveParser: RaceDataParser = {
         continue;
       }
 
+      const status = carMeta.get(num)?.status;
       cars[String(num)] = {
         num, team: meta.team, cls: meta.cls,
+        ...(status ? { status } : {}),
         finishPos: meta.finPos, finishPosClass: meta.finPosCls,
         laps,
       };
