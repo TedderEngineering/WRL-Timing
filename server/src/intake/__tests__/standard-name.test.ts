@@ -26,6 +26,25 @@ describe("standard race names", () => {
     );
   });
 
+  it("fixes the names the October plan got wrong, and gives the same answer twice", () => {
+    const cases: [SessionIdentity, ReturnType<typeof cur>, string][] = [
+      [sess("redmist", "WRL", "Mid-Ohio - Sunday - 7 hour", "Mid-Ohio"), cur("WRL - Mid-Ohio - 8+7 — Mid-Ohio - Sunday - 7 hour", "WRL", "Mid-Ohio Sports Car Course"), "WRL Sunday 7 Hour — Mid-Ohio Sports Car Course"],
+      [sess("redmist", "WRL", "Barber - Saturday - 8 Hour", "Barber Motorsports Park"), cur("WRL - Barber Motorsports Park - 8+7 — Barber - Saturday - 8 Hour", "WRL", "Barber Motorsports Park"), "WRL Saturday 8 Hour — Barber Motorsports Park"],
+      [sess("redmist", "WRL", "WRL - High Plains - 13 Hour", "High Plains Raceway"), cur("WRL - High Plains Raceway - 13 — WRL - High Plains - 13 Hour", "WRL", "High Plains Raceway"), "WRL 13 Hour — High Plains Raceway"],
+      [sess("imsa", "11_Historic Sportscar Racing", "Race", "Daytona International Speedway"), cur("Historic Sportscar Racing Race — Daytona International Speedway", "IMSA", "Daytona International Speedway"), "HSR — Daytona International Speedway"],
+      [sess("sro", "07_IGTC Indianapolis 8 Hour", "Race", "Indianapolis Motor Speedway RC"), cur("IGTC Indianapolis 8 Hour Race — Indianapolis Motor Speedway RC", "SRO", "Indianapolis Motor Speedway RC"), "Indianapolis 8 Hour — Indianapolis Motor Speedway"],
+      [sess("sro", "07_IGTC Indianapolis 8 Hour", "8 Hour Race", "Indianapolis Motor Speedway RC"), cur("IGTC Indianapolis 8 Hour 8 Hour Race — Indianapolis Motor Speedway RC", "SRO", "Indianapolis Motor Speedway RC"), "Indianapolis 8 Hour — Indianapolis Motor Speedway"],
+      [sess("sro", "09_Skip Barber Racing Series", "Race 1", "Sebring International Raceway"), cur("Skip Barber Race 1 — Sebring International Raceway", "SRO", "Sebring International Raceway"), "Skip Barber Race 1 — Sebring International Raceway"],
+      // A championship with no label keeps the site's folder name rather than losing it.
+      [sess("sro", "12_Radical Cup North America", "Race 2", "Sebring International Raceway"), cur("Race 2 — Sebring International Raceway", "SRO", "Sebring International Raceway"), "Radical Cup North America Race 2 — Sebring International Raceway"],
+    ];
+    for (const [s, c, want] of cases) {
+      const once = standardRaceName(s, c);
+      expect(once).toBe(want);
+      expect(standardRaceName(s, { ...c, name: once })).toBe(want);
+    }
+  });
+
   it("handles the odd names in the live list", () => {
     expect(standardRaceName(sess("imsa", "05_IMSA Airbnb Endurance Challenge", "Race", "Sebring International Raceway"), cur("IMSA Airbnb Endurance Challenge — Sebring International Raceway", "IMSA", "Sebring International Raceway"))).toBe(
       "Airbnb Endurance Challenge — Sebring International Raceway"

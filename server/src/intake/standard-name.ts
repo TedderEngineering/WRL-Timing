@@ -67,7 +67,38 @@ export function fixTypos(s: string): string {
 function championshipOf(s: SessionIdentity, current: CurrentRace): string | null {
   if (s.site === "redmist" || s.site === "speedhive") return "WRL";
   const folder = s.championship.replace(/^\d+_/, "").replace(/_/g, " ");
-  return CHAMPIONSHIP_WORDS.find(([re]) => re.test(folder))?.[1] ?? raceLabel(current.name, current.series, current.sourceKey).championship;
+  return (
+    CHAMPIONSHIP_WORDS.find(([re]) => re.test(folder))?.[1] ??
+    raceLabel(current.name, current.series, current.sourceKey).championship ??
+    // A championship we have no label for: the site's own folder name, better than none.
+    (folder.trim() || null)
+  );
+}
+
+/**
+ * The session without what the rest of the name already says: a leading championship
+ * ("WRL High Plains 13 Hour"), words the championship ends with ("Indianapolis 8 Hour" +
+ * "8 Hour Race"), or the track's own words before the race length ("High Plains 13 Hour").
+ */
+function sessionPart(session: string, championship: string | null, track: string): string {
+  let words = session.split(" ").filter(Boolean);
+  const lc = (w: string) => w.toLowerCase();
+  if (championship) {
+    const cw = championship.split(" ").map(lc);
+    if (cw.every((w, i) => lc(words[i] ?? "") === w)) words = words.slice(cw.length);
+    // The longest run of words the championship ends with and the session starts with.
+    for (let n = Math.min(cw.length, words.length); n > 0; n--) {
+      if (cw.slice(-n).every((w, i) => lc(words[i]) === w)) {
+        words = words.slice(n);
+        break;
+      }
+    }
+  }
+  const trackWords = new Set(canonicalTrack(track).split(/\s+/).map(lc));
+  let k = 0;
+  while (k < words.length && trackWords.has(lc(words[k]))) k++;
+  if (k > 0 && /^(\d|race\b|thursday|friday|saturday|sunday)/i.test(words.slice(k).join(" "))) words = words.slice(k);
+  return words.join(" ");
 }
 
 /** Looks like a championship and session, not an event: "America Race 1", "WRL Saturday 8 Hour". */
@@ -84,7 +115,8 @@ function eventTitle(current: CurrentRace): string | null {
   const hasTail = /\s[—–]\s/.test(current.name);
   const t = fixTypos((hasTail ? label.eventName : label.eventName ?? label.title) ?? "").trim();
   if (!t) return null;
-  if (SESSION_LIKE.test(t) || isJustTrack(t)) return null;
+  // "Mid-Ohio - Sunday - 7 hour" is a session with the track in front of it.
+  if (SESSION_LIKE.test(t) || SESSION_LIKE.test(tidySession(t)) || isJustTrack(t)) return null;
   if (/^(race|qualifying|heat|sprint|feature|saturday|sunday|friday|thursday)\b/i.test(t)) return null;
   const champ = (label.championship ?? "").toLowerCase();
   if (champ && (t.toLowerCase() === champ || t.toLowerCase().startsWith(`${champ} `))) return null;
@@ -94,12 +126,13 @@ function eventTitle(current: CurrentRace): string | null {
 
 export function standardRaceName(s: SessionIdentity, current: CurrentRace): string {
   const championship = championshipOf(s, current);
-  let session = tidySession(s.sessionName);
+  const track = s.track || current.track;
+  let session = sessionPart(tidySession(s.sessionName), championship, track);
   // A championship's only race is just "Race": the name says "Pilot Challenge — Fox Factory 120".
   if (/^race$/i.test(session)) session = "";
-  const head = [championship, session].filter(Boolean).join(" ") || tidySession(current.name);
+  const head = [championship, session].filter(Boolean).join(" ") || tidySession(current.name.split(/\s+[—–]\s+/)[0]);
   const event = eventTitle(current);
-  const tail = event && event.toLowerCase() !== (championship ?? "").toLowerCase() ? event : canonicalTrack(s.track || current.track);
+  const tail = event && event.toLowerCase() !== (championship ?? "").toLowerCase() ? event : canonicalTrack(track);
   return fixTypos(`${head} — ${tail}`).replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
