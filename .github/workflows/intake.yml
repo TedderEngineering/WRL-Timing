@@ -58,6 +58,10 @@ on:
         description: "analyze / refresh: at most this many races per run (newest first); empty = all"
         required: false
         default: ""
+      races:
+        description: "analyze only: these race ids (comma-separated) instead of every race without a package"
+        required: false
+        default: ""
       approve:
         description: "reimport only: race ids of 'unsure' pairs the owner approves, comma-separated"
         required: false
@@ -144,9 +148,11 @@ jobs:
           SERIES: ${{ inputs.series }}
           SEASON: ${{ inputs.season }}
           LIMIT: ${{ inputs.limit }}
+          RACES: ${{ inputs.races }}
         run: |
           args=(--series "$SERIES" --season "$SEASON" --notes "$RUNNER_TEMP/analyze-notes.txt")
           [ -n "$LIMIT" ] && args+=(--limit "$LIMIT")
+          for id in ${RACES//,/ }; do args+=(--race "$id"); done
           status=0
           npx tsx scripts/intake.ts analyze "${args[@]}" > "$RUNNER_TEMP/analyze.txt" 2> "$RUNNER_TEMP/analyze.log" || status=1
           tail -n 60 "$RUNNER_TEMP/analyze.log"
