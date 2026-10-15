@@ -38,6 +38,30 @@ describe("standard race names", () => {
     expect(standardRaceName(sess("imsa", "02_IMSA Michelin Pilot Challenge", "Race", "VIR"), cur("Virgina is For Racing Lovers Grand Prix", "IMSA", "VIR"))).toBe("Pilot Challenge — Virginia is For Racing Lovers Grand Prix");
   });
 
+  it("gives the same name when run again on its own output", () => {
+    const cases: [SessionIdentity, ReturnType<typeof cur>][] = [
+      [sess("sro", "48_TGRNA GR Cup North America", "Race 1", "Circuit of the Americas"), cur("GR Cup Race 1", "GR CUP", "COTA")],
+      [sess("sro", "16_Pirelli GT4 America", "Race 1", "Sebring International Raceway"), cur("Pirelli GT4 Race 1 — Sebring International Raceway", "SRO", "Sebring International Raceway")],
+      [sess("sro", "16_Pirelli GT4 America", "Road America Race 1 Make-Up", "Barber Motorsports Park"), cur("Pirelli GT4 — Barber Motorsports Park", "SRO", "Barber Motorsports Park")],
+      [sess("imsa", "02_IMSA Michelin Pilot Challenge", "Race", "Road Atlanta"), cur("Fox Factory 120", "IMSA", "Road Atlanta")],
+      [sess("imsa", "03_IMSA VP Racing SportsCar Challenge", "Race 1", "VIR"), cur("IMSA VPRC Race 1 — Michelin GT Challenge at VIR", "IMSA", "VIR")],
+      [sess("imsa", "01_IMSA WeatherTech SportsCar Championship", "Race", "Indianapolis Motor Speedway RC"), cur("IMSA Race — Indianapolis Motor Speedway RC", "IMSA", "Indianapolis Motor Speedway RC")],
+      [sess("redmist", "WRL", "Saturday - 8 Hour", "Road Atlanta"), cur("Saturday 8-Hour", "WRL", "Road Atlanta")],
+      [sess("speedhive", "WRL", "Barber - Sunday - 7 hour", "Barber Motorsports Park"), cur("Sunday 7 Hour", "WRL", "Barber Motorsports Park")],
+      [sess("imsa", "05_IMSA Airbnb Endurance Challenge", "Race", "Sebring International Raceway"), cur("IMSA Airbnb Endurance Challenge — Sebring International Raceway", "IMSA", "Sebring International Raceway")],
+    ];
+    for (const [s, c] of cases) {
+      const once = standardRaceName(s, c);
+      expect(standardRaceName(s, { ...c, name: once }), once).toBe(once);
+    }
+    expect(standardRaceName(cases[2][0], cases[2][1])).toBe("GT4 America Road America Race 1 Make-Up — Barber Motorsports Park");
+  });
+
+  it("puts right the names a non-repeatable first version produced", () => {
+    expect(standardRaceName(sess("redmist", "WRL", "Saturday 8 Hour", "Road Atlanta"), cur("WRL Saturday 8 Hour — WRL Saturday 8 Hour", "WRL", "Road Atlanta"))).toBe("WRL Saturday 8 Hour — Michelin Raceway Road Atlanta");
+    expect(standardRaceName(sess("sro", "16_Pirelli GT4 America", "Race 2", "Sonoma Raceway"), cur("GT4 America Race 2 — America Race 2", "SRO", "Sonoma Raceway"))).toBe("GT4 America Race 2 — Sonoma Raceway");
+  });
+
   it("tidies session names", () => {
     expect(tidySession("Saturday - 8 Hour")).toBe("Saturday 8 Hour");
     expect(tidySession("Sunday 7 hour")).toBe("Sunday 7 Hour");

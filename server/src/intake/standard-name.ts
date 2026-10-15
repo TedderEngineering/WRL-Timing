@@ -70,14 +70,25 @@ function championshipOf(s: SessionIdentity, current: CurrentRace): string | null
   return CHAMPIONSHIP_WORDS.find(([re]) => re.test(folder))?.[1] ?? raceLabel(current.name, current.series, current.sourceKey).championship;
 }
 
-/** A title the race already carries that names the event or race, not the session or track. */
+/** Looks like a championship and session, not an event: "America Race 1", "WRL Saturday 8 Hour". */
+const SESSION_LIKE = /^(?:wrl\s+)?(?:\S+\s+){0,2}?(?:(?:qualifying\s+)?race(?:\s*\d+)?|(?:thursday|friday|saturday|sunday)(?:\s+\d+\s*hours?)?)$/i;
+
+/**
+ * A title the race already carries that names the event or the race ("Michelin GT Challenge at
+ * VIR", "Fox Factory 120"), not its championship, session or track. It must give the same answer
+ * for a name this module produced, so running `names` twice changes nothing.
+ */
 function eventTitle(current: CurrentRace): string | null {
   const label = raceLabel(current.name, current.series, current.sourceKey);
-  if (label.eventName) return label.eventName;
-  const t = label.title;
-  if (!t || /^(race|qualifying|heat|sprint|feature|saturday|sunday|friday|thursday)\b/i.test(t)) return null;
-  if (label.championship && t.toLowerCase() === label.championship.toLowerCase()) return null;
-  if (isJustTrack(t)) return null;
+  // With "<head> — <tail>", only the tail can be the event; a bare name ("Fox Factory 120") may be one itself.
+  const hasTail = /\s[—–]\s/.test(current.name);
+  const t = fixTypos((hasTail ? label.eventName : label.eventName ?? label.title) ?? "").trim();
+  if (!t) return null;
+  if (SESSION_LIKE.test(t) || isJustTrack(t)) return null;
+  if (/^(race|qualifying|heat|sprint|feature|saturday|sunday|friday|thursday)\b/i.test(t)) return null;
+  const champ = (label.championship ?? "").toLowerCase();
+  if (champ && (t.toLowerCase() === champ || t.toLowerCase().startsWith(`${champ} `))) return null;
+  if (/^wrl\b/i.test(t)) return null;
   return t;
 }
 
