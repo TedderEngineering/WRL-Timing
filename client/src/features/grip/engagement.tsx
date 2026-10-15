@@ -19,7 +19,7 @@ import {
   isInstalled,
   onInstallChange,
   promptInstall,
-} from "./install";
+} from "@/lib/install";
 
 // ─── Per-browser memory (hidden cards) ───────────────────────────────────────
 

@@ -10,7 +10,7 @@ import { GripProvider, useGrip } from "./GripContext";
 import { GripButton, Pill, Spinner, primaryLinkClass } from "./components";
 import { useGripStatus } from "./hooks";
 // Listens for the browser's install offer from the first page load.
-import "./install";
+import "@/lib/install";
 import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
 import { SupportProvider } from "@/features/support/SupportContext";
 import { SupportLink } from "@/features/support/SupportPrompts";

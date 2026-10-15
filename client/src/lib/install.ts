@@ -1,5 +1,6 @@
 /**
- * "Add to home screen". Chrome and Edge on Android (and desktop) fire
+ * "Add to home screen", shared by RaceTrace and Finding Grip (each site imports it once in
+ * its layout, so the browser's offer is caught on the first page load). Chrome and Edge on Android (and desktop) fire
  * `beforeinstallprompt` once, early, when the site can be installed; keep it so
  * a button can show the browser's install dialog later. Safari never fires it,
  * so iPhone users get instructions instead.
