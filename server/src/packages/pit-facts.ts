@@ -58,6 +58,8 @@ export interface PitFacts {
     netClass: number | null;
     overallPosBefore: number | null;
     overallPosAfter: number | null;
+    /** Time lost against the cycle's mean (negative = quicker). */
+    deltaToCycleMeanS: number | null;
   }[];
   /** Same-class position swaps (positionChanges): lap, winner, loser, mechanism. */
   swaps: [number, string, string, string][];
@@ -138,6 +140,7 @@ export function extractPitFacts(pkg: any): PitFacts {
     netClass: num(r.netClass),
     overallPosBefore: num(r.overallPosBefore),
     overallPosAfter: num(r.overallPosAfter),
+    deltaToCycleMeanS: num(r.deltaToCycleMeanS),
   }));
 
   const pc = pkg.positionChanges?.rows;
@@ -414,4 +417,105 @@ function reasonsFor(
     out[String(m.l)] = `${what === "Pit" || /^Pit \d/.test(what) ? "Pit stop" : what}${parts.length ? ` — ${parts.join("; ")}` : ""}`;
   }
   return out;
+}
+
+// ── The Pit Stops tab (GET /races/:id/pit-analysis) from the same facts ─────
+
+const CONDITION: Record<string, string> = { green: "Full green", fcy: "Caution", mixed: "Green and caution" };
+const REF_SOURCE: Record<string, string> = {
+  green_reference: "Green pace",
+  fcy_neighbours: "Cars on track (caution)",
+  fcy_lap_field: "Field caution laps",
+  see_group: "With the stop before",
+  none: "Not measurable",
+};
+
+export interface PitStopsResponse {
+  source: "facts";
+  cars: Record<
+    string,
+    {
+      carNumber: string;
+      teamName: string;
+      carClass: string;
+      carColor: string | null;
+      finishPos: number | null;
+      stops: {
+        stopNumber: number;
+        pitLap: number;
+        kind: string;
+        condition: string;
+        localRef_s: number | null;
+        refSource: string;
+        serviceTime_s: null;
+        pitRoadTime_s: number | null;
+        timeLost_s: number | null;
+        /** Against the class pit cycle's mean. */
+        delta_s: number | null;
+        cycle: number | null;
+      }[];
+    }
+  >;
+  summary: { totalStops: number; totalCars: number; avgServiceTime_s: null; avgTimeLost_s: number | null };
+}
+
+/**
+ * Every car's stops (stop, garage, stop-and-go, penalty served; drive-throughs are left out, as
+ * they are not stops), keyed by published car number. Average time lost is over green stops
+ * (not garage visits or penalties).
+ */
+export function pitStopsFromFacts(
+  facts: PitFacts,
+  entries: { carNumber: string; teamName: string; carClass: string; carColor: string | null; finishPos: number | null }[]
+): PitStopsResponse {
+  const byCar = new Map(entries.map((e) => [e.carNumber, e]));
+  const entryFor = (car: string) => byCar.get(car) ?? entries.find((e) => normCar(e.carNumber) === normCar(car) && !byCar.has(car));
+  const result = new Map(facts.cycleResults.map((r) => [r.passageId, r]));
+  const cars: PitStopsResponse["cars"] = {};
+  const green: number[] = [];
+  let total = 0;
+  for (const p of facts.passages) {
+    if (!["stop", "garage", "stop_and_go", "penalty_served"].includes(p.kind)) continue;
+    const e = entryFor(p.car);
+    const meta = facts.entries[p.car];
+    cars[p.car] ??= {
+      carNumber: p.car,
+      teamName: e?.teamName ?? meta?.team ?? `Car #${p.car}`,
+      carClass: e?.carClass ?? meta?.cls ?? "",
+      carColor: e?.carColor ?? null,
+      finishPos: e?.finishPos ?? null,
+      stops: [],
+    };
+    const group = p.groupId ? facts.groups[p.groupId] : undefined;
+    const first = !group || group.passageIds[0] === p.id;
+    const lost = group ? (first ? group.timeLostS : null) : p.timeLostS;
+    const method = group ? (first ? group.lossMethod : "see_group") : p.lossMethod;
+    const r = result.get(p.id);
+    const cyc = p.cycleId ? facts.cycles[p.cycleId] : undefined;
+    cars[p.car].stops.push({
+      stopNumber: p.stopNumber ?? cars[p.car].stops.length + 1,
+      pitLap: p.inLap,
+      kind: p.kind,
+      condition: CONDITION[p.fcyContext] ?? p.fcyContext,
+      localRef_s: (group && first ? group.refLapS : p.refLapS) ?? null,
+      refSource: REF_SOURCE[method] ?? method,
+      serviceTime_s: null,
+      pitRoadTime_s: p.officialPitLaneTimeS,
+      timeLost_s: lost,
+      delta_s: r?.deltaToCycleMeanS ?? null,
+      cycle: cyc?.ordinal ?? null,
+    });
+    total++;
+    if (p.kind === "stop" && p.fcyContext === "green" && typeof lost === "number") green.push(lost);
+  }
+  return {
+    source: "facts",
+    cars,
+    summary: {
+      totalStops: total,
+      totalCars: Object.keys(cars).length,
+      avgServiceTime_s: null,
+      avgTimeLost_s: green.length ? green.reduce((a, b) => a + b, 0) / green.length : null,
+    },
+  };
 }

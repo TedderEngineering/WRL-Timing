@@ -9,6 +9,8 @@ import { assertRaceAccess, resolveViewer } from "../services/race-access.js";
 import { getRacePackage } from "./packages.js";
 import { packagesFlagOn } from "../packages/flags.js";
 import { parseVersion } from "../packages/service.js";
+import { publishedPitFacts } from "../packages/race-pit-facts.js";
+import { pitStopsFromFacts } from "../packages/pit-facts.js";
 
 export const racesRouter = Router();
 
@@ -175,10 +177,21 @@ racesRouter.get(
 
       const race = await prisma.race.findUnique({
         where: { id: raceId },
-        select: { id: true, track: true, series: true, status: true },
+        select: { id: true, track: true, series: true, status: true, currentPackageId: true, packagesDisabled: true },
       });
       if (!race || (race.status === "DRAFT" && req.user?.role !== "ADMIN")) {
         throw new AppError(404, "Race not found", "RACE_NOT_FOUND");
+      }
+
+      // A race with a published analysis package: its stops, as on the chart (packages/pit-facts.ts).
+      const facts = await publishedPitFacts(race);
+      if (facts) {
+        const entries = await prisma.raceEntry.findMany({
+          where: { raceId },
+          select: { carNumber: true, teamName: true, carClass: true, carColor: true, finishPos: true },
+        });
+        res.json({ raceId, track: race.track, trackConfig: null, ...pitStopsFromFacts(facts, entries) });
+        return;
       }
 
       // Fetch all pit stop analysis rows for this race

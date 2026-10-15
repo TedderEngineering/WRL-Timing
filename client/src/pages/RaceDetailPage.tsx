@@ -542,7 +542,7 @@ export function RaceDetailPage() {
 
       {activeTab === "pitanalysis" && (
         <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
-          <PitAnalysisTab raceId={id} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
+          <PitAnalysisTab raceId={id} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
         </div>
       )}
 
