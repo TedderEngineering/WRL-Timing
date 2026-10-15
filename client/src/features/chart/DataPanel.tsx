@@ -491,7 +491,7 @@ function EventPreview({ reason, posDelta, posDeltaColor, alsoPittingCars, data, 
     const t = seg.trim().replace(/^passed\s+/i, "");
     if (!t || seen.has(t)) continue;
     seen.add(t);
-    const m = t.match(/^#([0-9A-Za-z]+)\b.*?\b(on pace|pitted|\(yellow\))$/i);
+    const m = t.match(/^#([0-9A-Za-z]+)\b.*?(on pace|pitted|\(yellow\)|\(this car pitted\))$/i);
     if (m) items.push(`#${m[1]} ${m[2]}`);
   }
 

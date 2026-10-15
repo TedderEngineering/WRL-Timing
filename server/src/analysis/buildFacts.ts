@@ -37,7 +37,7 @@ import { buildStints } from "./engine/stints.js";
 import { buildResults, finalisePenalties } from "./engine/results.js";
 import { carOrder, matchDriver, rd } from "./util.js";
 
-export const ENGINE_VERSION = "1.0.0";
+export const ENGINE_VERSION = "1.1.0"; // 1.1.0: C8, cycle positions count from before the cycle opened
 export type FactsPackage = RaceAnalysisPackage;
 
 export interface BuildFactsInput {

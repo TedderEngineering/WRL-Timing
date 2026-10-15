@@ -3,7 +3,8 @@
  "family": "alkamel",
  "derivedFrom": [
   "audit1c/alkamel/fixtures/grcup_cota_r1.json",
-  "stage2/core/fixture_deltas.json"
+  "stage2/core/fixture_deltas.json",
+  "C8 (owner 2026-10-15): a cycle member's position before is its last crossing before the cycle opened"
  ],
  "fcyIntervalsClockS": [
   [
@@ -401,7 +402,7 @@
    "pitLaneTimeReliable": true,
    "timeLost": {
     "method": "green_reference",
-    "valueS": 31.0,
+    "valueS": 31,
     "refLapS": 151.454,
     "refWindowLaps": 5,
     "refLapCount": 3

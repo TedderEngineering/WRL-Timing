@@ -267,9 +267,14 @@ interface Effect {
   lostTo: Counterparty[];
 }
 
-function effectThrough(ctx: Ctx, pos: PositionIndex, swapIdx: Map<string, Swap[]>, p: Passage, closeT: number, member: boolean): Effect {
+function effectThrough(ctx: Ctx, pos: PositionIndex, swapIdx: Map<string, Swap[]>, p: Passage, closeT: number, member: boolean, openT?: number): Effect {
   const rows = ctx.laps[p.car] ?? [];
-  const beforeRow = p.inIdx !== null && p.inIdx > 0 ? rows[p.inIdx - 1] : null;
+  let beforeRow = p.inIdx !== null && p.inIdx > 0 ? rows[p.inIdx - 1] : null;
+  // A cycle member counts from its last crossing before the cycle opened: rivals that stopped
+  // first lift it up the order, and those places were never its own (D-CYCLE-POS).
+  if (beforeRow && openT !== undefined && p.inIdx !== null) {
+    for (let i = p.inIdx - 1; i > 0 && rows[i].endT > openT + 1e-6; i--) beforeRow = rows[i - 1];
+  }
   let afterRow: LapRow | null = null;
   if (p.outLap !== null) {
     for (const r of rows) {
@@ -320,10 +325,13 @@ export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleD
       // A car with two stops in one cycle gets ':<k>' on its second and later results (id stays unique).
       const k = (seenCar.get(p.car) ?? 0) + 1;
       seenCar.set(p.car, k);
-      const e = effectThrough(ctx, pos, swapIdx, p, cy.closes, true);
+      const e = effectThrough(ctx, pos, swapIdx, p, cy.closes, true, cy.opens);
       const cb = e.beforeRow?.cpos ?? null;
       const ca = e.afterRow?.cpos ?? null;
-      const ldb = e.beforeRow?.lapsDown ?? null;
+      // Laps down are the stop's own effect: from the lap before this car's in-lap, not from
+      // the cycle's opening (where a lap lost on track would be blamed on the stop).
+      const own = p.inIdx !== null && p.inIdx > 0 ? ctx.laps[p.car]?.[p.inIdx - 1] : null;
+      const ldb = own?.lapsDown ?? null;
       const lda = e.afterRow?.lapsDown ?? null;
       p.lapDown = ldb !== null && lda !== null ? lda > ldb : null;
       const notes: string[] = [];

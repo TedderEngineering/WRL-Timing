@@ -48,6 +48,7 @@ Race-level checks cover FCY intervals and leader laps, class median clean laps, 
 | I8 | Cycle-result id when one car has two member stops in one cycle | `cycres:<class>:<n>:<car>:<k>` for k ≥ 2 (MPC GS, R2 Am, SRO COTA Pro-Am). | The schema grammar `cycres:<class>:<n>:<car>` would collide. |
 | I9 | D-DATE when the files have no date (SRO COTA, GR COTA) | Blocker `DATE-AMBIGUOUS`; `raceDate` 1970-01-01 until the owner enters it. | No date was invented. The COTA 8 h test uses 2025-12-06, which is the day before the Sunday 7 h `Time of Day` date. |
 | I10 | Lap interval when a previous row exists | Previous row's end (D-TIME), also for WRL. | Stage 1 WRL used end − `Lap_Time`; see G1. |
+| I11 | D-CYCLE-POS before (C8, owner 2026-10-15; engine 1.1.0) | A cycle member's position before is its last crossing **before the cycle opened**, not the lap before its own in-lap. Laps down stay the stop's own effect (from the lap before the in-lap). The expected fixtures' before fields were re-derived (`derivedFrom` names C8). | Rivals that stop first lift a car up the order for a few laps. Utah 2026 GTO #123 ran P3, was P1 only after #54 and #9 had stopped, and was P3 after the cycle: "Lost 2" became "Held". Across the fixtures the before lap moves back a median of 1 to 3 laps, at most 9 (MPC rounds). |
 
 ## Not built in G2 (status October 2026)
 
