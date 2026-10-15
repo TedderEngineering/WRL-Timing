@@ -51,7 +51,9 @@ export function tidySession(name: string): string {
 
 /** Spelling slips carried in some stored names. */
 const TYPOS: [RegExp, string][] = [
-  [/\^R/g, "'"], // "O^RReilly" (an apostrophe mangled on upload)
+  // "O^RReilly": an apostrophe that arrived as a control character (Ctrl-R, U+0012), or as "^R".
+  [/[\u0000-\u001f]/g, "'"],
+  [/\^R/g, "'"],
   [/O'RReilly/g, "O'Reilly"],
   [/\bVirgina\b/g, "Virginia"],
   [/\bCircut\b/gi, "Circuit"],
