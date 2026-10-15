@@ -237,6 +237,23 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
   const warnings = [...parsed.warnings];
   for (const k of placeholders) warnings.push(`No ${k} supplied: the parser used an empty table (FCY from lap status).`);
 
+  const carCount = Object.keys(data.cars).length;
+
+  // A new race must not be one already on the site under another source (the same session
+  // listed twice, or once on Red Mist and once on Speedhive) or from an older upload with a
+  // wrong date. Same series family, within three weeks, same length, same cars, same finishing
+  // order → refused unless `force`. Checked before anything is archived or written.
+  if (!existing && !body.force) {
+    const twin = await findTwinRace(body.metadata, data, carCount);
+    if (twin) {
+      throw new AppError(
+        409,
+        `This session looks like race ${twin.id} ("${twin.name}", ${new Date(twin.date).toISOString().slice(0, 10)}): same series, ${carCount} cars, ${data.maxLap} laps and the same finishing order. Delete that race, attach to it, or send force: true to import anyway.`,
+        "DUPLICATE_SUSPECT"
+      );
+    }
+  }
+
   // Archive BEFORE any DB write (G1 / F7). Throws ARCHIVE_FAILED on any failure.
   // Files the timing site still serves are not copied: the source key and the manifest (URL and
   // sha256 of every file, kept in the audit row) are enough to fetch them again and prove they
@@ -245,7 +262,6 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
   const archived = Object.keys(toArchive).length > 0 ? await deps.archive(toArchive) : { paths: {}, warnings: [] };
   warnings.push(...archived.warnings);
   const sourceFiles = Object.keys(archived.paths).length > 0 ? archived.paths : undefined;
-  const carCount = Object.keys(data.cars).length;
 
   let action: "created" | "updated";
   let raceId: string;
@@ -452,4 +468,36 @@ export async function setRaceIdentity(raceId: string, bodyIn: unknown, actor: In
     },
   });
   return { raceId, name: body.name, date: body.date, season: body.season };
+}
+
+/** Finishing order as car numbers, the fingerprint two copies of one race share. */
+function finishOrder(cars: Record<string, { finishPos?: number }>): string {
+  return Object.entries(cars)
+    .sort(([a, x], [b, y]) => (x.finishPos ?? 9999) - (y.finishPos ?? 9999) || a.localeCompare(b, undefined, { numeric: true }))
+    .map(([n]) => n)
+    .join(",");
+}
+
+/** A race already on the site that this new session duplicates (see intakeRace), or null. */
+export async function findTwinRace(
+  meta: { series: string; subSeries?: string | null; date: string },
+  data: RaceDataJson,
+  carCount: number
+): Promise<{ id: string; name: string; date: Date } | null> {
+  const day = Date.parse(`${meta.date}T00:00:00Z`);
+  const window = 21 * 86400000;
+  const candidates = await prisma.race.findMany({
+    where: { maxLap: data.maxLap, totalCars: carCount, date: { gte: new Date(day - window), lte: new Date(day + window) } },
+    select: { id: true, name: true, date: true, series: true, maxLap: true, totalCars: true, chartData: true },
+  });
+  const family = raceFamily(meta.series, meta.subSeries ?? undefined);
+  const order = finishOrder(data.cars);
+  for (const r of candidates as { id: string; name: string; date: Date; series: string; maxLap: number; totalCars: number; chartData: any }[]) {
+    // Filtered again here: the where clause above is only a pre-filter.
+    if (r.maxLap !== data.maxLap || r.totalCars !== carCount) continue;
+    if (Math.abs(new Date(r.date).getTime() - day) > window) continue;
+    if (r.series !== meta.series && (family === null || raceFamily(r.series) !== family)) continue;
+    if (r.chartData?.cars && finishOrder(r.chartData.cars) === order) return { id: r.id, name: r.name, date: r.date };
+  }
+  return null;
 }
