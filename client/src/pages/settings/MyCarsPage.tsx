@@ -4,7 +4,8 @@ import { Button } from "../../components/Button";
 import { track } from "../../lib/analytics";
 import { addCar, carTitle, listCars, removeCar, SERIES_LABEL, updateCar, type CarInput, type MyCar, type SeriesFamily } from "../../features/my-cars/api";
 
-const SERIES: SeriesFamily[] = ["imsa", "sro", "wrl"];
+// The shared list: "other" (track day / club) can come from Finding Grip, so it can be kept when editing.
+const SERIES: SeriesFamily[] = ["imsa", "sro", "wrl", "other"];
 const field = "w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100";
 const label = "block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1";
 

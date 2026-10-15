@@ -4,8 +4,11 @@
  */
 import { api } from "../../lib/api";
 
-export type SeriesFamily = "imsa" | "sro" | "wrl";
-export const SERIES_LABEL: Record<SeriesFamily, string> = { imsa: "IMSA", sro: "SRO", wrl: "WRL" };
+/** "other" is a track-day or club car (Finding Grip); it never matches a race. */
+export type SeriesFamily = "imsa" | "sro" | "wrl" | "other";
+export const SERIES_LABEL: Record<SeriesFamily, string> = { imsa: "IMSA", sro: "SRO", wrl: "WRL", other: "Track day / club" };
+/** The series RaceTrace has races for (what onboarding offers). */
+export const RACE_SERIES: SeriesFamily[] = ["imsa", "sro", "wrl"];
 
 export interface MyCar {
   id: string;

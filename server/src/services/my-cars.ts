@@ -2,7 +2,8 @@
  * My cars (engagement plan B): the cars a user follows.
  *
  * A race entry is the user's car when
- *   - the race's series family matches the car's ("imsa" | "sro" | "wrl"),
+ *   - the race's series family matches the car's ("imsa" | "sro" | "wrl"; a car in
+ *     "other", a track-day or club car added in Finding Grip, never matches a race),
  *   - the car number matches ("007" and "7" are one car, as in the parsers),
  *   - the team matches when the car has one (case and punctuation ignored, either name may
  *     hold the other: "Blackdog" matches "Blackdog Racing"),
@@ -13,7 +14,11 @@ import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { normCar, raceFamily } from "../intake/reimport.js";
 
-export const SERIES_FAMILIES = ["imsa", "sro", "wrl"] as const;
+/**
+ * "other" is a track-day or club car (Finding Grip): it is in the same list, but
+ * `raceFamily()` never returns it, so it never matches a race entry.
+ */
+export const SERIES_FAMILIES = ["imsa", "sro", "wrl", "other"] as const;
 export type SeriesFamily = (typeof SERIES_FAMILIES)[number];
 export const MAX_CARS = 20;
 
