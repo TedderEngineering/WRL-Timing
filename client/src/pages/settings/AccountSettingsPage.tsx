@@ -2,6 +2,7 @@ import { ShareRaceTraceButton } from "../../features/share/ShareRaceTrace";
 import { useState } from "react";
 import { useAuth } from "../../features/auth/AuthContext";
 import { api } from "../../lib/api";
+import { IS_GRIP_SITE } from "../../lib/site";
 
 export function AccountSettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -184,16 +185,20 @@ export function AccountSettingsPage() {
         </div>
       </Section>
 
+      {/* Not on the Finding Grip site, which shows this page at /account and has its own share in Settings. */}
+      {!IS_GRIP_SITE && (
+        <Section title="Share RaceTrace">
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+            RaceTrace is free for your teammates and friends too. The link opens the site; it never says who shared it.
+          </p>
+          <ShareRaceTraceButton
+            source="settings"
+            className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900"
+          />
+        </Section>
+      )}
+
       {/* Danger Zone */}
-      <Section title="Share RaceTrace">
-        <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-          RaceTrace is free for your teammates and friends too. The link opens the site; it never says who shared it.
-        </p>
-        <ShareRaceTraceButton
-          source="settings"
-          className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900"
-        />
-      </Section>
       <Section title="Danger Zone" danger>
         {!showDelete ? (
           <button
