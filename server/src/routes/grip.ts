@@ -45,7 +45,13 @@ import {
   createGripPortalSession,
 } from "../services/grip/billing.js";
 import { gripSite, readGripPublicUrl } from "../services/site.js";
-import { actualOf, compare, ON_TARGET_PSI } from "../services/grip/outcome.js";
+import {
+  actualOf,
+  compare,
+  progressSummary,
+  seasonSummary,
+  ON_TARGET_PSI,
+} from "../services/grip/outcome.js";
 
 export const gripRouter = Router();
 
@@ -840,6 +846,51 @@ gripRouter.post(
       data: { outcomeSkipped: true },
     });
     res.json({ calculation: calculationOut(await ownCalculation(userId, calc.id)) });
+  })
+);
+
+// ─── Progress over time ──────────────────────────────────────────────────────
+
+/** How close the driver's recorded runs came: the last ten, the trend, each track. */
+gripRouter.get(
+  "/progress",
+  wrap(async (req, res) => {
+    const rows = await prisma.gripCalculation.findMany({
+      where: { userId: req.user!.userId, outcomeAt: { not: null } },
+      include: { track: true },
+      orderBy: { sessionDate: "desc" },
+      take: 1000,
+    });
+    res.json({ progress: progressSummary(rows) });
+  })
+);
+
+/** One calendar year in facts, for the season recap card (default: this year). */
+gripRouter.get(
+  "/season",
+  wrap(async (req, res) => {
+    const userId = req.user!.userId;
+    const thisYear = new Date().getUTCFullYear();
+    const { year } = z
+      .object({ year: z.coerce.number().int().min(2020).max(thisYear).default(thisYear) })
+      .parse(req.query);
+    const sessionDate = {
+      gte: new Date(Date.UTC(year, 0, 1)),
+      lt: new Date(Date.UTC(year + 1, 0, 1)),
+    };
+    const [calcs, refs] = await Promise.all([
+      prisma.gripCalculation.findMany({
+        where: { userId, sessionDate },
+        include: { track: true },
+        take: 5000,
+      }),
+      prisma.gripReferenceSession.findMany({
+        where: { userId, sessionDate },
+        select: { id: true, sessionDate: true, track: true },
+        take: 5000,
+      }),
+    ]);
+    res.json({ season: seasonSummary(year, calcs, refs) });
   })
 );
 

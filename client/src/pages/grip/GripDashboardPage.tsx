@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthContext";
 import { gripApi, type Calculation, type ReferenceSession } from "@/features/grip/api";
 import { useGrip } from "@/features/grip/GripContext";
@@ -27,6 +27,8 @@ import { gp } from "@/lib/site";
 import { SupportCard } from "@/features/support/SupportPrompts";
 import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
 import { FirstWeekendChecklist, InstallHint } from "@/features/grip/engagement";
+import { ProgressPanel } from "@/features/grip/progress";
+import { SeasonRecapCard, previewYear, recapYearFor } from "@/features/grip/season";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
@@ -63,6 +65,10 @@ export function GripDashboardPage() {
   const navigate = useNavigate();
   const sessions = useLoad(() => gripApi.sessions());
   const calcs = useLoad(() => gripApi.calculations());
+  const progress = useLoad(() => gripApi.progress());
+  // Season recap: 20 Nov to the end of January, or `?season=2026` to check it early.
+  const location = useLocation();
+  const recapYear = previewYear(location.search) ?? recapYearFor(new Date());
   const [upgrade, setUpgrade] = useState(false);
   const [deleting, setDeleting] = useState<Calculation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -86,7 +92,7 @@ export function GripDashboardPage() {
       await gripApi.deleteCalculation(deleting.id);
       toast("Calculation deleted");
       setDeleting(null);
-      await calcs.reload();
+      await Promise.all([calcs.reload(), progress.reload()]);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not delete");
     } finally {
@@ -139,6 +145,8 @@ export function GripDashboardPage() {
           </span>
         </Banner>
       )}
+
+      {recapYear !== null && <SeasonRecapCard year={recapYear} />}
 
       {/* Open items: recent runs waiting for their hot pressures. */}
       {calcs.data && <AwaitingOutcomes calcs={calcs.data} />}
@@ -204,6 +212,9 @@ export function GripDashboardPage() {
           )}
         </>
       )}
+
+      {/* Accuracy over time, once a run's hot pressures are recorded. */}
+      {progress.data && <ProgressPanel progress={progress.data} units={units} />}
 
       <section className="space-y-2.5">
         <Eyebrow>Recent tire pressure calculations</Eyebrow>

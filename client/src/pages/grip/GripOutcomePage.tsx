@@ -13,6 +13,7 @@ import {
   type CornerKey,
   type Corners,
   type ReferenceSession,
+  type Progress,
 } from "@/features/grip/api";
 import { useGrip } from "@/features/grip/GripContext";
 import {
@@ -51,6 +52,7 @@ import {
 import { SupportAsk } from "@/features/support/SupportPrompts";
 import { track } from "@/lib/analytics";
 import { SharePressuresButton } from "@/features/grip/pressureCard";
+import { ProgressLine } from "@/features/grip/progress";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 
@@ -78,6 +80,22 @@ export function GripOutcomePage() {
   /** Set when the result was recorded on this visit: the moment to celebrate (and the coffee ask). */
   const [justRecorded, setJustRecorded] = useState(false);
   const [savedRef, setSavedRef] = useState<ReferenceSession | null>(null);
+  // Accuracy over time, for one line under the verdict (fetched once the run has an outcome).
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const outcomeKey = calc?.outcome
+    ? `${calc.id}:${calc.outcome.worstMiss}:${calc.outcome.onTarget}`
+    : null;
+  useEffect(() => {
+    if (!outcomeKey) return;
+    let cancelled = false;
+    gripApi
+      .progress()
+      .then((p) => !cancelled && setProgress(p))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [outcomeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +238,13 @@ export function GripOutcomePage() {
                 {v.title}
               </h2>
               <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">{v.body}</p>
+              {progress && (
+                <ProgressLine
+                  progress={progress}
+                  trackId={c.track.id}
+                  trackName={c.track.shortName || c.track.name}
+                />
+              )}
             </div>
           </div>
 

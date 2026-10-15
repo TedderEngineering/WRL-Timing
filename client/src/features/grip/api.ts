@@ -108,6 +108,74 @@ export interface Outcome {
   recordedAt: string;
 }
 
+type TrackRef = Pick<Track, "id" | "name" | "shortName">;
+
+/** How close the driver's recorded runs came (GET /grip/progress). Own runs only. */
+export interface Progress {
+  onTargetPsi: number;
+  recordedTotal: number;
+  recent: {
+    count: number;
+    onTarget: number;
+    /** Average of each run's worst corner miss. */
+    averageWorstMiss: number | null;
+    /** Oldest first. */
+    runs: {
+      id: string;
+      name: string;
+      sessionDate: string;
+      track: TrackRef;
+      worstMiss: number;
+      onTarget: boolean;
+    }[];
+  };
+  /** The latest five runs' average worst-corner miss against the (up to) five before; null under six runs. */
+  trend: {
+    latestAverage: number;
+    previousAverage: number;
+    latestRuns: number;
+    previousRuns: number;
+    direction: "smaller" | "similar" | "larger";
+  } | null;
+  tracks: {
+    track: TrackRef;
+    recorded: number;
+    onTarget: number;
+    averageWorstMiss: number | null;
+    lastDate: string;
+  }[];
+}
+
+/** One calendar year in facts (GET /grip/season). Own runs only. */
+export interface Season {
+  year: number;
+  onTargetPsi: number;
+  calculations: number;
+  referenceSessions: number;
+  trackDays: number;
+  recorded: number;
+  onTarget: number;
+  averageWorstMiss: number | null;
+  tracks: {
+    track: TrackRef;
+    days: number;
+    calculations: number;
+    recorded: number;
+    onTarget: number;
+  }[];
+  closest: {
+    id: string;
+    name: string;
+    track: TrackRef;
+    sessionDate: string;
+    worstMiss: number;
+    onTarget: boolean;
+  } | null;
+  /** "YYYY-MM-DD" (UTC day). */
+  firstDate: string | null;
+  lastDate: string | null;
+}
+
 export interface OutcomeInput {
   hot: Corners;
   saveAsReference?: boolean;
@@ -220,6 +288,16 @@ export const gripApi = {
     api
       .post<{ calculation: Calculation }>(`/grip/calculations/${id}/skip-outcome`)
       .then((r) => r.calculation),
+
+  /** Accuracy over time: the last ten recorded runs, the trend, each track. */
+  progress: () =>
+    api.get<{ progress: Progress }>("/grip/progress").then((r) => r.progress),
+
+  /** The season recap for one year (default: this year). */
+  season: (year?: number) =>
+    api
+      .get<{ season: Season }>(`/grip/season${year ? `?year=${year}` : ""}`)
+      .then((r) => r.season),
 
   damper: (q: DamperQuery) =>
     api.get<DamperResult>(`/grip/damper?${new URLSearchParams({ ...q }).toString()}`),
