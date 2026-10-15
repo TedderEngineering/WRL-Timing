@@ -18,6 +18,7 @@
  */
 
 import type { RaceDataParser } from "./types.js";
+import { uniqueDrivers } from "../driverNames.js";
 import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
 import type { RaceDataJson } from "../race-validators.js";
 import { parseCSV, mapHeaders, col, parseLapTime, detectAllCarPitStops, parseFlagsCSV, parseControlLogCSV, enrichAnnotationsFromControlLog } from "./csv-utils.js";
@@ -121,6 +122,8 @@ export const wrlWebsiteParser: RaceDataParser = {
     >();
 
     let maxLap = 0;
+    // Driver names per car, when the export has them (RedMist's "Driver", WRL's Driver_Name).
+    const carDrivers = new Map<number, string[]>();
 
     for (let i = 1; i < lapsRows.length; i++) {
       const row = lapsRows[i];
@@ -160,6 +163,11 @@ export const wrlWebsiteParser: RaceDataParser = {
       });
 
       if (lapNum > maxLap) maxLap = lapNum;
+      const driverName = col(row, lapsHdr, "driver_name");
+      if (driverName) {
+        if (!carDrivers.has(num)) carDrivers.set(num, []);
+        carDrivers.get(num)!.push(driverName);
+      }
 
       if (!carFromLaps.has(num)) {
         carFromLaps.set(num, {
@@ -237,6 +245,7 @@ export const wrlWebsiteParser: RaceDataParser = {
       cars[String(num)] = {
         num, ...(ids.label(num) ? { label: ids.label(num) } : {}), team: meta.team, cls: meta.cls,
         finishPos: meta.finPos, finishPosClass: meta.finPosCls,
+        ...(carDrivers.has(num) ? { drivers: uniqueDrivers(carDrivers.get(num)!) } : {}),
         laps,
       };
 

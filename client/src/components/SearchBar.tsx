@@ -6,9 +6,10 @@ interface SearchBarProps {
   onChange: (q: string) => void;
   isSearching: boolean;
   className?: string;
+  placeholder?: string;
 }
 
-export function SearchBar({ value, onChange, isSearching, className }: SearchBarProps) {
+export function SearchBar({ value, onChange, isSearching, className, placeholder = "Search tracks, series, races..." }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -29,7 +30,7 @@ export function SearchBar({ value, onChange, isSearching, className }: SearchBar
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search tracks, series, races..."
+        placeholder={placeholder}
         className="w-full h-10 md:h-10 pl-10 pr-9 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
       />
 

@@ -9,7 +9,7 @@ import { getCompColor } from "./chart-renderer";
 import { TRACE } from "./constants";
 import { makeGroupsOf } from "./makes";
 import type { TraceView } from "./trace-view";
-import { carNo } from "./car-number";
+import { carMatchesSearch, carNo, textMatches } from "./car-number";
 
 const T = {
   card: "#12122a",
@@ -93,17 +93,12 @@ function CarMenu({
     const needle = q.trim().toLowerCase();
     const byCls = new Map<
       string,
-      Array<{ n: number; team: string; pos: number; make?: string; dns: boolean; official: string; classified: boolean }>
+      Array<{ n: number; team: string; pos: number; make?: string; dns: boolean; official: string; classified: boolean; driver?: string }>
     >();
     for (const [k, c] of Object.entries(data.cars)) {
       const n = Number(k);
-      if (
-        needle &&
-        !carNo(data, n).toLowerCase().includes(needle) &&
-        !c.team.toLowerCase().includes(needle) &&
-        !(c.make ?? "").toLowerCase().includes(needle)
-      )
-        continue;
+      // Number, team, make or a driver's name (car-number.ts).
+      if (needle && !carMatchesSearch(data, n, needle)) continue;
       const list = byCls.get(c.cls) ?? [];
       list.push({
         n,
@@ -113,6 +108,8 @@ function CarMenu({
         classified: finishInfo(data, n)?.pos != null,
         make: c.make,
         dns: c.laps.length === 0,
+        // The driver the search found, shown under the team.
+        driver: needle ? (c.drivers ?? []).find((d) => textMatches(d, needle)) : undefined,
       });
       byCls.set(c.cls, list);
     }
@@ -134,7 +131,7 @@ function CarMenu({
         ref={inputRef}
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Car number, team or make"
+        placeholder="Car number, team, driver or make"
         className="m-2 rounded-md border px-3 py-2 text-sm outline-none"
         style={{ background: "#0b0b18", borderColor: T.border, color: T.text }}
       />
@@ -156,10 +153,17 @@ function CarMenu({
                 style={{ color: T.text, background: c.n === selected ? "rgba(244,140,52,0.10)" : undefined }}
               >
                 <span className="w-12 font-mono font-semibold" style={{ color: c.n === selected ? T.accent : undefined }}>
-                  #{c.n}
+                  #{carNo(data, c.n)}
                 </span>
-                <span className="min-w-0 flex-1 truncate" style={{ color: T.soft }}>
-                  {c.team}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate" style={{ color: T.soft }}>
+                    {c.team}
+                  </span>
+                  {c.driver && (
+                    <span className="truncate text-xs" style={{ color: T.muted }}>
+                      {c.driver}
+                    </span>
+                  )}
                 </span>
                 {c.n === selected && (
                   <span aria-label="current focus" className="text-xs" style={{ color: T.accent }}>

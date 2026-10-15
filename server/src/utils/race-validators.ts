@@ -19,6 +19,8 @@ const carDataSchema = z.object({
   num: z.number().int().nonnegative(),
   /** The car number as published when it differs from String(num), e.g. "4A", "007" (utils/carNumbers.ts). */
   label: z.string().min(1).max(12).optional(),
+  /** Driver names as the source gives them (driver search); RaceEntry.driverNames joins them. */
+  drivers: z.array(z.string().min(1).max(120)).max(12).optional(),
   team: z.string().min(1),
   cls: z.string().min(1),
   make: z.string().optional(),

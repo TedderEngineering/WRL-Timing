@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { RaceChartData } from "@shared/types";
-import { carNo } from "./car-number";
+import { carMatchesSearch, carNo } from "./car-number";
 
 interface GapEvolutionPanelProps {
   data: RaceChartData;
@@ -360,7 +360,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
             type="text"
             value={gapRefSearch}
             onChange={(e) => setGapRefSearch(e.target.value)}
-            placeholder="Search car # or team…"
+            placeholder="Search car #, team or driver…"
             className="w-full bg-white/[0.04] border border-white/[0.10] rounded-md pl-6 pr-2 py-1
                        text-[11px] text-white placeholder-white/25 outline-none
                        focus:border-white/30 font-mono"
@@ -377,7 +377,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
               .filter((n) => {
                 const c = data.cars[String(n)];
                 if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                if (q && !carMatchesSearch(data, n, q))
                   return false;
                 return true;
               })
@@ -465,7 +465,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                   .filter((n) => {
                     const c = data.cars[String(n)];
                     if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                    if (q && !carMatchesSearch(data, n, q))
                       return false;
                     return true;
                   });
@@ -486,7 +486,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                   .filter((n) => {
                     const c = data.cars[String(n)];
                     if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !carNo(data, n).toLowerCase().includes(q) && !(c.team ?? "").toLowerCase().includes(q))
+                    if (q && !carMatchesSearch(data, n, q))
                       return false;
                     return true;
                   });

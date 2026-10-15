@@ -3,8 +3,21 @@ import { optionalAuth } from "../middleware/auth.js";
 import { prisma } from "../models/prisma.js";
 import { getFreeAccessRaceIds } from "../services/races.js";
 import { freeMode } from "../lib/free-mode.js";
+import { searchDrivers } from "../services/driver-search.js";
 
 export const searchRouter = Router();
+
+// ─── GET /api/search/drivers?q= — every published race a driver ran in ─────────
+
+searchRouter.get("/drivers", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = String(req.query.q ?? "").trim().slice(0, 80);
+    res.set("Cache-Control", "public, max-age=120");
+    res.json({ query: q, drivers: await searchDrivers(q) });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── GET /api/search?q=&series=&season= — Unified event+race search ─────────
 

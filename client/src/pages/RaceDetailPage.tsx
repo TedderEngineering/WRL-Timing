@@ -1,3 +1,4 @@
+import { carKey } from "../features/chart/car-number";
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { FollowCarButton } from "../features/my-cars/FollowCarButton";
 import { ShareRaceButton } from "../features/share/ShareRaceButton";
@@ -126,8 +127,10 @@ export function RaceDetailPage() {
     winner = winner || Number(Object.keys(data.cars)[0]) || 0;
 
     // A shared link can name the car (?car=67): open on it instead of the winner.
-    const named = Number(new URLSearchParams(window.location.search).get("car"));
-    if (Number.isFinite(named) && named > 0 && data.cars[String(named)]) winner = named;
+    // ?car= takes the published number ("007") or the chart key (car-number.ts).
+    const param = new URLSearchParams(window.location.search).get("car");
+    const named = param ? carKey(data, param) : null;
+    if (named !== null && named > 0 && data.cars[String(named)]) winner = named;
 
     setFocusNum(winner);
     setClassView("");

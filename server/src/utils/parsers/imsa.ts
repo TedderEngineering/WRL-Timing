@@ -25,6 +25,7 @@ import { parseDelimitedCSV, mapHeaders, col } from "./csv-utils.js";
 import { parseSROResults, type SROEntry } from "../parseSROResults.js";
 import { parseAlkamelPitStopPdf } from "../parseAlkamelPitStopPdf.js";
 import { carNumbering, carNumberingWarnings } from "../carNumbers.js";
+import { uniqueDrivers } from "../driverNames.js";
 
 // ─── IMSA JSON types ─────────────────────────────────────────────────────────
 
@@ -1079,11 +1080,20 @@ export const imsaParser: RaceDataParser = {
         };
       });
 
+      const drivers = uniqueDrivers(
+        participant
+          ? participant.drivers.map((d) => `${d.firstname ?? ""} ${d.surname ?? ""}`)
+          : csvMeta
+            ? [...csvMeta.driverNames]
+            : resultEntry?.driverNames ?? []
+      );
+
       cars[String(num)] = {
         num,
         ...(ids.label(num) ? { label: ids.label(num) } : {}),
         team,
         cls,
+        ...(drivers.length ? { drivers } : {}),
         ...(make ? { make } : {}),
         ...(vehicle ? { vehicle } : {}),
         ...(normalizeFinishStatus(resultEntry?.status) ? { status: normalizeFinishStatus(resultEntry?.status)! } : {}),

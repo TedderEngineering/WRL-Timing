@@ -1,3 +1,4 @@
+import { DRIVER_SEPARATOR } from "../utils/driverNames.js";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import {
@@ -111,7 +112,7 @@ export async function ingestRaceData(
         raceId: race.id,
         carNumber: car.label ?? String(car.num),
         teamName: car.team,
-        driverNames: "", // not in source data
+        driverNames: (car.drivers ?? []).join(DRIVER_SEPARATOR),
         carClass: car.cls,
         finishPos: car.finishPos,
         finishPosClass: car.finishPosClass,
@@ -210,7 +211,7 @@ export async function reprocessRace(raceId: string): Promise<IngestResult> {
         raceId,
         carNumber: car.label ?? String(car.num),
         teamName: car.team,
-        driverNames: "",
+        driverNames: (car.drivers ?? []).join(DRIVER_SEPARATOR),
         carClass: car.cls,
         finishPos: car.finishPos,
         finishPosClass: car.finishPosClass,
