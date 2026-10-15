@@ -6,6 +6,7 @@ import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { peekPostAuthRedirect, clearPostAuthRedirect } from "../lib/postAuthRedirect";
+import { OAuthButtons, oauthMessage } from "../features/auth/OAuthButtons";
 
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -49,6 +50,12 @@ export function LoginPage() {
 
   return (
     <AuthLayout title="Welcome back" subtitle="Log in to your account">
+      {oauthMessage(location.search) && (
+        <div className="mb-5">
+          <Alert variant="error">{oauthMessage(location.search)}</Alert>
+        </div>
+      )}
+      <OAuthButtons next={from} />
       <form onSubmit={handleSubmit} className="space-y-5">
         {globalError && <Alert variant="error">{globalError}</Alert>}
 

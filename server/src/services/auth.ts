@@ -164,6 +164,27 @@ export async function login(
     throw new AppError(401, "Invalid email or password", "INVALID_CREDENTIALS");
   }
 
+  return startSession(user, meta);
+}
+
+/**
+ * Sign a user in: last-login time, the device limit (oldest sessions revoked), and a new token
+ * pair. Shared by password login and sign-in with another account (services/oauth.ts).
+ */
+export async function startSession(
+  user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    role: "USER" | "ADMIN";
+    emailVerified: boolean;
+    onboardingDone: boolean;
+    createdAt: Date;
+    subscription: { plan: string; status: string; currentPeriodEnd: Date | null; cancelAtPeriodEnd: boolean } | null;
+  },
+  meta: SessionMeta = {}
+): Promise<AuthResult> {
   // Update last login
   await prisma.user.update({
     where: { id: user.id },
@@ -527,7 +548,7 @@ export async function completeOnboarding(userId: string, theme?: string): Promis
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface SessionMeta {
+export interface SessionMeta {
   ipAddress?: string | null;
   userAgent?: string | null;
 }

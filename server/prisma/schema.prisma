@@ -65,6 +65,7 @@ model User {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   refreshTokens       RefreshToken[]
+  identities          UserIdentity[]
   passwordResetTokens PasswordResetToken[]
   emailVerifyTokens   EmailVerificationToken[]
   subscription        Subscription?
@@ -919,4 +920,21 @@ model SetupSessionNote {
   @@index([sessionId, createdAt])
   @@index([authorId])
   @@map("setup_session_notes")
+}
+
+/// A sign-in account at another provider (Google, Apple, Microsoft, Facebook, GitHub) linked to a user.
+model UserIdentity {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  provider  String // google | apple | microsoft | facebook | github
+  subject   String // the provider's stable user id ("sub")
+  email     String? // as the provider gave it when linked
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([userId])
+  @@map("user_identities")
 }

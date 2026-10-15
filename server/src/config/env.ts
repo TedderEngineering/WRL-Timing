@@ -72,6 +72,23 @@ const envSchema = z.object({
   // http://localhost:3000 for local work on Setup Sheet. Ignored in production.
   EXTRA_CORS_ORIGINS: z.string().optional(),
 
+  // Sign in with another account (services/oauth.ts). A provider's button shows only when its
+  // settings are present. Redirect URI to register at each provider, per site:
+  //   https://<site host>/api/auth/oauth/<provider>/callback
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  FACEBOOK_APP_ID: z.string().optional(),
+  FACEBOOK_APP_SECRET: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  // Apple: the Services ID, the team id, and a Sign in with Apple key (id + .p8 contents; "\n" for line breaks).
+  APPLE_CLIENT_ID: z.string().optional(),
+  APPLE_TEAM_ID: z.string().optional(),
+  APPLE_KEY_ID: z.string().optional(),
+  APPLE_PRIVATE_KEY: z.string().optional(),
+
   // Supabase
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),

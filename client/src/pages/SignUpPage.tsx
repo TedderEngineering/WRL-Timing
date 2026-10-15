@@ -7,6 +7,8 @@ import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { cn } from "../lib/utils";
 import { IS_GRIP_SITE } from "../lib/site";
+import { OAuthButtons } from "../features/auth/OAuthButtons";
+import { peekPostAuthRedirect } from "../lib/postAuthRedirect";
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -110,6 +112,7 @@ export function SignUpPage() {
 
   return (
     <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
+      <OAuthButtons next={peekPostAuthRedirect() || "/dashboard"} verb="Sign up" />
       <form onSubmit={handleSubmit} className="space-y-5">
         {globalError && <Alert variant="error">{globalError}</Alert>}
 

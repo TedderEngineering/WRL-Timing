@@ -1,3 +1,4 @@
+import { oauthRouter } from "./routes/oauth.js";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -89,6 +90,7 @@ export function createApp() {
 
   // ─── Routes ─────────────────────────────────────────────────────────────────
   app.use("/api/health", healthRouter);
+  app.use("/api/auth/oauth", oauthRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/races", racesRouter);
   app.use("/api/me", meRouter);
