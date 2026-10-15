@@ -72,7 +72,7 @@ vi.mock("../../config/env.js", () => ({ env: { NODE_ENV: "test", JWT_ACCESS_SECR
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { intakeRace, listIntakeRaces, parserInput, type IntakeDeps } from "../intake.js";
+import { findTwinRace, intakeRace, listIntakeRaces, parserInput, type IntakeDeps } from "../intake.js";
 import { getParser } from "../../utils/parsers/index.js";
 import type { RaceDataParser } from "../../utils/parsers/types.js";
 import { download, resolve } from "../../intake/index.js";
@@ -229,6 +229,28 @@ describe("intake upsert by source key", () => {
     expect(res.filter((x) => x.status === "fulfilled")).toHaveLength(1);
     expect((res.find((x) => x.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ statusCode: 409, code: "SOURCE_KEY_CONFLICT" });
     expect(store.races.size).toBe(1);
+  });
+
+  it("refuses a new source key whose race is already on the site under another key, unless forced", async () => {
+    await intakeRace(body(), actor, deps);
+    archive.mockClear();
+    const other = body({ sourceKey: "speedhive:session:123", metadata: { ...body().metadata, date: "2026-10-11" } });
+    await expect(intakeRace(other, actor, deps)).rejects.toMatchObject({ statusCode: 409, code: "DUPLICATE_SUSPECT" });
+    expect(archive).not.toHaveBeenCalled();
+    expect(store.races.size).toBe(1);
+    expect((await intakeRace({ ...other, force: true }, actor, deps)).action).toBe("created");
+    expect(store.races.size).toBe(2);
+  });
+
+  it("a twin needs the same series, cars, laps and finishing order (Race 1 and Race 2 are not twins)", async () => {
+    const cars = (order: string[]) => Object.fromEntries(order.map((n, i) => [n, { finishPos: i + 1 }]));
+    store.races.set("r1", { id: "r1", name: "GR Cup Race 1", date: new Date("2026-10-10T00:00:00Z"), series: "SRO", maxLap: 20, totalCars: 3, chartData: { cars: cars(["7", "8", "9"]) } });
+    const meta = { series: "SRO", date: "2026-10-11" };
+    const data = (order: string[]) => ({ maxLap: 20, cars: cars(order) }) as any;
+    expect(await findTwinRace(meta, data(["8", "7", "9"]), 3)).toBeNull();
+    expect(await findTwinRace(meta, data(["7", "8", "9"]), 3)).toMatchObject({ id: "r1" });
+    expect(await findTwinRace({ ...meta, series: "WRL" }, data(["7", "8", "9"]), 3)).toBeNull();
+    expect(await findTwinRace({ ...meta, date: "2026-12-01" }, data(["7", "8", "9"]), 3)).toBeNull();
   });
 
   it("a write that runs out of time is a clear 504, with a long enough limit for a 24-hour race", async () => {
