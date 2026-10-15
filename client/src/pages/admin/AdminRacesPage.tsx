@@ -235,7 +235,7 @@ export function AdminRacesPage() {
                         </button>
                       </td>
                       <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-400 hidden lg:table-cell">{race.entryCount}</td>
-                      <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-400 hidden lg:table-cell">{race.lapCount.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-400 hidden lg:table-cell">{race.maxLap ?? "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <Link
