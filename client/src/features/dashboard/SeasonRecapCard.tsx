@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { drawText, imageName, makeShareCard, roundRect, useShareCard, type Box, type SiteStyle } from "@/features/share";
+import { drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
+import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { SupportAsk } from "../support/SupportPrompts";
 import { readUi, writeUi } from "./ui-state";
 
@@ -78,7 +79,6 @@ function drawSeasonBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyl
 
 export function SeasonRecapCard({ recap, ask = true }: { recap: SeasonRecap; /** Only one coffee ask per page. */ ask?: boolean }) {
   const [hidden, setHidden] = useState(() => (readUi().recapsHidden ?? []).includes(recap.key));
-  const { share, busy } = useShareCard();
   if (hidden) return null;
   const title = `#${recap.number} ${recap.team}`;
   const stats = recapStats(recap);
@@ -135,28 +135,22 @@ export function SeasonRecapCard({ recap, ask = true }: { recap: SeasonRecap; /**
           </ul>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              share({
-                make: () =>
-                  makeShareCard({
-                    site: "racetrace",
-                    title: `${title}: ${recap.season}`,
-                    subtitle: recap.seriesLabel,
-                    body: (ctx, box, style) => drawSeasonBody(ctx, box, style, recap),
-                    fact: recap.best ? { text: `Best result: P${recap.best.finishClass} in ${recap.best.cls} at ${shortName(recap.best.raceName)}`, tone: "good" } : undefined,
-                  }),
-                filename: imageName("racetrace", `${title} ${recap.season} ${recap.seriesLabel}`),
-                text: `${title}: ${recap.season} in ${recap.seriesLabel}, on RaceTrace`,
-                kind: "season",
+          <ShareImageActions
+            make={() =>
+              makeShareCard({
+                site: "racetrace",
+                title: `${title}: ${recap.season}`,
+                subtitle: recap.seriesLabel,
+                body: (ctx, box, style) => drawSeasonBody(ctx, box, style, recap),
+                fact: recap.best ? { text: `Best result: P${recap.best.finishClass} in ${recap.best.cls} at ${shortName(recap.best.raceName)}`, tone: "good" } : undefined,
               })
             }
-            className="font-semibold text-[var(--rt-accent)] disabled:opacity-60"
-          >
-            {busy ? "Making the image…" : "Share your season ↗"}
-          </button>
+            filename={imageName("racetrace", `${title} ${recap.season} ${recap.seriesLabel}`)}
+            text={`${title}: ${recap.season} in ${recap.seriesLabel}, on RaceTrace`}
+            kind="season"
+            label="Share your season"
+            className="text-sm font-semibold disabled:opacity-60"
+          />
           {recap.best && (
             <Link to={`/chart?race=${recap.best.raceId}&car=${encodeURIComponent(recap.number)}`} className="text-[var(--rt-accent)]">
               Best race →
