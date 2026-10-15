@@ -51,6 +51,7 @@ import {
 } from "@/features/grip/validate";
 import { cn } from "@/lib/utils";
 import { OutcomePill } from "@/features/grip/outcome";
+import { SharePressuresButton } from "@/features/grip/pressureCard";
 import { gp } from "@/lib/site";
 
 const WEATHER = [
@@ -675,9 +676,10 @@ export function GripCalculatorPage() {
                     see them for what you have entered now.
                   </p>
                 )}
-                <span className="block text-xs text-gray-500">
-                  Saved to your dashboard.
-                </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-gray-500">Saved to your dashboard.</span>
+                  <SharePressuresButton calc={result} variant="ghost" />
+                </div>
                 {/* Close the loop: the hot pressures after the run show how close it came. */}
                 {result.outcome ? (
                   <Link
