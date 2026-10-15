@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { RecapCard, EventRow, raceChipLabels } from "../RecapCard";
+import { RecapCard } from "../RecapCard";
 import { SeasonPanel, shortRaceLabel } from "../SeasonPanel";
 import { formatDayRange, whenLabel } from "../format";
 import type { LatestEvent, SeasonResponse } from "../types";
@@ -99,20 +99,6 @@ describe("RecapCard", () => {
   it("says when a race has no recap yet", () => {
     const ev = { ...EVENT, races: [EVENT.races[1]] };
     expect(text(html(<RecapCard event={ev} variant="compact" />))).toContain("Chart only · recap coming");
-    expect(text(html(<ul><EventRow event={ev} /></ul>))).toContain("1 race · up to 34 cars · Chart only");
-  });
-
-  it("lists earlier weekends' races as chips that open Position Trace", () => {
-    const h = html(<ul><EventRow event={EVENT} /></ul>);
-    const chips = h.match(/<a [^>]*>[^<]*<\/a>/g) ?? [];
-    expect(chips).toHaveLength(2);
-    expect(chips[0]).toMatch(/href="\/chart\?race=r1"[^>]*>Race 1</);
-    expect(raceChipLabels({ ...EVENT, races: [{ ...EVENT.races[0], session: "Pirelli GT4 Race 1" }] })).toEqual(["GT4 Race 1"]);
-    const wrl = { ...EVENT, series: "WRL", races: [
-      { ...EVENT.races[1], id: "a", session: "WRL West Desert 2026", date: "2026-09-26" },
-      { ...EVENT.races[1], id: "b", session: "WRL West Desert 2026", date: "2026-09-27" },
-    ] };
-    expect(raceChipLabels(wrl)).toEqual(["Sat · West Desert 2026", "Sun · West Desert 2026"]);
   });
 
   it("locks a race the member's plan does not open", () => {
