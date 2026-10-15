@@ -31,8 +31,10 @@ export function SupportLink({ variant = "pill", onClick, className }: { variant?
 /**
  * F9-B: shown once (at most every 30 days), at the end of a recap the reader
  * chose to expand. Never to someone who came back from checkout.
+ * `lead`/`body`/`from` replace the site's usual wording for a second moment
+ * (Finding Grip's season recap); left out, nothing changes.
  */
-export function SupportAsk() {
+export function SupportAsk({ lead, body, from }: { lead?: string; body?: string; from?: string } = {}) {
   const { support, copy, openSupport } = useSupport();
   const [show] = useState(() => support.enabled && canAsk());
   const [hidden, setHidden] = useState(false);
@@ -45,12 +47,12 @@ export function SupportAsk() {
       <SupporterAvatar size={44} />
       <div className="flex min-w-0 flex-col gap-2">
         <p className="m-0 leading-normal text-[var(--rt-text)]">
-          <b>{copy.askLead}</b> {copy.askBody}
+          <b>{lead ?? copy.askLead}</b> {body ?? copy.askBody}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => openSupport(copy.site === "grip" ? "on-target" : "recap")}
+            onClick={() => openSupport(from ?? (copy.site === "grip" ? "on-target" : "recap"))}
             className="rounded-md bg-[var(--rt-accent)] px-3.5 py-2 text-sm font-semibold text-[var(--rt-on-accent)]"
           >
             ☕ Buy me a coffee

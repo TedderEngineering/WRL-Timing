@@ -187,3 +187,109 @@ export function progressSummary(rows: CalcRow[], recentCount = 10) {
     tracks,
   };
 }
+
+// ─── Season recap ────────────────────────────────────────────────────────────
+
+/** The columns the season recap needs from a reference session (with its track). */
+export interface RefRow {
+  id: string;
+  sessionDate: Date;
+  track: CalcRow["track"];
+}
+
+const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * A driver's season (calendar year) in facts, for the recap card. Rows must
+ * already be limited to that year and to the driver. Only their own runs;
+ * nothing is compared with other drivers.
+ */
+export function seasonSummary(year: number, calcs: CalcRow[], refs: RefRow[]) {
+  const recorded = recordedOf(calcs);
+  const days = new Set<string>();
+  const tracks = new Map<
+    string,
+    {
+      track: ReturnType<typeof trackOut>;
+      days: Set<string>;
+      calculations: number;
+      recorded: number;
+      onTarget: number;
+    }
+  >();
+  const entry = (t: CalcRow["track"]) => {
+    let e = tracks.get(t.id);
+    if (!e) {
+      e = {
+        track: trackOut(t),
+        days: new Set(),
+        calculations: 0,
+        recorded: 0,
+        onTarget: 0,
+      };
+      tracks.set(t.id, e);
+    }
+    return e;
+  };
+  for (const c of calcs) {
+    const e = entry(c.track);
+    e.calculations += 1;
+    e.days.add(dayKey(c.sessionDate));
+    days.add(dayKey(c.sessionDate));
+  }
+  for (const r of refs) {
+    entry(r.track).days.add(dayKey(r.sessionDate));
+    days.add(dayKey(r.sessionDate));
+  }
+  for (const r of recorded) {
+    const e = entry(r.row.track);
+    e.recorded += 1;
+    if (r.cmp.onTarget) e.onTarget += 1;
+  }
+
+  // The run that came closest: the smallest worst-corner miss (earliest on a tie).
+  const closest = [...recorded].sort(
+    (a, b) =>
+      a.cmp.worstMiss - b.cmp.worstMiss ||
+      a.row.sessionDate.getTime() - b.row.sessionDate.getTime()
+  )[0];
+  const onTarget = recorded.filter((r) => r.cmp.onTarget).length;
+  const dates = [...days].sort();
+
+  return {
+    year,
+    onTargetPsi: ON_TARGET_PSI,
+    calculations: calcs.length,
+    referenceSessions: refs.length,
+    trackDays: days.size,
+    recorded: recorded.length,
+    onTarget,
+    averageWorstMiss: mean(recorded.map((r) => r.cmp.worstMiss)),
+    tracks: [...tracks.values()]
+      .map((t) => ({
+        track: t.track,
+        days: t.days.size,
+        calculations: t.calculations,
+        recorded: t.recorded,
+        onTarget: t.onTarget,
+      }))
+      .sort(
+        (a, b) =>
+          b.days - a.days ||
+          b.calculations - a.calculations ||
+          a.track.name.localeCompare(b.track.name)
+      ),
+    closest: closest
+      ? {
+          id: closest.row.id,
+          name: closest.row.name,
+          track: trackOut(closest.row.track),
+          sessionDate: closest.row.sessionDate,
+          worstMiss: closest.cmp.worstMiss,
+          onTarget: closest.cmp.onTarget,
+        }
+      : null,
+    firstDate: dates[0] ?? null,
+    lastDate: dates[dates.length - 1] ?? null,
+  };
+}

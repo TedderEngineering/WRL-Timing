@@ -3,8 +3,10 @@ import {
   actualOf,
   compare,
   progressSummary,
+  seasonSummary,
   ON_TARGET_PSI,
   type CalcRow,
+  type RefRow,
 } from "../grip/outcome.js";
 
 describe("compare", () => {
@@ -156,5 +158,82 @@ describe("progressSummary", () => {
       onTarget: 2,
       averageWorstMiss: 0.3,
     });
+  });
+});
+
+describe("seasonSummary", () => {
+  const vir = { id: "t1", name: "VIRginia International Raceway", shortName: "VIR" };
+  const ra = { id: "t2", name: "Road America", shortName: "RA" };
+  const at = (m: number, d: number, h = 15) => new Date(Date.UTC(2026, m - 1, d, h));
+  let n = 0;
+  const calc = (date: Date, miss: number | null, track = vir): CalcRow => {
+    n += 1;
+    const hot = miss === null ? null : 30 + miss;
+    return {
+      id: `s${n}`,
+      name: `Run ${n}`,
+      sessionDate: date,
+      track,
+      targetLf: 30,
+      targetRf: 30,
+      targetLr: 30,
+      targetRr: 30,
+      actualHotLf: hot,
+      actualHotRf: 30,
+      actualHotLr: 30,
+      actualHotRr: 30,
+      outcomeAt: hot === null ? null : date,
+    };
+  };
+  const ref = (date: Date, track = vir): RefRow => ({
+    id: `r${date.getTime()}`,
+    sessionDate: date,
+    track,
+  });
+
+  it("is all zeros for an empty year", () => {
+    const s = seasonSummary(2026, [], []);
+    expect(s).toMatchObject({
+      year: 2026,
+      calculations: 0,
+      referenceSessions: 0,
+      trackDays: 0,
+      recorded: 0,
+      onTarget: 0,
+      averageWorstMiss: null,
+      tracks: [],
+      closest: null,
+      firstDate: null,
+      lastDate: null,
+    });
+  });
+
+  it("counts days, tracks, recorded runs and the closest run", () => {
+    const calcs = [
+      calc(at(4, 11, 14), 0.8),
+      calc(at(4, 11, 18), 0.3),
+      calc(at(4, 12), 0.1),
+      calc(at(6, 20), null, ra),
+      calc(at(6, 21), 0.1, ra),
+    ];
+    const refs = [ref(at(4, 10)), ref(at(6, 20), ra)];
+    const s = seasonSummary(2026, calcs, refs);
+    expect(s).toMatchObject({
+      calculations: 5,
+      referenceSessions: 2,
+      trackDays: 5,
+      recorded: 4,
+      onTarget: 3,
+      averageWorstMiss: 0.33,
+      firstDate: "2026-04-10",
+      lastDate: "2026-06-21",
+    });
+    expect(s.tracks).toEqual([
+      { track: vir, days: 3, calculations: 3, recorded: 3, onTarget: 2 },
+      { track: ra, days: 2, calculations: 2, recorded: 1, onTarget: 1 },
+    ]);
+    // Two runs tie at 0.1; the earlier one is the closest.
+    expect(s.closest).toMatchObject({ name: "Run 3", worstMiss: 0.1, onTarget: true });
+    expect(s.closest!.track.shortName).toBe("VIR");
   });
 });

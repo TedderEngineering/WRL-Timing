@@ -24,11 +24,13 @@ import {
 // ─── Per-browser memory (hidden cards) ───────────────────────────────────────
 
 const KEY = "findinggrip.ui.v1";
-interface UiState {
+export interface UiState {
   checklistHidden?: boolean;
   installDismissedAt?: number;
+  /** The season recap year the driver hid. */
+  recapHiddenYear?: number;
 }
-function readUi(): UiState {
+export function readUi(): UiState {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || "{}");
     return v && typeof v === "object" ? v : {};
@@ -36,7 +38,7 @@ function readUi(): UiState {
     return {};
   }
 }
-function writeUi(patch: UiState) {
+export function writeUi(patch: UiState) {
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...readUi(), ...patch }));
   } catch {
