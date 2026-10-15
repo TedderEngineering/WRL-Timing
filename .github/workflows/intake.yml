@@ -246,7 +246,21 @@ jobs:
           for m in "$INTAKE_WORK_DIR"/*/manifest.json; do [ -f "$m" ] && dirs+=("$(dirname "$m")"); done
           if [ ${#dirs[@]} -gt 0 ]; then
             npx tsx scripts/intake.ts push "${dirs[@]}" 2>&1 | tee "$RUNNER_TEMP/push.txt" || status=1
-            node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Imported as drafts::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/push.txt"
+            # Results table first (the end of the log), then errors, in notice-sized parts.
+            node -e '
+              const t = require("fs").readFileSync(process.argv[1], "utf8").split("\n");
+              const at = t.findIndex((l) => /^ACTION\s+RACE/.test(l));
+              const table = at >= 0 ? t.slice(at) : [];
+              const counts = {};
+              for (const l of table.slice(1)) { const k = l.trim().split(/\s{2,}/)[0]; if (k) counts[k] = (counts[k] || 0) + 1; }
+              const errs = t.filter((l) => /HTTP \d{3}|ERROR|error \d{3}/.test(l));
+              const body = [`PUSH: ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(", ") || "no table"}`, "", "ERRORS", ...errs, "", ...table];
+              const parts = []; let cur = "";
+              for (const l of body) { if (cur.length + l.length + 1 > 3800) { parts.push(cur); cur = ""; } cur += l + "\n"; }
+              if (cur.trim()) parts.push(cur);
+              const enc = (x) => x.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+              parts.slice(0, 8).forEach((p, i) => console.log(`::notice title=Imported ${i + 1}/${Math.min(parts.length, 8)}::` + enc(p)));
+            ' "$RUNNER_TEMP/push.txt"
             { echo "## Imported as drafts"; echo '```'; cat "$RUNNER_TEMP/push.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit $status
