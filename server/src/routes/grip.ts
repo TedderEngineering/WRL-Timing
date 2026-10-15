@@ -45,7 +45,12 @@ import {
   createGripPortalSession,
 } from "../services/grip/billing.js";
 import { gripSite, readGripPublicUrl } from "../services/site.js";
-import { actualOf, compare, ON_TARGET_PSI } from "../services/grip/outcome.js";
+import {
+  actualOf,
+  compare,
+  progressSummary,
+  ON_TARGET_PSI,
+} from "../services/grip/outcome.js";
 
 export const gripRouter = Router();
 
@@ -840,6 +845,22 @@ gripRouter.post(
       data: { outcomeSkipped: true },
     });
     res.json({ calculation: calculationOut(await ownCalculation(userId, calc.id)) });
+  })
+);
+
+// ─── Progress over time ──────────────────────────────────────────────────────
+
+/** How close the driver's recorded runs came: the last ten, the trend, each track. */
+gripRouter.get(
+  "/progress",
+  wrap(async (req, res) => {
+    const rows = await prisma.gripCalculation.findMany({
+      where: { userId: req.user!.userId, outcomeAt: { not: null } },
+      include: { track: true },
+      orderBy: { sessionDate: "desc" },
+      take: 1000,
+    });
+    res.json({ progress: progressSummary(rows) });
   })
 );
 

@@ -27,6 +27,7 @@ import { gp } from "@/lib/site";
 import { SupportCard } from "@/features/support/SupportPrompts";
 import { AwaitingOutcomes, OutcomePill, awaitingOutcome } from "@/features/grip/outcome";
 import { FirstWeekendChecklist, InstallHint } from "@/features/grip/engagement";
+import { ProgressPanel } from "@/features/grip/progress";
 
 function SessionCard({ session, detail }: { session: ReferenceSession; detail: string }) {
   return (
@@ -63,6 +64,7 @@ export function GripDashboardPage() {
   const navigate = useNavigate();
   const sessions = useLoad(() => gripApi.sessions());
   const calcs = useLoad(() => gripApi.calculations());
+  const progress = useLoad(() => gripApi.progress());
   const [upgrade, setUpgrade] = useState(false);
   const [deleting, setDeleting] = useState<Calculation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -86,7 +88,7 @@ export function GripDashboardPage() {
       await gripApi.deleteCalculation(deleting.id);
       toast("Calculation deleted");
       setDeleting(null);
-      await calcs.reload();
+      await Promise.all([calcs.reload(), progress.reload()]);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not delete");
     } finally {
@@ -204,6 +206,9 @@ export function GripDashboardPage() {
           )}
         </>
       )}
+
+      {/* Accuracy over time, once a run's hot pressures are recorded. */}
+      {progress.data && <ProgressPanel progress={progress.data} units={units} />}
 
       <section className="space-y-2.5">
         <Eyebrow>Recent tire pressure calculations</Eyebrow>

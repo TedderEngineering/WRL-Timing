@@ -108,6 +108,44 @@ export interface Outcome {
   recordedAt: string;
 }
 
+type TrackRef = Pick<Track, "id" | "name" | "shortName">;
+
+/** How close the driver's recorded runs came (GET /grip/progress). Own runs only. */
+export interface Progress {
+  onTargetPsi: number;
+  recordedTotal: number;
+  recent: {
+    count: number;
+    onTarget: number;
+    /** Average of each run's worst corner miss. */
+    averageWorstMiss: number | null;
+    /** Oldest first. */
+    runs: {
+      id: string;
+      name: string;
+      sessionDate: string;
+      track: TrackRef;
+      worstMiss: number;
+      onTarget: boolean;
+    }[];
+  };
+  /** The latest five runs' average worst-corner miss against the (up to) five before; null under six runs. */
+  trend: {
+    latestAverage: number;
+    previousAverage: number;
+    latestRuns: number;
+    previousRuns: number;
+    direction: "smaller" | "similar" | "larger";
+  } | null;
+  tracks: {
+    track: TrackRef;
+    recorded: number;
+    onTarget: number;
+    averageWorstMiss: number | null;
+    lastDate: string;
+  }[];
+}
+
 export interface OutcomeInput {
   hot: Corners;
   saveAsReference?: boolean;
@@ -220,6 +258,10 @@ export const gripApi = {
     api
       .post<{ calculation: Calculation }>(`/grip/calculations/${id}/skip-outcome`)
       .then((r) => r.calculation),
+
+  /** Accuracy over time: the last ten recorded runs, the trend, each track. */
+  progress: () =>
+    api.get<{ progress: Progress }>("/grip/progress").then((r) => r.progress),
 
   damper: (q: DamperQuery) =>
     api.get<DamperResult>(`/grip/damper?${new URLSearchParams({ ...q }).toString()}`),
