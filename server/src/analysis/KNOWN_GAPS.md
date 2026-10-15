@@ -49,13 +49,18 @@ Race-level checks cover FCY intervals and leader laps, class median clean laps, 
 | I9 | D-DATE when the files have no date (SRO COTA, GR COTA) | Blocker `DATE-AMBIGUOUS`; `raceDate` 1970-01-01 until the owner enters it. | No date was invented. The COTA 8 h test uses 2025-12-06, which is the day before the Sunday 7 h `Time of Day` date. |
 | I10 | Lap interval when a previous row exists | Previous row's end (D-TIME), also for WRL. | Stage 1 WRL used end − `Lap_Time`; see G1. |
 
-## Not built in G2
+## Not built in G2 (status October 2026)
 
 | Item | Status |
 |---|---|
-| M17 rule checks | `ruleChecks: []`, `completeness.ruleChecks: absent`. This is G3. The facts G3 needs are present: pit-in clocks, drive time per driver number, stints with lap ranges, and pits-open flags with class scope. |
-| WRL control log / Redmist flags (FCY rank 1 or 2 for WRL) | Not wired. WRL FCY is always reconstructed (Q1). |
+| M17 rule checks | Built in G3: `rules/run-rule-checks.ts` with rulebooks `imsa-mpc-2026`, `sro-gt4-america-2026` and `wrl-2026` (`rules/rulebooks/*.yaml`, loaded by `rules/load-rulebook.ts`). |
+| WRL control log / Redmist flags (FCY rank 1 or 2 for WRL) | Built for the RedMist format (`adapters/redmist.ts`): its flags file gives the caution periods and its pit report the pit passages. WRL website and Speedhive exports still reconstruct FCY (Q1). |
 | WW `Penalties` column | Not turned into penalty records. The schema has no type for "presence only". |
-| IMSA PDF flags, `12_Lap Chart` check (A-LC), W-POS running-order check (T6) | Not implemented. The lap chart is accepted as a file role but not read. |
+| `12_Lap Chart` check (A-LC) | Built: `engine/lap-chart.ts` compares the lap chart with D-POS and raises `LAP-CHART-MISMATCH` (warning) or `LAP-CHART-UNMATCHED` / `LAP-CHART-UNREAD` (notes). MPC Road Atlanta: 3261 of 3261 positions agree. Not part of the frozen fixtures (their file lists leave the lap chart out). |
+| IMSA PDF flags, W-POS running-order check (T6) | Not implemented. |
 | T8 penalty fixture (22 records) and T9 make/date fixtures | Covered only by unit tests on synthetic data, and by MPC/R1 spot checks (dates 2026-10-02, 2026-10-10 −04:00, 2026-10-11). There is no frozen expected file. |
-| Rulebook YAML loader | Not built. The engine takes the few values it reads as `options.rulebook` (`pitCycleModel`, `pitLaneTransitS`, `garageThresholdS`, `serveWindowS`, `scheduledDurationS`, `driveTimeEndsAt`). |
+| Rulebook YAML loader | Built (`rules/load-rulebook.ts`). The engine itself still takes the few values it reads as `options.rulebook` (`pitCycleModel`, `pitLaneTransitS`, `garageThresholdS`, `serveWindowS`, `scheduledDurationS`, `driveTimeEndsAt`). |
+
+## On the race page
+
+Since October 2026 the race page, Your car and the Pit Stops tab take their pit facts from a race's published package (`packages/pit-facts.ts`). So the gaps above are the gaps users see on those races. Races without a package still show the import's own analysis (`utils/parsers/position-analysis.ts`, audited in ACCURACY_WRL / ACCURACY_ALKAMEL).
