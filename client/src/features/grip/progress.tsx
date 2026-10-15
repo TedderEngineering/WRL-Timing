@@ -159,3 +159,37 @@ export function ProgressPanel({ progress, units }: { progress: Progress; units: 
     </section>
   );
 }
+
+/**
+ * One line under a recorded run's verdict: "On target in 6 of your last 10
+ * recorded runs. At VIR: 3 of 4." Nothing until there are two recorded runs.
+ */
+export function ProgressLine({
+  progress,
+  trackId,
+  trackName,
+}: {
+  progress: Progress;
+  trackId: string;
+  trackName: string;
+}) {
+  const { recent } = progress;
+  if (progress.recordedTotal < 2) return null;
+  const here = progress.tracks.find((t) => t.track.id === trackId);
+  // Only worth naming the track when it isn't the same set of runs.
+  const showTrack = here && here.recorded >= 2 && here.recorded !== recent.count;
+  return (
+    <p
+      data-testid="progress-line"
+      className="mt-2 text-sm text-gray-700 dark:text-gray-300"
+    >
+      On target in <b>{recent.onTarget}</b> of your last {recent.count} recorded runs.
+      {showTrack && (
+        <>
+          {" "}
+          At {trackName}: <b>{here.onTarget}</b> of {here.recorded}.
+        </>
+      )}
+    </p>
+  );
+}
