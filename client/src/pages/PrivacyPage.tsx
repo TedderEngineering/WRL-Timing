@@ -15,7 +15,10 @@ export function PrivacyPage() {
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             We collect the following categories of information: account information you
-            provide (email, display name, password); usage data (pages visited, races
+            provide (email, display name, password); if you sign in with another account
+            (Google, Apple, Microsoft, Facebook or GitHub), the email address, name, profile
+            picture and account id that provider shares with us, and nothing else from that
+            account; usage data (pages visited, races
             viewed, features used); and payment information processed securely through
             Stripe (we do not store your full credit card details).
           </p>
