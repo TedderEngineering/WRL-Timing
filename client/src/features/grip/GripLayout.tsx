@@ -14,6 +14,7 @@ import "./install";
 import { IS_GRIP_SITE, RACETRACE_URL, gp, stripGripPrefix } from "@/lib/site";
 import { SupportProvider } from "@/features/support/SupportContext";
 import { SupportLink } from "@/features/support/SupportPrompts";
+import { useSupport } from "@/features/support/SupportContext";
 
 const APP_NAV = [
   { to: gp("/dashboard"), label: "Dashboard", short: "Home" },
@@ -56,11 +57,12 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
       <nav
-        className="container-page flex items-center justify-between h-16 gap-3"
+        className="container-page flex items-center justify-between h-16 gap-2 sm:gap-3"
         aria-label="Main"
       >
-        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-          <div className="flex items-center gap-3 min-w-0 md:shrink-0">
+        {/* Phones: a smaller Tedder logo and tighter spacing leave room for the name and the coffee button. */}
+        <div className="flex items-center gap-2 sm:gap-6 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 md:shrink-0">
             <a
               href="https://tedderengineering.com"
               target="_blank"
@@ -70,24 +72,24 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
               <img
                 src="/te-logo-black.png"
                 alt="Tedder Engineering"
-                className="h-8 dark:hidden"
+                className="h-6 sm:h-8 dark:hidden"
               />
               <img
                 src="/te-logo-white.png"
                 alt="Tedder Engineering"
-                className="h-8 hidden dark:block"
+                className="h-6 sm:h-8 hidden dark:block"
               />
             </a>
             <Link
               to={isAuthenticated ? gp("/dashboard") : gp("")}
-              className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-700 pl-3 text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
+              className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-700 pl-2 sm:pl-3 text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
             >
               <GripMark className="h-6 w-6 shrink-0" />
               <span className="truncate">Finding Grip</span>
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
             {links.map((l) => (
               <NavLink
                 key={l.to}
@@ -108,8 +110,11 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Below 1024px (phones and tablets use the compact header with the menu
+              button): the same always-on coffee entry as the desktop link. */}
+          <CoffeeIconButton />
+          <div className="hidden lg:flex items-center gap-3">
             {/* The only always-on support entry; lg+ so the name never gets squeezed. */}
             <div className="hidden lg:block">
               <SupportLink />
@@ -152,7 +157,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
 
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="md:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="lg:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             aria-label="Menu"
             aria-expanded={menuOpen}
           >
@@ -174,7 +179,7 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
       </nav>
 
       {menuOpen && (
-        <div className="md:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-lg z-50">
+        <div className="lg:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-lg z-50">
           <div className="container-page py-3 flex flex-col">
             {links.map((l) => (
               <Link
@@ -245,6 +250,27 @@ function Header({ signedInApp }: { signedInApp: boolean }) {
         </div>
       )}
     </header>
+  );
+}
+
+/**
+ * The header's coffee entry where the "☕ Buy me a coffee" link doesn't fit
+ * (below 1024px). Passive: it never opens by itself. Same placement name as
+ * the desktop link ("header").
+ */
+function CoffeeIconButton() {
+  const { support, openSupport } = useSupport();
+  if (!support.enabled) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => openSupport("header")}
+      aria-label="Buy me a coffee"
+      title="Buy me a coffee"
+      className="lg:hidden grid h-11 w-11 shrink-0 place-items-center rounded-full border border-gray-300 dark:border-gray-700 text-xl leading-none hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-grip-500"
+    >
+      <span aria-hidden="true">☕</span>
+    </button>
   );
 }
 
