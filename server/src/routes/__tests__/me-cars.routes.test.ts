@@ -89,6 +89,10 @@ describe("matching a car to a race entry", () => {
     expect(carMatchesEntry({ number: "67", series: "imsa", teamName: "Other Team" }, race, { carNumber: "67", teamName: "Blackdog Racing" })).toBe(false);
     expect(carMatchesEntry({ number: "67", series: "imsa", season: 2025 }, race, { carNumber: "67" })).toBe(false);
   });
+  it("never matches a track-day or club car (series other) to a race", () => {
+    for (const r of [race, { series: "WRL", season: 2026 }, { series: "Unknown Club Series", season: 2026 }])
+      expect(carMatchesEntry({ number: "67", series: "other" }, r, { carNumber: "67" })).toBe(false);
+  });
   it("compares team names without case or punctuation", () => {
     expect(teamsMatch("BLACKDOG RACING.", "Blackdog Racing")).toBe(true);
     expect(teamsMatch(null, "anything")).toBe(true);
@@ -132,6 +136,10 @@ describe("/api/me/cars", () => {
     expect(e.body.car).toMatchObject({ number: "68", season: 2027 });
     expect((await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "#67!", series: "wrl" })).status).toBe(400);
     expect((await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "67", series: "nascar" })).status).toBe(400);
+    const club = await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "12", series: "other", label: "Track day Miata" });
+    expect(club.status).toBe(201);
+    expect(club.body.car).toMatchObject({ number: "12", series: "other", label: "Track day Miata" });
+    expect((await request(app).delete(`/api/me/cars/${club.body.car.id}`).set("Authorization", A)).status).toBe(204);
     expect((await request(app).delete(`/api/me/cars/${c.body.car.id}`).set("Authorization", A)).status).toBe(204);
     expect((await request(app).get("/api/me/cars").set("Authorization", A)).body.cars).toEqual([]);
   });

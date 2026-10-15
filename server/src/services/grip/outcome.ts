@@ -70,6 +70,8 @@ export interface CalcRow {
   name: string;
   sessionDate: Date;
   track: { id: string; name: string; shortName: string };
+  /** The car from the shared My cars list, when the run has one. */
+  userCar?: { id: string; label: string | null; number: string; series: string } | null;
   targetLf: number;
   targetRf: number;
   targetLr: number;
@@ -166,6 +168,28 @@ export function progressSummary(rows: CalcRow[], recentCount = 10) {
     }))
     .sort((a, b) => b.recorded - a.recorded || a.track.name.localeCompare(b.track.name));
 
+  // Each car (shared My cars list); runs without a car are left out here.
+  const carGroups = new Map<string, Recorded[]>();
+  for (const r of recorded) {
+    const car = r.row.userCar;
+    if (!car) continue;
+    const list = carGroups.get(car.id) ?? [];
+    list.push(r);
+    carGroups.set(car.id, list);
+  }
+  const cars = [...carGroups.values()]
+    .map((list) => {
+      const c = list[0].row.userCar!;
+      return {
+        car: { id: c.id, label: c.label, number: c.number, series: c.series },
+        recorded: list.length,
+        onTarget: list.filter((r) => r.cmp.onTarget).length,
+        averageWorstMiss: mean(list.map((r) => r.cmp.worstMiss)),
+        lastDate: list[0].row.sessionDate,
+      };
+    })
+    .sort((a, b) => b.recorded - a.recorded || a.car.number.localeCompare(b.car.number));
+
   return {
     onTargetPsi: ON_TARGET_PSI,
     recordedTotal: recorded.length,
@@ -185,6 +209,7 @@ export function progressSummary(rows: CalcRow[], recentCount = 10) {
     },
     trend,
     tracks,
+    cars,
   };
 }
 

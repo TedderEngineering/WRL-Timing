@@ -40,10 +40,19 @@ export interface Track {
   isActive: boolean;
 }
 
+/** A car from the shared My cars list, as shown on a session or calculation. */
+export interface CarRef {
+  id: string;
+  label: string | null;
+  number: string;
+  series: string;
+}
+
 export interface ReferenceSession {
   id: string;
   name: string;
   track: Track;
+  car: CarRef | null;
   sessionDate: string;
   weather: Weather;
   trackTemp: number;
@@ -70,6 +79,8 @@ export interface SessionInput {
   hot?: Corners<number | null>;
   wheel: Corners;
   notes?: string | null;
+  /** Shared My cars list; null for none. Left out: unchanged on edit. */
+  userCarId?: string | null;
 }
 
 export interface Calculation {
@@ -78,6 +89,8 @@ export interface Calculation {
   referenceSessionId: string | null;
   referenceName: string;
   track: Track;
+  /** The reference session's car (shared My cars list). */
+  car: CarRef | null;
   sessionDate: string;
   weather: Weather;
   trackTemp: number;
@@ -139,6 +152,14 @@ export interface Progress {
   } | null;
   tracks: {
     track: TrackRef;
+    recorded: number;
+    onTarget: number;
+    averageWorstMiss: number | null;
+    lastDate: string;
+  }[];
+  /** Each car (shared My cars list); runs without a car are left out. */
+  cars: {
+    car: CarRef;
     recorded: number;
     onTarget: number;
     averageWorstMiss: number | null;

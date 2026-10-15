@@ -9,6 +9,7 @@ import {
 } from "@/features/grip/api";
 import { useGrip } from "@/features/grip/GripContext";
 import { useLoad } from "@/features/grip/hooks";
+import { CarPicker } from "@/features/grip/cars";
 import {
   Card,
   ChoiceChips,
@@ -53,6 +54,7 @@ interface FormState {
   cold: Corners<string>;
   hot: Corners<string>;
   notes: string;
+  carId: string;
 }
 
 const blank = (): FormState => ({
@@ -66,6 +68,7 @@ const blank = (): FormState => ({
   cold: emptyCorners(),
   hot: emptyCorners(),
   notes: "",
+  carId: "",
 });
 
 type Errors = Partial<
@@ -109,6 +112,7 @@ export function GripSessionFormPage() {
       cold: mapCorners(s.cold, (v) => pressureInput(v, units)),
       hot: mapCorners(s.hot, (v) => pressureInput(v, units)),
       notes: s.notes ?? "",
+      carId: s.car?.id ?? "",
     };
     setForm(loadedForm);
     setLoaded(loadedForm);
@@ -197,6 +201,7 @@ export function GripSessionFormPage() {
       ) as Corners,
       hot: keepUnchangedCorners(hot.values, form.hot, loaded?.hot, stored?.hot),
       notes: form.notes.trim() || null,
+      userCarId: form.carId || null,
     };
 
     setSaving(true);
@@ -296,6 +301,11 @@ export function GripSessionFormPage() {
                 hint="Over 60 minutes is calculated as 60."
               />
             </div>
+            <CarPicker
+              value={form.carId}
+              onChange={(v) => set("carId", v)}
+              source="grip_session_form"
+            />
             <div>
               <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
                 Weather

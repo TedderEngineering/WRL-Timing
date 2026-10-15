@@ -138,6 +138,23 @@ describe("progressSummary", () => {
     expect(same.trend?.direction).toBe("similar");
   });
 
+  it("groups by car, leaving out runs without one", () => {
+    const miata = { id: "car1", label: "Track day Miata", number: "12", series: "other" };
+    const gt4 = { id: "car2", label: null, number: "67", series: "sro" };
+    const withCar = (row: CalcRow, car: CalcRow["userCar"]) => ({ ...row, userCar: car });
+    const p = progressSummary([
+      withCar(run(1, 0.2), miata),
+      withCar(run(2, 0.8), gt4),
+      withCar(run(3, 0.4), miata),
+      run(4, 0.1),
+    ]);
+    expect(p.cars.map((c) => c.car.id)).toEqual(["car1", "car2"]);
+    expect(p.cars[0]).toMatchObject({ recorded: 2, onTarget: 2, averageWorstMiss: 0.3 });
+    expect(p.cars[1]).toMatchObject({ recorded: 1, onTarget: 0 });
+    expect(p.recordedTotal).toBe(4);
+    expect(progressSummary([run(5, 0.2)]).cars).toEqual([]);
+  });
+
   it("groups by track, most recorded first", () => {
     const p = progressSummary([
       run(1, 0.2),

@@ -1,7 +1,8 @@
 /**
  * Share cards for both sites: one template (template.ts), IBM Plex fonts
  * loaded on demand (fonts.ts), and sharing through the phone's share sheet or
- * a download (shareImage.ts).
+ * a download (shareImage.ts). Sharing the site's own link with a friend:
+ * shareLink.ts.
  */
 export {
   CARD_HEIGHT,
@@ -18,3 +19,4 @@ export {
 } from "./template";
 export { MONO, SANS, loadShareFonts } from "./fonts";
 export { copyImage, downloadImage, imageName, isComputer, shareImage, useShareCard, type ShareMethod } from "./shareImage";
+export { noteShareArrival, shareLink, sharedUrl, type ShareLinkMethod } from "./shareLink";

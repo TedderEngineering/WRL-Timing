@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
 import { takePostAuthRedirect } from "../lib/postAuthRedirect";
 import { track } from "../lib/analytics";
-import { addCar, hasPendingFollow, SERIES_LABEL, type SeriesFamily } from "../features/my-cars/api";
+import { addCar, hasPendingFollow, RACE_SERIES, SERIES_LABEL, type SeriesFamily } from "../features/my-cars/api";
 
 type Theme = "light" | "dark" | "system";
 
@@ -106,7 +106,7 @@ function CarStep({ onNext }: { onNext: () => void }) {
         <label className="block">
           <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Series</span>
           <select className={field} value={series} onChange={(e) => setSeries(e.target.value as SeriesFamily)}>
-            {(Object.keys(SERIES_LABEL) as SeriesFamily[]).map((s) => (
+            {RACE_SERIES.map((s) => (
               <option key={s} value={s}>{SERIES_LABEL[s]}</option>
             ))}
           </select>

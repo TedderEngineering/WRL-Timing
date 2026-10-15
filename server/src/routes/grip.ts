@@ -174,6 +174,8 @@ const sessionSchema = z.object({
   hot: corners(psi.nullable()).optional(),
   wheel: corners(degF),
   notes,
+  /** A car from the shared My cars list, or null for none. Left out on edit: unchanged. */
+  userCarId: z.string().trim().min(1).max(40).nullable().optional(),
 });
 
 const calculationSchema = z.object({
@@ -216,6 +218,15 @@ const trackSchema = z.object({
 
 // ─── Serializers ─────────────────────────────────────────────────────────────
 
+/** The car (shared My cars list) shown with a session or calculation. */
+const CAR_SELECT = { id: true, label: true, number: true, series: true } as const;
+const WITH_REFS = { track: true, userCar: { select: CAR_SELECT } } as const;
+type CarRef = { id: string; label: string | null; number: string; series: string };
+const carOut = (c: CarRef | null | undefined) =>
+  c ? { id: c.id, label: c.label, number: c.number, series: c.series } : null;
+/** "Track day Miata" or "#67", for the CSV export. */
+const carName = (c: CarRef | null | undefined) => (c ? c.label || `#${c.number}` : "");
+
 const trackOut = (t: GripTrack) => ({
   id: t.id,
   name: t.name,
@@ -225,12 +236,15 @@ const trackOut = (t: GripTrack) => ({
   isActive: t.isActive,
 });
 
-function sessionOut(s: GripReferenceSession & { track: GripTrack }) {
+function sessionOut(
+  s: GripReferenceSession & { track: GripTrack; userCar?: CarRef | null }
+) {
   const hot = { lf: s.hotLf, rf: s.hotRf, lr: s.hotLr, rr: s.hotRr };
   return {
     id: s.id,
     name: s.name,
     track: trackOut(s.track),
+    car: carOut(s.userCar),
     sessionDate: s.sessionDate,
     weather: s.weather,
     trackTemp: s.trackTemp,
@@ -248,13 +262,16 @@ function sessionOut(s: GripReferenceSession & { track: GripTrack }) {
   };
 }
 
-function calculationOut(c: GripCalculation & { track: GripTrack }) {
+function calculationOut(
+  c: GripCalculation & { track: GripTrack; userCar?: CarRef | null }
+) {
   return {
     id: c.id,
     name: c.name,
     referenceSessionId: c.referenceSessionId,
     referenceName: c.referenceName,
     track: trackOut(c.track),
+    car: carOut(c.userCar),
     sessionDate: c.sessionDate,
     weather: c.weather,
     trackTemp: c.trackTemp,
@@ -299,6 +316,7 @@ function referenceFromCalculation(
     userId,
     name: input.name,
     trackId: calc.trackId,
+    userCarId: calc.userCarId,
     sessionDate: calc.sessionDate,
     weather: calc.weather,
     trackTemp: calc.trackTemp,
@@ -354,6 +372,15 @@ function sessionData(input: z.infer<typeof sessionSchema>) {
   };
 }
 
+/** The car must be one of this user's (shared My cars list). */
+async function assertOwnCar(userId: string, carId: string) {
+  const car = await prisma.userCar.findFirst({
+    where: { id: carId, userId },
+    select: { id: true },
+  });
+  if (!car) throw new AppError(400, "Choose a car from your list", "INVALID_CAR");
+}
+
 async function assertActiveTrack(trackId: string) {
   const track = await prisma.gripTrack.findUnique({ where: { id: trackId } });
   if (!track || !track.isActive)
@@ -363,7 +390,7 @@ async function assertActiveTrack(trackId: string) {
 async function ownSession(userId: string, id: string) {
   const session = await prisma.gripReferenceSession.findFirst({
     where: { id, userId },
-    include: { track: true },
+    include: WITH_REFS,
   });
   if (!session) throw new AppError(404, "Reference session not found", "NOT_FOUND");
   return session;
@@ -372,7 +399,7 @@ async function ownSession(userId: string, id: string) {
 async function ownCalculation(userId: string, id: string) {
   const calc = await prisma.gripCalculation.findFirst({
     where: { id, userId },
-    include: { track: true },
+    include: WITH_REFS,
   });
   if (!calc) throw new AppError(404, "Calculation not found", "NOT_FOUND");
   return calc;
@@ -425,7 +452,7 @@ gripRouter.get(
   wrap(async (req, res) => {
     const sessions = await prisma.gripReferenceSession.findMany({
       where: { userId: req.user!.userId },
-      include: { track: true },
+      include: WITH_REFS,
       orderBy: { sessionDate: "desc" },
       take: 500,
     });
@@ -438,9 +465,14 @@ gripRouter.post(
   wrap(async (req, res) => {
     const input = sessionSchema.parse(req.body);
     await assertActiveTrack(input.trackId);
+    if (input.userCarId) await assertOwnCar(req.user!.userId, input.userCarId);
     const created = await prisma.gripReferenceSession.create({
-      data: { userId: req.user!.userId, ...sessionData(input) },
-      include: { track: true },
+      data: {
+        userId: req.user!.userId,
+        ...sessionData(input),
+        userCarId: input.userCarId ?? null,
+      },
+      include: WITH_REFS,
     });
     res.status(201).json({ session: sessionOut(created) });
   })
@@ -459,10 +491,26 @@ gripRouter.put(
     const existing = await ownSession(req.user!.userId, idParam(req));
     const input = sessionSchema.parse(req.body);
     if (input.trackId !== existing.trackId) await assertActiveTrack(input.trackId);
-    const updated = await prisma.gripReferenceSession.update({
-      where: { id: existing.id },
-      data: sessionData(input),
-      include: { track: true },
+    const carChanged =
+      input.userCarId !== undefined && input.userCarId !== existing.userCarId;
+    if (carChanged && input.userCarId)
+      await assertOwnCar(req.user!.userId, input.userCarId);
+    const updated = await prisma.$transaction(async (tx) => {
+      const session = await tx.gripReferenceSession.update({
+        where: { id: existing.id },
+        data: {
+          ...sessionData(input),
+          ...(input.userCarId !== undefined ? { userCarId: input.userCarId } : {}),
+        },
+        include: WITH_REFS,
+      });
+      // Runs calculated from this session were with this car, so they move with it.
+      if (carChanged)
+        await tx.gripCalculation.updateMany({
+          where: { userId: req.user!.userId, referenceSessionId: existing.id },
+          data: { userCarId: input.userCarId ?? null },
+        });
+      return session;
     });
     res.json({ session: sessionOut(updated) });
   })
@@ -485,7 +533,7 @@ gripRouter.get(
   wrap(async (req, res) => {
     const calculations = await prisma.gripCalculation.findMany({
       where: { userId: req.user!.userId },
-      include: { track: true },
+      include: WITH_REFS,
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -589,6 +637,7 @@ async function runCalculation(userId: string, input: z.infer<typeof calculationS
       referenceSessionId: ref.id,
       referenceName: ref.name,
       trackId: ref.trackId,
+      userCarId: ref.userCarId,
       name: input.name,
       weather: input.weather,
       trackTemp: input.trackTemp,
@@ -667,7 +716,7 @@ gripRouter.post(
 
       return tx.gripCalculation.create({
         data: { userId, ...data },
-        include: { track: true },
+        include: WITH_REFS,
       });
     });
 
@@ -720,7 +769,7 @@ gripRouter.put(
         throw new AppError(404, "Calculation not found", "NOT_FOUND");
       return tx.gripCalculation.findUniqueOrThrow({
         where: { id: existing.id },
-        include: { track: true },
+        include: WITH_REFS,
       });
     });
 
@@ -776,7 +825,7 @@ gripRouter.post(
       }
       return tx.gripReferenceSession.create({
         data: referenceFromCalculation(calc, userId, input),
-        include: { track: true },
+        include: WITH_REFS,
       });
     });
 
@@ -811,7 +860,7 @@ gripRouter.post(
               hot: input.hot,
               notes: input.notes,
             }),
-            include: { track: true },
+            include: WITH_REFS,
           });
         }
       }
@@ -823,7 +872,7 @@ gripRouter.post(
         throw new AppError(404, "Calculation not found", "NOT_FOUND");
       const updated = await tx.gripCalculation.findUniqueOrThrow({
         where: { id: calc.id },
-        include: { track: true },
+        include: WITH_REFS,
       });
       return { updated, session };
     });
@@ -857,7 +906,7 @@ gripRouter.get(
   wrap(async (req, res) => {
     const rows = await prisma.gripCalculation.findMany({
       where: { userId: req.user!.userId, outcomeAt: { not: null } },
-      include: { track: true },
+      include: WITH_REFS,
       orderBy: { sessionDate: "desc" },
       take: 1000,
     });
@@ -881,7 +930,7 @@ gripRouter.get(
     const [calcs, refs] = await Promise.all([
       prisma.gripCalculation.findMany({
         where: { userId, sessionDate },
-        include: { track: true },
+        include: WITH_REFS,
         take: 5000,
       }),
       prisma.gripReferenceSession.findMany({
@@ -938,12 +987,12 @@ gripRouter.get(
     const [sessions, calcs] = await Promise.all([
       prisma.gripReferenceSession.findMany({
         where: { userId },
-        include: { track: true },
+        include: WITH_REFS,
         orderBy: { sessionDate: "asc" },
       }),
       prisma.gripCalculation.findMany({
         where: { userId },
-        include: { track: true },
+        include: WITH_REFS,
         orderBy: { createdAt: "asc" },
       }),
     ]);
@@ -975,6 +1024,7 @@ gripRouter.get(
       "target_hot_rr_psi",
       "reference",
       "notes",
+      "car",
     ];
     const rows: unknown[][] = [header];
     for (const s of sessions) {
@@ -1005,6 +1055,7 @@ gripRouter.get(
         "",
         "",
         s.notes,
+        carName(s.userCar),
       ]);
     }
     for (const c of calcs) {
@@ -1036,6 +1087,7 @@ gripRouter.get(
         c.targetRr,
         c.referenceName,
         "",
+        carName(c.userCar),
       ]);
     }
 
