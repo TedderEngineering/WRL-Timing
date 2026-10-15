@@ -38,33 +38,36 @@ const SERIES_CONFIG: Record<
   },
 };
 
-// Normalize series string for lookup: "GR Cup" → "GR_CUP", "gr_cup" → "GR_CUP"
-function normalizeSeriesKey(series: string): string {
-  return series.toUpperCase().replace(/[\s-]+/g, "_");
+/**
+ * The badge for any series string the site stores ("IMSA", "SRO", "GR_CUP", "GR CUP", "WRL",
+ * "Porsche Carrera Cup North America", "Mustang Challenge North America"…): every series is
+ * shown as its sanctioning family, so one race weekend looks the same on every page.
+ */
+export function seriesFamilyKey(series: string): keyof typeof SERIES_CONFIG | null {
+  const s = series.toLowerCase().replace(/_/g, " ");
+  if (/\bgr cup\b|toyota/.test(s)) return "GR_CUP";
+  if (/\bwrl\b|world racing league/.test(s)) return "WRL";
+  if (/\bsro\b|gt4|gtwc|gt world challenge|tc america|mclaren|gt america|igtc/.test(s)) return "SRO";
+  if (/imsa|weathertech|pilot challenge|porsche|carrera|mustang|lamborghini|super trofeo|mx-?5|vp racing|vprc|hsr|airbnb/.test(s)) return "IMSA";
+  return null;
 }
 
-const SIZE_HEIGHT: Record<BadgeSize, number> = { sm: 12, md: 16, lg: 20 };
+/** Outer height in px; logos and text sit in the same box so every badge lines up. */
+const SIZE_HEIGHT: Record<BadgeSize, number> = { sm: 18, md: 22, lg: 26 };
 
 const DISPLAY_LABELS: Record<string, string> = {
   GR_CUP: "GR Cup",
 };
 
 function getConfig(series: string) {
-  const key = normalizeSeriesKey(series);
-  // Direct match first
-  if (SERIES_CONFIG[key]) {
-    return { ...SERIES_CONFIG[key], label: DISPLAY_LABELS[key] || key };
-  }
-  // Substring match fallback
-  for (const [name, config] of Object.entries(SERIES_CONFIG)) {
-    if (key.includes(name)) return { ...config, label: DISPLAY_LABELS[name] || name };
-  }
+  const key = seriesFamilyKey(series);
+  if (key) return { ...SERIES_CONFIG[key], label: DISPLAY_LABELS[key] || key };
   return {
     color: "#4B5563",
     bg: "rgba(75,85,99,0.12)",
     text: "#9ca3af",
     logo: "",
-    label: series.slice(0, 6),
+    label: series.replace(/_/g, " ").slice(0, 10),
   };
 }
 
@@ -72,21 +75,20 @@ export function SeriesBadge({ series, size = "md" }: SeriesBadgeProps) {
   const config = getConfig(series);
   const height = SIZE_HEIGHT[size];
   const [imgFailed, setImgFailed] = useState(false);
+  const box = {
+    backgroundColor: config.bg,
+    border: `1px solid ${config.color}66`,
+    height,
+    padding: "0 6px",
+  } as const;
 
   if (config.logo && !imgFailed) {
     return (
-      <span
-        className="inline-flex items-center justify-center rounded"
-        style={{
-          backgroundColor: config.bg,
-          border: `1px solid ${config.color}66`,
-          padding: "2px 6px",
-        }}
-      >
+      <span className="inline-flex shrink-0 items-center justify-center rounded" style={box} title={config.label}>
         <img
           src={config.logo}
           alt={config.label}
-          style={{ height, pointerEvents: "none" }}
+          style={{ height: height - 6, pointerEvents: "none" }}
           onError={() => setImgFailed(true)}
         />
       </span>
@@ -95,14 +97,8 @@ export function SeriesBadge({ series, size = "md" }: SeriesBadgeProps) {
 
   return (
     <span
-      className="inline-flex items-center justify-center rounded text-[10px] font-bold uppercase tracking-wider leading-none"
-      style={{
-        backgroundColor: config.bg,
-        color: config.text,
-        border: `1px solid ${config.color}66`,
-        padding: "2px 6px",
-        height: height + 4,
-      }}
+      className="inline-flex shrink-0 items-center justify-center rounded text-[10px] font-bold uppercase leading-none tracking-wider"
+      style={{ ...box, color: config.text }}
     >
       {config.label}
     </span>
