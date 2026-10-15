@@ -50,6 +50,7 @@ import {
 } from "@/features/grip/validate";
 import { SupportAsk } from "@/features/support/SupportPrompts";
 import { track } from "@/lib/analytics";
+import { SharePressuresButton } from "@/features/grip/pressureCard";
 import { cn } from "@/lib/utils";
 import { gp } from "@/lib/site";
 
@@ -269,6 +270,7 @@ export function GripOutcomePage() {
               Calculate the next session
             </Link>
           )}
+          <SharePressuresButton calc={c} />
           <GripButton
             size="sm"
             variant="ghost"
