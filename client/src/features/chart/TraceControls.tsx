@@ -46,16 +46,19 @@ function carLabel(data: RaceChartData, n: number) {
   return c ? `${c.team}` : "";
 }
 
-/** Searchable list of cars, grouped by class in finishing order. */
+/**
+ * Searchable list of cars, grouped by class in finishing order. The current focus car is listed
+ * too, ticked, so the class order reads from P1 (it used to be left out, so a winner's list began at P2).
+ */
 function CarMenu({
   data,
-  exclude,
+  selected,
   onPick,
   onClose,
   title,
 }: {
   data: RaceChartData;
-  exclude: Set<number>;
+  selected: number;
   onPick: (n: number) => void;
   onClose: () => void;
   title: string;
@@ -63,6 +66,13 @@ function CarMenu({
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Open on the current focus car (scroll the list only, never the page).
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>("[data-selected]");
+    if (list && row) list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 3);
+  }, []);
   useEffect(() => {
     inputRef.current?.focus();
     const onDown = (e: MouseEvent) => {
@@ -85,7 +95,6 @@ function CarMenu({
     >();
     for (const [k, c] of Object.entries(data.cars)) {
       const n = Number(k);
-      if (exclude.has(n)) continue;
       if (
         needle &&
         !String(n).includes(needle) &&
@@ -106,7 +115,7 @@ function CarMenu({
     return [...byCls.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([cls, cars]) => ({ cls, cars: cars.sort((a, b) => a.pos - b.pos) }));
-  }, [data, exclude, q]);
+  }, [data, q]);
 
   return (
     <div
@@ -124,7 +133,7 @@ function CarMenu({
         className="m-2 rounded-md border px-3 py-2 text-sm outline-none"
         style={{ background: "#0b0b18", borderColor: T.border, color: T.text }}
       />
-      <div className="overflow-y-auto pb-2">
+      <div ref={listRef} className="relative overflow-y-auto pb-2">
         {groups.map((g) => (
           <div key={g.cls}>
             <div className={`${labelCls} px-3 pb-1 pt-2`} style={{ color: T.muted }}>
@@ -135,14 +144,23 @@ function CarMenu({
                 key={c.n}
                 type="button"
                 disabled={c.dns}
-                onClick={() => onPick(c.n)}
+                aria-current={c.n === selected ? "true" : undefined}
+                data-selected={c.n === selected || undefined}
+                onClick={() => (c.n === selected ? onClose() : onPick(c.n))}
                 className="flex min-h-[40px] w-full items-center gap-3 px-3 text-left text-sm hover:bg-white/5 disabled:opacity-40"
-                style={{ color: T.text }}
+                style={{ color: T.text, background: c.n === selected ? "rgba(244,140,52,0.10)" : undefined }}
               >
-                <span className="w-12 font-mono font-semibold">#{c.n}</span>
+                <span className="w-12 font-mono font-semibold" style={{ color: c.n === selected ? T.accent : undefined }}>
+                  #{c.n}
+                </span>
                 <span className="min-w-0 flex-1 truncate" style={{ color: T.soft }}>
                   {c.team}
                 </span>
+                {c.n === selected && (
+                  <span aria-label="current focus" className="text-xs" style={{ color: T.accent }}>
+                    ✓
+                  </span>
+                )}
                 <span className="font-mono text-xs" style={{ color: T.muted }}>
                   {c.dns ? "DNS" : `P${c.pos}`}
                 </span>
@@ -254,7 +272,7 @@ export function TraceControls(p: TraceControlsProps) {
           <CarMenu
             title="Choose the focus car"
             data={data}
-            exclude={new Set([focusNum])}
+            selected={focusNum}
             onPick={(n) => {
               p.onFocus(n);
               setMenu(null);
