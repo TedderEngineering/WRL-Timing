@@ -33,15 +33,24 @@ const STATUS_TEXT: Record<SeasonRound["status"], string> = {
 function Segment({ r }: { r: SeasonRound }) {
   const label = `Round ${r.round} ${r.name}, ${formatDayRange(r.start, r.end, false)}: ${r.isNext ? "next" : STATUS_TEXT[r.status]}`;
   const base = "block h-2.5 rounded-[3px] box-border";
-  if (r.status === "on_site")
+  // A round on RaceTrace opens its weekend (the race page lists every race of the event).
+  // The link is taller than the bar so it is easy to hit.
+  if (r.status === "on_site" && r.races.length)
     return (
-      <span
+      <Link
+        to={`/chart?race=${r.races[0].id}`}
         title={label}
-        aria-label={label}
-        className={base}
-        style={{ background: "var(--rt-accent)" }}
-      />
+        aria-label={`${label}. Open`}
+        className="group block rounded py-1.5 -my-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--rt-accent)]"
+      >
+        <span
+          className={`${base} transition-[filter] group-hover:brightness-125`}
+          style={{ background: "var(--rt-accent)" }}
+        />
+      </Link>
     );
+  if (r.status === "on_site")
+    return <span title={label} aria-label={label} className={base} style={{ background: "var(--rt-accent)" }} />;
   if (r.status === "missing")
     return (
       <span
@@ -66,11 +75,12 @@ function Segment({ r }: { r: SeasonRound }) {
   );
 }
 
-/** "Saturday 8-Hour" → "Sat", "Pirelli GT4 Race 1 — Sonoma Raceway" → "Race 1". */
+/** "WRL Saturday 8 Hour — Road Atlanta" → "Sat", "GT4 America Race 1 — Sonoma Raceway" → "Race 1". */
 export function shortRaceLabel(name: string): string {
   const base = name
     .replace(/\s+—.*$/, "")
-    .replace(/^(?:Pirelli\s+)?GT4\s+/i, "")
+    // The championship is the card's title: "WRL Saturday 8 Hour" → "Saturday 8 Hour".
+    .replace(/^(?:WRL|(?:Pirelli\s+)?GT4(?:\s+America)?|GR Cup|Pilot Challenge|WeatherTech|VP Racing Challenge|MX-5 Cup|Super Trofeo|Carrera Cup|Mustang Challenge|GT World Challenge)\s+/i, "")
     .trim();
   const day = base.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*day\b/i);
   return day ? day[1] : base;
@@ -87,7 +97,13 @@ function RoundRow({ r }: { r: SeasonRound }) {
         >
           R{r.round}
         </span>
-        {r.name}
+        {r.status === "on_site" && r.races.length ? (
+          <Link to={`/chart?race=${r.races[0].id}`} className="hover:text-[var(--rt-accent)]">
+            {r.name}
+          </Link>
+        ) : (
+          r.name
+        )}
         {r.note ? <span className="text-[var(--rt-text-muted)]"> · {r.note}</span> : null}
       </span>
       <span

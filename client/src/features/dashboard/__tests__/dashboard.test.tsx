@@ -145,6 +145,17 @@ describe("SeasonPanel", () => {
   it("shortens race names for round links", () => {
     expect(shortRaceLabel("Saturday 8-Hour")).toBe("Sat");
     expect(shortRaceLabel("Pirelli GT4 Race 1 — Sonoma Raceway")).toBe("Race 1");
+    // The standard names (intake "names").
+    expect(shortRaceLabel("WRL Saturday 8 Hour — Michelin Raceway Road Atlanta")).toBe("Sat");
+    expect(shortRaceLabel("GT4 America Race 2 — Sonoma Raceway")).toBe("Race 2");
+  });
+
+  it("links each round on RaceTrace, bar and name, to its weekend", () => {
+    const markup = html(<SeasonPanel data={data} />);
+    const links = markup.match(/<a [^>]*>/g) ?? [];
+    expect(links.some((a) => a.includes('href="/chart?race=x6"') && /aria-label="Round 6 [^"]*Open"/.test(a))).toBe(true);
+    // Rounds not on RaceTrace are not links.
+    expect(links.some((a) => a.includes("Round 7"))).toBe(false);
   });
 
   it("shows run and on-site counts and each round's state", () => {
