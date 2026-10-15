@@ -42,6 +42,7 @@ describe("your car's latest race", () => {
     expect(t).toContain("Pit cycle 1 (settled lap 15): P5 → P2 in Silver, gained 3");
     expect(t).toContain("Pit cycle 2 (settled lap 28): P2 → P3 in Silver, lost 1");
     expect(t).toContain("Position Trace →");
+    expect(t).toContain("Share");
   });
 
   it("leads with the package's car story when there is one", () => {
@@ -68,6 +69,9 @@ describe("first steps", () => {
     const none = text(<FirstStepsChecklist data={{ carCount: 0, car: null, race: null }} />);
     expect(none).toContain("1 of 3 done");
     expect(none).toContain("Follow your car");
+    // Two ways: find a race and press Follow, or type the number.
+    expect(none).toContain("Find its race →");
+    expect(none).toContain("Add it by number →");
     expect(text(<FirstStepsChecklist data={base} />)).toContain("2 of 3 done");
     expect(text(<FirstStepsChecklist data={{ ...base, viewed: true }} />)).toBe("");
   });

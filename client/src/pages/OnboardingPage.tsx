@@ -5,6 +5,8 @@ import { api } from "../lib/api";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
 import { takePostAuthRedirect } from "../lib/postAuthRedirect";
+import { track } from "../lib/analytics";
+import { addCar, hasPendingFollow, SERIES_LABEL, type SeriesFamily } from "../features/my-cars/api";
 
 type Theme = "light" | "dark" | "system";
 
@@ -13,8 +15,9 @@ interface OnboardingStep {
   title: string;
 }
 
-const STEPS: OnboardingStep[] = [
+const ALL_STEPS: OnboardingStep[] = [
   { id: "welcome", title: "Welcome" },
+  { id: "car", title: "Your car" },
   { id: "preferences", title: "Preferences" },
   { id: "tour", title: "Quick Tour" },
 ];
@@ -58,6 +61,68 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
         Let's go
       </Button>
     </div>
+  );
+}
+
+/**
+ * "Which car do you follow?" (engagement plan B/C): one number and a series, or Skip. Not
+ * asked when the visitor signed up from a race's Follow button (that follow is done on return).
+ */
+function CarStep({ onNext }: { onNext: () => void }) {
+  const [number, setNumber] = useState("");
+  const [series, setSeries] = useState<SeriesFamily>("wrl");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const field = "w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-base text-gray-900 dark:text-gray-100";
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = number.trim().replace(/^#/, "");
+    if (!/^[0-9A-Za-z]{1,8}$/.test(n)) return setError("Enter the car number, e.g. 67.");
+    setBusy(true);
+    setError(null);
+    try {
+      await addCar({ number: n, series, season: null });
+      track("follow_car", { series, source: "onboarding" });
+      onNext();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That did not save. You can add it later in Settings → My cars.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="text-center" onSubmit={save}>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-2">Which car do you follow?</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-sm mx-auto">
+        Your car's latest race opens first on your dashboard: its finish, its pit cycles and its story.
+      </p>
+      <div className="grid grid-cols-[1fr_1.2fr] gap-3 max-w-xs mx-auto mb-2 text-left">
+        <label className="block">
+          <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Car number</span>
+          <input className={field} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="67" autoFocus />
+        </label>
+        <label className="block">
+          <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Series</span>
+          <select className={field} value={series} onChange={(e) => setSeries(e.target.value as SeriesFamily)}>
+            {(Object.keys(SERIES_LABEL) as SeriesFamily[]).map((s) => (
+              <option key={s} value={s}>{SERIES_LABEL[s]}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Add a team, a season or more cars any time in Settings → My cars.</p>
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>}
+      <div className="flex items-center justify-center gap-3">
+        <Button type="button" variant="ghost" onClick={onNext}>
+          Skip
+        </Button>
+        <Button type="submit" size="lg" className="px-10" disabled={busy}>
+          Follow this car
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -197,8 +262,12 @@ function TourStep({ onFinish }: { onFinish: () => void }) {
 export function OnboardingPage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
+  // Signed up from a race's Follow button: that follow is done on return, so the car step is not asked.
+  const [steps] = useState(() => (hasPendingFollow() ? ALL_STEPS.filter((s) => s.id !== "car") : ALL_STEPS));
   const [step, setStep] = useState(0);
   const [theme, setTheme] = useState<Theme>("dark");
+  const at = steps[step]?.id;
+  const next = () => setStep((n) => n + 1);
 
   const applyTheme = (t: Theme) => {
     setTheme(t);
@@ -230,24 +299,13 @@ export function OnboardingPage() {
   return (
     <div className="container-page flex items-center justify-center min-h-[80vh] py-12">
       <div className="w-full max-w-lg">
-        <StepIndicator current={step} total={STEPS.length} />
+        <StepIndicator current={step} total={steps.length} />
 
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
-          {step === 0 && (
-            <WelcomeStep
-              name={user?.displayName || ""}
-              onNext={() => setStep(1)}
-            />
-          )}
-          {step === 1 && (
-            <PreferencesStep
-              theme={theme}
-              setTheme={applyTheme}
-              onNext={() => setStep(2)}
-              onSkip={() => setStep(2)}
-            />
-          )}
-          {step === 2 && <TourStep onFinish={finish} />}
+          {at === "welcome" && <WelcomeStep name={user?.displayName || ""} onNext={next} />}
+          {at === "car" && <CarStep onNext={next} />}
+          {at === "preferences" && <PreferencesStep theme={theme} setTheme={applyTheme} onNext={next} onSkip={next} />}
+          {at === "tour" && <TourStep onFinish={finish} />}
         </div>
       </div>
     </div>
