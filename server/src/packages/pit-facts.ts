@@ -373,8 +373,8 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
 /**
  * The "What changed" lines in the format the Lap details and pass panels read
  * ("Gained — passed #12 Team on pace; #7 Team pitted", "Lost — #3 Team (yellow)"), from the
- * package's class swaps: the other car "pitted" when it was in the pits for the swap, "(yellow)"
- * under a caution, else "on pace". A pit lap leads with the stop and its cycle result.
+ * package's class swaps: the other car "pitted" when its stop made the swap, "(this car pitted)"
+ * when this car's did, "(yellow)" under a caution, else "on pace". A pit lap leads with the stop and its cycle result.
  */
 function reasonsFor(
   car: string,
@@ -392,12 +392,14 @@ function reasonsFor(
   };
   const fcyLap = new Set<number>();
   for (const [a, b] of facts.fcy) for (let l = a; l <= b; l++) fcyLap.add(l);
-  const how = (otherPitted: boolean, lap: number) => (otherPitted ? "pitted" : fcyLap.has(lap) ? "(yellow)" : "on pace");
+  // The other car "pitted" when its stop made the swap; "(this car pitted)" when this car's did.
+  const how = (otherPitted: boolean, ownPit: boolean, lap: number) =>
+    otherPitted ? "pitted" : ownPit ? "(this car pitted)" : fcyLap.has(lap) ? "(yellow)" : "on pace";
   const gained = new Map<number, string[]>();
   const lost = new Map<number, string[]>();
   for (const [lap, w, l, mech] of facts.swaps) {
-    if (w === car) gained.set(lap, [...(gained.get(lap) ?? []), `${name(l)} ${how(mech === "loser_pitted" || mech === "both_pitted", lap)}`]);
-    if (l === car) lost.set(lap, [...(lost.get(lap) ?? []), `${name(w)} ${how(mech === "winner_pitted" || mech === "both_pitted", lap)}`]);
+    if (w === car) gained.set(lap, [...(gained.get(lap) ?? []), `${name(l)} ${how(mech === "loser_pitted" || mech === "both_pitted", mech === "winner_pitted", lap)}`]);
+    if (l === car) lost.set(lap, [...(lost.get(lap) ?? []), `${name(w)} ${how(mech === "winner_pitted" || mech === "both_pitted", mech === "loser_pitted", lap)}`]);
   }
   const out: Record<string, string> = {};
   for (const lap of new Set([...gained.keys(), ...lost.keys()])) {

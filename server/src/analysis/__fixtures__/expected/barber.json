@@ -3,7 +3,8 @@
  "family": "wrl",
  "derivedFrom": [
   "audit1c/wrl/fixtures/barber.json",
-  "stage2/core/fixture_deltas.json"
+  "stage2/core/fixture_deltas.json",
+  "C8 (owner 2026-10-15): a cycle member's position before is its last crossing before the cycle opened"
  ],
  "fcyIntervalsRaceS": [
   [
@@ -16,7 +17,7 @@
   ],
   [
    8090.8,
-   8421.0
+   8421
   ],
   [
    10738.9,
@@ -24,7 +25,7 @@
   ],
   [
    12923.8,
-   13713.0
+   13713
   ],
   [
    13969.5,
@@ -36,7 +37,7 @@
   ],
   [
    23182.3,
-   23727.0
+   23727
   ],
   [
    23919.3,
@@ -959,7 +960,7 @@
    "stage1Kind": "stop",
    "timeLost": {
     "method": "fcy_neighbours",
-    "valueS": 137.0
+    "valueS": 137
    },
    "position": {
     "afterLap": 11,
@@ -1211,7 +1212,7 @@
     "classPosBefore": 1,
     "classPosAfter": 1,
     "netClass": 0,
-    "overallPosBefore": 19,
+    "overallPosBefore": 18,
     "overallPosAfter": 19,
     "gainedOn": [],
     "lostTo": [],
@@ -1345,7 +1346,7 @@
     "classPosBefore": 2,
     "classPosAfter": 2,
     "netClass": 0,
-    "overallPosBefore": 18,
+    "overallPosBefore": 19,
     "overallPosAfter": 18,
     "gainedOn": [],
     "lostTo": [],
@@ -1627,7 +1628,7 @@
     "classPosBefore": 8,
     "classPosAfter": 8,
     "netClass": 0,
-    "overallPosBefore": 20,
+    "overallPosBefore": 19,
     "overallPosAfter": 20,
     "gainedOn": [],
     "lostTo": [],
@@ -1990,13 +1991,14 @@
    },
    "position": {
     "afterLap": 131,
-    "classPosBefore": 3,
+    "classPosBefore": 2,
     "classPosAfter": 8,
-    "netClass": -5,
-    "overallPosBefore": 4,
+    "netClass": -6,
+    "overallPosBefore": 3,
     "overallPosAfter": 9,
     "gainedOn": [],
     "lostTo": [
+     "2",
      "54",
      "99",
      "119",
@@ -2366,12 +2368,14 @@
    },
    "position": {
     "afterLap": 133,
-    "classPosBefore": 3,
+    "classPosBefore": 4,
     "classPosAfter": 3,
-    "netClass": 0,
-    "overallPosBefore": 4,
+    "netClass": 1,
+    "overallPosBefore": 5,
     "overallPosAfter": 4,
-    "gainedOn": [],
+    "gainedOn": [
+     "246"
+    ],
     "lostTo": [],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
@@ -2402,16 +2406,14 @@
    },
    "position": {
     "afterLap": 176,
-    "classPosBefore": 1,
+    "classPosBefore": 3,
     "classPosAfter": 5,
-    "netClass": -4,
-    "overallPosBefore": 2,
+    "netClass": -2,
+    "overallPosBefore": 4,
     "overallPosAfter": 6,
     "gainedOn": [],
     "lostTo": [
-     "2",
      "54",
-     "282",
      "678"
     ],
     "lapsDownBefore": 0,

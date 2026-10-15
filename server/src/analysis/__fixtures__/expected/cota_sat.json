@@ -3,11 +3,12 @@
  "family": "wrl",
  "derivedFrom": [
   "audit1c/wrl/fixtures/cota_sat.json",
-  "stage2/core/fixture_deltas.json"
+  "stage2/core/fixture_deltas.json",
+  "C8 (owner 2026-10-15): a cycle member's position before is its last crossing before the cycle opened"
  ],
  "fcyIntervalsRaceS": [
   [
-   73.0,
+   73,
    2157.9
   ],
   [
@@ -98,17 +99,18 @@
    },
    "position": {
     "afterLap": 21,
-    "classPosBefore": 3,
+    "classPosBefore": 2,
     "classPosAfter": 4,
-    "netClass": -1,
-    "overallPosBefore": 9,
+    "netClass": -2,
+    "overallPosBefore": 7,
     "overallPosAfter": 9,
     "gainedOn": [
      "60"
     ],
     "lostTo": [
      "1",
-     "98"
+     "98",
+     "247"
     ],
     "lapsDownBefore": 3,
     "lapsDownAfter": 1
@@ -137,14 +139,15 @@
    },
    "position": {
     "afterLap": 48,
-    "classPosBefore": 2,
+    "classPosBefore": 1,
     "classPosAfter": 3,
-    "netClass": -1,
-    "overallPosBefore": 3,
+    "netClass": -2,
+    "overallPosBefore": 2,
     "overallPosAfter": 4,
     "gainedOn": [],
     "lostTo": [
-     "60"
+     "60",
+     "908"
     ],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
@@ -253,7 +256,7 @@
     "classPosBefore": 4,
     "classPosAfter": 4,
     "netClass": 0,
-    "overallPosBefore": 5,
+    "overallPosBefore": 4,
     "overallPosAfter": 6,
     "gainedOn": [],
     "lostTo": [],
@@ -690,17 +693,17 @@
    },
    "position": {
     "afterLap": 57,
-    "classPosBefore": 2,
+    "classPosBefore": 5,
     "classPosAfter": 2,
-    "netClass": 0,
-    "overallPosBefore": 20,
+    "netClass": 3,
+    "overallPosBefore": 24,
     "overallPosAfter": 19,
     "gainedOn": [
-     "62"
+     "46",
+     "62",
+     "808"
     ],
-    "lostTo": [
-     "38"
-    ],
+    "lostTo": [],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -772,7 +775,7 @@
     "classPosBefore": 1,
     "classPosAfter": 1,
     "netClass": 0,
-    "overallPosBefore": 18,
+    "overallPosBefore": 19,
     "overallPosAfter": 18,
     "gainedOn": [],
     "lostTo": [],
@@ -841,7 +844,7 @@
     "classPosBefore": 1,
     "classPosAfter": 8,
     "netClass": -7,
-    "overallPosBefore": 41,
+    "overallPosBefore": 43,
     "overallPosAfter": 49,
     "gainedOn": [],
     "lostTo": [
@@ -997,7 +1000,7 @@
     "classPosBefore": 3,
     "classPosAfter": 1,
     "netClass": 2,
-    "overallPosBefore": 27,
+    "overallPosBefore": 28,
     "overallPosAfter": 23,
     "gainedOn": [
      "83",
@@ -1035,16 +1038,18 @@
    },
    "position": {
     "afterLap": 16,
-    "classPosBefore": 4,
+    "classPosBefore": 2,
     "classPosAfter": 4,
-    "netClass": 0,
-    "overallPosBefore": 6,
+    "netClass": -2,
+    "overallPosBefore": 4,
     "overallPosAfter": 13,
     "gainedOn": [
      "247"
     ],
     "lostTo": [
-     "60"
+     "58",
+     "60",
+     "98"
     ],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
@@ -1259,7 +1264,7 @@
     "classPosBefore": 9,
     "classPosAfter": 9,
     "netClass": 0,
-    "overallPosBefore": 62,
+    "overallPosBefore": 64,
     "overallPosAfter": 61,
     "gainedOn": [],
     "lostTo": [],
@@ -1363,7 +1368,7 @@
     "classPosBefore": 8,
     "classPosAfter": 7,
     "netClass": 1,
-    "overallPosBefore": 45,
+    "overallPosBefore": 46,
     "overallPosAfter": 43,
     "gainedOn": [
      "109"
@@ -1403,7 +1408,7 @@
     "classPosBefore": 7,
     "classPosAfter": 8,
     "netClass": -1,
-    "overallPosBefore": 28,
+    "overallPosBefore": 30,
     "overallPosAfter": 31,
     "gainedOn": [],
     "lostTo": [
@@ -1890,17 +1895,16 @@
    },
    "position": {
     "afterLap": 48,
-    "classPosBefore": 8,
+    "classPosBefore": 12,
     "classPosAfter": 12,
-    "netClass": -4,
-    "overallPosBefore": 13,
+    "netClass": 0,
+    "overallPosBefore": 18,
     "overallPosAfter": 18,
-    "gainedOn": [],
+    "gainedOn": [
+     "163"
+    ],
     "lostTo": [
-     "11",
-     "77",
-     "191",
-     "410"
+     "11"
     ],
     "lapsDownBefore": 1,
     "lapsDownAfter": 0
@@ -2043,13 +2047,15 @@
    },
    "position": {
     "afterLap": 148,
-    "classPosBefore": 7,
+    "classPosBefore": 6,
     "classPosAfter": 7,
-    "netClass": 0,
-    "overallPosBefore": 11,
+    "netClass": -1,
+    "overallPosBefore": 10,
     "overallPosAfter": 11,
     "gainedOn": [],
-    "lostTo": [],
+    "lostTo": [
+     "2"
+    ],
     "lapsDownBefore": 1,
     "lapsDownAfter": 1
    },
@@ -2247,15 +2253,13 @@
    },
    "position": {
     "afterLap": 96,
-    "classPosBefore": 1,
+    "classPosBefore": 2,
     "classPosAfter": 2,
-    "netClass": -1,
-    "overallPosBefore": 1,
+    "netClass": 0,
+    "overallPosBefore": 2,
     "overallPosAfter": 3,
     "gainedOn": [],
-    "lostTo": [
-     "60"
-    ],
+    "lostTo": [],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -2354,13 +2358,15 @@
    },
    "position": {
     "afterLap": 157,
-    "classPosBefore": 2,
+    "classPosBefore": 1,
     "classPosAfter": 2,
-    "netClass": 0,
-    "overallPosBefore": 2,
+    "netClass": -1,
+    "overallPosBefore": 1,
     "overallPosAfter": 2,
     "gainedOn": [],
-    "lostTo": [],
+    "lostTo": [
+     "58"
+    ],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -2410,15 +2416,20 @@
    },
    "position": {
     "afterLap": 7,
-    "classPosBefore": 8,
+    "classPosBefore": 1,
     "classPosAfter": 7,
-    "netClass": 1,
-    "overallPosBefore": 27,
+    "netClass": -6,
+    "overallPosBefore": 1,
     "overallPosAfter": 24,
-    "gainedOn": [
-     "10"
+    "gainedOn": [],
+    "lostTo": [
+     "1",
+     "58",
+     "98",
+     "247",
+     "908",
+     "909"
     ],
-    "lostTo": [],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -2443,16 +2454,17 @@
    },
    "position": {
     "afterLap": 20,
-    "classPosBefore": 2,
+    "classPosBefore": 1,
     "classPosAfter": 5,
-    "netClass": -3,
-    "overallPosBefore": 7,
+    "netClass": -4,
+    "overallPosBefore": 6,
     "overallPosAfter": 11,
     "gainedOn": [],
     "lostTo": [
      "1",
      "58",
-     "98"
+     "98",
+     "247"
     ],
     "lapsDownBefore": 3,
     "lapsDownAfter": 2
@@ -2721,13 +2733,30 @@
    },
    "position": {
     "afterLap": 7,
-    "classPosBefore": 21,
+    "classPosBefore": 5,
     "classPosAfter": 21,
-    "netClass": 0,
-    "overallPosBefore": 66,
+    "netClass": -16,
+    "overallPosBefore": 35,
     "overallPosAfter": 60,
     "gainedOn": [],
-    "lostTo": [],
+    "lostTo": [
+     "24",
+     "38",
+     "48",
+     "80",
+     "112",
+     "118",
+     "140",
+     "221",
+     "237",
+     "302",
+     "315",
+     "333",
+     "522",
+     "555",
+     "808",
+     "999"
+    ],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -2753,15 +2782,16 @@
    },
    "position": {
     "afterLap": 15,
-    "classPosBefore": 18,
+    "classPosBefore": 21,
     "classPosAfter": 19,
-    "netClass": -1,
-    "overallPosBefore": 47,
+    "netClass": 2,
+    "overallPosBefore": 52,
     "overallPosAfter": 53,
-    "gainedOn": [],
-    "lostTo": [
-     "112"
+    "gainedOn": [
+     "80",
+     "999"
     ],
+    "lostTo": [],
     "lapsDownBefore": 0,
     "lapsDownAfter": 0
    },
@@ -2837,13 +2867,14 @@
    },
    "position": {
     "afterLap": 56,
-    "classPosBefore": 13,
+    "classPosBefore": 14,
     "classPosAfter": 12,
-    "netClass": 1,
-    "overallPosBefore": 33,
+    "netClass": 2,
+    "overallPosBefore": 36,
     "overallPosAfter": 34,
     "gainedOn": [
-     "112"
+     "112",
+     "315"
     ],
     "lostTo": [],
     "lapsDownBefore": 1,
@@ -2877,13 +2908,14 @@
    },
    "position": {
     "afterLap": 67,
-    "classPosBefore": 11,
+    "classPosBefore": 12,
     "classPosAfter": 11,
-    "netClass": 0,
-    "overallPosBefore": 32,
+    "netClass": 1,
+    "overallPosBefore": 33,
     "overallPosAfter": 33,
     "gainedOn": [
-     "221"
+     "221",
+     "522"
     ],
     "lostTo": [
      "112"
@@ -2921,12 +2953,14 @@
    },
    "position": {
     "afterLap": 89,
-    "classPosBefore": 5,
+    "classPosBefore": 6,
     "classPosAfter": 6,
-    "netClass": -1,
-    "overallPosBefore": 24,
+    "netClass": 0,
+    "overallPosBefore": 25,
     "overallPosAfter": 26,
-    "gainedOn": [],
+    "gainedOn": [
+     "48"
+    ],
     "lostTo": [
      "237"
     ],
@@ -3042,7 +3076,7 @@
     "classPosBefore": 4,
     "classPosAfter": 4,
     "netClass": 0,
-    "overallPosBefore": 21,
+    "overallPosBefore": 20,
     "overallPosAfter": 21,
     "gainedOn": [],
     "lostTo": [],

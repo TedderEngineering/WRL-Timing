@@ -20,7 +20,7 @@ type LapData = CarData["laps"][number];
 
 interface Crossover {
   num: number;
-  reason: "on pace" | "pitted" | "yellow";
+  reason: "on pace" | "pitted" | "yellow" | "own pit";
 }
 
 export interface PitMarker {
@@ -44,6 +44,9 @@ interface SettleMarker {
   lb: string;
   su: string;
   c: string;
+  /** Class positions before the class pit cycle opened and where it settled. */
+  cpBefore?: number;
+  cpAfter?: number;
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
@@ -189,9 +192,11 @@ export function generateAnnotations(
             });
           }
           if (otherPrev > prevP && otherCurr < currP) {
+            const theirs = classifyCrossover(otherNum, lapNum, pitAt, fcyLaps);
             lost.push({
               num: otherNum,
-              reason: classifyCrossover(otherNum, lapNum, pitAt, fcyLaps),
+              // Passed while this car was in the pits (its in-lap or the lap after): not on pace.
+              reason: theirs !== "pitted" && (pitAt.get(num)?.has(lapNum) || pitAt.get(num)?.has(lapNum - 1)) ? "own pit" : theirs,
             });
           }
         }
@@ -458,21 +463,31 @@ function v3Pipeline(
       // Assign to pit cycle
       const cycle = assignPitToCycle(pe.inLap, cycles);
 
-      // 5. Pre-pit baseline (reverse CUSUM)
-      // If pit during FCY, use pre-FCY start as scan origin
-      let scanEvent: Pick<PitEvent, "inLap"> = pe;
+      // 5. Position before the stop: where the car ran before its class pit cycle opened.
+      // Rivals that stopped first lift the car up the order for a few laps; counting from
+      // there would show it "losing" places it never held (Utah 2026 #123: P3 before the
+      // GTO cycle, P1 only after #54 and #9 had stopped, P3 after it).
+      const classPits = classPitEvents.get(cls) || [];
+      let cycleStart = pe.inLap;
+      for (;;) {
+        const earlier = classPits.filter((o) => o.inLap < cycleStart && o.inLap >= cycleStart - 3 && o.inLap >= pe.inLap - 10);
+        if (earlier.length === 0) break;
+        cycleStart = Math.min(...earlier.map((o) => o.inLap));
+      }
+      // A stop under a caution counts from before the caution.
       for (const [fcyStart, fcyEnd] of data.fcy) {
         if (pe.inLap >= fcyStart && pe.inLap <= fcyEnd) {
-          scanEvent = { inLap: fcyStart };
+          cycleStart = Math.min(cycleStart, fcyStart);
           break;
         }
       }
-      const preBaseline = findPrePitBaseline(
-        car, scanEvent, classVol, baseline, fcyLaps
-      );
+      const beforeLd = [...car.laps].reverse().find((ld) => ld.l < cycleStart);
+      const preBaseline = beforeLd
+        ? beforeLd.p
+        : findPrePitBaseline(car, { inLap: cycleStart }, classVol, baseline, fcyLaps);
+      const preClass = beforeLd?.cp;
 
       // 6. CUSUM settle detection
-      const classPits = classPitEvents.get(cls) || [];
       let classPitWindowEnd = pe.outLap;
       for (const other of classPits) {
         if (Math.abs(other.inLap - pe.inLap) <= 5) {
@@ -535,15 +550,33 @@ function v3Pipeline(
       allPitEventsForStrategy.get(cls)!.push(stratEvt);
 
       // Build v3 settle marker from CUSUM result
+      const withClass = (sm: SettleMarker): SettleMarker => {
+        const at = car.laps.find((ld) => ld.l === sm.l);
+        if (preClass !== undefined && at) {
+          sm.cpBefore = preClass;
+          sm.cpAfter = at.cp;
+          // The stop's line in "What changed" says the same as the marker (class positions).
+          const net = preClass - at.cp;
+          const key = String(pe.inLap);
+          const said = ann.reasons[key];
+          if (said && /^Pit stop/.test(said)) {
+            const cyc = net > 0 ? `Gained ${net} in pit cycle` : net < 0 ? `Lost ${-net} in pit cycle` : "Held position in pit cycle";
+            ann.reasons[key] = /(Gained|Lost) \d+ in pit cycle/.test(said)
+              ? said.replace(/(Gained|Lost) \d+ in pit cycle/, cyc)
+              : said.replace(/^Pit stop( — )?/, (_m, dash) => `Pit stop — ${cyc}${dash ? "; " : ""}`);
+          }
+        }
+        return sm;
+      };
       if (settleResult) {
         const net = preBaseline - settleResult.settlePosition;
         v3Settles.push(
-          makeSettle(
+          withClass(makeSettle(
             settleResult.settleLap,
             settleResult.settlePosition,
             preBaseline,
             net
-          )
+          ))
         );
       } else {
         // Fallback: CUSUM returned null (re-pit or too few laps).
@@ -552,7 +585,7 @@ function v3Pipeline(
           if (ld.l <= pe.outLap) continue;
           if (ld.pit === 1 || fcyLaps.has(ld.l)) continue;
           const net = preBaseline - ld.p;
-          v3Settles.push(makeSettle(ld.l, ld.p, preBaseline, net));
+          v3Settles.push(withClass(makeSettle(ld.l, ld.p, preBaseline, net)));
           break;
         }
       }
@@ -647,7 +680,9 @@ function classifyCrossover(
   pitAt: Map<number, Set<number>>,
   fcyLaps: Set<number>
 ): "pitted" | "yellow" | "on pace" {
-  if (pitAt.get(otherNum)?.has(lap)) return "pitted";
+  // The swap shows on the other car's in-lap or the lap after it (the stop itself often falls
+  // in the next lap's time: Utah 2026 #9, pit flag on lap 36, the 204 s lap 37).
+  if (pitAt.get(otherNum)?.has(lap) || pitAt.get(otherNum)?.has(lap - 1)) return "pitted";
   if (fcyLaps.has(lap)) return "yellow";
   return "on pace";
 }
@@ -661,6 +696,7 @@ function buildGainReason(posDelta: number, gained: Crossover[], teamLookup: Map<
     const tn = shortTeam(teamLookup.get(c.num));
     if (c.reason === "pitted") return `#${labelOf(c.num)}${tn} pitted`;
     if (c.reason === "yellow") return `#${labelOf(c.num)}${tn} (yellow)`;
+    if (c.reason === "own pit") return `#${labelOf(c.num)}${tn} (this car pitted)`;
     return `#${labelOf(c.num)}${tn} on pace`;
   });
   return `Gained — passed ${parts.join("; ")}`;
@@ -676,6 +712,7 @@ function buildLossReason(posDelta: number, lost: Crossover[], teamLookup: Map<nu
     const tn = shortTeam(teamLookup.get(c.num));
     if (c.reason === "pitted") return `#${labelOf(c.num)}${tn} pitted`;
     if (c.reason === "yellow") return `#${labelOf(c.num)}${tn} (yellow)`;
+    if (c.reason === "own pit") return `#${labelOf(c.num)}${tn} (this car pitted)`;
     return `#${labelOf(c.num)}${tn} on pace`;
   });
   return `Lost — ${parts.join("; ")}`;

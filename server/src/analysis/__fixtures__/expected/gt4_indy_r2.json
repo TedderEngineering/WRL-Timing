@@ -3,7 +3,8 @@
  "family": "alkamel",
  "derivedFrom": [
   "audit1c/alkamel/fixtures/gt4_indy_r2.json",
-  "stage2/core/fixture_deltas.json"
+  "stage2/core/fixture_deltas.json",
+  "C8 (owner 2026-10-15): a cycle member's position before is its last crossing before the cycle opened"
  ],
  "fcyIntervalsClockS": [
   [
@@ -99,14 +100,14 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 14,
+    "beforeLap": 13,
     "afterLap": 23,
     "classPosBefore": 8,
     "classPosAfter": 10,
     "netClass": -2,
-    "overallPosBefore": 22,
+    "overallPosBefore": 23,
     "overallPosAfter": 26,
-    "netOverall": -4,
+    "netOverall": -3,
     "gainedOn": [
      "71"
     ],
@@ -155,7 +156,7 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 15,
+    "beforeLap": 14,
     "afterLap": 21,
     "classPosBefore": 3,
     "classPosAfter": 3,
@@ -249,24 +250,19 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 19,
+    "beforeLap": 13,
     "afterLap": 24,
-    "classPosBefore": 1,
+    "classPosBefore": 10,
     "classPosAfter": 8,
-    "netClass": -7,
-    "overallPosBefore": 7,
+    "netClass": 2,
+    "overallPosBefore": 25,
     "overallPosAfter": 24,
-    "netOverall": -17,
-    "gainedOn": [],
-    "lostTo": [
-     "11",
-     "21",
-     "30",
-     "36",
-     "37",
-     "72",
-     "188"
-    ]
+    "netOverall": 1,
+    "gainedOn": [
+     "5",
+     "71"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -453,19 +449,16 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 17,
+    "beforeLap": 13,
     "afterLap": 21,
-    "classPosBefore": 3,
+    "classPosBefore": 5,
     "classPosAfter": 5,
-    "netClass": -2,
-    "overallPosBefore": 9,
+    "netClass": 0,
+    "overallPosBefore": 11,
     "overallPosAfter": 11,
-    "netOverall": -2,
+    "netOverall": 0,
     "gainedOn": [],
-    "lostTo": [
-     "7",
-     "007"
-    ]
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -500,18 +493,18 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 20,
+    "beforeLap": 16,
     "afterLap": 22,
-    "classPosBefore": 3,
+    "classPosBefore": 5,
     "classPosAfter": 4,
-    "netClass": -1,
-    "overallPosBefore": 4,
+    "netClass": 1,
+    "overallPosBefore": 7,
     "overallPosAfter": 7,
-    "netOverall": -3,
-    "gainedOn": [],
-    "lostTo": [
-     "39"
-    ]
+    "netOverall": 0,
+    "gainedOn": [
+     "40"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -550,14 +543,14 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 14,
+    "beforeLap": 13,
     "afterLap": 24,
     "classPosBefore": 7,
     "classPosAfter": 4,
     "netClass": 3,
-    "overallPosBefore": 21,
+    "overallPosBefore": 22,
     "overallPosAfter": 19,
-    "netOverall": 2,
+    "netOverall": 3,
     "gainedOn": [
      "11",
      "21",
@@ -604,7 +597,7 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 20,
+    "beforeLap": 16,
     "afterLap": 22,
     "classPosBefore": 1,
     "classPosAfter": 2,
@@ -654,15 +647,17 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 17,
+    "beforeLap": 14,
     "afterLap": 24,
-    "classPosBefore": 1,
+    "classPosBefore": 2,
     "classPosAfter": 1,
-    "netClass": 0,
-    "overallPosBefore": 11,
+    "netClass": 1,
+    "overallPosBefore": 16,
     "overallPosAfter": 16,
-    "netOverall": -5,
-    "gainedOn": [],
+    "netOverall": 0,
+    "gainedOn": [
+     "71"
+    ],
     "lostTo": []
    },
    "lapDown": false,
@@ -738,7 +733,7 @@
   },
   {
    "car": "38",
-   "pitInClockS": 38373.0,
+   "pitInClockS": 38373,
    "pitOutClockS": null,
    "inLap": 6,
    "inLapCompleted": false,
@@ -774,7 +769,7 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 17,
+    "beforeLap": 16,
     "afterLap": 22,
     "classPosBefore": 3,
     "classPosAfter": 3,
@@ -822,17 +817,18 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 18,
+    "beforeLap": 16,
     "afterLap": 21,
-    "classPosBefore": 5,
+    "classPosBefore": 4,
     "classPosAfter": 6,
-    "netClass": -1,
-    "overallPosBefore": 7,
+    "netClass": -2,
+    "overallPosBefore": 6,
     "overallPosAfter": 9,
-    "netOverall": -2,
+    "netOverall": -3,
     "gainedOn": [],
     "lostTo": [
-     "39"
+     "25",
+     "94"
     ]
    },
    "lapDown": false,
@@ -872,14 +868,14 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 20,
+    "beforeLap": 16,
     "afterLap": 22,
     "classPosBefore": 2,
     "classPosAfter": 1,
     "netClass": 1,
-    "overallPosBefore": 2,
+    "overallPosBefore": 3,
     "overallPosAfter": 1,
-    "netOverall": 1,
+    "netOverall": 2,
     "gainedOn": [
      "33"
     ],
@@ -966,7 +962,7 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 18,
+    "beforeLap": 14,
     "afterLap": 22,
     "classPosBefore": 1,
     "classPosAfter": 1,
@@ -1072,19 +1068,24 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 21,
+    "beforeLap": 14,
     "afterLap": 23,
-    "classPosBefore": 6,
+    "classPosBefore": 1,
     "classPosAfter": 12,
-    "netClass": -6,
-    "overallPosBefore": 21,
+    "netClass": -11,
+    "overallPosBefore": 15,
     "overallPosAfter": 28,
-    "netOverall": -7,
+    "netOverall": -13,
     "gainedOn": [],
     "lostTo": [
      "5",
      "10",
+     "11",
      "21",
+     "30",
+     "36",
+     "37",
+     "72",
      "92",
      "188",
      "413"
@@ -1129,18 +1130,18 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 18,
+    "beforeLap": 14,
     "afterLap": 24,
-    "classPosBefore": 1,
+    "classPosBefore": 3,
     "classPosAfter": 2,
-    "netClass": -1,
-    "overallPosBefore": 10,
+    "netClass": 1,
+    "overallPosBefore": 17,
     "overallPosAfter": 17,
-    "netOverall": -7,
-    "gainedOn": [],
-    "lostTo": [
-     "36"
-    ]
+    "netOverall": 0,
+    "gainedOn": [
+     "71"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -1181,18 +1182,17 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 20,
+    "beforeLap": 14,
     "afterLap": 22,
-    "classPosBefore": 1,
+    "classPosBefore": 2,
     "classPosAfter": 3,
-    "netClass": -2,
-    "overallPosBefore": 3,
+    "netClass": -1,
+    "overallPosBefore": 4,
     "overallPosAfter": 4,
-    "netOverall": -1,
+    "netOverall": 0,
     "gainedOn": [],
     "lostTo": [
-     "7",
-     "68"
+     "7"
     ]
    },
    "lapDown": false,
@@ -1228,17 +1228,16 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 16,
+    "beforeLap": 15,
     "afterLap": 21,
-    "classPosBefore": 7,
+    "classPosBefore": 8,
     "classPosAfter": 9,
-    "netClass": -2,
-    "overallPosBefore": 10,
+    "netClass": -1,
+    "overallPosBefore": 12,
     "overallPosAfter": 14,
-    "netOverall": -4,
+    "netOverall": -2,
     "gainedOn": [],
     "lostTo": [
-     "03",
      "90"
     ]
    },
@@ -1279,18 +1278,19 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 18,
+    "beforeLap": 15,
     "afterLap": 21,
-    "classPosBefore": 6,
+    "classPosBefore": 9,
     "classPosAfter": 7,
-    "netClass": -1,
-    "overallPosBefore": 8,
+    "netClass": 2,
+    "overallPosBefore": 13,
     "overallPosAfter": 12,
-    "netOverall": -4,
-    "gainedOn": [],
-    "lostTo": [
-     "39"
-    ]
+    "netOverall": 1,
+    "gainedOn": [
+     "03",
+     "77"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -1329,24 +1329,18 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 16,
+    "beforeLap": 13,
     "afterLap": 23,
-    "classPosBefore": 4,
+    "classPosBefore": 12,
     "classPosAfter": 11,
-    "netClass": -7,
-    "overallPosBefore": 17,
+    "netClass": 1,
+    "overallPosBefore": 27,
     "overallPosAfter": 27,
-    "netOverall": -10,
-    "gainedOn": [],
-    "lostTo": [
-     "5",
-     "11",
-     "21",
-     "30",
-     "37",
-     "188",
-     "413"
-    ]
+    "netOverall": 0,
+    "gainedOn": [
+     "71"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -1387,19 +1381,18 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 19,
+    "beforeLap": 16,
     "afterLap": 21,
-    "classPosBefore": 3,
+    "classPosBefore": 6,
     "classPosAfter": 5,
-    "netClass": -2,
-    "overallPosBefore": 4,
+    "netClass": 1,
+    "overallPosBefore": 8,
     "overallPosAfter": 8,
-    "netOverall": -4,
-    "gainedOn": [],
-    "lostTo": [
-     "25",
-     "39"
-    ]
+    "netOverall": 0,
+    "gainedOn": [
+     "40"
+    ],
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {
@@ -1420,7 +1413,7 @@
   },
   {
    "car": "98",
-   "pitInClockS": 37752.0,
+   "pitInClockS": 37752,
    "pitOutClockS": null,
    "inLap": 1,
    "inLapCompleted": false,
@@ -1482,7 +1475,7 @@
   },
   {
    "car": "028",
-   "pitInClockS": 37736.0,
+   "pitInClockS": 37736,
    "pitOutClockS": null,
    "inLap": 1,
    "inLapCompleted": true,
@@ -1500,7 +1493,7 @@
   },
   {
    "car": "131",
-   "pitInClockS": 37741.0,
+   "pitInClockS": 37741,
    "pitOutClockS": null,
    "inLap": 1,
    "inLapCompleted": true,
@@ -1683,19 +1676,16 @@
     "refLapCount": 10
    },
    "position": {
-    "beforeLap": 18,
+    "beforeLap": 15,
     "afterLap": 21,
-    "classPosBefore": 8,
+    "classPosBefore": 10,
     "classPosAfter": 10,
-    "netClass": -2,
-    "overallPosBefore": 13,
+    "netClass": 0,
+    "overallPosBefore": 19,
     "overallPosAfter": 25,
-    "netOverall": -12,
+    "netOverall": -6,
     "gainedOn": [],
-    "lostTo": [
-     "03",
-     "77"
-    ]
+    "lostTo": []
    },
    "lapDown": false,
    "cycle": {

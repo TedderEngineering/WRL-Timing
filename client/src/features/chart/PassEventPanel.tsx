@@ -21,7 +21,7 @@ interface CarEvent {
   kind: "car";
   carNum: number;
   teamName: string;
-  reason: "on pace" | "pitted" | "yellow" | "unknown";
+  reason: "on pace" | "pitted" | "yellow" | "own pit" | "unknown";
   direction: "gained" | "lost" | "neutral";
 }
 
@@ -31,6 +31,7 @@ const REASON_STYLES: Record<string, { bg: string; border: string; color: string;
   "on pace": { bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)", color: "#93c5fd", label: "on pace" },
   pitted: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fcd34d", label: "pitted" },
   yellow: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fcd34d", label: "on yellow" },
+  "own pit": { bg: "rgba(244,140,52,0.1)", border: "rgba(244,140,52,0.3)", color: "#fdba74", label: "while this car pitted" },
   unknown: { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.5)", label: "—" },
 };
 
@@ -57,7 +58,7 @@ function parseRacingLap(reason: string, posDelta: number, data?: RaceChartData |
   for (const part of body.split(/;\s*/)) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const m = trimmed.match(/^#([0-9A-Za-z]+)\s*(.*?)?\s+(on pace|pitted|\(yellow\))$/i);
+    const m = trimmed.match(/^#([0-9A-Za-z]+)\s*(.*?)?\s+(on pace|pitted|\(yellow\)|\(this car pitted\))$/i);
     if (m) {
       const carNum = carKey(data, m[1]);
       if (carNum === null) continue;
@@ -67,6 +68,7 @@ function parseRacingLap(reason: string, posDelta: number, data?: RaceChartData |
       if (r === "on pace") reasonType = "on pace";
       else if (r === "pitted") reasonType = "pitted";
       else if (r === "(yellow)") reasonType = "yellow";
+      else if (r === "(this car pitted)") reasonType = "own pit";
       events.push({ kind: "car", carNum, teamName, reason: reasonType, direction });
     } else {
       const numMatch = trimmed.match(/^#([0-9A-Za-z]+)/);
