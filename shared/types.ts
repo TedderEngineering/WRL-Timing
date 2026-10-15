@@ -65,6 +65,44 @@ export interface EventSummary {
   raceIds?: string[];
 }
 
+/** A race row on the Events page (GET /api/events/weekends). */
+export interface WeekendRace {
+  id: string;
+  eventId: string | null;
+  name: string;
+  /** "Pilot Challenge", "GR Cup"…; null when the name and source don't say. */
+  championship: string | null;
+  /** "Race 1", "Saturday 8 Hour", "Fox Factory 120". */
+  title: string;
+  family: "IMSA" | "SRO" | "GR Cup" | "WRL" | "Other";
+  /** YYYY-MM-DD */
+  date: string;
+  cars: number | null;
+  laps: number | null;
+  status: RaceStatus;
+  resultsStatus: string | null;
+  /** A published analysis package (stories) exists. */
+  hasStory: boolean;
+}
+
+/** Every race at one track within a few days, whatever event rows they were filed under. */
+export interface Weekend {
+  key: string;
+  track: string;
+  title: string | null;
+  startDate: string;
+  endDate: string;
+  season: string;
+  families: WeekendRace["family"][];
+  races: WeekendRace[];
+}
+
+export interface WeekendsResponse {
+  weekends: Weekend[];
+  /** Admins only: events with no race at all, to clean up. */
+  emptyEvents: { id: string; name: string; track: string; date: string }[];
+}
+
 export interface EventRace {
   id: string;
   name: string;

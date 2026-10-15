@@ -99,8 +99,27 @@ function MobileMenu() {
   );
 }
 
+/** A top-bar link; the current section is shown in the accent colour. */
+function NavItem({ to, label }: { to: string; label: string }) {
+  const { pathname } = useLocation();
+  const active = pathname === to || pathname.startsWith(`${to}/`) || (to === "/races" && pathname === "/chart");
+  return (
+    <Link
+      to={to}
+      aria-current={active ? "page" : undefined}
+      className={
+        active
+          ? "text-sm font-medium text-gray-900 dark:text-gray-50 underline decoration-brand-500 decoration-2 underline-offset-[22px]"
+          : "text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+      }
+    >
+      {label}
+    </Link>
+  );
+}
+
 export function Layout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   useSiteConfig(); // re-render when free mode / support settings arrive
   // Race and qualifying pages are apps: they fill the window exactly (no page scroll, no footer)
   // and each part scrolls on its own.
@@ -124,12 +143,9 @@ export function Layout() {
 
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-4">
-              <Link
-                to="/races"
-                className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-              >
-                Events
-              </Link>
+              <NavItem to="/races" label="Events" />
+              {isAuthenticated && <NavItem to="/dashboard" label="Dashboard" />}
+              {user?.role === "ADMIN" && <NavItem to="/admin" label="Admin" />}
               {!isAuthenticated && !isFreeMode() && (
                 <Link
                   to="/pricing"

@@ -1,327 +1,281 @@
-import { useState, useEffect, useMemo } from "react";
-import { fetchEvents } from "../lib/api";
-import { EventCard } from "../components/EventCard";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import type { Weekend, WeekendRace, WeekendsResponse } from "@shared/types";
+import { fetchWeekends } from "../lib/api";
 import { SearchBar } from "../components/SearchBar";
-import { useEventSearch } from "../hooks/useEventSearch";
-import { useFilterOptions } from "../hooks/useChartData";
 import { useAuth } from "../features/auth/AuthContext";
-import { hasFullAccess } from "../lib/utils";
-import { SeriesBadge } from "../components/SeriesBadge";
-import type { EventSummary } from "@shared/types";
+import { cn } from "../lib/utils";
+import { dayName, formatDateRange } from "../lib/race-dates";
 
-const FALLBACK_SERIES = ["IMSA", "SRO", "WRL"];
+type Family = WeekendRace["family"];
 
-type SortKey = "date-desc" | "date-asc" | "track-az";
+/** Text badge per series group (GUI spec §9.1): every series named in words. */
+const FAMILY_STYLE: Record<Family, string> = {
+  IMSA: "text-sky-300 border-sky-400/40 bg-sky-400/10",
+  SRO: "text-rose-300 border-rose-400/40 bg-rose-400/10",
+  "GR Cup": "text-red-300 border-red-400/40 bg-red-400/10",
+  WRL: "text-gray-100 border-gray-300/40 bg-white/5",
+  Other: "text-gray-300 border-gray-500/40 bg-white/5",
+};
+const FAMILIES: Family[] = ["IMSA", "SRO", "GR Cup", "WRL", "Other"];
+
+function FamilyBadge({ family, className }: { family: Family; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center rounded border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide", FAMILY_STYLE[family], className)}>
+      {family}
+    </span>
+  );
+}
+
+function matches(w: Weekend, q: string): boolean {
+  if (!q) return true;
+  const hay = [w.track, w.title ?? "", ...w.races.flatMap((r) => [r.championship ?? "", r.title, r.name, r.family])]
+    .join(" ")
+    .toLowerCase();
+  return q
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => hay.includes(word));
+}
 
 export function RaceListPage() {
   const { user } = useAuth();
-  const fullAccess = hasFullAccess(user);
+  const isAdmin = user?.role === "ADMIN";
+  const [data, setData] = useState<WeekendsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [season, setSeason] = useState<string>("all");
+  const [families, setFamilies] = useState<Set<Family>>(new Set());
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [seriesFilters, setSeriesFilters] = useState<Set<string> | null>(null);
-  const [seasonFilter, setSeasonFilter] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("date-desc");
-
-  // Default event list (cached -- not refetched on search clear)
-  const [events, setEvents] = useState<EventSummary[]>([]);
-  const [freeAccessRaceIds, setFreeAccessRaceIds] = useState<string[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const [eventsError, setEventsError] = useState<string | null>(null);
-
-  const filters = useFilterOptions();
-
-  // Build the canonical series list from DB + fallbacks
-  const allSeries = useMemo(() => {
-    const dbSeries = filters?.sanctioningBodies ?? [];
-    const merged = new Set([...FALLBACK_SERIES, ...dbSeries]);
-    return Array.from(merged);
-  }, [filters]);
-
-  // Initialize series filters once allSeries is known
-  if (seriesFilters === null && allSeries.length > 0) {
-    setSeriesFilters(new Set(allSeries));
-  }
-  const activeFilters = seriesFilters ?? new Set(allSeries);
-
-  const allSelected = activeFilters.size >= allSeries.length;
-
-  // Derive a single series string for the API (or undefined if multi/all)
-  const seriesParam = activeFilters.size === 1 ? [...activeFilters][0] : undefined;
-
-  // Fetch default events on mount and when filters change
   useEffect(() => {
-    setEventsLoading(true);
-    setEventsError(null);
-    fetchEvents({
-      series: allSelected ? undefined : seriesParam,
-      season: seasonFilter || undefined,
-    })
-      .then((data) => {
-        setFreeAccessRaceIds(data.freeAccessRaceIds);
-        const eventsList = data.events;
-        // Client-side multi-series filter when not all selected and more than one
-        if (!allSelected && activeFilters.size > 1) {
-          setEvents(eventsList.filter((ev) => activeFilters.has(ev.series)));
-        } else if (!allSelected && activeFilters.size === 0) {
-          setEvents([]);
-        } else {
-          setEvents(eventsList);
-        }
-      })
-      .catch(() => setEventsError("Failed to load events"))
-      .finally(() => setEventsLoading(false));
-  }, [seriesParam, activeFilters.size, seasonFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+    let alive = true;
+    fetchWeekends()
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setError("The events could not be loaded. Check your connection and reload the page."));
+    return () => {
+      alive = false;
+    };
+  }, [user?.role]);
 
-  // Client-side sort
-  const sortedEvents = useMemo(() => {
-    const sorted = [...events];
-    switch (sortBy) {
-      case "date-asc":
-        sorted.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-        break;
-      case "track-az":
-        sorted.sort((a, b) => a.track.localeCompare(b.track));
-        break;
-      case "date-desc":
-      default:
-        sorted.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-        break;
+  const weekends = data?.weekends ?? [];
+  const seasons = useMemo(() => [...new Set(weekends.map((w) => w.season))].sort().reverse(), [weekends]);
+  const present = useMemo(() => FAMILIES.filter((f) => weekends.some((w) => w.families.includes(f))), [weekends]);
+
+  // Series chips narrow each weekend to those races; a weekend with none left is hidden.
+  const shown = useMemo(() => {
+    return weekends
+      .filter((w) => season === "all" || w.season === season)
+      .map((w) => (families.size === 0 ? w : { ...w, races: w.races.filter((r) => families.has(r.family)) }))
+      .filter((w) => w.races.length > 0 && matches(w, query.trim()));
+  }, [weekends, season, families, query]);
+
+  // One section per season; race weekends are weeks apart, so months would be one card each.
+  const bySeason = useMemo(() => {
+    const groups: { season: string; weekends: Weekend[] }[] = [];
+    for (const w of shown) {
+      const last = groups[groups.length - 1];
+      if (last?.season === w.season) last.weekends.push(w);
+      else groups.push({ season: w.season, weekends: [w] });
     }
-    return sorted;
-  }, [events, sortBy]);
+    return groups;
+  }, [shown]);
 
-  // Compute per-event accessibility
-  const freeSet = useMemo(() => new Set(freeAccessRaceIds), [freeAccessRaceIds]);
+  const raceCount = shown.reduce((n, w) => n + w.races.length, 0);
+  const filtered = query !== "" || season !== "all" || families.size > 0;
 
-  const isEventAccessible = (ev: EventSummary): boolean => {
-    if (fullAccess) return true;
-    if (!ev.raceIds || ev.raceIds.length === 0) return false;
-    return ev.raceIds.some((id) => freeSet.has(id));
-  };
-
-  // Live search (debounced, abortable)
-  const {
-    results: searchResults,
-    freeAccessRaceIds: searchFreeIds,
-    isSearching,
-  } = useEventSearch(searchQuery, {
-    series: seriesParam,
-    season: seasonFilter || undefined,
-  });
-
-  const searchFreeSet = useMemo(() => new Set(searchFreeIds), [searchFreeIds]);
-
-  const isSearchMode = searchResults !== null;
-
-  // Filter search results client-side for multi-series
-  const filteredSearchResults =
-    searchResults && !allSelected && activeFilters.size > 0
-      ? searchResults.filter((sr) => activeFilters.has(sr.series))
-      : searchResults;
-
-  const isSearchEventAccessible = (ev: EventSummary): boolean => {
-    if (fullAccess) return true;
-    // Search results include races directly — check race IDs
-    const raceIds = ev.raceIds ?? (ev as any).races?.map((r: any) => r.id) ?? [];
-    return raceIds.some((id: string) => searchFreeSet.has(id));
-  };
-
-  const toggleSeries = (s: string) => {
-    setSeriesFilters((prev) => {
-      const next = new Set(prev ?? allSeries);
-      if (next.has(s)) {
-        next.delete(s);
-      } else {
-        next.add(s);
-      }
+  const toggleFamily = (f: Family) =>
+    setFamilies((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f);
+      else next.add(f);
       return next;
     });
-  };
-
-  const hasActiveFilters = !allSelected || seasonFilter !== "" || searchQuery !== "";
-
-  const clearFilters = () => {
-    setSeriesFilters(new Set(allSeries));
-    setSeasonFilter("");
-    setSearchQuery("");
-  };
 
   return (
-    <div className="container-page py-8 lg:py-12">
-      {/* Header + summary stats */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+    <div className="container-page py-8 lg:py-10">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">Events</h1>
-          <p className="mt-1 text-gray-500 dark:text-gray-400 text-sm">
-            Browse race events and charts.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-50 lg:text-3xl">Events</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Every race weekend on RaceTrace, newest first.</p>
         </div>
-        {!eventsLoading && events.length > 0 && (
-          <div className="flex gap-3">
-            {[
-              { label: "Total events", value: events.length },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="text-right px-3.5 py-2 rounded-lg bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08]"
-              >
-                <div className="text-lg font-bold text-gray-900 dark:text-white">{s.value}</div>
-                <div className="text-[11px] text-gray-400 dark:text-white/35 mt-0.5">{s.label}</div>
-              </div>
-            ))}
-          </div>
+        {data && (
+          <p className="text-sm tabular-nums text-gray-500 dark:text-gray-400">
+            {shown.length} weekend{shown.length === 1 ? "" : "s"} · {raceCount} race{raceCount === 1 ? "" : "s"}
+          </p>
         )}
       </div>
 
-      {/* Search bar */}
-      <SearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        isSearching={isSearching}
-        className="mb-4"
-      />
-
-      {/* Filter + sort bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        {/* Series filter chips */}
-        <div className="flex gap-2 flex-wrap">
-          {allSeries.map((s) => {
-            const active = activeFilters.has(s);
-            return (
+      {/* Filters */}
+      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <SearchBar value={query} onChange={setQuery} isSearching={false} className="lg:max-w-md lg:flex-1" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="radiogroup" aria-label="Season" className="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-800">
+            {["all", ...seasons].map((s) => (
               <button
                 key={s}
-                onClick={() => toggleSeries(s)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all duration-150 cursor-pointer"
-                style={{
-                  borderColor: active ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
-                  background: active ? "rgba(255,255,255,0.06)" : "transparent",
-                }}
+                role="radio"
+                aria-checked={season === s}
+                onClick={() => setSeason(s)}
+                className={cn(
+                  "rounded-md px-3 py-1 text-sm transition-colors",
+                  season === s ? "bg-brand-500 font-semibold text-gray-950" : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                )}
               >
-                <SeriesBadge series={s} size="sm" />
+                {s === "all" ? "All seasons" : s}
+              </button>
+            ))}
+          </div>
+          {present.map((f) => {
+            const on = families.has(f);
+            return (
+              <button
+                key={f}
+                onClick={() => toggleFamily(f)}
+                aria-pressed={on}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-sm transition-colors",
+                  on
+                    ? "border-brand-500 bg-brand-500/15 font-medium text-gray-900 dark:text-gray-50"
+                    : "border-gray-200 text-gray-500 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:text-gray-100"
+                )}
+              >
+                {f}
               </button>
             );
           })}
-        </div>
-
-        {/* Sort + season controls */}
-        <div className="flex gap-2 items-center">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-          >
-            <option value="date-desc">Date: Newest first</option>
-            <option value="date-asc">Date: Oldest first</option>
-            <option value="track-az">Track: A-Z</option>
-          </select>
-
-          {filters && filters.seasons.length > 0 && (
-            <select
-              value={seasonFilter}
-              onChange={(e) => setSeasonFilter(e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+          {filtered && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setSeason("all");
+                setFamilies(new Set());
+              }}
+              className="px-2 text-sm text-brand-500 hover:text-brand-400"
             >
-              <option value="">All Seasons</option>
-              {filters.seasons.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+              Clear
+            </button>
           )}
         </div>
       </div>
 
-      {/* Active filters summary */}
-      {hasActiveFilters && (
-        <div className="flex items-center gap-2 mb-4 text-sm text-gray-500 dark:text-gray-400">
-          <span>
-            Showing {isSearchMode ? (filteredSearchResults?.length ?? 0) : sortedEvents.length} of {events.length} events
-          </span>
-          <button
-            onClick={clearFilters}
-            className="text-brand-500 dark:text-brand-400 hover:text-brand-400 dark:hover:text-brand-300 transition-colors"
-          >
-            Clear filters ×
-          </button>
-        </div>
+      {error && <p className="py-16 text-center text-red-500">{error}</p>}
+      {!data && !error && <Skeleton />}
+      {data && shown.length === 0 && (
+        <p className="py-16 text-center text-gray-500 dark:text-gray-400">
+          No race weekends match.{" "}
+          {filtered && (
+            <button className="text-brand-500 hover:underline" onClick={() => { setQuery(""); setSeason("all"); setFamilies(new Set()); }}>
+              Clear the filters
+            </button>
+          )}
+        </p>
       )}
 
-      {/* Search results mode */}
-      {isSearchMode && (
-        <>
-          {isSearching ? (
-            <SkeletonGrid />
-          ) : !filteredSearchResults || filteredSearchResults.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-lg text-gray-500 dark:text-gray-400">
-                No events match &ldquo;{searchQuery}&rdquo;
-              </p>
-              <button
-                onClick={() => setSearchQuery("")}
-                className="mt-2 text-brand-600 hover:underline text-sm"
-              >
-                Clear search
-              </button>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredSearchResults.map((sr) => (
-                <div key={sr.id} className="relative">
-                  <EventCard
-                    event={sr}
-                    searchRaces={sr.races}
-                    matchedOn={sr.matchedOn}
-                    accessible={isSearchEventAccessible(sr)}
-                  />
-                </div>
+      <div className="space-y-10">
+        {bySeason.map((g) => (
+          <section key={g.season} aria-labelledby={`s-${g.season}`}>
+            <h2 id={`s-${g.season}`} className="mb-3 flex items-baseline gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
+              {g.season}
+              <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                {g.weekends.length} weekend{g.weekends.length === 1 ? "" : "s"}
+              </span>
+            </h2>
+            <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {g.weekends.map((w) => (
+                <WeekendCard key={w.key} weekend={w} isAdmin={isAdmin} />
               ))}
             </div>
-          )}
-        </>
-      )}
+          </section>
+        ))}
+      </div>
 
-      {/* Default event grid */}
-      {!isSearchMode && (
-        <>
-          {eventsLoading && <SkeletonGrid />}
-          {eventsError && (
-            <div className="text-center py-20 text-red-500">{eventsError}</div>
-          )}
-          {!eventsLoading && !eventsError && sortedEvents.length === 0 && (
-            <div className="text-center py-20">
-              <p className="text-lg text-gray-500 dark:text-gray-400">No events found.</p>
-            </div>
-          )}
-          {!eventsLoading && sortedEvents.length > 0 && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sortedEvents.map((ev) => (
-                <div key={ev.id} className="relative">
-                  <EventCard
-                    event={ev}
-                    accessible={isEventAccessible(ev)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+      {isAdmin && data && data.emptyEvents.length > 0 && (
+        <section className="mt-12 rounded-xl border border-dashed border-gray-300 p-4 dark:border-gray-700">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Empty events (admin only)</h2>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Events with no races. They are hidden from everyone else.</p>
+          <ul className="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            {data.emptyEvents.map((e) => (
+              <li key={e.id} className="flex flex-wrap gap-x-2">
+                <span className="rounded border border-gray-400/40 px-1.5 text-[10px] uppercase leading-5">Empty</span>
+                <span>{e.name}</span>
+                <span className="text-gray-400 dark:text-gray-500">{formatDateRange(e.date, e.date)} · {e.id}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
 }
 
-// ---- Skeleton grid ----
-
-function SkeletonGrid() {
+function WeekendCard({ weekend: w, isAdmin }: { weekend: Weekend; isAdmin: boolean }) {
+  const multiDay = w.startDate !== w.endDate;
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="rounded-xl bg-gray-900 border border-gray-800 p-5 space-y-3">
-          <div className="flex justify-between">
-            <div className="h-5 w-14 bg-gray-800 rounded-full animate-pulse" />
-            <div className="h-4 w-24 bg-gray-800 rounded animate-pulse" />
+    <article className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900/60">
+      <header className="px-4 pb-2 pt-3.5">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-bold leading-snug text-gray-900 dark:text-gray-50">{w.track}</h3>
+          <div className="flex shrink-0 gap-1 pt-0.5">
+            {w.families.map((f) => (
+              <FamilyBadge key={f} family={f} />
+            ))}
           </div>
-          <div className="h-6 w-3/4 bg-gray-800 rounded animate-pulse" />
-          <div className="h-4 w-1/3 bg-gray-800/60 rounded animate-pulse ml-auto" />
+        </div>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          <span className="tabular-nums">{formatDateRange(w.startDate, w.endDate)}</span>
+          {w.title && <span> · {w.title}</span>}
+        </p>
+      </header>
+      <ul className="border-t border-gray-100 dark:border-gray-800/80">
+        {w.races.map((r) => (
+          <li key={r.id}>
+            <Link
+              to={r.eventId ? `/chart?event=${r.eventId}&race=${r.id}` : `/chart?race=${r.id}`}
+              className="group flex items-center gap-3 px-4 py-2 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none dark:hover:bg-white/[0.04] dark:focus-visible:bg-white/[0.04]"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-1.5">
+                  {r.championship && (
+                    <span className="truncate text-xs text-gray-500 dark:text-gray-400">{r.championship}</span>
+                  )}
+                  <span className="truncate text-sm font-medium text-gray-800 group-hover:text-brand-500 dark:text-gray-200">
+                    {r.title}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500 dark:text-gray-500">
+                  {multiDay && <span>{dayName(r.date)}</span>}
+                  {r.cars !== null && <span className="tabular-nums">{r.cars} cars</span>}
+                  {r.laps !== null && r.laps > 0 && <span className="tabular-nums">{r.laps} laps</span>}
+                  {r.resultsStatus === "provisional" && (
+                    <span className="rounded border border-amber-400/50 px-1 text-amber-300">Provisional</span>
+                  )}
+                  {r.hasStory && <span className="rounded border border-brand-500/50 px-1 text-brand-400">Story</span>}
+                  {isAdmin && r.status === "DRAFT" && (
+                    <span className="rounded border border-gray-400/50 px-1 text-gray-400">Draft</span>
+                  )}
+                </div>
+              </div>
+              <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+function Skeleton() {
+  return (
+    <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+          <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+          <div className="h-3 w-1/3 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+          <div className="h-9 animate-pulse rounded bg-gray-100 dark:bg-gray-800/60" />
+          <div className="h-9 animate-pulse rounded bg-gray-100 dark:bg-gray-800/60" />
         </div>
       ))}
     </div>

@@ -1,3 +1,4 @@
+import { adminSearchWords } from "../lib/race-search.js";
 import { prisma } from "../models/prisma.js";
 import { freeMode } from "../lib/free-mode.js";
 import { AppError } from "../middleware/error-handler.js";
@@ -152,10 +153,10 @@ export async function listRacesAdmin(params: RaceListParams) {
   if (params.series) where.series = params.series;
   if (params.season) where.season = params.season;
   if (params.search) {
-    where.OR = [
-      { name: { contains: params.search, mode: "insensitive" } },
-      { track: { contains: params.search, mode: "insensitive" } },
-    ];
+    // A race id finds that race; otherwise every word must appear in the name, track or
+    // series ("GR Cup R1 Barber" finds "GR Cup Race 1 — Barber Motorsports Park").
+    const q = params.search.trim();
+    where.OR = [{ id: q }, { AND: adminSearchWords(q) }];
   }
 
   const [races, total] = await prisma.$transaction([

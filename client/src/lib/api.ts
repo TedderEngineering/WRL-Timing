@@ -1,4 +1,4 @@
-import type { ApiError, EventSummary, EventWithRaces, SearchResult } from "@shared/types";
+import type { ApiError, EventSummary, EventWithRaces, SearchResult, WeekendsResponse } from "@shared/types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -201,6 +201,10 @@ export function fetchEvents(params?: {
   if (params?.season) qs.set("season", params.season);
   const query = qs.toString();
   return api.get<EventsResponse>(`/events${query ? `?${query}` : ""}`);
+}
+
+export function fetchWeekends(): Promise<WeekendsResponse> {
+  return api.get<WeekendsResponse>("/events/weekends");
 }
 
 export function fetchEvent(eventId: string): Promise<EventWithRaces> {

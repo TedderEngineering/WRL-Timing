@@ -76,3 +76,15 @@ describe("toDateInputValue", () => {
     expect(toDateInputValue("nope")).toBe("");
   });
 });
+
+describe("event page dates", () => {
+  it("formats weekend ranges, day names and month headings from the calendar day", async () => {
+    const { formatDateRange, dayName, monthHeading } = await import("../race-dates");
+    expect(formatDateRange("2025-10-09", "2025-10-11")).toBe("Oct 9–11, 2025");
+    expect(formatDateRange("2026-02-28", "2026-03-01")).toBe("Feb 28 – Mar 1, 2026");
+    expect(formatDateRange("2025-12-31", "2026-01-01")).toBe("Dec 31, 2025 – Jan 1, 2026");
+    expect(formatDateRange("2026-10-02", "2026-10-02")).toBe("Oct 2, 2026");
+    expect(dayName("2026-10-02")).toBe("Fri");
+    expect(monthHeading("2026-10-02")).toBe("October 2026");
+  });
+});

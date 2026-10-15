@@ -4,6 +4,7 @@ import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { getFreeAccessRaceIds } from "../services/races.js";
 import { freeMode } from "../lib/free-mode.js";
+import { groupWeekends, type WeekendRaceIn } from "../lib/weekends.js";
 
 export const eventsRouter = Router();
 
@@ -80,6 +81,58 @@ eventsRouter.get(
           };
         }),
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/events/weekends — Race weekends for the Events page ───────────
+// Every visible race, grouped by normalised track and dates (one card per weekend, whatever
+// event rows it was filed under). Events with no visible race are left out; admins get them
+// back as "emptyEvents" so they can be cleaned up.
+
+eventsRouter.get(
+  "/weekends",
+  optionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const isAdmin = req.user?.role === "ADMIN";
+      const races = await prisma.race.findMany({
+        where: isAdmin ? {} : { status: "PUBLISHED", OR: [{ eventId: null }, { event: { status: "PUBLISHED" } }] },
+        select: {
+          id: true, name: true, date: true, track: true, series: true, status: true,
+          totalCars: true, maxLap: true, resultsStatus: true, currentPackageId: true, sourceKey: true,
+          eventId: true, event: { select: { name: true, track: true } },
+        },
+      });
+      const input: WeekendRaceIn[] = races.map((r) => ({
+        id: r.id,
+        name: r.name,
+        date: r.date.toISOString().slice(0, 10),
+        track: r.event?.track ?? r.track,
+        series: r.series,
+        status: r.status,
+        totalCars: r.totalCars,
+        maxLap: r.maxLap,
+        resultsStatus: r.resultsStatus,
+        hasStory: r.currentPackageId !== null,
+        eventId: r.eventId,
+        eventName: r.event?.name ?? null,
+        sourceKey: r.sourceKey,
+      }));
+
+      let empty: { id: string; name: string; track: string; date: string }[] = [];
+      if (isAdmin) {
+        const rows = await prisma.event.findMany({
+          where: { races: { none: {} } },
+          select: { id: true, name: true, track: true, date: true },
+          orderBy: { date: "desc" },
+        });
+        empty = rows.map((e) => ({ ...e, date: e.date.toISOString().slice(0, 10) }));
+      }
+
+      res.json({ weekends: groupWeekends(input), emptyEvents: empty });
     } catch (err) {
       next(err);
     }
