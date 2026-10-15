@@ -7,6 +7,8 @@ interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+  /** Extra headers, e.g. List-Unsubscribe for alert emails. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -25,6 +27,7 @@ async function sendEmail({
   to,
   subject,
   html,
+  headers,
 }: SendEmailParams): Promise<void> {
   if (!env.RESEND_API_KEY) {
     if (env.NODE_ENV === "production") {
@@ -51,6 +54,7 @@ async function sendEmail({
       to,
       subject,
       html,
+      ...(headers ? { headers } : {}),
     }),
   });
 
@@ -120,6 +124,22 @@ export async function sendPasswordResetEmail(
         </p>
       </div>
     `,
+  });
+}
+
+/**
+ * A race-ready alert (engagement plan D). One-click unsubscribe: List-Unsubscribe with an https
+ * address, and List-Unsubscribe-Post so mail apps can turn it off without opening anything.
+ */
+export async function sendRaceAlertEmail(p: { to: string; subject: string; html: string; unsubscribeUrl: string }): Promise<void> {
+  await sendEmail({
+    to: p.to,
+    subject: p.subject,
+    html: p.html,
+    headers: {
+      "List-Unsubscribe": `<${p.unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
   });
 }
 

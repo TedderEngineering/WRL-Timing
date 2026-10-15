@@ -7,6 +7,7 @@ import { SupportAsk } from "../support/SupportPrompts";
 import { StatusPill } from "./RecapCard";
 import { formatDayRange } from "./format";
 import { readUi, writeUi } from "./ui-state";
+import { switchAlerts } from "../my-cars/alerts";
 
 /**
  * "Your car's latest race" (engagement plan C, the peak moment): the followed car's finish,
@@ -44,6 +45,8 @@ export interface MyCarResponse {
   } | null;
   story?: { headline: Prose; paragraphs: Prose[]; cars: ProseContext["cars"]; classes: Record<string, string> } | null;
   viewed?: boolean;
+  /** Race-ready emails are on. */
+  alerts?: boolean;
 }
 
 const chartHref = (id: string, tab?: string) => `/chart?race=${id}${tab ? `&tab=${tab}` : ""}`;
@@ -183,8 +186,19 @@ export function MyCarCard({ data }: { data: MyCarResponse }) {
  */
 export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
   const [hidden, setHidden] = useState(() => !!readUi().checklistHidden);
+  const [alertsOn, setAlertsOn] = useState<boolean | null>(null);
   if (!data) return null;
-  type Step = { key: string; label: string; done: boolean; to: string | null; start?: string; alt?: { label: string; to: string; key: string } };
+  const alerts = alertsOn ?? !!data.alerts;
+  type Step = {
+    key: string;
+    label: string;
+    done: boolean;
+    to: string | null;
+    start?: string;
+    alt?: { label: string; to: string; key: string };
+    /** A step done right here (a switch), not on another page. */
+    action?: { label: string; run: () => void };
+  };
   const steps: Step[] = [
     { key: "account", label: "Create your account", done: true, to: null },
     {
@@ -197,12 +211,25 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
       alt: { key: "follow_by_number", label: "Add it by number →", to: "/settings/cars" },
     },
     { key: "open_race", label: "Open your car's latest race", done: !!data.viewed, to: data.race ? chartHref(data.race.id) : null },
+    {
+      key: "alerts",
+      label: "Get an email when your car's race is up",
+      done: alerts,
+      to: null,
+      // Only once there is a car to be emailed about.
+      action: data.carCount === 0 ? undefined : {
+        label: "Turn on",
+        run: () => {
+          track("checklist_step", { step: "alerts" });
+          switchAlerts(true, "checklist").then(setAlertsOn).catch(() => undefined);
+        },
+      },
+    },
   ];
   const done = steps.filter((s) => s.done).length;
   if (hidden || done === steps.length) return null;
-  // Following a car that has not raced here yet leaves nothing to open; the card says so.
-  if (data.carCount > 0 && !data.race) return null;
-  const next = steps.find((s) => !s.done);
+  // A step that cannot be done yet (no race to open) is not "next".
+  const next = steps.find((s) => !s.done && (s.to || s.action));
 
   return (
     <section aria-labelledby="first-steps" className="rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] px-5 py-4 text-left">
@@ -251,9 +278,19 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
                 {s.label}
                 <span className="sr-only">{s.done ? " (done)" : ""}</span>
               </span>
-              {isNext && !s.alt && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
+              {isNext && !s.alt && !s.action && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
             </>
           );
+          if (!s.done && s.action) {
+            return (
+              <li key={s.key} className="flex min-h-[40px] items-center gap-3">
+                {body}
+                <button type="button" onClick={s.action.run} className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">
+                  {s.action.label}
+                </button>
+              </li>
+            );
+          }
           if (isNext && s.alt && s.to) {
             // Two ways to do this step: find a race and press Follow, or type the number.
             return (

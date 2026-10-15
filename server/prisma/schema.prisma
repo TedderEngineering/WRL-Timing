@@ -72,6 +72,7 @@ model User {
   favorites           UserFavorite[]
   raceViews           UserRaceView[]
   cars                UserCar[]
+  raceAlertSends      RaceAlertSend[]
   createdRaces        Race[]                   @relation("RaceCreator")
   createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
   auditLogs           AuditLog[]
@@ -229,6 +230,7 @@ model Race {
   laps             RaceLap[]
   favorites        UserFavorite[]
   views            UserRaceView[]
+  alertSends       RaceAlertSend[]
   pitStopAnalysis  PitStopAnalysis[]
 
   @@index([status])
@@ -363,6 +365,22 @@ model UserCar {
   @@map("user_cars")
 }
 
+/// One race-ready email per race per user (engagement plan D): the row is written before the
+/// email is sent, so a second trigger (publish, then results turning official) never repeats it.
+model RaceAlertSend {
+  userId String   @map("user_id")
+  raceId String   @map("race_id")
+  carId  String?  @map("car_id")
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, raceId])
+  @@index([raceId])
+  @@map("race_alert_sends")
+}
+
 model UserRaceView {
   id       String   @id @default(cuid())
   userId   String   @map("user_id")
@@ -381,6 +399,8 @@ model UserPreferences {
   userId               String @id @map("user_id")
   theme                String @default("system") // "light" | "dark" | "system"
   defaultChartSettings Json?  @map("default_chart_settings")
+  /// Race-ready emails (engagement plan D): off until the user turns them on.
+  raceAlerts           Boolean @default(false) @map("race_alerts")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

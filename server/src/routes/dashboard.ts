@@ -16,6 +16,7 @@ import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
 import { carMatchesEntry, listCars } from "../services/my-cars.js";
+import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
 
@@ -226,9 +227,9 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
 dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
-    const cars = await listCars(userId);
+    const [cars, alerts] = await Promise.all([listCars(userId), getRaceAlerts(userId)]);
     if (cars.length === 0) {
-      res.json({ carCount: 0, car: null, race: null });
+      res.json({ carCount: 0, car: null, race: null, alerts });
       return;
     }
     // Candidate numbers as stored ("7" and "007" are one car).
@@ -256,7 +257,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       if (hit) break;
     }
     if (!hit) {
-      res.json({ carCount: cars.length, car: cars[0], race: null });
+      res.json({ carCount: cars.length, car: cars[0], race: null, alerts });
       return;
     }
 
@@ -274,7 +275,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       lockReason: access.accessible ? null : access.reason ?? null,
     };
     if (!access.accessible) {
-      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false });
+      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false, alerts });
       return;
     }
     const [data, viewed] = await Promise.all([
@@ -283,7 +284,7 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
     ]);
     const facts = data?.chartData ? carFacts(data.chartData, data.annotationData ?? null, carNumber) : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
-    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed });
+    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts });
   } catch (err) {
     next(err);
   }

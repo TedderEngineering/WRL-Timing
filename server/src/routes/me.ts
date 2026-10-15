@@ -6,10 +6,15 @@
  *   PATCH  /api/me/cars/:id                 edit (a new number for a new season, a team…)
  *   DELETE /api/me/cars/:id                 stop following
  *   GET    /api/me/cars/in-race/:raceId     which of the race's cars the user follows
+ * Race-ready emails (engagement plan D):
+ *   GET    /api/me/alerts                   { raceAlerts }
+ *   PUT    /api/me/alerts                   { raceAlerts: boolean }
  */
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
+import { z } from "zod";
 import * as cars from "../services/my-cars.js";
+import { getRaceAlerts, setRaceAlerts } from "../services/race-alerts.js";
 
 export const meRouter = Router();
 meRouter.use(requireAuth);
@@ -41,4 +46,14 @@ meRouter.patch("/cars/:id", wrap(async (req, res) => {
 meRouter.delete("/cars/:id", wrap(async (req, res) => {
   await cars.deleteCar(req.user!.userId, req.params.id as string);
   res.status(204).end();
+}));
+
+meRouter.get("/alerts", wrap(async (req, res) => {
+  res.json({ raceAlerts: await getRaceAlerts(req.user!.userId) });
+}));
+
+meRouter.put("/alerts", wrap(async (req, res) => {
+  const { raceAlerts } = z.object({ raceAlerts: z.boolean() }).parse(req.body);
+  await setRaceAlerts(req.user!.userId, raceAlerts);
+  res.json({ raceAlerts });
 }));

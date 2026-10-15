@@ -28,6 +28,7 @@ import { findOrCreateEvent, mapSeriesToSanctioningBody } from "./race-ingest.js"
 import { canonicalSourceKey, SOURCE_KEY_PATTERN } from "../intake/source-key.js";
 import { resultsStatusRank } from "../intake/file-select.js";
 import { sameSessionTraits } from "../intake/push.js";
+import { queueRaceAlerts } from "./race-alerts.js";
 import { raceFamily } from "../intake/reimport.js";
 
 export const RESULTS_STATUSES = ["official", "provisional", "unofficial", "unknown", "none"] as const;
@@ -364,6 +365,12 @@ export async function intakeRace(bodyIn: unknown, actor: IntakeActor, deps: Inta
       } as any,
     },
   });
+
+  // Results that just turned official on a published race: race-ready emails for anyone who
+  // follows one of its cars and has not had one for this race (sendRaceAlerts checks the rest).
+  if (action === "updated" && body.resultsStatus === "official" && previous?.resultsStatus !== "official") {
+    queueRaceAlerts(raceId);
+  }
 
   return { action, ...(attached ? { attached: true } : {}), raceId, sourceKey, entriesCreated: counts.entries, lapsCreated: counts.laps, warnings, archived: archived.paths };
 }

@@ -71,3 +71,8 @@ export function takePendingFollow(raceId: string, now = Date.now()): string | nu
     return null;
   }
 }
+
+// ─── Race-ready emails (engagement plan D) ───────────────────────────────────
+
+export const getAlerts = () => api.get<{ raceAlerts: boolean }>("/me/alerts");
+export const setAlerts = (raceAlerts: boolean) => api.put<{ raceAlerts: boolean }>("/me/alerts", { raceAlerts });

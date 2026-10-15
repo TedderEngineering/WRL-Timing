@@ -8,6 +8,8 @@ const KEY = "racetrace.ui.v1";
 export interface UiState {
   installDismissedAt?: number;
   checklistHidden?: boolean;
+  /** The race-email ask after a follow was answered (never asked again here). */
+  alertAskDone?: boolean;
 }
 
 export function readUi(): UiState {

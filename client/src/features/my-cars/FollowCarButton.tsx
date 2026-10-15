@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { rememberPostAuthRedirect } from "../../lib/postAuthRedirect";
 import { track } from "../../lib/analytics";
 import { followCar, followedInRace, rememberPendingFollow, removeCar, takePendingFollow } from "./api";
+import { AlertAskAfterFollow } from "./alerts";
 
 const norm = (n: string) => (/^\d+$/.test(n) ? String(Number(n)) : n.toUpperCase());
 
@@ -30,6 +31,8 @@ export function FollowCarButton({
   const [followed, setFollowed] = useState<{ carNumber: string; carId: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Just followed here: offer the race-ready email once (it hides itself when already on).
+  const [justFollowed, setJustFollowed] = useState(false);
 
   useEffect(() => {
     setFollowed([]);
@@ -41,8 +44,9 @@ export function FollowCarButton({
       const pending = takePendingFollow(raceId);
       if (pending) {
         try {
-          await followCar(raceId, pending);
+          const r = await followCar(raceId, pending);
           track("follow_car", { series, source: "race_page" });
+          if (alive && r.created) setJustFollowed(true);
         } catch {
           // shown as not followed; they can press Follow again
         }
@@ -80,7 +84,10 @@ export function FollowCarButton({
       } else {
         const r = await followCar(raceId, carNumber);
         setFollowed((f) => [...f, { carNumber, carId: r.car.id }]);
-        if (r.created) track("follow_car", { series, source: "race_page" });
+        if (r.created) {
+          track("follow_car", { series, source: "race_page" });
+          setJustFollowed(true);
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "That did not work. Try again.");
@@ -103,6 +110,7 @@ export function FollowCarButton({
         <span aria-hidden style={{ color: mine ? "#4ade80" : undefined }}>{mine ? "✓" : "+"}</span>
         {mine ? `Following #${carNumber}` : `Follow #${carNumber}`}
       </button>
+      {justFollowed && mine && <AlertAskAfterFollow carNumber={carNumber} style={{ color: "#cbd5e1" }} />}
       {error && (
         <span role="alert" className="mt-1 text-xs" style={{ color: "#e66767" }}>
           {error}
