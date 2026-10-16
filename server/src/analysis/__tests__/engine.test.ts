@@ -300,7 +300,7 @@ describe("red flag: cars held in the pit lane", () => {
       expect(hold.timeLost).toMatchObject({ valueS: null, method: "none" });
       expect(hold.cycleId).toBeNull();
     }
-    expect(red.pitCycles.flatMap((c) => c.memberPassageIds ?? [])).not.toContain("pit:40:1");
+    expect(red.pitCycles.flatMap((c) => c.members.map((m) => m.passageId))).not.toContain("pit:40:1");
   });
 
   it("stops either side of the hold keep their numbers", () => {
@@ -315,7 +315,7 @@ describe("red flag: cars held in the pit lane", () => {
   it("the Drive Time row after the restart joins the held visit instead of becoming a drive-through", () => {
     expect(red.events.pitPassages.filter((p) => p.kind === "drive_through").map((p) => p.id)).toEqual(["pit:44:1"]);
     expect(red.events.pitPassages.filter((p) => p.car === "40")).toHaveLength(1);
-    expect(pass(red, "pit:40:1").source.refs.some((r) => r.startsWith("f") && r.includes(":L"))).toBe(true);
+    expect((pass(red, "pit:40:1").source.refs ?? []).some((r) => r.startsWith("f") && r.includes(":L"))).toBe(true);
   });
 
   it("a retirement's Drive Time rows split by the red flag are one visit", () => {
