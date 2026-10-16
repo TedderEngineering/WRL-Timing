@@ -4,6 +4,7 @@ import { prisma } from "../models/prisma.js";
 import { getFreeAccessRaceIds } from "../services/races.js";
 import { freeMode } from "../lib/free-mode.js";
 import { searchDrivers } from "../services/driver-search.js";
+import { searchCars } from "../services/car-search.js";
 
 export const searchRouter = Router();
 
@@ -14,6 +15,18 @@ searchRouter.get("/drivers", async (req: Request, res: Response, next: NextFunct
     const q = String(req.query.q ?? "").trim().slice(0, 80);
     res.set("Cache-Control", "public, max-age=120");
     res.json({ query: q, drivers: await searchDrivers(q) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/search/cars?q= — a car by number or team, with every published race ──
+
+searchRouter.get("/cars", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = String(req.query.q ?? "").trim().slice(0, 80);
+    res.set("Cache-Control", "public, max-age=120");
+    res.json({ query: q, cars: await searchCars(q) });
   } catch (err) {
     next(err);
   }
