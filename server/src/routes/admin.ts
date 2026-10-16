@@ -853,6 +853,41 @@ adminRouter.put(
   }
 );
 
+// ─── Drafts by event: list, and publish all of one event's drafts ────────────
+
+adminRouter.get(
+  "/events/drafts",
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ events: await raceSvc.listEventsWithDrafts() });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+adminRouter.post(
+  "/events/:eventId/publish",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const eventId = req.params.eventId as string;
+      const published = await raceSvc.publishEventDrafts(eventId);
+      await prisma.auditLog.create({
+        data: {
+          adminUserId: req.user!.userId,
+          action: "PUBLISH_EVENT_RACES",
+          targetType: "event",
+          targetId: eventId,
+          details: { races: published.map((r) => r.id), count: published.length },
+        },
+      });
+      res.json({ eventId, published });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ─── GET /api/admin/stats — Dashboard statistics ─────────────────────────────
 
 adminRouter.get(

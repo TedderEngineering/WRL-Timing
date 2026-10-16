@@ -406,6 +406,71 @@ export async function updateRace(
   return updated;
 }
 
+// ─── Drafts by event (Admin › Races: "Publish all drafts in this event") ──────
+
+export interface EventDrafts {
+  eventId: string;
+  name: string;
+  series: string;
+  track: string;
+  /** First and last race day, YYYY-MM-DD. */
+  startDate: string;
+  endDate: string;
+  drafts: { id: string; name: string; date: string }[];
+  publishedCount: number;
+}
+
+/** Every event that has draft races, newest first, with its drafts in race order. */
+export async function listEventsWithDrafts(): Promise<EventDrafts[]> {
+  const drafts = await prisma.race.findMany({
+    where: { status: "DRAFT", eventId: { not: null } },
+    select: { id: true, name: true, date: true, eventId: true },
+    orderBy: [{ date: "asc" }, { name: "asc" }],
+  });
+  const ids = [...new Set(drafts.map((r) => r.eventId as string))];
+  if (ids.length === 0) return [];
+  const [events, published] = await Promise.all([
+    prisma.event.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, series: true, track: true } }),
+    prisma.race.findMany({ where: { eventId: { in: ids }, status: "PUBLISHED" }, select: { eventId: true, date: true } }),
+  ]);
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  return events
+    .map((e) => {
+      const mine = drafts.filter((r) => r.eventId === e.id);
+      const pub = published.filter((r) => r.eventId === e.id);
+      const days = [...mine.map((r) => day(r.date)), ...pub.map((r) => day(r.date))].sort();
+      return {
+        eventId: e.id,
+        name: e.name,
+        series: e.series,
+        track: e.track,
+        startDate: days[0],
+        endDate: days[days.length - 1],
+        drafts: mine.map((r) => ({ id: r.id, name: r.name, date: day(r.date) })),
+        publishedCount: pub.length,
+      };
+    })
+    .sort((a, b) => b.endDate.localeCompare(a.endDate) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Publish every draft race of one event, one by one through updateRace (so each gets its
+ * race-ready emails, as when published singly). Returns the races published.
+ */
+export async function publishEventDrafts(eventId: string): Promise<{ id: string; name: string }[]> {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, status: true } });
+  if (!event) throw new AppError(404, "Event not found", "EVENT_NOT_FOUND");
+  const drafts = await prisma.race.findMany({
+    where: { eventId, status: "DRAFT" },
+    select: { id: true, name: true },
+    orderBy: [{ date: "asc" }, { name: "asc" }],
+  });
+  for (const r of drafts) await updateRace(r.id, { status: "PUBLISHED" });
+  // An event listed as a draft would hide its now-published races from the event list.
+  if (event.status !== "PUBLISHED") await prisma.event.update({ where: { id: eventId }, data: { status: "PUBLISHED" } });
+  return drafts;
+}
+
 // ─── Delete Race ─────────────────────────────────────────────────────────────
 
 export async function deleteRace(raceId: string) {
