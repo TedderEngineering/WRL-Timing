@@ -9,12 +9,16 @@
  * Race-ready emails (engagement plan D):
  *   GET    /api/me/alerts                   { raceAlerts }
  *   PUT    /api/me/alerts                   { raceAlerts: boolean }
+ * Chart defaults (Settings → Preferences):
+ *   GET    /api/me/chart-defaults           { openOn, classView, axis, tab }
+ *   PUT    /api/me/chart-defaults           any of those fields; returns all of them
  */
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { z } from "zod";
 import * as cars from "../services/my-cars.js";
 import { getRaceAlerts, setRaceAlerts } from "../services/race-alerts.js";
+import { chartDefaultsPatch, getChartDefaults, setChartDefaults } from "../services/chart-defaults.js";
 
 export const meRouter = Router();
 meRouter.use(requireAuth);
@@ -56,4 +60,12 @@ meRouter.put("/alerts", wrap(async (req, res) => {
   const { raceAlerts } = z.object({ raceAlerts: z.boolean() }).parse(req.body);
   await setRaceAlerts(req.user!.userId, raceAlerts);
   res.json({ raceAlerts });
+}));
+
+meRouter.get("/chart-defaults", wrap(async (req, res) => {
+  res.json(await getChartDefaults(req.user!.userId));
+}));
+
+meRouter.put("/chart-defaults", wrap(async (req, res) => {
+  res.json(await setChartDefaults(req.user!.userId, chartDefaultsPatch.parse(req.body)));
 }));

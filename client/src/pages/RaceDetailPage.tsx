@@ -1,4 +1,5 @@
 import { carKey } from "../features/chart/car-number";
+import { useChartDefaults } from "../features/chart/chart-defaults";
 import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { FollowCarButton } from "../features/my-cars/FollowCarButton";
 import { ShareRaceButton } from "../features/share/ShareRaceButton";
@@ -37,16 +38,21 @@ export function RaceDetailPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const autoLoadAttempted = useRef(false);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+  // How races open for this user (Settings → Preferences → Chart defaults).
+  const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
+  const defaultsRef = useRef(chartDefaults);
+  defaultsRef.current = chartDefaults;
   const { data, annotations, raceMeta, pitFacts, isLoading, error } = useChartData(id);
   // Derive event ID from URL param or from the loaded race metadata
   const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
   const [resultsStatus, setResultsStatus] = useState<"official" | "provisional" | null>(null);
-  // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis).
+  // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
   const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy" | "pitanalysis">(() => {
     const t = searchParams.get("tab");
-    return t === "laptimes" || t === "strategy" || t === "pitanalysis" ? t : "position";
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position") return t;
+    return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
 
@@ -133,7 +139,8 @@ export function RaceDetailPage() {
     if (named !== null && named > 0 && data.cars[String(named)]) winner = named;
 
     setFocusNum(winner);
-    setClassView("");
+    // Chart defaults: just the focus car's class, or the whole field.
+    setClassView(defaultsRef.current.classView === "focus_class" ? data.cars[String(winner)]?.cls ?? "" : "");
     setActiveLap(null);
 
     const allOthers = new Set<number>();
@@ -173,14 +180,19 @@ export function RaceDetailPage() {
       .catch(() => {});
   }, [id, isAuthenticated]);
 
-  // Open on the user's own car rather than the winner, once per race (the user's later picks win).
+  // Open on the user's own car rather than the winner, once per race (the user's later picks win),
+  // unless their chart defaults say to always open on the winner.
   const followFocused = useRef<string | null>(null);
   const focusFollowed = useCallback(
     (nums: string[]) => {
       if (!data || !id || followFocused.current === id || nums.length === 0) return;
       followFocused.current = id;
+      if (defaultsRef.current.openOn === "winner") return;
       const n = Number(nums[0]);
-      if (Number.isFinite(n) && data.cars[String(n)]) setFocusNum(n);
+      if (Number.isFinite(n) && data.cars[String(n)]) {
+        setFocusNum(n);
+        if (defaultsRef.current.classView === "focus_class") setClassView(data.cars[String(n)].cls ?? "");
+      }
     },
     [data, id]
   );
@@ -527,6 +539,7 @@ export function RaceDetailPage() {
           classView={classView} setClassView={setClassView}
           activeLap={activeLap} setActiveLap={setActiveLap}
           view={traceView}
+          defaultAxis={chartDefaults.axis}
         />
       </div>
 

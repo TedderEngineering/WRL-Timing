@@ -201,6 +201,18 @@ export interface CarData {
   laps: LapData[];
 }
 
+/** How a race page opens for a signed-in user (Settings → Preferences → Chart defaults). */
+export interface ChartDefaults {
+  /** Open on a car you follow when it ran in the race, or always on the overall winner. */
+  openOn: "my_car" | "winner";
+  /** The whole field, or just the class of the car the page opens on. */
+  classView: "all" | "focus_class";
+  /** Position Trace's bottom axis: laps, race time, or both. */
+  axis: "laps" | "hours" | "both";
+  /** The tab a race opens on (a link with ?tab= still wins). */
+  tab: "position" | "pitanalysis" | "laptimes" | "strategy";
+}
+
 export interface RaceChartData {
   maxLap: number;
   totalCars: number;
