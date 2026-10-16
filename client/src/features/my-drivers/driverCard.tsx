@@ -6,8 +6,9 @@
  *   body      the car ("#67 BSI Racing · GS · with Harrison Goodman"), then its overall position
  *             lap by lap against the whole field, the driver's own stints in the accent colour and
  *             the co-drivers' in white; under it the finish and the driver's drive
- *   fact      the driver's best lap when it was the quickest of the car's drivers, else the car's
- *             best class benchmark
+ *   fact      something the driver did for the car (laps led, a best lap in the class top three,
+ *             bringing it home), never a comparison with the co-drivers; else the car's best class
+ *             benchmark
  *
  * Facts only, as on the card. The race's chart data is fetched once per race and kept, and is
  * fetched ahead (shortly after the card shows) so that the phone's share sheet opens straight
@@ -180,10 +181,41 @@ export function driverCardLines(input: DriverCardInput): string[] {
   return out;
 }
 
-export function driverCardFact(input: DriverCardInput): { text: string; tone: "good" } | undefined {
-  const r = input.drive?.bestRank;
-  if (r && r.rank === 1 && r.of > 1 && input.drive?.bestLap) return { text: `Quickest lap of the car's ${r.of} drivers`, tone: "good" };
-  const b = input.facts?.benchmarks?.[0];
+const ORD = ["", "", "2nd ", "3rd "];
+
+/**
+ * The fact line: something the driver did for the car, never a comparison with the co-drivers
+ * (they race together). In order: laps led while the driver was at the wheel (overall, else in
+ * class); the driver's best lap among the class when it is the car's best and in the class top
+ * three; bringing the car home when the driver drove the last stint; else the car's own best
+ * class benchmark (a team fact).
+ */
+export function driverCardFact(input: DriverCardInput, chart: RaceChartData | null = null, key: string | null = null): { text: string; tone: "good" } | undefined {
+  const { drive, facts, car } = input;
+  const mineKnown = !!drive?.known && drive.myStints > 0;
+  const own = chart && key ? chart.cars[key] : null;
+  if (mineKnown && own) {
+    const owner = lapOwners(drive);
+    const mine = own.laps.filter((l) => owner(l.l) === true);
+    const ledOverall = mine.filter((l) => l.p === 1).length;
+    const ledClass = mine.filter((l) => l.cp === 1).length;
+    const laps = (n: number) => `${n} lap${n === 1 ? "" : "s"}`;
+    if (ledOverall > 0) return { text: `Led the race overall for ${laps(ledOverall)}`, tone: "good" };
+    if (ledClass > 0) return { text: `Led ${car.cls} for ${laps(ledClass)}`, tone: "good" };
+  }
+  if (mineKnown && own && chart && drive?.bestLap) {
+    const best = (laps: { ltSec: number }[]) => Math.min(...laps.map((l) => l.ltSec).filter((t) => t > 0));
+    const mineBest = drive.bestLap.sec;
+    // Only when the car's best lap is the driver's (so "in class" is true for the car as well).
+    if (Math.abs(best(own.laps) - mineBest) < 0.0015) {
+      const others = Object.entries(chart.cars).filter(([k, c]) => k !== key && c.cls === own.cls && c.laps.length);
+      const rank = 1 + others.filter(([, c]) => best(c.laps) < mineBest - 0.0005).length;
+      if (rank <= 3) return { text: `Best lap ${formatDuration(mineBest)}, ${rank === 1 ? "quickest" : `${ORD[rank]}quickest`} in ${own.cls}`, tone: "good" };
+    }
+  }
+  const last = drive?.stints[drive.stints.length - 1];
+  if (mineKnown && last?.mine && facts?.finishClass) return { text: `Brought #${car.number} home P${facts.finishClass} in ${car.cls}`, tone: "good" };
+  const b = facts?.benchmarks?.[0];
   return b ? { text: b, tone: "good" } : undefined;
 }
 
@@ -220,7 +252,7 @@ export async function makeDriverCard(input: DriverCardInput): Promise<Blob> {
     title,
     subtitle,
     body: (ctx, box, style) => drawBody(ctx, box, style, chart, input),
-    fact: driverCardFact(input),
+    fact: driverCardFact(input, chart, chart ? chartCarKey(chart, input.car.number) : null),
   });
 }
 

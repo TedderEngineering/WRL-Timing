@@ -284,8 +284,8 @@ function DriveBox({
         <div>
           <dd className="m-0 font-mono text-[20px] font-bold leading-none text-[var(--rt-text)]">{drive.bestLap ? formatDuration(drive.bestLap.sec) : "—"}</dd>
           <dt className="mt-1 text-[12px] text-[var(--rt-text-muted)]">
+            {/* Co-drivers race together: no ranking against them here. */}
             {drive.bestLap ? `best lap, lap ${drive.bestLap.lap}` : "no green lap"}
-            {drive.bestRank && drive.bestRank.of > 1 ? (drive.bestRank.rank === 1 ? ` · quickest of ${drive.bestRank.of}` : ` · ${drive.bestRank.rank} of ${drive.bestRank.of}`) : ""}
           </dt>
         </div>
       </dl>
