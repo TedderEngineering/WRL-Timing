@@ -5,6 +5,7 @@ import { MyDriverCard, type MyDriverResponse } from "../MyDriverCard";
 import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
+import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners } from "../../my-drivers/driverCard";
 
 const text = (node: React.ReactNode) =>
   renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
@@ -58,7 +59,7 @@ describe("MyDriverCard", () => {
     expect(t).toContain("drive time · 37%");
     expect(t).toContain("laps 1–10, 21–30");
     expect(t).toContain("1:10.881");
-    expect(t).toContain("quickest of 2");
+    expect(t).not.toContain("quickest of");
     expect(t).toContain("Jamie Cole"); // the legend, display-cased
     expect(t).toContain("Alex's recent races");
     expect(t).toContain("Indianapolis 8 Hour");
@@ -89,5 +90,82 @@ describe("who drove when", () => {
     expect(carDriverNames({ team: "BSI Racing (Weisenberg / Goodman)" })).toEqual(["Weisenberg", "Goodman"]);
     expect(carDriverNames({ team: "X", drivers: ["Alex Rivera", "RIVERA Alex", "Jamie Cole"] })).toEqual(["Alex Rivera", "Jamie Cole"]);
     expect(sameDriver("Marvin Kirchhöfer", "KIRCHHOFER Marvin")).toBe(true);
+  });
+});
+
+describe("driver card share image", () => {
+  const input = { driverName: "Alex Rivera", race: base.race!, car: base.car!, facts: base.facts!, drive: base.driverFacts! };
+
+  it("puts a share button on the card", () => {
+    const t = text(<MyDriverCard data={base} />);
+    expect(t).toMatch(/(Share|Copy) Alex's race card/);
+  });
+
+  it("says the finish and the driver's drive under the trace", () => {
+    expect(driverCardLines(input)).toEqual(["Finished P1 in GTP of 9 · P1 overall · 30 laps", "Alex: 3:42 h (37%) · 2 stints · best lap 1:10.881"]);
+  });
+
+  it("falls back to the car's best lap when the timing doesn't say who drove", () => {
+    const lines = driverCardLines({ ...input, drive: { ...input.drive, known: false, myStints: 0 } });
+    expect(lines[1]).toBe("Car's best lap 1:10.881 on lap 25");
+  });
+
+  // Alex drives laps 1-10 and 21-30; Jamie 11-20. Three GTP cars.
+  const lap = (l: number, p: number, cp: number, ltSec: number) => ({ l, p, cp, ltSec, lt: "", flag: "GF", pit: 0 });
+  const chartWith = (alex: (l: number) => [number, number, number]) =>
+    ({
+      maxLap: 30,
+      totalCars: 3,
+      fcy: [],
+      cars: {
+        "7": { num: 7, team: "Example Racing", cls: "GTP", laps: Array.from({ length: 30 }, (_, i) => lap(i + 1, ...alex(i + 1))) },
+        "8": { num: 8, team: "B", cls: "GTP", laps: Array.from({ length: 30 }, (_, i) => lap(i + 1, 1, 1, 71.2)) },
+        "9": { num: 9, team: "C", cls: "GTP", laps: Array.from({ length: 30 }, (_, i) => lap(i + 1, 3, 3, 70.5)) },
+      },
+    }) as unknown as Parameters<typeof chartCarKey>[0];
+
+  it("never compares the driver with the co-drivers", () => {
+    const chart = chartWith((l) => [2, 2, l === 25 ? 70.881 : 72]);
+    const f = driverCardFact(input, chart, "7");
+    expect(f?.text ?? "").not.toMatch(/drivers|co-driver|Jamie|Chris/);
+  });
+
+  it("names laps led while the driver was at the wheel, overall first", () => {
+    // Jamie led overall on laps 11-20; Alex led overall on 21-23 and the class on 24-26.
+    const chart = chartWith((l) => (l >= 11 && l <= 20 ? [1, 1, 72] : l >= 21 && l <= 23 ? [1, 1, 72] : l <= 26 && l >= 24 ? [2, 1, 72] : [2, 2, 72]));
+    expect(driverCardFact(input, chart, "7")).toEqual({ text: "Led the race overall for 3 laps", tone: "good" });
+    const classOnly = chartWith((l) => (l >= 24 && l <= 26 ? [2, 1, 72] : [2, 2, 72]));
+    expect(driverCardFact(input, classOnly, "7")).toEqual({ text: "Led GTP for 3 laps", tone: "good" });
+  });
+
+  it("gives the driver's best lap a class rank only when it is the car's best and in the top three", () => {
+    const chart = chartWith((l) => [2, 2, l === 25 ? 70.881 : 72]);
+    expect(driverCardFact(input, chart, "7")).toEqual({ text: "Best lap 1:10.881, 2nd quickest in GTP", tone: "good" });
+    // Jamie's lap 15 was quicker: the car's best is not Alex's, so no class rank for Alex.
+    const notMine = chartWith((l) => [2, 2, l === 15 ? 70.1 : l === 25 ? 70.881 : 72]);
+    expect(driverCardFact(input, notMine, "7")).toEqual({ text: "Brought #7 home P1 in GTP", tone: "good" });
+  });
+
+  it("without the chart, says the driver brought the car home when they drove the last stint", () => {
+    expect(driverCardFact(input)).toEqual({ text: "Brought #7 home P1 in GTP", tone: "good" });
+    const middle = { ...input.drive, stints: [...input.drive.stints, { start: 31, end: 40, driver: "JAMIE COLE", mine: false }] };
+    expect(driverCardFact({ ...input, drive: middle })).toBeUndefined();
+  });
+
+  it("colours each lap by who drove it", () => {
+    const own = lapOwners(input.drive);
+    expect([own(5), own(15), own(25), own(40)]).toEqual([true, false, true, null]);
+    expect(lapOwners({ ...input.drive, known: false })(5)).toBeNull();
+  });
+
+  it("finds the chart car by its published number", () => {
+    const chart = { cars: { "7": { label: undefined }, "1007": { label: "007" } } } as unknown as Parameters<typeof chartCarKey>[0];
+    expect(chartCarKey(chart, "007")).toBe("1007");
+    expect(chartCarKey(chart, "7")).toBe("7");
+    expect(chartCarKey(chart, "8")).toBeNull();
+  });
+
+  it("links the shared text to the race page", () => {
+    expect(driverShareUrl(input)).toMatch(/\/chart\?race=plm&car=7&from=share$/);
   });
 });

@@ -9,6 +9,7 @@ import { StatusPill } from "./RecapCard";
 import { finishLine, type MyCarResponse } from "./MyCarCard";
 import { driveTimeText } from "../my-drivers/stints";
 import { displayName } from "../my-drivers/api";
+import { ShareDriverCardButton } from "../my-drivers/driverCard";
 
 /**
  * "Your driver's latest race": a followed driver's newest race whatever the car or series, the
@@ -193,6 +194,7 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
               <Link to={chartHref(race.id, car.number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
+              <ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null }} />
             </div>
           </>
         )}
@@ -282,8 +284,8 @@ function DriveBox({
         <div>
           <dd className="m-0 font-mono text-[20px] font-bold leading-none text-[var(--rt-text)]">{drive.bestLap ? formatDuration(drive.bestLap.sec) : "—"}</dd>
           <dt className="mt-1 text-[12px] text-[var(--rt-text-muted)]">
+            {/* Co-drivers race together: no ranking against them here. */}
             {drive.bestLap ? `best lap, lap ${drive.bestLap.lap}` : "no green lap"}
-            {drive.bestRank && drive.bestRank.of > 1 ? (drive.bestRank.rank === 1 ? ` · quickest of ${drive.bestRank.of}` : ` · ${drive.bestRank.rank} of ${drive.bestRank.of}`) : ""}
           </dt>
         </div>
       </dl>
