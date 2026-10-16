@@ -2,6 +2,7 @@ import { SeriesBadge } from "../../components/SeriesBadge";
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
+import { EventDraftsPanel } from "../../features/admin/EventDrafts";
 
 import { formatRaceDate, formatRaceDateLong, toDateInputValue } from "../../lib/race-dates";
 
@@ -141,6 +142,9 @@ export function AdminRacesPage() {
           + Upload Race
         </Link>
       </div>
+
+      {/* A weekend's drafts in one step */}
+      <EventDraftsPanel onPublished={fetchRaces} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
