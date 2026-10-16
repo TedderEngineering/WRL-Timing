@@ -594,7 +594,7 @@ export function LapChart({
                   <GapEvolutionPanel data={data} focusNum={focusNum} activeLap={activeLap} compSet={compSet} />
                 )}
                 {sidePanel === "h2h" && activeLap !== null && (
-                  <HeadToHeadPanel data={data} focusNum={focusNum} activeLap={activeLap} defaultCompareNum={h2hDefaultCarRef.current} />
+                  <HeadToHeadPanel data={data} focusNum={focusNum} activeLap={activeLap} defaultCompareNum={h2hDefaultCarRef.current} annotations={annotations} />
                 )}
                 {sidePanel === "event" && info && (
                   <PassEventPanel
