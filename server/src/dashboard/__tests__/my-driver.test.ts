@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
 
 import { driverFacts, stintsOf } from "../my-driver.js";
-import { bestSpelling, coDrivers, driverInNames, sameDriver } from "../../services/my-drivers.js";
+import { bestSpelling, coDrivers, driverInNames, expandDriverName, sameDriver } from "../../services/my-drivers.js";
 
 const laps = (n: number, sec: (l: number) => number, pits: number[] = [], fcy: number[] = []) =>
   Array.from({ length: n }, (_, i) => {
@@ -28,6 +28,24 @@ describe("sameDriver", () => {
   it("shows the spelling seen most, in mixed case", () => {
     expect(bestSpelling([{ spelledAs: "RIVERA Alex" }, { spelledAs: "Alex Rivera" }, { spelledAs: "Alex Rivera" }], "x")).toBe("Alex Rivera");
     expect(bestSpelling([{ spelledAs: "ALEX RIVERA" }], "x")).toBe("Alex Rivera");
+  });
+});
+
+describe("short names in the timing", () => {
+  it("become the car's full name when exactly one driver fits", () => {
+    const car = ["Kevin Boehm", "Francis Selldorff"];
+    expect(expandDriverName("Boehm", car)).toBe("Kevin Boehm");
+    expect(expandDriverName("K. Boehm", car)).toBe("Kevin Boehm");
+    expect(expandDriverName("BOEHM Kevin", car)).toBe("Kevin Boehm");
+    expect(expandDriverName("J. Boehm", car)).toBe("J. Boehm"); // the initial does not fit
+    expect(expandDriverName("Smith", ["Ann Smith", "Bo Smith"])).toBe("Smith"); // two fit: kept
+  });
+
+  it("let a surname-only pit record count for the followed driver", () => {
+    const car = { laps: laps(10, () => 90, [4]) };
+    const f = driverFacts(car, [{ l: 4, inDriver: "Selldorff", outDriver: "Boehm" }], "Kevin Boehm", ["Kevin Boehm", "Francis Selldorff"]);
+    expect(f.myStints).toBe(1);
+    expect(f.stints.map((s) => s.driver)).toEqual(["Francis Selldorff", "Kevin Boehm"]);
   });
 });
 

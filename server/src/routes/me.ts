@@ -6,12 +6,14 @@
  *   PATCH  /api/me/cars/:id                 edit (a new number for a new season, a team…)
  *   DELETE /api/me/cars/:id                 stop following
  *   GET    /api/me/cars/in-race/:raceId     which of the race's cars the user follows
+ *   PUT    /api/me/cars/order               { ids } the order of the car tabs
  * My drivers (followed across cars and series):
  *   GET    /api/me/drivers                  the drivers the user follows
  *   POST   /api/me/drivers                  { name } follow one (race page, driver search, Settings)
  *   PATCH  /api/me/drivers/:id              { alerts } race emails for this driver
  *   DELETE /api/me/drivers/:id              stop following
  *   GET    /api/me/drivers/in-race/:raceId  which of the race's drivers the user follows
+ *   PUT    /api/me/drivers/order            { ids } the order of the driver tabs
  * Race-ready emails (engagement plan D):
  *   GET    /api/me/alerts                   { raceAlerts }
  *   PUT    /api/me/alerts                   { raceAlerts: boolean }
@@ -46,6 +48,10 @@ meRouter.post("/cars/follow", wrap(async (req, res) => {
   res.status(r.created ? 201 : 200).json(r);
 }));
 
+meRouter.put("/cars/order", wrap(async (req, res) => {
+  res.json({ cars: await cars.reorderCars(req.user!.userId, req.body) });
+}));
+
 meRouter.get("/cars/in-race/:raceId", wrap(async (req, res) => {
   res.json({ followed: await cars.followedInRace(req.user!.userId, req.params.raceId as string) });
 }));
@@ -66,6 +72,10 @@ meRouter.get("/drivers", wrap(async (req, res) => {
 meRouter.post("/drivers", wrap(async (req, res) => {
   const r = await drivers.followDriver(req.user!.userId, req.body);
   res.status(r.created ? 201 : 200).json(r);
+}));
+
+meRouter.put("/drivers/order", wrap(async (req, res) => {
+  res.json({ drivers: await drivers.reorderDrivers(req.user!.userId, req.body) });
 }));
 
 meRouter.get("/drivers/in-race/:raceId", wrap(async (req, res) => {

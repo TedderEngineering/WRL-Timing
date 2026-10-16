@@ -358,6 +358,8 @@ model UserCar {
   setupCarId String?  @map("setup_car_id")
   /// Race emails about this car (the per-car switch; the account-wide one is user_preferences.race_alerts).
   alerts     Boolean  @default(true)
+  /// The user's order for the car tabs (lowest first; ties by createdAt).
+  position   Int      @default(0)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -386,6 +388,8 @@ model UserDriver {
   key       String
   /// Race emails about this driver's races (the account-wide switch is user_preferences.race_alerts).
   alerts    Boolean  @default(true)
+  /// The user's order for the driver tabs (lowest first; ties by createdAt).
+  position  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

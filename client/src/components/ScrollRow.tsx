@@ -58,6 +58,11 @@ export function ScrollRow({
     };
     const onMove = (e: PointerEvent) => {
       if (!start || e.pointerId !== start.id) return;
+      // A tab is being dragged to a new place (FollowTabs): that move is not a scroll.
+      if (el.dataset.reordering === "1") {
+        start = null;
+        return;
+      }
       const dx = e.clientX - start.x;
       if (!dragged && Math.abs(dx) < 5) return;
       if (!dragged) {

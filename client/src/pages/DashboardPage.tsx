@@ -12,6 +12,8 @@ import { SeasonRecapCard, type SeasonRecap } from "../features/dashboard/SeasonR
 import { CarTabs } from "../features/dashboard/CarTabs";
 import { DriverTabs, MyDriverCard, type MyDriverResponse } from "../features/dashboard/MyDriverCard";
 import { readUi, writeUi } from "../features/dashboard/ui-state";
+import { reorderCars } from "../features/my-cars/api";
+import { reorderDrivers } from "../features/my-drivers/api";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -58,6 +60,15 @@ export function DashboardPage() {
       // keep what is shown
     }
   }, []);
+  // Hold and drag a tab to reorder: shown at once, saved to the account.
+  const orderCars = (ids: string[]) => {
+    setMyCar((m) => (m?.cars ? { ...m, cars: ids.map((id) => m.cars!.find((c) => c.id === id)!).filter(Boolean) } : m));
+    reorderCars(ids).catch(() => undefined);
+  };
+  const orderDrivers = (ids: string[]) => {
+    setMyDriver((m) => (m ? { ...m, drivers: ids.map((id) => m.drivers.find((d) => d.id === id)!).filter(Boolean) } : m));
+    reorderDrivers(ids).catch(() => undefined);
+  };
   // Cars or drivers, when the user follows both (remembered in this browser).
   const [yours, setYours] = useState<"cars" | "drivers">(() => readUi().yoursTab ?? "cars");
   const chooseYours = (v: "cars" | "drivers") => {
@@ -265,9 +276,9 @@ export function DashboardPage() {
                 )}
                 <div className="order-last min-w-0 basis-full sm:order-none sm:basis-0 sm:flex-1">
                   {view === "cars" ? (
-                    <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} className="" />
+                    <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} onReorder={orderCars} className="" />
                   ) : (
-                    <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} className="" />
+                    <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} onReorder={orderDrivers} className="" />
                   )}
                 </div>
                 <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="mb-2.5 ml-auto shrink-0 text-[13px] text-[var(--rt-accent)]">

@@ -45,6 +45,24 @@ export function sameDriver(a: string, b: string): boolean {
   return short.every((w) => long.includes(w));
 }
 
+/**
+ * A short name from the timing ("Boehm", "K. Boehm") as the car's full one ("Kevin Boehm"), when
+ * exactly one of the car's drivers fits (the server's expandDriverName).
+ */
+export function expandDriverName(name: string, carDrivers: string[]): string {
+  const same = carDrivers.find((d) => sameDriver(d, name));
+  if (same) return same;
+  const key = driverKey(name).split(" ").filter(Boolean);
+  const full = key.filter((w) => w.length > 1);
+  const initials = key.filter((w) => w.length === 1);
+  if (!full.length) return name;
+  const fits = carDrivers.filter((d) => {
+    const dw = driverKey(d).split(" ");
+    return full.every((w) => dw.includes(w)) && initials.every((i) => dw.some((x) => x.startsWith(i)));
+  });
+  return fits.length === 1 ? fits[0] : name;
+}
+
 /** "Zach VEACH" → "Zach Veach"; mixed-case names are kept as written (as the server shows them). */
 export function displayName(name: string): string {
   return /[a-z]/.test(name) && /[A-Z]/.test(name) && !/\b[A-Z]{3,}\b/.test(name)
@@ -112,6 +130,13 @@ export async function followDriver(name: string): Promise<{ driver: MyDriver; cr
 export async function unfollowDriver(id: string): Promise<void> {
   await api.delete<void>(`/me/drivers/${id}`);
   if (drivers) set(drivers.filter((d) => d.id !== id));
+}
+
+/** The order of the driver tabs (drag to reorder); the shared list follows it. */
+export async function reorderDrivers(ids: string[]): Promise<MyDriver[]> {
+  const r = await api.put<{ drivers: MyDriver[] }>("/me/drivers/order", { ids });
+  if (drivers) set(r.drivers);
+  return r.drivers;
 }
 
 export async function setDriverAlerts(id: string, alerts: boolean): Promise<MyDriver> {

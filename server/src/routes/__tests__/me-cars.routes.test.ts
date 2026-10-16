@@ -40,6 +40,7 @@ const fake = vi.hoisted(() => {
         state.cars = state.cars.filter((x) => x.id !== where.id);
       },
     },
+    $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
   };
   return { state, prisma };
 });
@@ -104,6 +105,18 @@ describe("/api/me/cars", () => {
   it("needs an account", async () => {
     expect((await request(app).get("/api/me/cars")).status).toBe(401);
     expect((await request(app).post("/api/me/cars/follow").send({ raceId: "vir26", carNumber: "67" })).status).toBe(401);
+  });
+
+  it("keeps the order the user drags the tabs into, and puts a new car last", async () => {
+    for (const n of ["1", "2", "3"]) await request(app).post("/api/me/cars").set("Authorization", A).send({ number: n, series: "wrl" });
+    const ids = (await request(app).get("/api/me/cars").set("Authorization", A)).body.cars.map((c: any) => c.id);
+    const sorted = () => [...fake.state.cars].filter((c) => c.userId === "u_a").sort((a, b) => a.position - b.position).map((c) => c.number);
+    expect(sorted()).toEqual(["1", "2", "3"]);
+    const r = await request(app).put("/api/me/cars/order").set("Authorization", A).send({ ids: [ids[2], "not-mine", ids[0]] });
+    expect(r.status).toBe(200);
+    expect(sorted()).toEqual(["3", "1", "2"]);
+    await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "4", series: "wrl" });
+    expect(sorted()).toEqual(["3", "1", "2", "4"]);
   });
 
   it("follows a car from a race page with the race's series, team, class and season, once", async () => {

@@ -75,11 +75,33 @@ export const createCarSchema = z.object(carFields);
 export const updateCarSchema = z.object({ ...carFields, alerts: z.boolean() }).partial();
 export const followSchema = z.object({ raceId: z.string().min(1), carNumber: z.string().trim().min(1).max(8) });
 
-const select = { id: true, label: true, number: true, series: true, teamName: true, carClass: true, season: true, alerts: true, createdAt: true } as const;
+const select = { id: true, label: true, number: true, series: true, teamName: true, carClass: true, season: true, alerts: true, position: true, createdAt: true } as const;
 const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v && v.length ? v : null);
 
 export async function listCars(userId: string) {
-  return prisma.userCar.findMany({ where: { userId }, orderBy: { createdAt: "asc" }, select });
+  return prisma.userCar.findMany({ where: { userId }, orderBy: [{ position: "asc" }, { createdAt: "asc" }], select });
+}
+
+/** A new car goes after the user's others (their tab order). */
+async function nextPosition(userId: string): Promise<number> {
+  const cars = (await listCars(userId)) as { position?: number | null }[];
+  return cars.reduce((m, c) => Math.max(m, c.position ?? 0), -1) + 1;
+}
+
+export const orderSchema = z.object({ ids: z.array(z.string().min(1)).max(100) });
+
+/**
+ * Put the user's cars in this order (drag to reorder the tabs). Ids the user does not own are
+ * ignored; cars left out keep their order after the listed ones.
+ */
+export async function reorderCars(userId: string, body: unknown) {
+  const { ids } = orderSchema.parse(body);
+  const cars = await listCars(userId);
+  const mine = new Set(cars.map((c: { id: string }) => c.id));
+  const listed = [...new Set(ids.filter((id) => mine.has(id)))];
+  const order = [...listed, ...cars.map((c: { id: string }) => c.id).filter((id: string) => !listed.includes(id))];
+  await prisma.$transaction(order.map((id, position) => prisma.userCar.update({ where: { id }, data: { position } })));
+  return listCars(userId);
 }
 
 async function assertRoom(userId: string) {
@@ -94,6 +116,7 @@ export async function createCar(userId: string, body: unknown) {
   return prisma.userCar.create({
     data: {
       userId,
+      position: await nextPosition(userId),
       number: b.number,
       series: b.series,
       label: blankToNull(b.label) ?? null,
@@ -127,7 +150,7 @@ export async function followFromRace(userId: string, body: unknown) {
   if (existing) return { car: existing, created: false };
   await assertRoom(userId);
   const car = await prisma.userCar.create({
-    data: { userId, number: entry.carNumber, series, teamName: entry.teamName || null, carClass: entry.carClass || null, season: race.season },
+    data: { userId, position: await nextPosition(userId), number: entry.carNumber, series, teamName: entry.teamName || null, carClass: entry.carClass || null, season: race.season },
     select,
   });
   return { car, created: true };
