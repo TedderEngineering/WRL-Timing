@@ -270,8 +270,10 @@ export function openState(raw: string | undefined, now = Date.now()): OAuthState
   if (!raw) return null;
   const [body, mac] = raw.split(".");
   if (!body || !mac) return null;
-  const want = crypto.createHmac("sha256", stateKey()).update(body).digest();
-  const got = Buffer.from(mac, "base64url");
+  // Compare the encoded text, not decoded bytes: base64url's last character carries spare bits,
+  // so different strings can decode to the same bytes. Only the exact seal is accepted.
+  const want = Buffer.from(crypto.createHmac("sha256", stateKey()).update(body).digest("base64url"));
+  const got = Buffer.from(mac);
   if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return null;
   try {
     const s = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OAuthState;
