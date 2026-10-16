@@ -105,7 +105,7 @@ export function toSummary(row: PackageRow, currentPackageId: string | null): Pac
 
 /**
  * Data badge grade (GUI_SYSTEM_SPEC §2.1). Provisional rule until the schema
- * carries its own grade: any blocker note or incomplete section → limited;
+ * carries its own grade: any blocker note or incomplete section (rule checks aside) → limited;
  * any warning note → check_notes; otherwise good.
  */
 export function deriveDataQualityGrade(pkg: Record<string, any>): DataQualityGrade {
@@ -114,7 +114,8 @@ export function deriveDataQualityGrade(pkg: Record<string, any>): DataQualityGra
     pkg.completeness && typeof pkg.completeness === "object" ? pkg.completeness : {};
   if (
     notes.some((n) => n?.severity === "blocker") ||
-    Object.values(completeness).some((v) => v !== "complete")
+    // Rule checks are admin-only (R0) and may be partial or absent in a published package.
+    Object.entries(completeness).some(([k, v]) => k !== "ruleChecks" && v !== "complete")
   ) {
     return "limited";
   }

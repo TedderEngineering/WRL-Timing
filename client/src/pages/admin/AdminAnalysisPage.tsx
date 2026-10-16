@@ -282,10 +282,11 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
     } catch (e) {
       const report = validatorReportOf(e);
       if (report) {
-        const gate = report.errors.some((x) => x.code === "PUBLISH_GATE");
+        // The stories message only when the stories are what's missing.
+        const noStories = report.errors.some((x) => x.code === "PUBLISH_GATE" && /carStories|raceSummary/.test(`${x.path} ${x.message}`));
         setResult({
           ok: false,
-          text: gate
+          text: noStories
             ? "Can't publish yet: this draft has facts and rule checks only. The race summary and car stories have to be written first."
             : `Can't publish: ${report.errorCount} problem(s) found.`,
           lines: report.errors.slice(0, 5).map((x) => `${x.code} ${x.path} ${x.message}`.trim()),

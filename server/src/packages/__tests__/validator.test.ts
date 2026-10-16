@@ -53,6 +53,8 @@ describe("derived columns", () => {
     expect(deriveDataQualityGrade(pkg)).toBe("check_notes"); // a warning note
     pkg.dataQuality = [];
     expect(deriveDataQualityGrade(pkg)).toBe("good");
+    pkg.completeness.ruleChecks = "absent";
+    expect(deriveDataQualityGrade(pkg)).toBe("good"); // rule checks are admin-only
     pkg.dataQuality = [{ id: "dq:1", severity: "blocker", code: "X1", message: "m" }];
     expect(deriveDataQualityGrade(pkg)).toBe("limited");
   });
