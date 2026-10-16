@@ -48,7 +48,7 @@ function surname(name: string): string {
   return p[p.length - 1] ?? name;
 }
 
-function causeStyle(m: RecapMoment): { color: string; shape: "dot" | "square" } {
+export function causeStyle(m: RecapMoment): { color: string; shape: "dot" | "square" } {
   if (m.causes.includes("penalty"))
     return { color: "var(--rt-critical)", shape: "square" };
   if (m.causes.includes("retirement"))
@@ -58,7 +58,7 @@ function causeStyle(m: RecapMoment): { color: string; shape: "dot" | "square" } 
   return { color: "var(--rt-info)", shape: "dot" };
 }
 
-const lapLabel = (m: RecapMoment) =>
+export const lapLabel = (m: RecapMoment) =>
   m.lapEnd && m.lapEnd !== m.lap ? `L${m.lap}–${m.lapEnd}` : `L${m.lap}`;
 
 /** Laps 1…N as a strip: FCY and pit-cycle bands, one marker per key moment. */
@@ -351,6 +351,16 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
           }
         >
           Position Trace
+        </Link>
+        <Link
+          to={chartHref(race.id, "story")}
+          className={
+            hero
+              ? "rounded-md border border-[var(--rt-border)] px-3 py-2 text-sm text-[var(--rt-text)]"
+              : "text-sm text-[var(--rt-text-secondary)]"
+          }
+        >
+          Story
         </Link>
         <Link
           to={chartHref(race.id, "pitanalysis")}
