@@ -15,7 +15,10 @@
  *   npx tsx scripts/intake.ts validate <draft.json> [--base <facts.base.json>] [--scope-class <id>] [--publish] [--json]
  *   npx tsx scripts/intake.ts steps                              which pipeline scripts this checkout has
  *   npx tsx scripts/intake.ts speedhive-org --from-session <URL|id>
- *   npx tsx scripts/intake.ts analyze [--series imsa-*,sro-*,wrl] [--season 2025,2026] [--race <raceId>]… [--force] [--limit N]
+ *   npx tsx scripts/intake.ts analyze [--series imsa-*,sro-*,wrl] [--season 2025,2026] [--race <raceId>]… [--force] [--limit N] [--no-upload]
+ *       --no-upload keeps the facts package on disk to write the stories on (scripts/analysis.ts)
+ *   npx tsx scripts/intake.ts upload <raceId> <package.json> [--notes "<text>"]
+ *       uploads a package as a DRAFT version (it is validated on the server; nothing is published)
  *                                      [--notes <file>]   facts + rule checks for races with a source key, uploaded as a
  *                                      DRAFT analysis package (no stories yet; those are written race by race later)
  *   npx tsx scripts/intake.ts reimport-plan --series imsa-*,sro-*,wrl,wrl-speedhive --season 2025,2026 [--save <file>] [--apply] [--approve <raceId,…>]
@@ -780,6 +783,12 @@ async function cmdAnalyze(a: ReturnType<typeof parseArgs>) {
         add("invalid", `${rep.errors.length} error(s): ${rep.errors.slice(0, 2).join(" / ").slice(0, 300)}`);
         continue;
       }
+      if (a.has("no-upload")) {
+        // Kept for the stories: the package, the race id it belongs to, and its source key.
+        writeFileSync(join(runDir, "race.json"), JSON.stringify({ raceId: r.raceId, name: r.name, date: r.date, sourceKey: m.sourceKey }, null, 2));
+        add("kept", `${pkgPath} · ${(pkg.entries ?? []).length} cars · rule checks ${pkg.ruleChecks?.length ?? 0} (${(pkg.ruleChecks ?? []).filter((c: any) => c.status === "fail").length} fail)`);
+        continue;
+      }
       const notes = encodeURIComponent(`intake analyze: facts + rule checks, no stories yet (${m.sourceKey})`);
       const up = await apiRequest<any>(cfg, "POST", `/admin/races/${encodeURIComponent(r.raceId)}/packages?notes=${notes}`, pkg);
       if (up.status === 201) {
@@ -797,7 +806,8 @@ async function cmdAnalyze(a: ReturnType<typeof parseArgs>) {
   const table2 = table([["RESULT", "DATE", "RACE", "ID", "DETAIL"], ...rows.map((x) => [x.result, x.race.date ?? "", x.race.name, x.race.raceId, x.detail])]);
   console.log(table2);
   const n = (res: string) => rows.filter((x) => x.result === res).length;
-  const summary = `${rows.length} race(s): ${n("draft uploaded")} draft uploaded, ${n("blocked")} blocked, ${rows.length - n("draft uploaded") - n("blocked")} failed.`;
+  const done = n("draft uploaded") + n("kept");
+  const summary = `${rows.length} race(s): ${n("draft uploaded")} draft uploaded, ${n("kept")} kept on disk, ${n("blocked")} blocked, ${rows.length - done - n("blocked")} failed.`;
   console.log(`\n${summary}`);
   const notes = a.one("notes");
   if (notes) {
@@ -805,7 +815,26 @@ async function cmdAnalyze(a: ReturnType<typeof parseArgs>) {
     const failedFirst = [...rows].sort((x, y) => Number(x.result === "draft uploaded") - Number(y.result === "draft uploaded"));
     writeFileSync(notes, [summary, "result | date | race | id | detail", ...failedFirst.map((x) => [x.result, x.race.date ?? "", x.race.name, x.race.raceId, x.detail].join(" | "))].join("\n") + "\n");
   }
-  if (rows.some((x) => x.result !== "draft uploaded" && x.result !== "blocked")) process.exitCode = 1;
+  if (rows.some((x) => !["draft uploaded", "kept", "blocked"].includes(x.result))) process.exitCode = 1;
+}
+
+/** Upload a package (stories written) as a DRAFT version of a race. The server validates it. */
+async function cmdUpload(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("upload needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const [raceId, file] = a.pos;
+  if (!raceId || !file) throw new UsageError("upload <raceId> <package.json> [--notes <text>]");
+  const pkg = JSON.parse(readFileSync(resolvePath(file), "utf-8"));
+  const notes = encodeURIComponent((a.one("notes") ?? "stories written (racetrace-ingest)").slice(0, 2000));
+  const up = await apiRequest<any>(cfg, "POST", `/admin/races/${encodeURIComponent(raceId)}/packages?notes=${notes}`, pkg);
+  if (up.status === 201) {
+    const w = up.data.report?.warnings?.length ?? 0;
+    console.log(`draft uploaded: v${up.data.package?.version ?? "?"} of ${raceId}${w ? ` (${w} warning(s))` : ""}`);
+  } else {
+    console.log(`upload failed: HTTP ${up.status} ${up.data?.code ?? ""} ${String(up.data?.error ?? "").slice(0, 300)}`);
+    for (const e of (up.data?.report?.errors ?? []).slice(0, 20)) console.log("ERROR", e.code ?? "", e.path ?? "", e.message ?? JSON.stringify(e));
+    process.exitCode = 1;
+  }
 }
 
 async function main() {
@@ -832,6 +861,8 @@ async function main() {
       return cmdSpeedhiveOrg(a);
     case "reimport-plan":
       return cmdReimportPlan(a);
+    case "upload":
+      return cmdUpload(a);
     case "analyze":
       return cmdAnalyze(a);
     case "names":
@@ -839,7 +870,7 @@ async function main() {
     case "refresh":
       return cmdRefresh(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, names, refresh`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, upload, names, refresh`);
   }
 }
 
