@@ -26,7 +26,7 @@ export const RACETRACE_COPY: SupportCopy = {
   name: "RaceTrace",
   sheetTitle: "Keep RaceTrace free",
   sheetBody:
-    "RaceTrace has no paywall and no ads. Coffees pay for the hosting, the timing data and the analysis Claude writes for every race.",
+    "RaceTrace has no paywall and no ads. Coffees pay for the hosting, the timing data and the analysis written for every race.",
   askLead: "Enjoyed this recap?",
   askBody:
     "I'm Brent, and I build RaceTrace. It's free, with no ads. One coffee covers the analysis of about one race.",

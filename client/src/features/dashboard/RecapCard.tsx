@@ -363,7 +363,7 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
           Pit Stops &amp; Cycles
         </Link>
         <span className="ml-auto text-xs text-[var(--rt-text-muted)]">
-          Written by Claude from the timing files · every number checked
+          Written from the timing files · every number checked
         </span>
       </div>
     </div>

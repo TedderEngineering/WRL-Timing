@@ -108,7 +108,7 @@ export function AdminApiTokensPage() {
     <div className="p-6 lg:p-8 max-w-5xl">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-2">API Tokens</h1>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-        Tokens let the Claude Code race intake on your laptop add races as drafts. Put the token in{" "}
+        Tokens let the race intake on your laptop add races as drafts. Put the token in{" "}
         <code className="px-1 rounded bg-gray-100 dark:bg-gray-800">server/.env.intake</code> as{" "}
         <code className="px-1 rounded bg-gray-100 dark:bg-gray-800">RACETRACE_API_TOKEN</code>. A token acts as you, only while you are an admin.
       </p>
