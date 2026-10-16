@@ -11,6 +11,7 @@ import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { useTraceView } from "../features/chart/trace-view";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+import { StoryTab } from "../features/chart/StoryTab";
 
 import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
@@ -48,10 +49,13 @@ export function RaceDetailPage() {
   const effectiveEventId = urlEventId || raceMeta?.eventId;
   const [isFavorited, setIsFavorited] = useState(false);
   const [resultsStatus, setResultsStatus] = useState<"official" | "provisional" | null>(null);
+  // A published analysis package (it always carries the race summary and car stories): the Story tab.
+  // null while the race detail loads.
+  const [hasStories, setHasStories] = useState<boolean | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
-  const [activeTab, setActiveTab] = useState<"position" | "laptimes" | "strategy" | "pitanalysis">(() => {
+  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis">(() => {
     const t = searchParams.get("tab");
-    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position") return t;
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story") return t;
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
@@ -171,14 +175,21 @@ export function RaceDetailPage() {
   useEffect(() => {
     if (!id) return;
     setResultsStatus(null);
+    setHasStories(null);
     api
-      .get<{ isFavorited: boolean; resultsStatus?: "official" | "provisional" | null }>(`/races/${id}`)
+      .get<{ isFavorited: boolean; resultsStatus?: "official" | "provisional" | null; hasPackage?: boolean }>(`/races/${id}`)
       .then((res) => {
         setIsFavorited(!!res.isFavorited);
         setResultsStatus(res.resultsStatus ?? null);
+        setHasStories(!!res.hasPackage);
       })
-      .catch(() => {});
+      .catch(() => setHasStories(false));
   }, [id, isAuthenticated]);
+
+  // A race without published stories has no Story tab: fall back to Position Trace.
+  useEffect(() => {
+    if (hasStories === false && activeTab === "story") setActiveTab("position");
+  }, [hasStories, activeTab]);
 
   // Open on the user's own car rather than the winner, once per race (the user's later picks win),
   // unless their chart defaults say to always open on the winner.
@@ -390,6 +401,7 @@ export function RaceDetailPage() {
   const isTeam = hasTeamAccess(user);
   const tabs = [
     { id: "position" as const, label: "Position Trace", locked: false },
+    ...(hasStories ? [{ id: "story" as const, label: "Story", locked: false }] : []),
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
     { id: "strategy" as const, label: "Strategy", locked: !isTeam },
@@ -542,6 +554,30 @@ export function RaceDetailPage() {
           defaultAxis={chartDefaults.axis}
         />
       </div>
+
+      {activeTab === "story" && hasStories && (
+        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <StoryTab
+            raceId={id!}
+            data={data}
+            focusNum={focusNum}
+            setFocusNum={handleFocusChange}
+            onOpenTab={(t) => {
+              if (t === "pitanalysis" && !isTeam) {
+                setLockedMsg(t);
+                return;
+              }
+              setActiveTab(t);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (t === "position") next.delete("tab");
+                else next.set("tab", t);
+                return next;
+              }, { replace: true });
+            }}
+          />
+        </div>
+      )}
 
       {activeTab === "laptimes" && (
         <div className="flex flex-col md:min-h-0 md:flex-1">

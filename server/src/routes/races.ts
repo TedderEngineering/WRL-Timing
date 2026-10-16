@@ -7,6 +7,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { normalizeTrackName } from "../services/pitStopAnalysis.service.js";
 import { assertRaceAccess, resolveViewer } from "../services/race-access.js";
 import { getRacePackage } from "./packages.js";
+import { getRaceStories } from "../packages/race-stories.js";
 import { packagesFlagOn } from "../packages/flags.js";
 import { parseVersion } from "../packages/service.js";
 import { publishedPitFacts } from "../packages/race-pit-facts.js";
@@ -150,6 +151,10 @@ racesRouter.get(
 // Same gating as /chart-data. gzip + ETag (sha256). ?version=N is admin-only.
 
 racesRouter.get("/:id/package", optionalAuth, getRacePackage);
+
+// ─── GET /api/races/:id/stories — the published package's words (Story tab) ─
+
+racesRouter.get("/:id/stories", optionalAuth, getRaceStories);
 
 // ─── GET /api/races/:id/entries — Entry list for a race ─────────────────────
 

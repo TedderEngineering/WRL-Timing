@@ -68,7 +68,18 @@ export function proseToText(p: Prose, ctx: ProseContext = {}): string {
 }
 
 /** React rendering: numbers and car numbers in tabular mono so columns of figures line up. */
-export function ProseText({ prose, ctx = {}, carClassName = "font-semibold" }: { prose: Prose; ctx?: ProseContext; carClassName?: string }) {
+export function ProseText({
+  prose,
+  ctx = {},
+  carClassName = "font-semibold",
+  onCar,
+}: {
+  prose: Prose;
+  ctx?: ProseContext;
+  carClassName?: string;
+  /** Car numbers become buttons that call this (the Story tab opens that car's story). */
+  onCar?: (car: string) => void;
+}) {
   const out: ReactNode[] = [];
   let last = 0;
   let k = 0;
@@ -85,9 +96,21 @@ export function ProseText({ prose, ctx = {}, carClassName = "font-semibold" }: {
       );
     } else if (car !== undefined) {
       out.push(
-        <span key={k++} className={`font-mono tabular-nums ${carClassName}`}>
-          #{car}
-        </span>
+        onCar ? (
+          <button
+            key={k++}
+            type="button"
+            onClick={() => onCar(car)}
+            className={`font-mono tabular-nums underline decoration-dotted underline-offset-2 hover:text-[var(--rt-accent)] ${carClassName}`}
+            title={`Read #${car}'s story`}
+          >
+            #{car}
+          </button>
+        ) : (
+          <span key={k++} className={`font-mono tabular-nums ${carClassName}`}>
+            #{car}
+          </span>
+        )
       );
     } else if (cls !== undefined) {
       out.push(ctx.classes?.[cls] ?? cls);
