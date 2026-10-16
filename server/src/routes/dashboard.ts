@@ -143,7 +143,7 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
       const byDate = [...g.races].sort((a, b) => a.date.getTime() - b.date.getTime());
       const earliest = byDate[0];
       const last = byDate[byDate.length - 1];
-      const races = [];
+      const races: ({ session: string } & Record<string, unknown>)[] = [];
       for (const r of g.races) {
         const access = await canUserAccessRace(r, viewer.plan, viewer.role);
         const recap =
