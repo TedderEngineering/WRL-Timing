@@ -25,6 +25,11 @@
 #                     matching race replaces that race's data (same id, URL, name and
 #                     status); sessions with several possible matches are still held.
 #
+# Every Monday it also runs on its own (schedule below): mode = import for IMSA, SRO and WRL,
+# the current season, sessions from the last 21 days. New races arrive as drafts, provisional
+# results that turned official are updated in place, and possible duplicates of races already
+# on the site are held and listed for the owner (replace_matched off). Nothing is published.
+#
 # Needs repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Admin → API Tokens,
 # scope "intake"); WRL 2025 from Speedhive also needs SPEEDHIVE_WRL_ORG_ID.
 #
@@ -35,6 +40,10 @@
 name: RaceTrace intake
 
 on:
+  # Weekly import: Mondays 14:17 UTC (10:17 am Eastern in summer, 9:17 am in winter), after the
+  # weekend's races. Off the hour, when GitHub's scheduler is less busy.
+  schedule:
+    - cron: "17 14 * * 1"
   workflow_dispatch:
     inputs:
       series:
@@ -99,9 +108,35 @@ jobs:
       - run: npm ci
 
       - name: Check settings
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_SERIES: ${{ inputs.series }}
+          IN_SEASON: ${{ inputs.season }}
+          IN_SINCE: ${{ inputs.since }}
+          IN_REPLACE: ${{ inputs.replace_matched }}
         run: |
           # Work folder on the runner's temp disk (the runner context is not available in job-level env).
           echo "INTAKE_WORK_DIR=$RUNNER_TEMP/intake-work" >> "$GITHUB_ENV"
+          # A scheduled run has no inputs: the weekly import's settings stand in for them.
+          if [ "$EVENT" = "schedule" ]; then
+            {
+              echo "INTAKE_MODE=import"
+              echo "INTAKE_SERIES=imsa-*,sro-*,wrl"
+              echo "INTAKE_SEASON=$(date -u +%Y)"
+              echo "INTAKE_SINCE=$(date -u -d '21 days ago' +%F)"
+              echo "INTAKE_REPLACE=false"
+            } >> "$GITHUB_ENV"
+            echo "Weekly import: IMSA, SRO and WRL $(date -u +%Y), sessions since $(date -u -d '21 days ago' +%F)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "INTAKE_MODE=$IN_MODE"
+              echo "INTAKE_SERIES=$IN_SERIES"
+              echo "INTAKE_SEASON=$IN_SEASON"
+              echo "INTAKE_SINCE=$IN_SINCE"
+              echo "INTAKE_REPLACE=$IN_REPLACE"
+            } >> "$GITHUB_ENV"
+          fi
           if [ -z "$RACETRACE_API_URL" ] || [ -z "$RACETRACE_API_TOKEN" ]; then
             echo "::error::Add the repository secrets RACETRACE_API_URL and RACETRACE_API_TOKEN (Settings → Secrets and variables → Actions)."
             exit 1
@@ -109,11 +144,11 @@ jobs:
           npx tsx scripts/intake.ts preflight
 
       - name: Re-import plan
-        if: inputs.mode == 'reimport-plan' || inputs.mode == 'reimport'
+        if: env.INTAKE_MODE == 'reimport-plan' || env.INTAKE_MODE == 'reimport'
         env:
-          SERIES: ${{ inputs.series }}
-          SEASON: ${{ inputs.season }}
-          APPLY: ${{ inputs.mode == 'reimport' }}
+          SERIES: ${{ env.INTAKE_SERIES }}
+          SEASON: ${{ env.INTAKE_SEASON }}
+          APPLY: ${{ env.INTAKE_MODE == 'reimport' }}
           APPROVE: ${{ inputs.approve }}
         run: |
           set -o pipefail
@@ -143,10 +178,10 @@ jobs:
           exit $status
 
       - name: Analyze (facts + rule checks, draft packages)
-        if: inputs.mode == 'analyze'
+        if: env.INTAKE_MODE == 'analyze'
         env:
-          SERIES: ${{ inputs.series }}
-          SEASON: ${{ inputs.season }}
+          SERIES: ${{ env.INTAKE_SERIES }}
+          SEASON: ${{ env.INTAKE_SEASON }}
           LIMIT: ${{ inputs.limit }}
           RACES: ${{ inputs.races }}
         run: |
@@ -172,11 +207,11 @@ jobs:
           exit $status
 
       - name: Names and dates
-        if: inputs.mode == 'names-plan' || inputs.mode == 'names'
+        if: env.INTAKE_MODE == 'names-plan' || env.INTAKE_MODE == 'names'
         env:
-          SERIES: ${{ inputs.series }}
-          SEASON: ${{ inputs.season }}
-          APPLY: ${{ inputs.mode == 'names' }}
+          SERIES: ${{ env.INTAKE_SERIES }}
+          SEASON: ${{ env.INTAKE_SEASON }}
+          APPLY: ${{ env.INTAKE_MODE == 'names' }}
         run: |
           args=(--series "$SERIES" --season "$SEASON" --notes "$RUNNER_TEMP/names-notes.txt")
           [ "$APPLY" = "true" ] && args+=(--apply)
@@ -199,10 +234,10 @@ jobs:
           exit $status
 
       - name: Refresh (re-import keyed races in place)
-        if: inputs.mode == 'refresh'
+        if: env.INTAKE_MODE == 'refresh'
         env:
-          SERIES: ${{ inputs.series }}
-          SEASON: ${{ inputs.season }}
+          SERIES: ${{ env.INTAKE_SERIES }}
+          SEASON: ${{ env.INTAKE_SEASON }}
           LIMIT: ${{ inputs.limit }}
         run: |
           args=(--series "$SERIES" --season "$SEASON")
@@ -227,11 +262,11 @@ jobs:
           exit $status
 
       - name: Discover
-        if: inputs.mode == 'discover' || inputs.mode == 'import'
+        if: env.INTAKE_MODE == 'discover' || env.INTAKE_MODE == 'import'
         env:
-          SERIES: ${{ inputs.series }}
-          SEASON: ${{ inputs.season }}
-          SINCE: ${{ inputs.since }}
+          SERIES: ${{ env.INTAKE_SERIES }}
+          SEASON: ${{ env.INTAKE_SEASON }}
+          SINCE: ${{ env.INTAKE_SINCE }}
         run: |
           args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/discover.json")
           if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
@@ -246,9 +281,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pull and push as drafts
-        if: inputs.mode == 'import'
+        if: env.INTAKE_MODE == 'import'
         env:
-          REPLACE: ${{ inputs.replace_matched }}
+          REPLACE: ${{ env.INTAKE_REPLACE }}
         run: |
           set -o pipefail
           # replace_matched: a new session with exactly one matching race on the site replaces it; otherwise it is held.
