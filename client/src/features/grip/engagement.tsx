@@ -209,7 +209,7 @@ export function InstallHint() {
   };
   return (
     <Card className="flex items-start gap-3">
-      <img src="/grip-icon-192.png" alt="" className="h-12 w-12 shrink-0 rounded-xl" />
+      <img src="/grip-app-icon-192.png" alt="" className="h-12 w-12 shrink-0 rounded-xl" />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="font-semibold text-gray-900 dark:text-gray-100">
           Put Finding Grip on your home screen
