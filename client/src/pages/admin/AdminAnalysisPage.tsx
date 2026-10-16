@@ -9,7 +9,9 @@ import {
   rejectRacePackage,
   validatorReportOf,
 } from "../../lib/package-api";
-import type { DataQualityNote, RuleCheck } from "@shared/race-analysis-package/types";
+import type { DataQualityNote, RaceAnalysisPackage, RuleCheck } from "@shared/race-analysis-package/types";
+import { StoryPreview } from "../../features/admin/StoryPreview";
+import { VersionHistory } from "../../features/admin/VersionHistory";
 
 const badge = "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium";
 const tone = {
@@ -29,17 +31,24 @@ function day(iso: string): string {
  * themselves are already on the site; a draft is a newer analysis of one (facts and rule checks
  * first, stories later). Visitors keep seeing the published version until a draft is published.
  */
+type Tab = "draft" | "published";
+
 export function AdminAnalysisPage() {
+  const [tab, setTab] = useState<Tab>("draft");
   const [items, setItems] = useState<PackageReviewItem[] | null>(null);
+  const [published, setPublished] = useState<PackageReviewItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setItems((await listPackagesForReview("draft")).packages);
+      const [drafts, live] = await Promise.all([listPackagesForReview("draft"), listPackagesForReview("published")]);
+      setItems(drafts.packages);
+      setPublished(live.packages);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load the drafts");
       setItems([]);
+      setPublished([]);
     }
   }, []);
   useEffect(() => {
@@ -62,9 +71,36 @@ export function AdminAnalysisPage() {
         never more than &ldquo;possible&rdquo; while the rulebook is unverified.
       </p>
 
+      <div role="tablist" aria-label="Analysis" className="mt-4 flex gap-1 border-b border-gray-200 dark:border-gray-800">
+        {(
+          [
+            ["draft", "Waiting for you", items ? groups.length : null],
+            ["published", "Published", published?.length ?? null],
+          ] as const
+        ).map(([key, label, n]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px min-h-[40px] border-b-2 px-3 text-sm font-medium ${
+              tab === key
+                ? "border-brand-600 text-gray-900 dark:text-gray-100"
+                : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+          >
+            {label}
+            {n !== null && <span className="ml-1.5 tabular-nums text-gray-500 dark:text-gray-400">{n}</span>}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      {items === null ? (
+      {tab === "published" ? (
+        <PublishedList items={published} onChanged={load} />
+      ) : items === null ? (
         <div className="mt-6 h-40 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-900" />
       ) : groups.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
@@ -84,6 +120,114 @@ export function AdminAnalysisPage() {
   );
 }
 
+type Panel = "checks" | "stories" | "history";
+
+const secondary =
+  "min-h-[36px] rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800";
+
+/** Races whose analysis visitors see now, newest race first, with their stories and versions. */
+function PublishedList({ items, onChanged }: { items: PackageReviewItem[] | null; onChanged: () => void }) {
+  const [filter, setFilter] = useState("");
+  if (items === null) return <div className="mt-6 h-40 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-900" />;
+  if (items.length === 0) {
+    return (
+      <div className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+        No analysis published yet. Publish a draft and it moves here, with Roll back if it needs undoing.
+      </div>
+    );
+  }
+  const q = filter.trim().toLowerCase();
+  const shown = q
+    ? items.filter((p) => [p.race.name, p.race.series, p.race.subSeries, p.race.track].filter(Boolean).join(" ").toLowerCase().includes(q))
+    : items;
+  return (
+    <div className="mt-6 flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="m-0 mr-auto text-sm text-gray-500 dark:text-gray-400">
+          {items.length} race{items.length === 1 ? "" : "s"} with published analysis
+        </p>
+        <input
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Race, series or track"
+          aria-label="Find a race"
+          className="min-h-[36px] w-56 rounded-md border border-gray-300 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        />
+      </div>
+      {shown.map((p) => (
+        <PublishedCard key={p.race.id} item={p} onChanged={onChanged} />
+      ))}
+      {shown.length === 0 && <p className="m-0 text-sm text-gray-500 dark:text-gray-400">No race matches &ldquo;{filter}&rdquo;.</p>}
+    </div>
+  );
+}
+
+function PublishedCard({ item, onChanged }: { item: PackageReviewItem; onChanged: () => void }) {
+  const r = item.race;
+  const [panel, setPanel] = useState<"stories" | "history" | null>(null);
+  const [pkg, setPkg] = useState<RaceAnalysisPackage | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // After a roll back the current version changes under this card: drop the old version's stories.
+  useEffect(() => {
+    setPkg(null);
+    setLoadError(null);
+    setPanel((p) => (p === "stories" ? null : p));
+  }, [item.version]);
+
+  const show = async (p: "stories" | "history") => {
+    setPanel((cur) => (cur === p ? null : p));
+    if (p === "stories" && !pkg) {
+      try {
+        setPkg((await fetchRacePackage(r.id, { version: item.version })).pkg);
+      } catch (e) {
+        setLoadError(e instanceof ApiClientError ? e.message : "Could not load the package");
+      }
+    }
+  };
+
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+      <h2 className="m-0 text-base font-semibold text-gray-900 dark:text-gray-100">
+        <Link to={`/chart?race=${r.id}`} className="hover:underline">
+          {r.name}
+        </Link>
+      </h2>
+      <p className="m-0 mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+        {[r.series, r.subSeries, r.track, day(r.date)].filter(Boolean).join(" · ")}
+      </p>
+      <p className="m-0 mt-1 text-sm text-gray-700 dark:text-gray-300">
+        <strong>v{item.version}</strong> published{item.publishedAt ? ` ${day(item.publishedAt)}` : ""} · engine {item.engineVersion}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => show("stories")} aria-expanded={panel === "stories"} className={secondary}>
+          {panel === "stories" ? "Hide stories" : "Read stories"}
+        </button>
+        <button type="button" onClick={() => show("history")} aria-expanded={panel === "history"} className={secondary}>
+          {panel === "history" ? "Hide versions" : "Versions and roll back"}
+        </button>
+      </div>
+      {panel === "stories" && (
+        <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-800">
+          {loadError ? (
+            <p className="m-0 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+          ) : pkg ? (
+            <StoryPreview pkg={pkg} />
+          ) : (
+            <div className="h-20 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+          )}
+        </div>
+      )}
+      {panel === "history" && (
+        <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-800">
+          <VersionHistory raceId={r.id} raceName={r.name} onChanged={onChanged} />
+        </div>
+      )}
+    </article>
+  );
+}
+
 interface Details {
   hasStories: boolean;
   cars: number;
@@ -93,7 +237,8 @@ interface Details {
 
 function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; older: PackageReviewItem[]; onChanged: () => void }) {
   const r = draft.race;
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [pkg, setPkg] = useState<RaceAnalysisPackage | null>(null);
   const [details, setDetails] = useState<Details | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<"idle" | "publish" | "reject">("idle");
@@ -105,6 +250,7 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
     if (details) return details;
     try {
       const { pkg } = await fetchRacePackage(r.id, { version: draft.version });
+      setPkg(pkg);
       const d: Details = {
         hasStories: pkg.raceSummary != null,
         cars: pkg.entries?.length ?? 0,
@@ -119,10 +265,11 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
     }
   }, [details, r.id, draft.version]);
 
-  const toggle = () => {
-    setOpen((o) => !o);
-    if (!open) loadDetails();
+  const show = (p: Panel) => {
+    setPanel((cur) => (cur === p ? null : p));
+    if (p !== "history") loadDetails();
   };
+  const open = panel === "checks";
 
   const publish = async () => {
     setBusy(true);
@@ -202,7 +349,7 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
       {draft.notes && <p className="m-0 mt-2 text-xs text-gray-500 dark:text-gray-400">{draft.notes}</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={toggle} aria-expanded={open} className="min-h-[36px] rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+        <button type="button" onClick={() => show("checks")} aria-expanded={open} className={secondary}>
           {open ? "Hide rule checks and data notes" : "Rule checks and data notes"}
         </button>
         <Link
@@ -211,6 +358,12 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
         >
           Preview pit facts on the race page
         </Link>
+        <button type="button" onClick={() => show("stories")} aria-expanded={panel === "stories"} className={secondary}>
+          {panel === "stories" ? "Hide stories" : "Read stories"}
+        </button>
+        <button type="button" onClick={() => show("history")} aria-expanded={panel === "history"} className={secondary}>
+          {panel === "history" ? "Hide versions" : "Versions"}
+        </button>
         <span className="flex-1" />
         <button
           type="button"
@@ -244,7 +397,15 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
             <>
               <p className="m-0 text-gray-700 dark:text-gray-300">
                 Publish v{draft.version} of {r.name}? Visitors see it straight away
-                {r.currentVersion !== null ? `, and v${r.currentVersion} can be rolled back to` : ""}.
+                {r.currentVersion !== null ? `, and v${r.currentVersion} can be rolled back to from Versions` : ""}.
+                {panel !== "stories" && (
+                  <>
+                    {" "}
+                    <button type="button" onClick={() => show("stories")} className="font-medium text-brand-700 underline dark:text-brand-300">
+                      Read the stories first
+                    </button>
+                  </>
+                )}
               </p>
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={publish} disabled={busy} className="min-h-[36px] rounded-md bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50">
@@ -318,10 +479,28 @@ function DraftCard({ draft, older, onChanged }: { draft: PackageReviewItem; olde
         </div>
       )}
 
+      {panel === "stories" && (
+        <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-800">
+          {loadError ? (
+            <p className="m-0 text-sm text-red-600 dark:text-red-400">{loadError}</p>
+          ) : pkg ? (
+            <StoryPreview pkg={pkg} />
+          ) : (
+            <div className="h-20 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+          )}
+        </div>
+      )}
+
+      {panel === "history" && (
+        <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-800">
+          <VersionHistory raceId={r.id} raceName={r.name} onChanged={onChanged} />
+        </div>
+      )}
+
       {older.length > 0 && (
         <p className="m-0 mt-3 text-xs text-gray-500 dark:text-gray-400">
-          Older draft{older.length === 1 ? "" : "s"} of this race: {older.map((o) => `v${o.version}`).join(", ")} (replaced by v
-          {draft.version}; reject {older.length === 1 ? "it" : "them"} from the race&apos;s package list when convenient).
+          Older draft{older.length === 1 ? "" : "s"} of this race: {older.map((o) => `v${o.version}`).join(", ")}, replaced by v
+          {draft.version}. Reject {older.length === 1 ? "it" : "them"} under Versions when convenient.
         </p>
       )}
     </article>
