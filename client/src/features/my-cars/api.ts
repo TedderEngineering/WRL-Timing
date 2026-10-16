@@ -18,6 +18,8 @@ export interface MyCar {
   teamName: string | null;
   carClass: string | null;
   season: number | null;
+  /** Race emails about this car (on unless switched off; the account-wide switch comes first). */
+  alerts?: boolean;
 }
 
 export type CarInput = Partial<Omit<MyCar, "id">>;

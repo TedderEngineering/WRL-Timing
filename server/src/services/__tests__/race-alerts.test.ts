@@ -7,7 +7,9 @@ const fake = vi.hoisted(() => {
     race: { findUnique: async () => state.race },
     userCar: {
       findMany: async () =>
-        state.cars.filter((c) => state.prefs.get(c.userId) === true).map((c) => ({ ...c, user: { email: `${c.userId}@example.com` } })),
+        state.cars
+          .filter((c) => state.prefs.get(c.userId) === true && c.alerts !== false)
+          .map((c) => ({ ...c, user: { email: `${c.userId}@example.com` } })),
     },
     raceAlertSend: {
       findMany: async ({ where }: Row) => state.sends.filter((s) => s.raceId === where.raceId),
@@ -79,6 +81,17 @@ describe("race-ready emails", () => {
     // A second trigger (results turning official) repeats nothing.
     expect((await sendRaceAlerts("vir", NOW)).sent).toBe(0);
     expect(fake.state.mail).toHaveLength(1);
+  });
+
+  it("skip a car whose race emails are switched off, and use the user's other car", async () => {
+    fake.state.cars[0].alerts = false; // u1's #67
+    const r = await sendRaceAlerts("vir", NOW);
+    expect(r.sent).toBe(1);
+    expect(fake.state.mail[0].subject).toMatch(/^#8 at /);
+    fake.state.sends = [];
+    fake.state.mail = [];
+    fake.state.cars[1].alerts = false; // and #8
+    expect((await sendRaceAlerts("vir", NOW)).sent).toBe(0);
   });
 
   it("send nothing for a draft or an old race", async () => {

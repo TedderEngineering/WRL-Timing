@@ -72,10 +72,10 @@ const carFields = {
   season: z.number().int().min(2000).max(2100).nullish(),
 };
 export const createCarSchema = z.object(carFields);
-export const updateCarSchema = z.object(carFields).partial();
+export const updateCarSchema = z.object({ ...carFields, alerts: z.boolean() }).partial();
 export const followSchema = z.object({ raceId: z.string().min(1), carNumber: z.string().trim().min(1).max(8) });
 
-const select = { id: true, label: true, number: true, series: true, teamName: true, carClass: true, season: true, createdAt: true } as const;
+const select = { id: true, label: true, number: true, series: true, teamName: true, carClass: true, season: true, alerts: true, createdAt: true } as const;
 const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v && v.length ? v : null);
 
 export async function listCars(userId: string) {
@@ -150,6 +150,7 @@ export async function updateCar(userId: string, id: string, body: unknown) {
       ...(b.teamName !== undefined ? { teamName: blankToNull(b.teamName) } : {}),
       ...(b.carClass !== undefined ? { carClass: blankToNull(b.carClass) } : {}),
       ...(b.season !== undefined ? { season: b.season } : {}),
+      ...(b.alerts !== undefined ? { alerts: b.alerts } : {}),
     },
     select,
   });

@@ -27,7 +27,7 @@ const fake = vi.hoisted(() => {
       },
       count: async ({ where }: Row) => state.cars.filter((c) => c.userId === where.userId).length,
       create: async ({ data, select }: Row) => {
-        const c = { id: `car${++state.seq}`, createdAt: new Date(Date.UTC(2026, 9, 15, 0, state.seq)), label: null, teamName: null, carClass: null, season: null, ...data };
+        const c = { id: `car${++state.seq}`, createdAt: new Date(Date.UTC(2026, 9, 15, 0, state.seq)), label: null, teamName: null, carClass: null, season: null, alerts: true, ...data };
         state.cars.push(c);
         return pick(c, select);
       },
@@ -132,6 +132,9 @@ describe("/api/me/cars", () => {
     const c = await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "67", series: "wrl", label: "  " });
     expect(c.status).toBe(201);
     expect(c.body.car).toMatchObject({ number: "67", series: "wrl", label: null, season: null });
+    const off = await request(app).patch(`/api/me/cars/${c.body.car.id}`).set("Authorization", A).send({ alerts: false });
+    expect(off.body.car.alerts).toBe(false);
+    expect((await request(app).patch(`/api/me/cars/${c.body.car.id}`).set("Authorization", A).send({ alerts: "no" })).status).toBe(400);
     const e = await request(app).patch(`/api/me/cars/${c.body.car.id}`).set("Authorization", A).send({ number: "68", season: 2027 });
     expect(e.body.car).toMatchObject({ number: "68", season: 2027 });
     expect((await request(app).post("/api/me/cars").set("Authorization", A).send({ number: "#67!", series: "wrl" })).status).toBe(400);
