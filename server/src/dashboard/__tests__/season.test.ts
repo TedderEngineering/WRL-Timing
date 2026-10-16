@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSeason, calendarFor, locateRace, raceInSeries, type SeasonRace } from "../season.js";
-import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../latest.js";
+import { groupIntoWeekends, headlineOrder, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../latest.js";
 
 // The published 2026 races on racetrace.tedderengineering.com on 2026-10-13 (date|series|track|name).
 const LIVE_2026 = `2026-08-22|IMSA|Virginia International Raceway|Virgina is For Racing Lovers Grand Prix
@@ -120,6 +120,37 @@ describe("latest races grouped into weekends", () => {
       r("mx5-r2", "2026-10-02", 25, 30, 0),
     ];
     expect([...weekend].sort(headlineOrder).map((x) => x.id)).toEqual(["wtsc", "mpc", "mx5-r1", "mx5-r2", "pccna-r1"]);
+  });
+
+  it("says which race each tab is when a weekend mixes series", () => {
+    const sro = [
+      { name: "Indianapolis 8 Hour — Indianapolis Motor Speedway", series: "SRO", subSeries: "IGTC", session: "Race" },
+      { name: "GT4 America Race 1 — Indianapolis Motor Speedway", series: "SRO", subSeries: "GT4", session: "Race 1" },
+      { name: "GT4 America Race 2 — Indianapolis Motor Speedway", series: "SRO", subSeries: "GT4", session: "Race 2" },
+    ];
+    expect(weekendLabels(sro)).toEqual(["Indianapolis 8 Hour", "GT4 America Race 1", "GT4 America Race 2"]);
+    // One series: the short session names.
+    expect(weekendLabels(sro.slice(1))).toEqual(["Race 1", "Race 2"]);
+    // Two races of the same name get their session added.
+    const same = [
+      { name: "GT America — Indianapolis", series: "SRO", subSeries: "GTA", session: "Race 1" },
+      { name: "GT America — Indianapolis", series: "SRO", subSeries: "GTA", session: "Race 1" },
+      { name: "GT4 America Race 1 — Indianapolis", series: "SRO", subSeries: "GT4", session: "Race 1" },
+    ];
+    expect(weekendLabels(same)).toEqual(["GT America · Race 1", "GT America · Race 1", "GT4 America Race 1"]);
+  });
+
+  it("keeps a series' races together and in date order, feature series first", () => {
+    const r = (id: string, date: string, subSeries: string, maxLap: number, pitStops: number) => ({
+      ...row(id, date, id),
+      series: "SRO",
+      subSeries,
+      maxLap,
+      totalCars: 30,
+      pitStops,
+    });
+    const weekend = [r("gt4-r1", "2026-10-10", "GT4", 34, 30), r("gt4-r2", "2026-10-11", "GT4", 37, 30), r("8h", "2026-10-10", "IGTC", 323, 400), r("mcl", "2026-10-10", "MCL", 20, 0)];
+    expect(weekendOrder(weekend).map((x) => x.id)).toEqual(["8h", "gt4-r1", "gt4-r2", "mcl"]);
   });
 
   it("labels each race by its session", () => {
