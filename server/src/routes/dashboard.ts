@@ -15,7 +15,7 @@ import { packagesEnabledFor } from "../packages/flags.js";
 import { getServedGzip, gunzip } from "../packages/store.js";
 import { withPitFacts } from "../packages/race-pit-facts.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
-import { groupIntoWeekends, headlineOrder, sessionLabel, type LatestRaceRow } from "../dashboard/latest.js";
+import { groupIntoWeekends, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, chartKeyFor, extractCarStory, type CarStory } from "../dashboard/my-car.js";
 import { driverFacts } from "../dashboard/my-driver.js";
 import { coDrivers, listDrivers, racesForDriver, type DriverRaceRow } from "../services/my-drivers.js";
@@ -130,7 +130,7 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
     for (const l of pitLaps) pitCount.set(l.raceId, (pitCount.get(l.raceId) ?? 0) + 1);
     for (const g of groups) {
       for (const r of g.races) r.pitStops = pitCount.get(r.id) ?? 0;
-      g.races.sort(headlineOrder);
+      g.races = weekendOrder(g.races);
     }
     const cal = calendarFor(new Date().getUTCFullYear());
     const fresh = Date.now() - 14 * 86_400_000;
@@ -143,7 +143,7 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
       const byDate = [...g.races].sort((a, b) => a.date.getTime() - b.date.getTime());
       const earliest = byDate[0];
       const last = byDate[byDate.length - 1];
-      const races = [];
+      const races: ({ session: string } & Record<string, unknown>)[] = [];
       for (const r of g.races) {
         const access = await canUserAccessRace(r, viewer.plan, viewer.role);
         const recap =
@@ -161,6 +161,9 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
           recap,
         });
       }
+      // Say which race each tab is when the weekend mixes series ("GT4 America Race 1", not "Race 1").
+      const labels = weekendLabels(g.races.map((r, i) => ({ name: r.name, series: r.series, subSeries: r.subSeries, session: races[i].session })));
+      races.forEach((r, i) => (r.session = labels[i]));
       const located = cal ? locateRace(cal, first) : null;
       events.push({
         key: g.key,

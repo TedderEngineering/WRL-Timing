@@ -79,3 +79,44 @@ export function sessionLabel(race: { name: string }, packageSession?: string | n
   if (packageSession) return packageSession;
   return race.name.split(" — ")[0].trim();
 }
+
+/** The race's own name without the track ("GT4 America Race 1 — Indianapolis Motor Speedway" → "GT4 America Race 1"). */
+function namePart(name: string): string {
+  return name.split(" — ")[0].trim();
+}
+
+const seriesKey = (r: { series: string; subSeries: string | null }) =>
+  `${r.series.toUpperCase().replace(/[\s-]+/g, "_")}|${r.subSeries ?? ""}`;
+
+/**
+ * The tab labels for one weekend's races. A weekend of one series keeps the short session names
+ * ("Race 1", "Race 2"). A weekend that mixes series (SRO's Indianapolis weekend: the 8 Hour, GT4
+ * America, McLaren Trophy) says which race each one is ("Indianapolis 8 Hour", "GT4 America Race
+ * 1"), adding the session only where two names would read the same.
+ */
+export function weekendLabels(races: { name: string; series: string; subSeries: string | null; session: string }[]): string[] {
+  const oneSeries = new Set(races.map(seriesKey)).size <= 1;
+  const sessions = races.map((r) => r.session);
+  if (oneSeries && new Set(sessions).size === sessions.length) return sessions;
+  const names = races.map((r) => namePart(r.name) || r.session);
+  return names.map((n, i) => (names.filter((x) => x === n).length > 1 && !n.includes(races[i].session) ? `${n} · ${races[i].session}` : n));
+}
+
+/**
+ * A weekend's races grouped by series in headline order (the series with the feature race first),
+ * and in date order inside each series, so Race 1 comes before Race 2.
+ */
+export function weekendOrder<T extends LatestRaceRow>(races: T[]): T[] {
+  const ranked = [...races].sort(headlineOrder);
+  const rank = new Map<string, number>();
+  ranked.forEach((r, i) => {
+    const k = seriesKey(r);
+    if (!rank.has(k)) rank.set(k, i);
+  });
+  return [...races].sort(
+    (a, b) =>
+      rank.get(seriesKey(a))! - rank.get(seriesKey(b))! ||
+      a.date.getTime() - b.date.getTime() ||
+      a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
+}
