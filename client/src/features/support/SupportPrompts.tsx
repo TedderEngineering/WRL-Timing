@@ -21,9 +21,30 @@ export function SupportLink({ variant = "pill", onClick, className }: { variant?
     <button
       type="button"
       onClick={open}
-      className={`${btn} rounded-full border border-gray-300 px-3 py-1.5 text-[13px] text-gray-600 transition-colors hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:text-white`}
+      className={`${btn} whitespace-nowrap rounded-full border border-gray-300 px-3 py-1.5 text-[13px] text-gray-600 transition-colors hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:text-white`}
     >
       ☕ Buy me a coffee
+    </button>
+  );
+}
+
+/**
+ * The header's coffee entry where the "☕ Buy me a coffee" link doesn't fit (below 1024px). Passive:
+ * it never opens by itself. Same placement name as the link ("header"). Finding Grip's header
+ * has the same button (GripLayout.tsx); `className` sets where it shows.
+ */
+export function CoffeeIconButton({ className = "" }: { className?: string }) {
+  const { support, openSupport } = useSupport();
+  if (!support.enabled) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => openSupport("header")}
+      aria-label="Buy me a coffee"
+      title="Buy me a coffee"
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border border-gray-300 text-xl leading-none hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-gray-700 dark:hover:bg-gray-800 ${className}`}
+    >
+      <span aria-hidden="true">☕</span>
     </button>
   );
 }

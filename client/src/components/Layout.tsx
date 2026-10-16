@@ -4,7 +4,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { Button } from "./Button";
 import { UserMenu } from "./UserMenu";
 import { SupportProvider } from "../features/support/SupportContext";
-import { SupportLink } from "../features/support/SupportPrompts";
+import { CoffeeIconButton, SupportLink } from "../features/support/SupportPrompts";
 import { isFreeMode, useSiteConfig } from "../lib/site-config";
 // Listens for the browser's install offer from the first page load.
 import "../lib/install";
@@ -39,7 +39,7 @@ function MobileMenu() {
   const navigate = useNavigate();
 
   return (
-    <div className="sm:hidden">
+    <div className="lg:hidden">
       <button
         onClick={() => setOpen(!open)}
         className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -148,18 +148,26 @@ export function Layout() {
     <div className={appPage ? "h-dvh flex flex-col overflow-hidden" : "min-h-screen flex flex-col"}>
       {/* Navigation */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
-        <nav className="container-page flex items-center justify-between h-16">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer">
-                <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-8 dark:hidden" />
-                <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-8 hidden dark:block" />
+        <nav className="container-page flex items-center justify-between h-16 gap-2 sm:gap-3" aria-label="Main">
+          {/* The same brand block as Finding Grip's header (GripLayout.tsx): Tedder logo | app mark + name.
+              Phones get a smaller Tedder logo and tighter spacing so the name and coffee button fit. */}
+          <div className="flex items-center gap-2 sm:gap-6 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 md:shrink-0">
+              <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer" className="shrink-0">
+                <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-6 sm:h-8 dark:hidden" />
+                <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6 sm:h-8 hidden dark:block" />
               </a>
-              <Link to={isAuthenticated ? "/dashboard" : "/"} className="text-lg font-bold text-gray-900 dark:text-gray-100 hidden sm:inline">RaceTrace</Link>
+              <Link
+                to={isAuthenticated ? "/dashboard" : "/"}
+                className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-700 pl-2 sm:pl-3 text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
+              >
+                <img src="/racetrace-icon-192.png" alt="" className="h-6 w-6 shrink-0 rounded-md" />
+                <span className="truncate">RaceTrace</span>
+              </Link>
             </div>
 
             {/* Desktop nav links */}
-            <div className="hidden sm:flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-4">
               {isAuthenticated && <NavItem to="/dashboard" label="Dashboard" />}
               <NavItem to="/races" label="Events" />
               {user?.role === "ADMIN" && <NavItem to="/admin" label="Admin" />}
@@ -174,9 +182,11 @@ export function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Below 1024px, as on Finding Grip: the compact header with the coffee entry as an icon. */}
+            <CoffeeIconButton className="lg:hidden" />
             {/* Desktop auth */}
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               <SupportLink />
               {isLoading ? (
                 <div className="h-7 w-7 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
