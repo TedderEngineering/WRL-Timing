@@ -49,7 +49,7 @@ function CarDriversInApp({ data, focusNum, annotations }: { data: RaceChartData;
   const car = data.cars[String(focusNum)];
   const names = useMemo(() => carDriverNames(car), [car]);
   const stints = useMemo(
-    () => (car ? stintsOf(car.laps, annotations?.[String(focusNum)]?.pits, names.length === 1 ? names[0] : null) : []),
+    () => (car ? stintsOf(car.laps, annotations?.[String(focusNum)]?.pits, names.length === 1 ? names[0] : null, names) : []),
     [car, annotations, focusNum, names]
   );
 

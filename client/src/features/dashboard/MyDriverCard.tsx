@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type ProseContext } from "../../lib/prose";
 import { track } from "../../lib/analytics";
-import { ScrollRow } from "../../components/ScrollRow";
+import { FollowTabs } from "./FollowTabs";
 import { formatDayRange } from "./format";
 import { StatusPill } from "./RecapCard";
 import { finishLine, type MyCarResponse } from "./MyCarCard";
@@ -74,52 +74,29 @@ function result(r: NonNullable<MyDriverResponse["recent"]>[number]): string {
   return "—";
 }
 
-/** The followed drivers as tabs, like the car tabs. */
+/** The followed drivers as tabs, like the car tabs (hold and drag to reorder). */
 export function DriverTabs({
   drivers,
   active,
   onChoose,
-  className = "border-b border-[var(--rt-border)]",
+  onReorder,
+  className,
 }: {
   drivers: MyDriverResponse["drivers"];
   active: string | null;
   onChoose: (id: string) => void;
+  onReorder?: (ids: string[]) => void;
   className?: string;
 }) {
-  if (drivers.length < 2) return null;
-  const idx = Math.max(0, drivers.findIndex((d) => d.id === active));
   return (
-    <ScrollRow
-      role="tablist"
-      aria-label="Your drivers"
-      activeKey={idx}
+    <FollowTabs
+      label="Your drivers"
+      tabs={drivers.map((d) => ({ id: d.id, label: d.name }))}
+      active={active}
+      onChoose={onChoose}
+      onReorder={onReorder}
       className={className}
-      innerClassName="gap-1"
-      onKeyDown={(e) => {
-        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-        e.preventDefault();
-        const next = (idx + (e.key === "ArrowRight" ? 1 : drivers.length - 1)) % drivers.length;
-        onChoose(drivers[next].id);
-        e.currentTarget.querySelectorAll<HTMLElement>("button")[next]?.focus();
-      }}
-    >
-      {drivers.map((d, i) => (
-        <button
-          key={d.id}
-          type="button"
-          role="tab"
-          aria-selected={i === idx}
-          data-active={i === idx}
-          tabIndex={i === idx ? 0 : -1}
-          onClick={() => onChoose(d.id)}
-          className={`flex min-h-[40px] items-center whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
-            i === idx ? "border-[var(--rt-accent)] font-semibold text-[var(--rt-text)]" : "border-transparent text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
-          }`}
-        >
-          {d.name}
-        </button>
-      ))}
-    </ScrollRow>
+    />
   );
 }
 

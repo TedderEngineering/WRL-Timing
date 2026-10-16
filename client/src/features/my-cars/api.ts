@@ -30,6 +30,8 @@ export const updateCar = (id: string, car: CarInput) => api.patch<{ car: MyCar }
 export const removeCar = (id: string) => api.delete<void>(`/me/cars/${id}`);
 export const followCar = (raceId: string, carNumber: string) =>
   api.post<{ car: MyCar; created: boolean }>("/me/cars/follow", { raceId, carNumber });
+/** The order of the car tabs (drag to reorder). */
+export const reorderCars = (ids: string[]) => api.put<{ cars: MyCar[] }>("/me/cars/order", { ids });
 export const followedInRace = (raceId: string) =>
   api.get<{ followed: { carNumber: string; carId: string }[] }>(`/me/cars/in-race/${raceId}`);
 

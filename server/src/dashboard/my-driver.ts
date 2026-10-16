@@ -6,7 +6,7 @@
  * numbers instead. Nothing here is estimated: a stint whose driver the timing doesn't name stays
  * unnamed.
  */
-import { sameDriver } from "../services/my-drivers.js";
+import { expandDriverName, sameDriver } from "../services/my-drivers.js";
 
 interface LapRow {
   l: number;
@@ -51,8 +51,11 @@ function bestOf(laps: LapRow[]): { sec: number; lap: number } | null {
   return best;
 }
 
-/** The car's stints between stops, each with its driver when the timing names one. */
-export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | null): Omit<DriverStint, "mine">[] {
+/**
+ * The car's stints between stops, each with its driver when the timing names one; a short name
+ * ("Boehm") becomes the car's full one ("Kevin Boehm") when `carDrivers` gives it.
+ */
+export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | null, carDrivers: string[] = []): Omit<DriverStint, "mine">[] {
   const last = laps.length ? Math.max(...laps.map((l) => l.l)) : 0;
   if (last === 0) return [];
   const stops = [...new Map(pits.filter((p) => p.l > 0 && p.l < last).map((p) => [p.l, p])).values()].sort((a, b) => a.l - b.l);
@@ -65,9 +68,10 @@ export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | nu
     driver = p.outDriver?.trim() || null;
   }
   out.push({ start, end: last, driver });
+  const named = out.map((s) => ({ ...s, driver: s.driver ? expandDriverName(s.driver, carDrivers) : null }));
   // One driver in the car: every stint is theirs, stops or not.
-  if (soleDriver) return out.map((s) => ({ ...s, driver: s.driver ?? soleDriver }));
-  return out;
+  if (soleDriver) return named.map((s) => ({ ...s, driver: s.driver ?? soleDriver }));
+  return named;
 }
 
 export function driverFacts(
@@ -77,7 +81,7 @@ export function driverFacts(
   entryDrivers: string[]
 ): DriverFacts {
   const sole = entryDrivers.length === 1 ? entryDrivers[0] : null;
-  const stints = stintsOf(car.laps, pits ?? [], sole).map((s) => ({ ...s, mine: !!s.driver && sameDriver(s.driver, name) }));
+  const stints = stintsOf(car.laps, pits ?? [], sole, entryDrivers).map((s) => ({ ...s, mine: !!s.driver && sameDriver(s.driver, name) }));
   const known = stints.some((s) => s.driver);
   const inStint = (l: LapRow, list: DriverStint[]) => list.some((s) => l.l >= s.start && l.l <= s.end);
   const mineList = stints.filter((s) => s.mine);

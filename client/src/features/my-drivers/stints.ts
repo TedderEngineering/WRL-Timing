@@ -3,7 +3,7 @@
  * pit stops' driver changes name (inDriver on the in-lap, outDriver after it). The same rules as
  * the server's dashboard/my-driver.ts. Sources without driver changes (Speedhive) name nobody.
  */
-import { sameDriver } from "./api";
+import { expandDriverName, sameDriver } from "./api";
 
 interface LapRow {
   l: number;
@@ -23,7 +23,7 @@ export interface Stint {
   driver: string | null;
 }
 
-export function stintsOf(laps: LapRow[], pits: PitRow[] | undefined, soleDriver: string | null): Stint[] {
+export function stintsOf(laps: LapRow[], pits: PitRow[] | undefined, soleDriver: string | null, carDrivers: string[] = []): Stint[] {
   const last = laps.length ? Math.max(...laps.map((l) => l.l)) : 0;
   if (last === 0) return [];
   const stops = [...new Map((pits ?? []).filter((p) => p.l > 0 && p.l < last).map((p) => [p.l, p])).values()].sort((a, b) => a.l - b.l);
@@ -36,7 +36,9 @@ export function stintsOf(laps: LapRow[], pits: PitRow[] | undefined, soleDriver:
     driver = p.outDriver?.trim() || null;
   }
   out.push({ start, end: last, driver });
-  return soleDriver ? out.map((s) => ({ ...s, driver: s.driver ?? soleDriver })) : out;
+  // SRO's pit records name drivers by surname ("Boehm"): use the car's full name when one fits.
+  const named = out.map((s) => ({ ...s, driver: s.driver ? expandDriverName(s.driver, carDrivers) : null }));
+  return soleDriver ? named.map((s) => ({ ...s, driver: s.driver ?? soleDriver })) : named;
 }
 
 const green = (l: LapRow) => !l.flag || ["GF", "GREEN", "G"].includes(l.flag.toUpperCase());

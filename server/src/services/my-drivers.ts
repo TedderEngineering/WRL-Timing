@@ -30,6 +30,25 @@ export function sameDriver(a: string, b: string): boolean {
   return short.every((w) => long.includes(w));
 }
 
+/**
+ * A driver as the timing names them in one place ("Boehm", "K. Boehm") made into the car's full
+ * name ("Kevin Boehm") when exactly one of the car's drivers fits: every full word matches and
+ * each initial starts one of their names. Otherwise the name is kept as it is.
+ */
+export function expandDriverName(name: string, carDrivers: string[]): string {
+  const same = carDrivers.find((d) => sameDriver(d, name));
+  if (same) return same;
+  const key = driverKey(name).split(" ").filter(Boolean);
+  const full = key.filter((w) => w.length > 1);
+  const initials = key.filter((w) => w.length === 1);
+  if (!full.length) return name;
+  const fits = carDrivers.filter((d) => {
+    const dw = driverKey(d).split(" ");
+    return full.every((w) => dw.includes(w)) && initials.every((i) => dw.some((x) => x.startsWith(i)));
+  });
+  return fits.length === 1 ? fits[0] : name;
+}
+
 /** The entry's spelling of the driver, when the entry has them. */
 export function driverInNames(driverNames: string | null | undefined, name: string): string | null {
   for (const raw of String(driverNames ?? "").split(/;\s*/)) {
@@ -147,18 +166,32 @@ export function bestSpelling(rows: { spelledAs: string }[], fallback: string): s
 export const followDriverSchema = z.object({ name: z.string().trim().min(3).max(120) });
 export const updateDriverSchema = z.object({ alerts: z.boolean() });
 
-const select = { id: true, name: true, key: true, alerts: true, createdAt: true } as const;
+const select = { id: true, name: true, key: true, alerts: true, position: true, createdAt: true } as const;
 
 export interface FollowedDriver {
   id: string;
   name: string;
   key: string;
   alerts: boolean;
+  position: number;
   createdAt: Date;
 }
 
 export async function listDrivers(userId: string): Promise<FollowedDriver[]> {
-  return (await prisma.userDriver.findMany({ where: { userId }, orderBy: { createdAt: "asc" }, select })) as FollowedDriver[];
+  return (await prisma.userDriver.findMany({ where: { userId }, orderBy: [{ position: "asc" }, { createdAt: "asc" }], select })) as FollowedDriver[];
+}
+
+export const orderDriversSchema = z.object({ ids: z.array(z.string().min(1)).max(100) });
+
+/** Put the user's drivers in this order (drag to reorder the tabs); others keep their order after. */
+export async function reorderDrivers(userId: string, body: unknown) {
+  const { ids } = orderDriversSchema.parse(body);
+  const drivers = await listDrivers(userId);
+  const mine = new Set(drivers.map((d) => d.id));
+  const listed = [...new Set(ids.filter((id) => mine.has(id)))];
+  const order = [...listed, ...drivers.map((d) => d.id).filter((id) => !listed.includes(id))];
+  await prisma.$transaction(order.map((id, position) => prisma.userDriver.update({ where: { id }, data: { position } })));
+  return listDrivers(userId);
 }
 
 /**
@@ -177,7 +210,8 @@ export async function followDriver(userId: string, body: unknown) {
   if (mine.length >= MAX_DRIVERS) {
     throw new AppError(409, `You can follow up to ${MAX_DRIVERS} drivers. Remove one in Settings → My drivers first.`, "TOO_MANY_DRIVERS");
   }
-  const driver = (await prisma.userDriver.create({ data: { userId, name: shown, key }, select })) as FollowedDriver;
+  const position = mine.length ? Math.max(...mine.map((d) => d.position ?? 0)) + 1 : 0;
+  const driver = (await prisma.userDriver.create({ data: { userId, name: shown, key, position }, select })) as FollowedDriver;
   return { driver, created: true };
 }
 
