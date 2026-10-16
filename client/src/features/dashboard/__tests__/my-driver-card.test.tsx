@@ -5,6 +5,7 @@ import { MyDriverCard, type MyDriverResponse } from "../MyDriverCard";
 import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
+import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners } from "../../my-drivers/driverCard";
 
 const text = (node: React.ReactNode) =>
   renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
@@ -89,5 +90,45 @@ describe("who drove when", () => {
     expect(carDriverNames({ team: "BSI Racing (Weisenberg / Goodman)" })).toEqual(["Weisenberg", "Goodman"]);
     expect(carDriverNames({ team: "X", drivers: ["Alex Rivera", "RIVERA Alex", "Jamie Cole"] })).toEqual(["Alex Rivera", "Jamie Cole"]);
     expect(sameDriver("Marvin Kirchhöfer", "KIRCHHOFER Marvin")).toBe(true);
+  });
+});
+
+describe("driver card share image", () => {
+  const input = { driverName: "Alex Rivera", race: base.race!, car: base.car!, facts: base.facts!, drive: base.driverFacts! };
+
+  it("puts a share button on the card", () => {
+    const t = text(<MyDriverCard data={base} />);
+    expect(t).toMatch(/(Share|Copy) Alex's race card/);
+  });
+
+  it("says the finish and the driver's drive under the trace", () => {
+    expect(driverCardLines(input)).toEqual(["Finished P1 in GTP of 9 · P1 overall · 30 laps", "Alex: 3:42 h (37%) · 2 stints · best lap 1:10.881"]);
+  });
+
+  it("falls back to the car's best lap when the timing doesn't say who drove", () => {
+    const lines = driverCardLines({ ...input, drive: { ...input.drive, known: false, myStints: 0 } });
+    expect(lines[1]).toBe("Car's best lap 1:10.881 on lap 25");
+  });
+
+  it("names the quickest-lap fact only when the driver was quickest of several", () => {
+    expect(driverCardFact(input)).toEqual({ text: "Quickest lap of the car's 2 drivers", tone: "good" });
+    expect(driverCardFact({ ...input, drive: { ...input.drive, bestRank: { rank: 2, of: 2 } } })).toBeUndefined();
+  });
+
+  it("colours each lap by who drove it", () => {
+    const own = lapOwners(input.drive);
+    expect([own(5), own(15), own(25), own(40)]).toEqual([true, false, true, null]);
+    expect(lapOwners({ ...input.drive, known: false })(5)).toBeNull();
+  });
+
+  it("finds the chart car by its published number", () => {
+    const chart = { cars: { "7": { label: undefined }, "1007": { label: "007" } } } as unknown as Parameters<typeof chartCarKey>[0];
+    expect(chartCarKey(chart, "007")).toBe("1007");
+    expect(chartCarKey(chart, "7")).toBe("7");
+    expect(chartCarKey(chart, "8")).toBeNull();
+  });
+
+  it("links the shared text to the race page", () => {
+    expect(driverShareUrl(input)).toMatch(/\/chart\?race=plm&car=7&from=share$/);
   });
 });

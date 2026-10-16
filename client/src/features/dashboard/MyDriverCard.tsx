@@ -9,6 +9,7 @@ import { StatusPill } from "./RecapCard";
 import { finishLine, type MyCarResponse } from "./MyCarCard";
 import { driveTimeText } from "../my-drivers/stints";
 import { displayName } from "../my-drivers/api";
+import { ShareDriverCardButton } from "../my-drivers/driverCard";
 
 /**
  * "Your driver's latest race": a followed driver's newest race whatever the car or series, the
@@ -193,6 +194,7 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
               <Link to={chartHref(race.id, car.number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
+              <ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null }} />
             </div>
           </>
         )}
