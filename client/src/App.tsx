@@ -176,15 +176,8 @@ export function App() {
           }
         />
 
-        {/* Dashboard (protected) */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* Dashboard (open to everyone; signed in adds your car, favorites and recaps) */}
+        <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Race routes (public — auth optional for favorites) */}
         <Route path="/races" element={<RaceListPage />} />

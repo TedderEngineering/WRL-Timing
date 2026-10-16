@@ -14,6 +14,7 @@ import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel"
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
 import { SupportCard } from "../features/support/SupportPrompts";
+import { rememberPostAuthRedirect } from "../lib/postAuthRedirect";
 
 interface RaceItem {
   id: string;
@@ -25,10 +26,13 @@ interface RaceItem {
 
 /**
  * Dashboard (RaceTrace 2.0, mockups F7/F8): the newest race weekends with
- * their recaps, then the season for the series this user follows.
+ * their recaps, then the season for the series this user follows. Open to
+ * everyone: signed out, it shows the races and the season, and a card that
+ * says what an account adds (your car first, favorites, alerts).
  */
 export function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  const userId = user?.id ?? null;
   const [events, setEvents] = useState<LatestEvent[] | null>(null);
   const [season, setSeason] = useState<SeasonResponse | null>(null);
   const [recent, setRecent] = useState<RaceItem[]>([]);
@@ -49,15 +53,19 @@ export function DashboardPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
+    // Wait until we know whether someone is signed in, so the personal parts load for them.
+    if (isLoading) return;
     let alive = true;
     (async () => {
+      // Signed out, only the public parts: the personal ones would answer 401.
+      const mine = <T,>(get: () => Promise<T>): Promise<T> => (userId ? get() : Promise.reject(new Error("signed out")));
       const [latestRes, seasonRes, recentRes, favRes, myCarRes, recapRes] = await Promise.allSettled([
         api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
         api.get<SeasonResponse>("/dashboard/season"),
-        api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
-        api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
-        api.get<MyCarResponse>("/dashboard/my-car"),
-        api.get<{ recaps: SeasonRecap[] }>("/dashboard/season-recap"),
+        mine(() => api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1")),
+        mine(() => api.get<{ races: RaceItem[] }>("/races/favorites?limit=8")),
+        mine(() => api.get<MyCarResponse>("/dashboard/my-car")),
+        mine(() => api.get<{ recaps: SeasonRecap[] }>("/dashboard/season-recap")),
       ]);
       if (!alive) return;
       if (latestRes.status === "fulfilled") setEvents(latestRes.value.events);
@@ -74,9 +82,10 @@ export function DashboardPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isLoading, userId]);
 
-  const isFree = !hasFullAccess(user);
+  // The plan banner is for signed-in free members (it links to their billing page).
+  const isFree = !!user && !hasFullAccess(user);
   // With car tabs, the recaps follow the car shown.
   const shownCarId = myCar?.car?.id ?? null;
   const shownRecaps = (myCar?.cars?.length ?? 0) > 1 && shownCarId ? recaps.filter((r) => !r.carId || r.carId === shownCarId) : recaps;
@@ -226,7 +235,7 @@ export function DashboardPage() {
           {shownRecaps.map((r, i) => (
             <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />
           ))}
-          <FirstStepsChecklist data={myCar} />
+          {user ? <FirstStepsChecklist data={myCar} /> : !isLoading && <SignedOutCard />}
 
           <div className={`flex items-baseline justify-between ${myCar?.car ? "mt-4" : ""}`}>
             <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
@@ -288,7 +297,8 @@ export function DashboardPage() {
             </>
           )}
 
-          {/* Favorites */}
+          {/* Favorites (an account's) */}
+          {user && (
           <section className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--rt-border)] px-5 py-3 text-[var(--rt-text-muted)]">
             <span className="text-[13px] font-semibold uppercase tracking-[0.1em]">
               Favorites
@@ -307,6 +317,7 @@ export function DashboardPage() {
               <span className="text-[13px]">Star a race to keep it here.</span>
             )}
           </section>
+          )}
         </main>
 
         {/* Season */}
@@ -323,5 +334,37 @@ export function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * For a visitor who isn't signed in: what an account adds to this page, and the way in. Quiet,
+ * one card, never a pop-up; the races below are open either way.
+ */
+function SignedOutCard() {
+  const toSignUp = () => rememberPostAuthRedirect("/dashboard");
+  return (
+    <section aria-labelledby="follow-your-car" className="rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] px-5 py-4 text-left">
+      <h2 id="follow-your-car" className="m-0 text-[15px] font-semibold text-[var(--rt-text)]">
+        Follow your car
+      </h2>
+      <p className="m-0 mt-1 max-w-2xl text-sm text-[var(--rt-text-secondary)]">
+        With a free account, your car&apos;s latest race opens here first: where it finished, the pit cycles it gained or
+        lost, and its story. Star races to keep them handy, and get an email when your car&apos;s race is up.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Link
+          to="/signup"
+          onClick={toSignUp}
+          className="inline-flex min-h-[40px] items-center rounded-md bg-[var(--rt-accent)] px-4 text-sm font-semibold text-[var(--rt-on-accent)]"
+        >
+          Sign up free
+        </Link>
+        <Link to="/login" onClick={toSignUp} className="inline-flex min-h-[40px] items-center text-sm font-semibold text-[var(--rt-accent)]">
+          Log in
+        </Link>
+        <span className="text-[13px] text-[var(--rt-text-muted)]">No paywall, no ads.</span>
+      </div>
+    </section>
   );
 }

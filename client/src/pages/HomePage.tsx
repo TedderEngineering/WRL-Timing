@@ -88,6 +88,13 @@ export function HomePage() {
                     {isAuthenticated ? "Go to Dashboard" : "Get Started Free"}
                   </Button>
                 </Link>
+                {!isAuthenticated && (
+                  <Link to="/dashboard">
+                    <Button variant="secondary" size="lg" className="text-base px-8 border-gray-700 text-gray-300 hover:bg-gray-800">
+                      See the latest races
+                    </Button>
+                  </Link>
+                )}
                 {!free && (
                   <Link to="/pricing">
                     <Button variant="secondary" size="lg" className="text-base px-8 border-gray-700 text-gray-300 hover:bg-gray-800">

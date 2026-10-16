@@ -1,13 +1,13 @@
 /**
  * Dashboard API (RaceTrace 2.0, G6 dashboard).
  *
- *   GET /api/dashboard/latest?limit=6   newest race weekends with recaps
- *   GET /api/dashboard/season?season=   each calendar series, round by round
+ *   GET /api/dashboard/latest?limit=6   newest race weekends with recaps (signed in or not)
+ *   GET /api/dashboard/season?season=   each calendar series, round by round (signed in or not)
  *   GET /api/dashboard/my-car           the latest race of a car the user follows (plan C)
  *   GET /api/dashboard/season-recap     "Your 2026", per followed car and series once its season is over (plan H)
  */
 import { Router, Request, Response, NextFunction } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { optionalAuth, requireAuth } from "../middleware/auth.js";
 import { prisma } from "../models/prisma.js";
 import { canUserAccessRace } from "../services/races.js";
 import { resolveViewer } from "../services/race-access.js";
@@ -77,7 +77,7 @@ type Row = LatestRaceRow & {
   resultsStatus: string | null;
 };
 
-dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+dashboardRouter.get("/latest", optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 6, 1), 12);
     const viewer = await resolveViewer(req.user);
@@ -105,14 +105,17 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
       },
     })) as Row[];
 
+    // Races this user has opened (a signed-out visitor has opened none: every fresh race is new).
     const viewed = new Set(
-      (
-        await prisma.userRaceView.findMany({
-          where: { userId: req.user!.userId, raceId: { in: rows.map((r) => r.id) } },
-          select: { raceId: true },
-          distinct: ["raceId"],
-        })
-      ).map((v: { raceId: string }) => v.raceId)
+      req.user
+        ? (
+            await prisma.userRaceView.findMany({
+              where: { userId: req.user.userId, raceId: { in: rows.map((r) => r.id) } },
+              select: { raceId: true },
+              distinct: ["raceId"],
+            })
+          ).map((v: { raceId: string }) => v.raceId)
+        : []
     );
 
     const groups = groupIntoWeekends(rows).slice(0, limit);
@@ -180,7 +183,7 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
   }
 });
 
-dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+dashboardRouter.get("/season", optionalAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const seasons = availableSeasons();
     const asked = Number(req.query.season);
@@ -198,13 +201,15 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
     const today = new Date();
     const series = buildSeason(cal, races, today);
 
-    // The user's own series first: those of the races they viewed most recently.
-    const recent = await prisma.userRaceView.findMany({
-      where: { userId: req.user!.userId },
-      orderBy: { viewedAt: "desc" },
-      take: 50,
-      select: { race: { select: { id: true, name: true, date: true, track: true, series: true, subSeries: true } } },
-    });
+    // The user's own series first: those of the races they viewed most recently (none when signed out).
+    const recent = req.user
+      ? await prisma.userRaceView.findMany({
+          where: { userId: req.user.userId },
+          orderBy: { viewedAt: "desc" },
+          take: 50,
+          select: { race: { select: { id: true, name: true, date: true, track: true, series: true, subSeries: true } } },
+        })
+      : [];
     const rank = new Map<string, number>();
     recent.forEach((v: { race: SeasonRace }, i: number) => {
       const hit = locateRace(cal, v.race);

@@ -117,8 +117,12 @@ beforeEach(() => {
 });
 
 describe("GET /api/dashboard/latest", () => {
-  it("needs a signed-in user", async () => {
-    expect((await request(app).get("/api/dashboard/latest")).status).toBe(401);
+  it("is open to signed-out visitors, with every fresh race marked new", async () => {
+    const res = await request(app).get("/api/dashboard/latest");
+    expect(res.status).toBe(200);
+    expect(res.body.events.map((e: any) => e.races.map((r: any) => r.id))).toEqual([["gt4r1", "gt4r2"], ["vir"], ["wrlsat", "wrlsun"]]);
+    expect(res.body.events[0].isNew).toBe(true);
+    expect(res.body.events.flatMap((e: any) => e.races).every((r: any) => !r.locked)).toBe(true);
   });
 
   it("groups races into weekends, labels the round and attaches the package recap", async () => {
@@ -166,6 +170,13 @@ describe("GET /api/dashboard/latest", () => {
 });
 
 describe("GET /api/dashboard/season", () => {
+  it("is open to signed-out visitors", async () => {
+    const res = await request(app).get("/api/dashboard/season");
+    expect(res.status).toBe(200);
+    expect(res.body.season).toBe(2026);
+    expect(res.body.series.length).toBeGreaterThan(0);
+  });
+
   it("returns each series round by round and the next round", async () => {
     const res = await request(app).get("/api/dashboard/season").set("Authorization", bearer(users.pro));
     expect(res.status).toBe(200);
