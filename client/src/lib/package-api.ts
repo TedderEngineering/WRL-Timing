@@ -15,6 +15,8 @@ import type {
   PackageMeta,
   PackagePublishResponse,
   PackageRejectedBody,
+  PackageReviewItem,
+  PackageReviewResponse,
   PackageStatus,
   PackageSummary,
   PackageUploadResponse,
@@ -23,6 +25,8 @@ import type {
 } from "@shared/race-analysis-package/api";
 
 export type {
+  PackageReviewItem,
+  PackageReviewResponse,
   FetchedPackage,
   PackageListResponse,
   PackageMeta,
@@ -80,6 +84,11 @@ export function isPackageUnavailable(err: unknown): boolean {
 }
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
+
+/** Every package in one state across races (default: drafts waiting for review). */
+export function listPackagesForReview(status: PackageStatus = "draft"): Promise<PackageReviewResponse> {
+  return api.get<PackageReviewResponse>(`/admin/packages?status=${status}`);
+}
 
 export function listRacePackages(raceId: string): Promise<PackageListResponse> {
   return api.get<PackageListResponse>(`/admin/races/${enc(raceId)}/packages`);

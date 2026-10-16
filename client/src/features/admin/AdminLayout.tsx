@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },
   { to: "/admin/races", label: "Races", icon: "🏁", end: false },
+  { to: "/admin/analysis", label: "Analysis drafts", icon: "🔎", end: false },
   { to: "/admin/races/new", label: "Upload Race", icon: "⬆️", end: true },
   { to: "/admin/qualifying/new", label: "Upload Qualifying", icon: "⏱️", end: true },
   { to: "/admin/users", label: "Users", icon: "👥", end: false },

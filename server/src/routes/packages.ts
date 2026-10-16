@@ -9,6 +9,9 @@
  *   POST   /:version/rollback     make a superseded version current again
  *   POST   /:version/reject       { reason? } reject a draft or superseded version
  *
+ * Admin, across races (mounted at /api/admin/packages):
+ *   GET    /?status=draft         every package in that state, newest race first (review list)
+ *
  * Read (mounted in routes/races.ts):
  *   GET /api/races/:id/package[?version=N]   gzip + ETag; ?version is admin-only
  */
@@ -177,6 +180,24 @@ adminPackagesRouter.post("/:version/reject", async (req: Request, res: Response,
     const row = await svc.rejectPackage(raceId, version, reason);
     await audit(req, "REJECT_RACE_PACKAGE", { version, reason });
     res.json({ package: svc.toSummary(row, null) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Admin, across races ─────────────────────────────────────────────────────
+
+export const adminPackageReviewRouter = Router();
+adminPackageReviewRouter.use(requireAuth, requireAdmin);
+
+const REVIEW_STATUSES = { draft: "DRAFT", published: "PUBLISHED", superseded: "SUPERSEDED", rejected: "REJECTED" } as const;
+
+adminPackageReviewRouter.get("/", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const key = String(req.query.status ?? "draft").toLowerCase();
+    const status = REVIEW_STATUSES[key as keyof typeof REVIEW_STATUSES];
+    if (!status) throw new AppError(400, `status must be one of ${Object.keys(REVIEW_STATUSES).join(", ")}`, "INVALID_STATUS");
+    res.json({ status: key, packages: await svc.listPackagesByStatus(status) });
   } catch (err) {
     next(err);
   }
