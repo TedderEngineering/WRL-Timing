@@ -68,3 +68,25 @@ export function fcyRace(): SynthRace {
   }
   return { cars, fcy: [[800, 1120]] };
 }
+
+/**
+ * A red flag (race seconds 960–1800) inside a caution (900–2000). #40–#42 are called into the pit lane
+ * on lap 10 and held there until the restart; #41 also makes ordinary stops on laps 5 and 15. #43
+ * retired in the pits on lap 5, so its Drive Time PIT row runs through the red flag and is split by it.
+ * #44 serves a drive-through on lap 4 (it sets the pit-lane transit) and stops on lap 16.
+ */
+export function redFlagRace(): SynthRace {
+  return {
+    cars: [
+      car("40", "GS", 0, { stops: [{ lap: 10, pitLane: 830 }] }),
+      car("41", "GS", 1, { stops: [{ lap: 5, pitLane: 65 }, { lap: 10, pitLane: 830 }, { lap: 15, pitLane: 66 }] }),
+      car("42", "GS", 2, { stops: [{ lap: 10, pitLane: 830 }] }),
+      car("43", "GS", 3, { stops: [{ lap: 5, pitLane: 0, retire: true }], laps: 5 }),
+      car("44", "GS", 4, { stops: [{ lap: 4, pitLane: 34 }, { lap: 16, pitLane: 64 }] }),
+    ],
+    rc: [[350, "Car 44: Penalty - Speeding in pit lane - Drive Through"]],
+    fcy: [[900, 2000]],
+    red: [960, 1800],
+    driveTime: true,
+  };
+}

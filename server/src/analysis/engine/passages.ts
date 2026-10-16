@@ -207,33 +207,85 @@ function wrlPassages(ctx: Ctx, car: CarId): Passage[] {
   return out;
 }
 
-type TimedPitRecord = CanonPitRecord & { inClockS: number };
+type TimedPitRecord = CanonPitRecord & { inClockS: number; extraRefs?: string[]; notes?: string[] };
+
+/** A red-flag hold: from the red flag record to the next flag that restarts the session (FCY, SC or green). */
+export interface RedHold {
+  start: number;
+  end: number;
+}
+
+/** Red flags in the flags file, each ending at the next FCY, SC, green or chequered record (else the race end). */
+export function redHolds(flagRecords: Ctx["race"]["flagRecords"], raceEndT: number): RedHold[] {
+  const recs = [...flagRecords].sort((a, b) => a.tS - b.tS);
+  const out: RedHold[] = [];
+  for (let i = 0; i < recs.length; i++) {
+    const t = recs[i].recType.toUpperCase();
+    if (t !== "RF" && t !== "RED") continue;
+    if (out.length && recs[i].tS <= out[out.length - 1].end) continue;
+    const next = recs.slice(i + 1).find((r) => ["FCY", "SC", "GF", "FF"].includes(r.recType.toUpperCase()));
+    out.push({ start: recs[i].tS, end: next ? next.tS : raceEndT });
+  }
+  return out;
+}
+
+/** Seconds of [a, b] inside any hold. */
+function secondsInHolds(holds: RedHold[], a: number, b: number): number {
+  return holds.reduce((s, h) => s + Math.max(0, Math.min(b, h.end) - Math.max(a, h.start)), 0);
+}
 
 function alkamelPassages(ctx: Ctx): Passage[] {
   const recs: TimedPitRecord[] = ctx.race.pitRecords.filter((r): r is TimedPitRecord => r.inClockS !== null).map((r) => ({ ...r }));
   const issues = ctx.issues;
-  // Drive Time PIT rows: merge into a card within 1.5 s, else a passage of their own.
-  for (const d of ctx.race.driveStints) {
-    if (d.type !== "PIT" || d.startClockS === null) continue;
+  const holds = redHolds(ctx.race.flagRecords, ctx.raceEndT);
+  // Drive Time PIT rows: merge into a card within 1.5 s, else a passage of their own. The Drive Time
+  // clock stops during a red flag, so a visit that spans one is split into rows that end when the
+  // red flag starts and resume when it ends: those rows join the visit they belong to.
+  const pitRows = ctx.race.driveStints.filter((d) => d.type === "PIT" && d.startClockS !== null).sort((a, b) => a.startClockS! - b.startClockS!);
+  for (const d of pitRows) {
     const m = recs.find((r) => r.car === d.car && Math.abs(r.inClockS - d.startClockS!) <= 1.5);
     const ref = `${d.fileId}:L${d.row}`;
+    const dEnd = d.timeS !== null ? d.startClockS! + d.timeS : d.endClockS;
     if (m) {
       m.pitType = (d.pitType as "NORMAL" | "PENALTY") || null;
       m.driveTimeRef = ref;
-    } else {
-      recs.push({
-        car: d.car,
-        source: "drive_time",
-        fileId: d.fileId,
-        ref,
-        nr: null,
-        inClockS: d.startClockS,
-        outClockS: d.timeS !== null ? d.startClockS + d.timeS : d.endClockS,
-        pitTimeS: d.timeS,
-        pitType: (d.pitType as "NORMAL" | "PENALTY") || null,
-        driveTimeRef: ref,
-      });
+      continue;
     }
+    // Inside a time card's visit (it starts later than the card's pit-in): the same visit.
+    const host = recs.find(
+      (r) => r.car === d.car && r.source !== "drive_time" && r.outClockS !== null && r.inClockS < d.startClockS! && d.startClockS! <= r.outClockS + 1.5 && (dEnd === null || dEnd <= r.outClockS + 1.5),
+    );
+    if (host) {
+      (host.extraRefs ??= []).push(ref);
+      continue;
+    }
+    // Starts when a red flag ends and continues a visit that was open when it began (a PIT row that
+    // stopped at the red flag, or a card with no pit-out): one visit.
+    const hold = holds.find((h) => Math.abs(d.startClockS! - h.end) <= 2);
+    const before = hold
+      ? recs.find((r) => r.car === d.car && r.inClockS < hold.start && (r.outClockS === null || (r.source === "drive_time" && Math.abs(r.outClockS - hold.start) <= 2)))
+      : undefined;
+    if (before) {
+      if (before.outClockS !== null) {
+        before.outClockS = dEnd;
+        before.pitTimeS = before.pitTimeS !== null && d.timeS !== null ? before.pitTimeS + d.timeS : null;
+      }
+      (before.extraRefs ??= []).push(ref);
+      (before.notes ??= []).push("Drive Time splits this visit at the red flag; its rows before and after the red flag are joined.");
+      continue;
+    }
+    recs.push({
+      car: d.car,
+      source: "drive_time",
+      fileId: d.fileId,
+      ref,
+      nr: null,
+      inClockS: d.startClockS!,
+      outClockS: dEnd,
+      pitTimeS: d.timeS,
+      pitType: (d.pitType as "NORMAL" | "PENALTY") || null,
+      driveTimeRef: ref,
+    });
   }
   const out: Passage[] = [];
   const explained = new Map<string, Set<number>>();
@@ -265,6 +317,11 @@ function alkamelPassages(ctx: Ctx): Passage[] {
       p.files.push(r.driveTimeRef.split(":")[0]);
       p.refs.push(r.driveTimeRef);
     }
+    for (const x of r.extraRefs ?? []) {
+      if (!p.files.includes(x.split(":")[0])) p.files.push(x.split(":")[0]);
+      p.refs.push(x);
+    }
+    p.notes.push(...(r.notes ?? []));
     if (rows.length === 0) {
       p.notes.push("The car has no laps in the laps file (DNS or did not complete lap 1).");
       p.confNotes.push("in_lap_not_completed");
@@ -771,6 +828,7 @@ export function isPitLaneStart(p: Passage, laps: Ctx["laps"]): boolean {
 
 export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraft[], transit: Transit, garageS: number, serveWindowS: number): void {
   const T = transit.valueS;
+  const holds = redHolds(ctx.race.flagRecords, ctx.raceEndT);
   const sorted = [...passages].sort((a, b) => a.sortT - b.sortT || carOrder(a.car, b.car));
   for (const p of sorted) {
     // RedMist: a duration the report itself flags as partial (entry reissued) is not used for kinds.
@@ -786,6 +844,13 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
     }
     if (p.outcome === "retired") {
       set("retirement", ["no_later_lap"]);
+      continue;
+    }
+    // Cars called into the pit lane by a red flag wait there until the restart: most of the visit
+    // falls inside the red flag. It is not a pit stop (no stop number, no time lost, no pit cycle).
+    if (holds.length && p.pinT !== null && p.poutT !== null && !p.bOnly && p.poutT > p.pinT && secondsInHolds(holds, p.pinT, p.poutT) >= 0.5 * (p.poutT - p.pinT)) {
+      set("red_flag_hold", ["red_flag_period"]);
+      p.notes.push("Held in the pit lane during the red flag; not a pit stop.");
       continue;
     }
     if (p.outcome === "finished_in_pit_lane") {

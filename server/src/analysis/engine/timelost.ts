@@ -220,7 +220,7 @@ export function computeTimeLost(ctx: Ctx, passages: Passage[]): TimeLostResult {
   for (const p of passages) byCar.set(p.car, [...(byCar.get(p.car) ?? []), p]);
   const grouped = new Set<Passage>();
   for (const car of [...byCar.keys()].sort(carOrder)) {
-    const ps = byCar.get(car)!.filter((p) => p.inIdx !== null).sort((a, b) => a.sortT - b.sortT);
+    const ps = byCar.get(car)!.filter((p) => p.inIdx !== null && p.kind !== "red_flag_hold").sort((a, b) => a.sortT - b.sortT);
     let i = 0;
     while (i < ps.length - 1) {
       const g = [ps[i]];
@@ -283,7 +283,7 @@ export function computeTimeLost(ctx: Ctx, passages: Passage[]): TimeLostResult {
   // per passage
   for (const p of passages) {
     if (grouped.has(p)) continue;
-    if (p.kind === "retirement" || p.kind === "pit_lane_start" || p.outcome !== "rejoined" || p.inIdx === null || p.outIdx === null) {
+    if (p.kind === "retirement" || p.kind === "pit_lane_start" || p.kind === "red_flag_hold" || p.outcome !== "rejoined" || p.inIdx === null || p.outIdx === null) {
       p.timeLost = { valueS: null, method: "none" };
       continue;
     }

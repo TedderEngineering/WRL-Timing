@@ -224,9 +224,9 @@ export function matchCars(chart: Chart, facts: PitFacts): Map<string, string> {
   return out;
 }
 
-const COLORS = { stop: "#fbbf24", garage: "#f97316", penalty: "#f87171", gain: "#4ade80", loss: "#f87171", held: "#888" };
+const COLORS = { stop: "#fbbf24", garage: "#f97316", penalty: "#f87171", red: "#ef4444", gain: "#4ade80", loss: "#f87171", held: "#888" };
 
-const MARKED = new Set(["stop", "drive_through", "stop_and_go", "penalty_served", "garage", "retirement"]);
+const MARKED = new Set(["stop", "drive_through", "stop_and_go", "penalty_served", "garage", "retirement", "red_flag_hold"]);
 
 function markerLabel(kind: string, stopNumber: number | null): string {
   switch (kind) {
@@ -238,6 +238,8 @@ function markerLabel(kind: string, stopNumber: number | null): string {
       return "Penalty served";
     case "retirement":
       return "Retired in the pits";
+    case "red_flag_hold":
+      return "Red flag: held in the pit lane";
     case "garage":
       return `Pit ${stopNumber ?? ""} (garage)`.replace("  ", " ");
     default:
@@ -307,7 +309,7 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
       const marker: Marker = {
         l: p.inLap,
         lb: markerLabel(p.kind, p.stopNumber) + (p.kind === "stop" || p.kind === "garage" ? driverSuffix : ""),
-        c: p.kind === "garage" ? COLORS.garage : ["drive_through", "stop_and_go", "penalty_served"].includes(p.kind) ? COLORS.penalty : COLORS.stop,
+        c: p.kind === "red_flag_hold" ? COLORS.red : p.kind === "garage" ? COLORS.garage : ["drive_through", "stop_and_go", "penalty_served"].includes(p.kind) ? COLORS.penalty : COLORS.stop,
         yo: 0,
         da: 0,
         kind: p.kind,

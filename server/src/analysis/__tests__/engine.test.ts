@@ -7,7 +7,7 @@ import { buildFacts } from "../buildFacts.js";
 import { validatePackage } from "../validate-package.js";
 import { AdapterBlocker } from "../adapters/index.js";
 import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
-import { fcyRace, greenRace, OPTS } from "./scenarios.js";
+import { fcyRace, greenRace, OPTS, redFlagRace } from "./scenarios.js";
 import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
 
 const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
@@ -281,5 +281,46 @@ describe("Speedhive export", () => {
     const p = pkg.events.pitPassages.find((x) => x.car === "6")!;
     expect([p.inLap, p.outLap, p.kind]).toEqual([7, 8, "stop"]);
     expect(pkg.entries.every((e) => e.result?.status === "classified")).toBe(true);
+  });
+});
+
+describe("red flag: cars held in the pit lane", () => {
+  const red = buildFacts({ format: "alkamel-imsa", files: synthImsa(redFlagRace()), options: OPTS });
+
+  it("is schema-valid", () => {
+    expect(validatePackage(red).errors).toEqual([]);
+  });
+
+  it("a visit inside the red flag is a red_flag_hold: no stop number, no time lost, no pit cycle", () => {
+    for (const car of ["40", "41", "42"]) {
+      const hold = red.events.pitPassages.find((p) => p.car === car && p.inLap === 10)!;
+      expect(hold.kind).toBe("red_flag_hold");
+      expect(hold.kindBasis).toEqual(["red_flag_period"]);
+      expect(hold.stopNumber).toBeNull();
+      expect(hold.timeLost).toMatchObject({ valueS: null, method: "none" });
+      expect(hold.cycleId).toBeNull();
+    }
+    expect(red.pitCycles.flatMap((c) => c.members.map((m) => m.passageId))).not.toContain("pit:40:1");
+  });
+
+  it("stops either side of the hold keep their numbers", () => {
+    const ps = red.events.pitPassages.filter((p) => p.car === "41");
+    expect(ps.map((p) => [p.inLap, p.kind, p.stopNumber])).toEqual([
+      [5, "stop", 1],
+      [10, "red_flag_hold", null],
+      [15, "stop", 2],
+    ]);
+  });
+
+  it("the Drive Time row after the restart joins the held visit instead of becoming a drive-through", () => {
+    expect(red.events.pitPassages.filter((p) => p.kind === "drive_through").map((p) => p.id)).toEqual(["pit:44:1"]);
+    expect(red.events.pitPassages.filter((p) => p.car === "40")).toHaveLength(1);
+    expect((pass(red, "pit:40:1").source.refs ?? []).some((r) => r.startsWith("f") && r.includes(":L"))).toBe(true);
+  });
+
+  it("a retirement's Drive Time rows split by the red flag are one visit", () => {
+    const ps = red.events.pitPassages.filter((p) => p.car === "43");
+    expect(ps.map((p) => p.kind)).toEqual(["retirement"]);
+    expect(red.events.retirements.find((r) => r.car === "43")!.passageId).toBe(ps[0].id);
   });
 });
