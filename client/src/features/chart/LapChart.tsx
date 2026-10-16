@@ -42,6 +42,8 @@ interface LapChartProps {
   setActiveLap: React.Dispatch<React.SetStateAction<number | null>>;
   /** Class, makes and compare, shared with Lap Times (held by the race page). */
   view: TraceView;
+  /** The bottom axis to start with (the user's chart defaults). */
+  defaultAxis?: "laps" | "hours" | "both";
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ interface LapChartProps {
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view,
+  classView, activeLap, setActiveLap, view, defaultAxis,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -63,7 +65,11 @@ export function LapChart({
   // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
-  const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">("laps");
+  const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">(defaultAxis ?? "laps");
+  // The user's default, also when it arrives after the chart opened (first visit on this device).
+  useEffect(() => {
+    if (defaultAxis) setXAxisMode(defaultAxis);
+  }, [defaultAxis]);
   const [sidePanel, setSidePanel] = useState<string | null>(null);
   const h2hDefaultCarRef = useRef<number | undefined>(undefined);
 
