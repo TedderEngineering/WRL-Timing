@@ -78,7 +78,7 @@ export function finaliseReport(report: ValidatorReport): ValidatorReport {
  * Validate a parsed package.
  *
  * `asPublished`: check the package as if its `status` were "published", so the
- * schema's publish gate applies (every completeness section complete, a
+ * schema's publish gate applies (every completeness section complete except ruleChecks, a
  * non-null raceSummary, no blocker data-quality note). Used by the publish
  * endpoint; the stored bytes are never rewritten.
  */

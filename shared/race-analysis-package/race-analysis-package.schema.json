@@ -312,8 +312,39 @@
       "then": {
         "properties": {
           "completeness": {
-            "patternProperties": {
-              "^": {
+            "description": "Published packages need every section complete except ruleChecks: a series with no rulebook (absent) or an unverified one (partial) still publishes its facts and stories; rule checks stay admin-only until the rulebook is verified.",
+            "properties": {
+              "entries": {
+                "const": "complete"
+              },
+              "laps": {
+                "const": "complete"
+              },
+              "fcyPeriods": {
+                "const": "complete"
+              },
+              "events": {
+                "const": "complete"
+              },
+              "stints": {
+                "const": "complete"
+              },
+              "pitCycles": {
+                "const": "complete"
+              },
+              "cycleResults": {
+                "const": "complete"
+              },
+              "positionChanges": {
+                "const": "complete"
+              },
+              "ruleFindings": {
+                "const": "complete"
+              },
+              "carStories": {
+                "const": "complete"
+              },
+              "raceSummary": {
                 "const": "complete"
               }
             }

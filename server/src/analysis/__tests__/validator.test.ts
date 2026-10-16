@@ -34,9 +34,9 @@ describe("validator: core negatives (T11)", () => {
     ["wrong seconds value (rounded)", (p) => (story(p, "7").paragraphs[1].refs[0].value = 62.0001), /A4/],
     ["bare number typed into prose", (p) => (story(p, "7").paragraphs[0].text += " It lost 12 s."), /A7/],
     ["numeric car id", (p) => (p.events.pitPassages[0].car = 7), /V1/],
-    ["published while a blocker or section is open", (p) => {
+    ["published while a story section is open", (p) => {
       p.status = "published";
-      p.completeness.ruleChecks = "partial";
+      p.completeness.carStories = "partial";
     }, /V1/],
     ["unknown passage kind", (p) => (p.events.pitPassages[0].kind = "pit"), /V1/],
     ["dangling cycle id", (p) => (p.events.pitPassages.find((x: any) => x.cycleId).cycleId = "cycle:GS:9"), /V3/],
@@ -56,6 +56,15 @@ describe("validator: core negatives (T11)", () => {
       expect(r.errors.join("\n")).toMatch(rule);
     });
   }
+  it("publishes with rule checks partial or absent (no rulebook, or one not yet verified)", () => {
+    for (const state of ["partial", "absent"] as const) {
+      const p = clone(GOOD);
+      p.status = "published";
+      p.completeness.ruleChecks = state;
+      // (A1 would flag the change against the facts base, which has them complete: only the schema gate matters here.)
+      expect(run(p).errors.filter((e: string) => /^V1/.test(e))).toEqual([]);
+    }
+  });
   it("lapdown: ids resolve", () => {
     const p = clone(GOOD);
     const ld = p.positionChanges.lapDowns!;
