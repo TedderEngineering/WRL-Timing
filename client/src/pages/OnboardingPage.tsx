@@ -7,6 +7,8 @@ import { cn } from "../lib/utils";
 import { takePostAuthRedirect } from "../lib/postAuthRedirect";
 import { track } from "../lib/analytics";
 import { addCar, hasPendingFollow, RACE_SERIES, SERIES_LABEL, type SeriesFamily } from "../features/my-cars/api";
+import { followDriver, followedAs, hasPendingDriver, unfollowDriver, useMyDrivers } from "../features/my-drivers/api";
+import { useDriverSearch } from "../features/races/DriverResults";
 
 type Theme = "light" | "dark" | "system";
 
@@ -17,7 +19,7 @@ interface OnboardingStep {
 
 const ALL_STEPS: OnboardingStep[] = [
   { id: "welcome", title: "Welcome" },
-  { id: "car", title: "Your car" },
+  { id: "car", title: "Who you follow" },
   { id: "preferences", title: "Preferences" },
   { id: "tour", title: "Quick Tour" },
 ];
@@ -65,9 +67,127 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
 }
 
 /**
- * "Which car do you follow?" (engagement plan B/C): one number and a series, or Skip. Not
- * asked when the visitor signed up from a race's Follow button (that follow is done on return).
+ * "Who do you follow?": a car (number and series) or a driver (found by name), or Skip. Either
+ * one's latest race opens first on the Dashboard. Not asked when the visitor signed up from a
+ * race page's Follow button (that follow is done on return).
  */
+function FollowStep({ onNext }: { onNext: () => void }) {
+  const [kind, setKind] = useState<"car" | "driver">("car");
+  return (
+    <div className="text-center">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-2">Who do you follow?</h2>
+      <p className="text-gray-600 dark:text-gray-400 mb-5 max-w-sm mx-auto">
+        Their latest race opens first on your dashboard: the finish, the pit cycles and the story.
+      </p>
+      <div role="tablist" aria-label="Follow a car or a driver" className="mx-auto mb-5 grid max-w-xs grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+        {(
+          [
+            ["car", "A car"],
+            ["driver", "A driver"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={kind === k}
+            onClick={() => setKind(k)}
+            className={cn(
+              "min-h-[40px] rounded-md text-sm font-semibold",
+              kind === k ? "bg-white text-gray-900 shadow-sm dark:bg-gray-950 dark:text-gray-50" : "text-gray-600 dark:text-gray-400"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {kind === "car" ? <CarStep onNext={onNext} /> : <DriverStep onNext={onNext} />}
+    </div>
+  );
+}
+
+/** Find a driver by name and follow one or more; Continue once one is followed. */
+function DriverStep({ onNext }: { onNext: () => void }) {
+  const { user } = useAuth();
+  const mine = useMyDrivers(user?.id);
+  const [query, setQuery] = useState("");
+  const { drivers: found, loading } = useDriverSearch(query);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const field = "w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-base text-gray-900 dark:text-gray-100";
+
+  const toggle = async (name: string) => {
+    setBusy(name);
+    setError(null);
+    try {
+      const f = followedAs(mine, name);
+      if (f) await unfollowDriver(f.id);
+      else if ((await followDriver(name)).created) track("follow_driver", { source: "onboarding" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That did not save. You can follow drivers later in Settings → My drivers.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="text-left">
+      <label className="block max-w-sm mx-auto">
+        <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Driver&apos;s name</span>
+        <input className={field} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="At least 3 letters" autoComplete="off" autoFocus />
+      </label>
+      <div className="max-w-sm mx-auto mt-2 min-h-[48px]">
+        {loading && <p className="text-sm text-gray-500 dark:text-gray-400">Searching…</p>}
+        {!loading && query.trim().length >= 3 && found.length === 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">No driver called &ldquo;{query.trim()}&rdquo; in a race on RaceTrace yet.</p>
+        )}
+        {found.length > 0 && (
+          <ul className="m-0 list-none divide-y divide-gray-200 rounded-lg border border-gray-200 p-0 dark:divide-gray-800 dark:border-gray-800">
+            {found.slice(0, 5).map((d) => {
+              const f = followedAs(mine, d.name);
+              const r = d.races[0];
+              return (
+                <li key={d.name} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{d.name}</div>
+                    <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {d.races.length} race{d.races.length === 1 ? "" : "s"}
+                      {r ? ` · latest #${r.carNumber} ${r.carClass}, ${r.raceName}` : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    aria-pressed={!!f}
+                    disabled={busy === d.name || mine === null}
+                    onClick={() => toggle(d.name)}
+                    className={cn(
+                      "min-h-[36px] shrink-0 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50",
+                      f ? "border-brand-500/60 bg-brand-500/10 text-brand-700 dark:text-brand-300" : "border-gray-300 text-gray-800 dark:border-gray-700 dark:text-gray-200"
+                    )}
+                  >
+                    {f ? "✓ Following" : "+ Follow"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-3 mb-6">Follow more drivers, or cars, any time in Settings.</p>
+      {error && <p role="alert" className="text-sm text-center text-red-600 dark:text-red-400 mb-4">{error}</p>}
+      <div className="flex items-center justify-center gap-3">
+        <Button type="button" variant="ghost" onClick={onNext}>
+          Skip
+        </Button>
+        <Button type="button" size="lg" className="px-10" disabled={!mine?.length} onClick={onNext}>
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The car side of "Who do you follow?": one number and a series. */
 function CarStep({ onNext }: { onNext: () => void }) {
   const [number, setNumber] = useState("");
   const [series, setSeries] = useState<SeriesFamily>("wrl");
@@ -94,10 +214,6 @@ function CarStep({ onNext }: { onNext: () => void }) {
 
   return (
     <form className="text-center" onSubmit={save}>
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-50 mb-2">Which car do you follow?</h2>
-      <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-sm mx-auto">
-        Your car's latest race opens first on your dashboard: its finish, its pit cycles and its story.
-      </p>
       <div className="grid grid-cols-[1fr_1.2fr] gap-3 max-w-xs mx-auto mb-2 text-left">
         <label className="block">
           <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Car number</span>
@@ -262,8 +378,9 @@ function TourStep({ onFinish }: { onFinish: () => void }) {
 export function OnboardingPage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
-  // Signed up from a race's Follow button: that follow is done on return, so the car step is not asked.
-  const [steps] = useState(() => (hasPendingFollow() ? ALL_STEPS.filter((s) => s.id !== "car") : ALL_STEPS));
+  // Signed up from a race page's Follow button (car or driver): that follow is done on return, so
+  // "Who do you follow?" is not asked.
+  const [steps] = useState(() => (hasPendingFollow() || hasPendingDriver() ? ALL_STEPS.filter((s) => s.id !== "car") : ALL_STEPS));
   const [step, setStep] = useState(0);
   const [theme, setTheme] = useState<Theme>("dark");
   const at = steps[step]?.id;
@@ -303,7 +420,7 @@ export function OnboardingPage() {
 
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 shadow-sm">
           {at === "welcome" && <WelcomeStep name={user?.displayName || ""} onNext={next} />}
-          {at === "car" && <CarStep onNext={next} />}
+          {at === "car" && <FollowStep onNext={next} />}
           {at === "preferences" && <PreferencesStep theme={theme} setTheme={applyTheme} onNext={next} onSkip={next} />}
           {at === "tour" && <TourStep onFinish={finish} />}
         </div>

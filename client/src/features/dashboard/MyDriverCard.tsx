@@ -75,7 +75,17 @@ function result(r: NonNullable<MyDriverResponse["recent"]>[number]): string {
 }
 
 /** The followed drivers as tabs, like the car tabs. */
-export function DriverTabs({ drivers, active, onChoose }: { drivers: MyDriverResponse["drivers"]; active: string | null; onChoose: (id: string) => void }) {
+export function DriverTabs({
+  drivers,
+  active,
+  onChoose,
+  className = "border-b border-[var(--rt-border)]",
+}: {
+  drivers: MyDriverResponse["drivers"];
+  active: string | null;
+  onChoose: (id: string) => void;
+  className?: string;
+}) {
   if (drivers.length < 2) return null;
   const idx = Math.max(0, drivers.findIndex((d) => d.id === active));
   return (
@@ -83,7 +93,7 @@ export function DriverTabs({ drivers, active, onChoose }: { drivers: MyDriverRes
       role="tablist"
       aria-label="Your drivers"
       activeKey={idx}
-      className="border-b border-[var(--rt-border)]"
+      className={className}
       innerClassName="gap-1"
       onKeyDown={(e) => {
         if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -137,7 +147,7 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
 
   return (
     <article className="overflow-hidden rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left">
-      <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3.5">
+      <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3">
         <SeriesBadge series={race.series} size="sm" />
         <span className="text-sm font-semibold text-[var(--rt-text)]">{driver.name}</span>
         <span className="text-sm text-[var(--rt-text-secondary)]">
@@ -155,7 +165,7 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
         {car.coDrivers.length > 0 && <span className="text-[var(--rt-text-muted)]">with {list(car.coDrivers)}</span>}
       </div>
 
-      <div className="flex flex-col gap-3 px-5 pb-4 pt-3">
+      <div className="flex flex-col gap-2.5 px-5 pb-3.5 pt-2.5">
         {race.locked ? (
           <p className="m-0 text-sm text-[var(--rt-text-secondary)]">
             🔒 {race.lockReason === "available_soon" ? "This race opens to free members shortly." : "Upgrade to Pro to read this race."}{" "}
