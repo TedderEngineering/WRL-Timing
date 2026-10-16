@@ -221,7 +221,8 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
   const chart = await withPitFacts(race, { data: race.chartData, annotations: race.annotationData ?? {} });
 
   const followers = (await prisma.userCar.findMany({
-    where: { user: { preferences: { raceAlerts: true }, suspendedAt: null } },
+    // Opted in for the account, and not switched off for this car.
+    where: { alerts: true, user: { preferences: { raceAlerts: true }, suspendedAt: null } },
     select: { id: true, userId: true, number: true, series: true, teamName: true, season: true, user: { select: { email: true } } },
   })) as any[];
   type SendRow = { userId: string; carId: string | null; resultsStatus: string | null; facts: unknown; officialCheckedAt: Date | null };

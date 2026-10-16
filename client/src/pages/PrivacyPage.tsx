@@ -96,7 +96,22 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            8. Your Rights
+            8. Race Emails
+          </h2>
+          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+            Race emails are off until you turn them on in Settings › Preferences. When they are
+            on, we email you when a race with one of the cars you follow is published on
+            RaceTrace, and once more only if its official results change that car&apos;s finish
+            or pit cycles. You can switch them off for the account or for one car. To send them
+            we use your email address and your list of cars, and we keep a record of each email
+            we sent (the race, the car, and the finish and pit-cycle facts it stated) so we
+            never send the same one twice; that record is deleted with your account. Emails are
+            delivered by Resend. Every email has a one-click link that turns them off without
+            signing in.
+          </p>
+
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
+            9. Your Rights
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             You have the right to: access your personal data; correct inaccurate data;
@@ -106,7 +121,7 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            9. Changes to This Policy
+            10. Changes to This Policy
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             We may update this Privacy Policy from time to time. We will notify you of
@@ -116,7 +131,7 @@ export function PrivacyPage() {
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">
-            10. Contact
+            11. Contact
           </h2>
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
             For privacy inquiries, please contact us at{" "}

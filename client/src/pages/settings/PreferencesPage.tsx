@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { getAlerts } from "../../features/my-cars/api";
-import { switchAlerts } from "../../features/my-cars/alerts";
+import { AlertsSettings } from "../../features/my-cars/AlertsSettings";
 import type { ChartDefaults } from "@shared/types";
 import { loadChartDefaults, readChartDefaults, saveChartDefaults } from "../../features/chart/chart-defaults";
 
@@ -80,7 +78,7 @@ export function PreferencesPage() {
       <ChartDefaultsSection />
 
       {/* Race-ready emails (engagement plan D) */}
-      <RaceEmails />
+      <AlertsSettings />
     </div>
   );
 }
@@ -181,50 +179,6 @@ function ChartDefaultsSection() {
           );
         })}
       </div>
-    </div>
-  );
-}
-
-/** One switch: an email when a race with one of your cars is up. Off until turned on. */
-function RaceEmails() {
-  const [on, setOn] = useState<boolean | null>(null);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    getAlerts()
-      .then((r) => setOn(r.raceAlerts))
-      .catch(() => setError(true));
-  }, []);
-  const flip = async () => {
-    if (on === null) return;
-    setError(false);
-    try {
-      setOn(await switchAlerts(!on, "settings"));
-    } catch {
-      setError(true);
-    }
-  };
-  return (
-    <div id="race-emails" className="border border-gray-200 dark:border-gray-800 rounded-lg p-5">
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Race emails</h3>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        One email when a race with one of <Link to="/settings/cars" className="underline">your cars</Link> is on RaceTrace: its finish and pit
-        cycles. At most one per race; every email has a one-click way to turn them off.
-      </p>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-700 dark:text-gray-300">Email me when my car&apos;s race is up</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!on}
-          aria-label="Email me when my car's race is up"
-          disabled={on === null}
-          onClick={flip}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${on ? "bg-brand-600" : "bg-gray-300 dark:bg-gray-700"}`}
-        >
-          <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${on ? "translate-x-6" : "translate-x-1"}`} />
-        </button>
-      </div>
-      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">That did not save. Try again.</p>}
     </div>
   );
 }
