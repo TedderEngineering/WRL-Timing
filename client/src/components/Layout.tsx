@@ -22,6 +22,7 @@ function RaceTraceUserMenu() {
         [
           { label: "Dashboard", to: "/dashboard" },
           { label: "My cars", to: "/settings/cars" },
+          { label: "My drivers", to: "/settings/drivers" },
         ],
         [
           { label: "Settings", to: "/settings/account" },

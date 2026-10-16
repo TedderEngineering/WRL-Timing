@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { formatDateRange } from "../../lib/race-dates";
+import { useAuth } from "../auth/AuthContext";
+import { track } from "../../lib/analytics";
+import { followDriver, followedAs, unfollowDriver, useMyDrivers } from "../my-drivers/api";
 
 export interface DriverRace {
   raceId: string;
@@ -76,16 +79,52 @@ export function DriverResults({ drivers }: { drivers: DriverResult[] }) {
   );
 }
 
+/** Follow from the search results (signed in): the driver's latest race then shows on the Dashboard. */
+function FollowDriver({ name }: { name: string }) {
+  const { user } = useAuth();
+  const mine = useMyDrivers(user?.id);
+  const [busy, setBusy] = useState(false);
+  if (!user || mine === null) return null;
+  const f = followedAs(mine, name);
+  return (
+    <button
+      type="button"
+      aria-pressed={!!f}
+      aria-label={f ? `Stop following ${name}` : `Follow ${name}`}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          if (f) await unfollowDriver(f.id);
+          else if ((await followDriver(name)).created) track("follow_driver", { source: "search" });
+        } catch {
+          // the button stays as it was; they can try again
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className={`min-h-[32px] shrink-0 rounded-full border px-2.5 text-xs font-semibold disabled:opacity-50 ${
+        f
+          ? "border-brand-500/60 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+          : "border-gray-300 text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+      }`}
+    >
+      {f ? "✓ Following" : "+ Follow"}
+    </button>
+  );
+}
+
 function DriverCard({ driver: d }: { driver: DriverResult }) {
   const [all, setAll] = useState(false);
   const races = all ? d.races : d.races.slice(0, SHOWN);
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="truncate font-semibold text-gray-900 dark:text-gray-100">{d.name}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="min-w-0 flex-1 truncate font-semibold text-gray-900 dark:text-gray-100">{d.name}</h3>
         <span className="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400">
           {d.races.length} race{d.races.length === 1 ? "" : "s"}
         </span>
+        <FollowDriver name={d.name} />
       </div>
       <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
         {races.map((r) => (

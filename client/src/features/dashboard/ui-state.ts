@@ -12,6 +12,8 @@ export interface UiState {
   alertAskDone?: boolean;
   /** Season recaps hidden with "Hide", by recap key. */
   recapsHidden?: string[];
+  /** Cars or drivers shown first on the Dashboard, when the user follows both. */
+  yoursTab?: "cars" | "drivers";
 }
 
 export function readUi(): UiState {

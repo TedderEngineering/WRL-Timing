@@ -10,6 +10,8 @@ import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { FirstStepsChecklist, MyCarCard, type MyCarResponse } from "../features/dashboard/MyCarCard";
 import { SeasonRecapCard, type SeasonRecap } from "../features/dashboard/SeasonRecapCard";
 import { CarTabs } from "../features/dashboard/CarTabs";
+import { DriverTabs, MyDriverCard, type MyDriverResponse } from "../features/dashboard/MyDriverCard";
+import { readUi, writeUi } from "../features/dashboard/ui-state";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
@@ -46,18 +48,35 @@ export function DashboardPage() {
       // keep what is shown
     }
   }, []);
+  const [myDriver, setMyDriver] = useState<MyDriverResponse | null>(null);
+  const [driverChoice, setDriverChoice] = useState<string | null>(null);
+  const chooseDriver = useCallback(async (id: string) => {
+    setDriverChoice(id);
+    try {
+      setMyDriver(await api.get<MyDriverResponse>(`/dashboard/my-driver?driver=${encodeURIComponent(id)}`));
+    } catch {
+      // keep what is shown
+    }
+  }, []);
+  // Cars or drivers, when the user follows both (remembered in this browser).
+  const [yours, setYours] = useState<"cars" | "drivers">(() => readUi().yoursTab ?? "cars");
+  const chooseYours = (v: "cars" | "drivers") => {
+    setYours(v);
+    writeUi({ yoursTab: v });
+  };
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [latestRes, seasonRes, recentRes, favRes, myCarRes, recapRes] = await Promise.allSettled([
+      const [latestRes, seasonRes, recentRes, favRes, myCarRes, recapRes, myDriverRes] = await Promise.allSettled([
         api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
         api.get<SeasonResponse>("/dashboard/season"),
         api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
         api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
         api.get<MyCarResponse>("/dashboard/my-car"),
         api.get<{ recaps: SeasonRecap[] }>("/dashboard/season-recap"),
+        api.get<MyDriverResponse>("/dashboard/my-driver"),
       ]);
       if (!alive) return;
       if (latestRes.status === "fulfilled") setEvents(latestRes.value.events);
@@ -70,6 +89,7 @@ export function DashboardPage() {
       if (favRes.status === "fulfilled") setFavorites(favRes.value.races);
       if (myCarRes.status === "fulfilled") setMyCar(myCarRes.value);
       if (recapRes.status === "fulfilled") setRecaps(recapRes.value.recaps);
+      if (myDriverRes.status === "fulfilled") setMyDriver(myDriverRes.value);
     })();
     return () => {
       alive = false;
@@ -78,6 +98,10 @@ export function DashboardPage() {
 
   const isFree = !hasFullAccess(user);
   // With car tabs, the recaps follow the car shown.
+  const hasCars = !!myCar?.car;
+  const hasDrivers = !!myDriver?.driver;
+  // Followed cars and drivers share one place: two tabs at the top when there are both.
+  const view: "cars" | "drivers" | null = hasCars && hasDrivers ? yours : hasCars ? "cars" : hasDrivers ? "drivers" : null;
   const shownCarId = myCar?.car?.id ?? null;
   const shownRecaps = (myCar?.cars?.length ?? 0) > 1 && shownCarId ? recaps.filter((r) => !r.carId || r.carId === shownCarId) : recaps;
 
@@ -208,27 +232,59 @@ export function DashboardPage() {
         {/* Latest races */}
         <main className="flex min-w-0 flex-[999_1_640px] flex-col gap-4">
           {/* Your car (the peak moment), then the first steps until they are done. */}
-          {myCar?.car && (
-            <section aria-labelledby="your-car" className="flex flex-col gap-3">
-              <div className="flex items-baseline justify-between">
-                <h2 id="your-car" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
-                  {myCar.carCount > 1 ? "Your cars" : "Your car"}
-                </h2>
-                <Link to="/settings/cars" className="text-[13px] text-[var(--rt-accent)]">
-                  My cars →
+          {view && (
+            <section aria-labelledby="yours" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                {hasCars && hasDrivers ? (
+                  <div id="yours" role="tablist" aria-label="Yours" className="flex gap-1 rounded-lg bg-[var(--rt-surface)] p-[3px]">
+                    {(
+                      [
+                        ["cars", myCar!.carCount > 1 ? "Your cars" : "Your car"],
+                        ["drivers", myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={view === key}
+                        onClick={() => chooseYours(key)}
+                        className={`min-h-[36px] rounded-md px-3 text-[13px] font-semibold uppercase tracking-[0.06em] ${
+                          view === key ? "bg-[var(--rt-border)] text-[var(--rt-text)]" : "text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <h2 id="yours" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
+                    {view === "cars" ? (myCar!.carCount > 1 ? "Your cars" : "Your car") : myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"}
+                  </h2>
+                )}
+                <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="shrink-0 text-[13px] text-[var(--rt-accent)]">
+                  {view === "cars" ? "My cars →" : "My drivers →"}
                 </Link>
               </div>
-              <CarTabs cars={myCar.cars ?? []} active={carChoice ?? myCar.car.id} onChoose={chooseCar} />
-              <MyCarCard data={myCar} ask={shownRecaps.length === 0} />
+              {view === "cars" ? (
+                <>
+                  <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} />
+                  <MyCarCard data={myCar!} ask={shownRecaps.length === 0} />
+                </>
+              ) : (
+                <>
+                  <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} />
+                  <MyDriverCard data={myDriver!} />
+                </>
+              )}
             </section>
           )}
           {/* "Your 2026", series by series as each season ends (plan H), for the car shown. */}
-          {shownRecaps.map((r, i) => (
-            <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />
-          ))}
+          {view !== "drivers" &&
+            shownRecaps.map((r, i) => <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />)}
           <FirstStepsChecklist data={myCar} />
 
-          <div className={`flex items-baseline justify-between ${myCar?.car ? "mt-4" : ""}`}>
+          <div className={`flex items-baseline justify-between ${view ? "mt-4" : ""}`}>
             <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
               Latest races
             </h2>

@@ -10,6 +10,7 @@ import { ShareCarImageButton } from "./raceCard";
 import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
 import { carNo } from "./car-number";
+import { CarDrivers } from "../my-drivers/CarDrivers";
 
 const T = { card: "#12122a", line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", good: "#4ade80", bad: "#e66767", warn: "#fab219" };
 
@@ -120,6 +121,7 @@ export function CarSummary({ data, focusNum, annotations = null }: { data: RaceC
           ))}
         </ul>
       )}
+      <CarDrivers data={data} focusNum={focusNum} annotations={annotations} />
       {(f.changed || (f.pos === null && f.crossed && f.status !== "dnf")) && f.crossed && (
         <div
           className="mt-1 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug"

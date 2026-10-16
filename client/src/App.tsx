@@ -30,6 +30,7 @@ import { SettingsLayout } from "./pages/settings/SettingsLayout";
 import { AccountSettingsPage } from "./pages/settings/AccountSettingsPage";
 import { PreferencesPage } from "./pages/settings/PreferencesPage";
 import { MyCarsPage } from "./pages/settings/MyCarsPage";
+import { MyDriversPage } from "./pages/settings/MyDriversPage";
 import { AlertsOffPage } from "./pages/AlertsOffPage";
 import { BillingSettingsPage } from "./pages/settings/BillingSettingsPage";
 
@@ -211,6 +212,7 @@ export function App() {
           <Route path="account" element={<AccountSettingsPage />} />
           <Route path="preferences" element={<PreferencesPage />} />
           <Route path="cars" element={<MyCarsPage />} />
+          <Route path="drivers" element={<MyDriversPage />} />
           <Route path="billing" element={<BillingSettingsPage />} />
         </Route>
 
