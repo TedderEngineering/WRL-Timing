@@ -8,6 +8,7 @@ import { cn } from "../lib/utils";
 import { SeriesBadge } from "../components/SeriesBadge";
 import { dayName, formatDateRange } from "../lib/race-dates";
 import { DriverResults, useDriverSearch } from "../features/races/DriverResults";
+import { CarResults, useCarSearch } from "../features/my-cars/CarSearch";
 
 type Family = WeekendRace["family"];
 
@@ -42,6 +43,8 @@ export function RaceListPage() {
   const [families, setFamilies] = useState<Set<Family>>(new Set());
   // The same box finds drivers: every race they ran (features/races/DriverResults).
   const { drivers, loading: driversLoading } = useDriverSearch(query);
+  // And cars, by number or team.
+  const { cars, loading: carsLoading } = useCarSearch(query);
 
   useEffect(() => {
     let alive = true;
@@ -103,7 +106,7 @@ export function RaceListPage() {
 
       {/* Filters */}
       <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <SearchBar value={query} onChange={setQuery} isSearching={driversLoading} placeholder="Search tracks, series, races or drivers..." className="lg:max-w-md lg:flex-1" />
+        <SearchBar value={query} onChange={setQuery} isSearching={driversLoading || carsLoading} placeholder="Search tracks, races, drivers or car numbers..." className="lg:max-w-md lg:flex-1" />
         <div className="flex flex-wrap items-center gap-2">
           <div role="radiogroup" aria-label="Season" className="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-800">
             {["all", ...seasons].map((s) => (
@@ -158,9 +161,10 @@ export function RaceListPage() {
 
       {error && <p className="py-16 text-center text-red-500">{error}</p>}
       {!data && !error && <Skeleton />}
+      <CarResults cars={cars} />
       <DriverResults drivers={drivers} />
 
-      {data && shown.length === 0 && drivers.length === 0 && (
+      {data && shown.length === 0 && drivers.length === 0 && cars.length === 0 && (
         <p className="py-16 text-center text-gray-500 dark:text-gray-400">
           No race weekends match.{" "}
           {filtered && (

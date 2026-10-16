@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Button } from "../../components/Button";
 import { track } from "../../lib/analytics";
 import { addCar, carTitle, listCars, removeCar, SERIES_LABEL, updateCar, type CarInput, type MyCar, type SeriesFamily } from "../../features/my-cars/api";
+import { CarResultList, loadMyCars, useCarSearch } from "../../features/my-cars/CarSearch";
+import { useAuth } from "../../features/auth/AuthContext";
 
 // The shared list: "other" (track day / club) can come from Finding Grip, so it can be kept when editing.
 const SERIES: SeriesFamily[] = ["imsa", "sro", "wrl", "other"];
@@ -80,7 +82,15 @@ function CarForm({ initial, submitLabel, onSubmit, onCancel }: { initial: FormSt
 
 /** Settings → My cars: the cars the user follows; a new number or team each season is an edit. */
 export function MyCarsPage() {
+  const { user } = useAuth();
   const [cars, setCars] = useState<MyCar[] | null>(null);
+  const [query, setQuery] = useState("");
+  const { cars: found, loading: searching } = useCarSearch(query);
+  // A follow or unfollow from the search results: read the list again (and the results' buttons).
+  const reload = () => {
+    listCars().then((r) => setCars(r.cars)).catch(() => undefined);
+    if (user) void loadMyCars(user.id, true);
+  };
   const [max, setMax] = useState(20);
   const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -103,6 +113,26 @@ export function MyCarsPage() {
           The cars you follow. A race entry is your car when the series and number match, and the team and season too when you set them.
           Follow a car from any race with the <b>Follow</b> button above the chart.
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <label htmlFor="car-search" className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+          Find a car
+        </label>
+        <input
+          id="car-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Car number (67) or team name"
+          autoComplete="off"
+          className="min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 text-[15px] text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        />
+        {searching && <p className="text-sm text-gray-500 dark:text-gray-400">Searching…</p>}
+        {!searching && query.trim() && found.length === 0 && (query.trim().length >= 3 || /^#?\d/.test(query.trim())) && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">No car matches &ldquo;{query.trim()}&rdquo; in a race on RaceTrace. You can still add it by hand below.</p>
+        )}
+        <CarResultList cars={found} source="settings" onChange={reload} />
       </div>
 
       {loadError && <p className="text-sm text-red-600 dark:text-red-400">Your cars could not be loaded. Refresh to try again.</p>}
@@ -143,6 +173,7 @@ export function MyCarsPage() {
                     onClick={async () => {
                       await removeCar(c.id);
                       setCars(cars.filter((x) => x.id !== c.id));
+                      if (user) void loadMyCars(user.id, true);
                     }}
                   >
                     Remove
@@ -164,6 +195,7 @@ export function MyCarsPage() {
               const r = await addCar(toInput(f));
               setCars([...cars, r.car]);
               setAdding(false);
+              if (user) void loadMyCars(user.id, true);
               track("follow_car", { series: r.car.series, source: "settings" });
             }}
           />

@@ -9,6 +9,7 @@ import { track } from "../lib/analytics";
 import { addCar, hasPendingFollow, RACE_SERIES, SERIES_LABEL, type SeriesFamily } from "../features/my-cars/api";
 import { followDriver, followedAs, hasPendingDriver, unfollowDriver, useMyDrivers } from "../features/my-drivers/api";
 import { useDriverSearch } from "../features/races/DriverResults";
+import { CarResultList, useCarSearch, useMyCarsList } from "../features/my-cars/CarSearch";
 
 type Theme = "light" | "dark" | "system";
 
@@ -187,8 +188,49 @@ function DriverStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-/** The car side of "Who do you follow?": one number and a series. */
+/** The car side of "Who do you follow?": find it by number or team, or add it by number. */
 function CarStep({ onNext }: { onNext: () => void }) {
+  const { user } = useAuth();
+  const mine = useMyCarsList(user?.id);
+  const [byHand, setByHand] = useState(false);
+  const [query, setQuery] = useState("");
+  const { cars: found, loading } = useCarSearch(query);
+  const field = "w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2.5 text-base text-gray-900 dark:text-gray-100";
+  if (byHand) return <CarByNumber onNext={onNext} onSearch={() => setByHand(false)} />;
+  const typed = query.trim();
+  return (
+    <div className="text-left">
+      <label className="block max-w-sm mx-auto">
+        <span className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Car number or team</span>
+        <input className={field} type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="67, or Blackdog" autoComplete="off" autoFocus />
+      </label>
+      <div className="max-w-sm mx-auto mt-2 min-h-[48px]">
+        {loading && <p className="text-sm text-gray-500 dark:text-gray-400">Searching…</p>}
+        {!loading && typed && found.length === 0 && (typed.length >= 3 || /^#?\d/.test(typed)) && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">No car matches &ldquo;{typed}&rdquo; in a race on RaceTrace yet.</p>
+        )}
+        <CarResultList cars={found} source="onboarding" limit={5} />
+      </div>
+      <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-3 mb-6">
+        Not listed?{" "}
+        <button type="button" onClick={() => setByHand(true)} className="font-semibold text-brand-600 underline dark:text-brand-400">
+          Add it by number
+        </button>
+      </p>
+      <div className="flex items-center justify-center gap-3">
+        <Button type="button" variant="ghost" onClick={onNext}>
+          Skip
+        </Button>
+        <Button type="button" size="lg" className="px-10" disabled={!mine?.length} onClick={onNext}>
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A car not on RaceTrace yet: one number and a series. */
+function CarByNumber({ onNext, onSearch }: { onNext: () => void; onSearch: () => void }) {
   const [number, setNumber] = useState("");
   const [series, setSeries] = useState<SeriesFamily>("wrl");
   const [busy, setBusy] = useState(false);
@@ -228,7 +270,12 @@ function CarStep({ onNext }: { onNext: () => void }) {
           </select>
         </label>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Add a team, a season or more cars any time in Settings → My cars.</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+        Add a team, a season or more cars any time in Settings → My cars.{" "}
+        <button type="button" onClick={onSearch} className="font-semibold text-brand-600 underline dark:text-brand-400">
+          Search instead
+        </button>
+      </p>
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>}
       <div className="flex items-center justify-center gap-3">
         <Button type="button" variant="ghost" onClick={onNext}>
