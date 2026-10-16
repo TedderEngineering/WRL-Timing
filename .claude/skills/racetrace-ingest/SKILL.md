@@ -18,9 +18,10 @@ All commands run from the repo's `server/` folder. `intake` below means `npx tsx
 | Which steps exist | `intake steps` (`--json`) | G4 | — |
 | Facts | `intake facts <dir>` → wraps `scripts/build-facts.ts` | **G2** (fact engine) | exit 3 "SKIPPED": stop after step 5 for that race |
 | Rule checks | `npx tsx scripts/run-rule-checks.ts …` (read its `--help` first) | **G3** | continue without `ruleChecks`; say so in the report |
-| Digest, merge | `scripts/build-analysis-input.ts`, `scripts/merge-analysis.ts` | Stage 3 (analysis tooling) | stop after facts; the raw race stays a draft |
+| Facts kept for writing | `intake analyze --race <raceId> --no-upload` (pull, facts, rule checks; keeps `intake-work/<slug>/analysis/package.json` and `race.json`) | Stage 3 | — |
+| Digest, merge | `npx tsx scripts/analysis.ts digest <package.json>` (race.md + one file per class) · `analysis.ts check <package.json> <patch.json>` (one class) · `analysis.ts merge <package.json> <patches dir> --out <draft.json>` (fills every ref's value, unit and display from its fact, then validates with the publish gate) | Stage 3 | stop after facts; the raw race stays a draft |
 | Validate | `intake validate <draft.json> --base <facts.base.json> [--scope-class <id>]` → wraps `src/analysis/validate-package.ts` | **G2** | do not upload any package |
-| Package upload | `scripts/upload-package.ts` or the endpoint its `--help` names, **as draft** | **G5** (package ingest) | stop after validate; keep `draft.json` locally |
+| Package upload | `intake upload <raceId> <draft.json> [--notes "<text>"]`, **as draft** | **G5** (package ingest) | stop after validate; keep `draft.json` locally |
 
 **Graceful degradation.** Steps 1–5 alone are a complete, useful run: the raw files are archived and the race appears as a draft with the legacy charts. A missing later step never undoes them. Exit code 3 from `intake` means "this step is not on this branch": record it and move on.
 
@@ -72,6 +73,8 @@ If `.claude/skills/analyze-race/SKILL.md` exists in this checkout, follow it for
 The validator (`validate-package`, rules V1–V8 and A1–A20; banned phrases in `server/src/analysis/schema/prose-rules.json`) rejects any package whose words disagree with its numbers. Write so it passes the first time.
 
 **Patch format** `analysis-patch/1`: keys `patchFormat`, `packageId`, `basedOn` (`engineVersion`, `generatedAt` of the facts), `scope` (`{kind: "class", class}` or `{kind: "race"}`), `carStories`, `ruleFindings`, `raceSummary` (race scope only), `factJudgements`, `notes`. Nothing else.
+
+**Refs in patches.** A ref needs only `factId` and `field` (plus `transform` for a signed value): `analysis.ts merge` fills `value`, `unit` and `display` from the fact. A ref to a missing fact or field is reported, never guessed.
 
 **Evidence rule.**
 - Every number is a placeholder `{n}` with `refs[n] = {value, factId, field, unit}`: positions, laps, times, counts, gaps. Copy `factId` from the digest row and `field` from the column header.
