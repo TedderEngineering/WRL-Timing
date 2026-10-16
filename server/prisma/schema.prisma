@@ -73,6 +73,7 @@ model User {
   favorites           UserFavorite[]
   raceViews           UserRaceView[]
   cars                UserCar[]
+  drivers             UserDriver[]
   raceAlertSends      RaceAlertSend[]
   createdRaces        Race[]                   @relation("RaceCreator")
   createdQualifyingSessions QualifyingSession[] @relation("QualifyingCreator")
@@ -369,6 +370,29 @@ model UserCar {
   @@index([userId])
   @@index([series, number])
   @@map("user_cars")
+}
+
+/// A driver a user follows ("My drivers"): their latest race shows on the Dashboard whatever
+/// car or series they raced in. A race entry has this driver when one of its driver names has
+/// the same `key` (utils/driverNames.ts driverKey: accents, case and word order ignored), so
+/// "Marvin Kirchhöfer" and "KIRCHHOFER Marvin" are one driver. Two people with one name are one
+/// driver here (owner decision, Oct 16 2026).
+model UserDriver {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  /// The name as shown (the spelling seen most across races).
+  name      String
+  /// driverKey(name): what race entries are matched on.
+  key       String
+  /// Race emails about this driver's races (the account-wide switch is user_preferences.race_alerts).
+  alerts    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([key])
+  @@map("user_drivers")
 }
 
 /// One race-ready email per race per user (engagement plan D): the row is written before the
