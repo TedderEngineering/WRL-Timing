@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => {
   type Row = Record<string, any>;
-  const state = { race: null as Row | null, cars: [] as Row[], sends: [] as Row[], prefs: new Map<string, boolean>(), mail: [] as Row[] };
+  const state = { race: null as Row | null, cars: [] as Row[], drivers: [] as Row[], sends: [] as Row[], prefs: new Map<string, boolean>(), mail: [] as Row[] };
   const prisma: Row = {
     race: { findUnique: async () => state.race },
     userCar: {
@@ -10,6 +10,12 @@ const fake = vi.hoisted(() => {
         state.cars
           .filter((c) => state.prefs.get(c.userId) === true && c.alerts !== false)
           .map((c) => ({ ...c, user: { email: `${c.userId}@example.com` } })),
+    },
+    userDriver: {
+      findMany: async () =>
+        state.drivers
+          .filter((d) => state.prefs.get(d.userId) === true && d.alerts !== false)
+          .map((d) => ({ ...d, user: { email: `${d.userId}@example.com` } })),
     },
     raceAlertSend: {
       findMany: async ({ where }: Row) => state.sends.filter((s) => s.raceId === where.raceId),
@@ -49,6 +55,7 @@ beforeEach(() => {
   s.sends = [];
   s.mail = [];
   s.prefs = new Map([["u1", true], ["u2", false]]);
+  s.drivers = [];
   s.cars = [
     { id: "c1", userId: "u1", number: "67", series: "imsa", teamName: null, season: null },
     { id: "c1b", userId: "u1", number: "8", series: "imsa", teamName: null, season: null },
@@ -57,7 +64,10 @@ beforeEach(() => {
   s.race = {
     id: "vir", name: "Pilot Challenge — Michelin GT Challenge at VIR", date: new Date(Date.UTC(2026, 9, 10)), track: "VIRginia International Raceway",
     series: "IMSA", subSeries: "Pilot Challenge", season: 2026, status: "PUBLISHED", resultsStatus: "official",
-    entries: [{ carNumber: "67", teamName: "Blackdog Racing" }, { carNumber: "8", teamName: "X" }],
+    entries: [
+      { carNumber: "67", teamName: "Blackdog Racing", driverNames: "Lucas Weisenberg; Harrison Goodman" },
+      { carNumber: "8", teamName: "X", driverNames: "Alex Rivera; Jamie Cole" },
+    ],
     annotationData: { "67": { settles: [{ l: 4, p: 2, su: "Was P1 · Lost 1" }] } },
     chartData: {
       maxLap: 5, classCarCounts: { GS: 2 },
@@ -155,6 +165,25 @@ describe("a second email when official results change the car's result", () => {
 
     fake.state.sends = [{ userId: "u1", raceId: "vir", carId: "c1", resultsStatus: null, facts: null, officialCheckedAt: null }];
     expect((await sendRaceAlerts("vir", NOW + 86_400_000)).sent).toBe(0);
+  });
+
+  it("go to a user who follows a driver, naming the driver, and once when they also follow the car", async () => {
+    fake.state.prefs.set("u3", true);
+    fake.state.drivers = [
+      { id: "d3", userId: "u3", name: "RIVERA Alex" },
+      { id: "d1", userId: "u1", name: "Alex Rivera" },
+    ];
+    const r = await sendRaceAlerts("vir", NOW);
+    expect(r.sent).toBe(2);
+    const m = fake.state.mail.find((x) => x.to === "u3@example.com")!;
+    expect(m.subject).toBe("RIVERA Alex in #8 at VIRginia International Raceway: P1 in GS");
+    expect(m.html).toContain("your driver's race is up");
+    expect(m.html).toContain("/settings/drivers");
+    // u1 follows #67 and Alex Rivera (#8): one email, about the car.
+    expect(fake.state.mail.filter((x) => x.to === "u1@example.com").map((x) => x.subject)).toEqual([
+      "#67 at VIRginia International Raceway: P2 in GS, lost 1 place in pit cycle 1",
+    ]);
+    expect(fake.state.sends.find((x) => x.userId === "u3")).toMatchObject({ carId: null, facts: { carNumber: "8" } });
   });
 
   it("words pit-cycle and status changes as facts", () => {

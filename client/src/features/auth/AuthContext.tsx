@@ -208,3 +208,8 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
+
+/** The auth state, or null outside an AuthProvider (a component rendered on its own, in a test). */
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
+}

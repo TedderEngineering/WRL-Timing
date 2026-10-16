@@ -2,7 +2,7 @@
  * Race-ready emails (engagement plan D).
  *
  *  - Opt-in only: `user_preferences.race_alerts`, off by default.
- *  - Sent when a race with a followed car is published, or when a published race's results
+ *  - Sent when a race with a followed car or driver is published, or when a published race's results
  *    turn official; one email per race per user (the `race_alert_sends` row is written first,
  *    so the second trigger never repeats it).
  *  - One exception (owner decision, Oct 15 2026): when that email went out on provisional
@@ -18,6 +18,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "../models/prisma.js";
 import { env } from "../config/env.js";
 import { entryForCar } from "./my-cars.js";
+import { driverInNames } from "./my-drivers.js";
 import { carFacts, type CarFacts } from "../dashboard/my-car.js";
 import { escapeHtml, sendRaceAlertEmail } from "./email.js";
 import { racetraceSite } from "./site.js";
@@ -69,9 +70,12 @@ export async function getRaceAlerts(userId: string): Promise<boolean> {
 
 const shortTrack = (track: string) => canonicalTrack(track);
 
-/** "#67 at VIR: P13 in GS, gained 3 places in pit cycle 2 (provisional)". Facts only. */
-export function alertSubject(f: CarFacts, track: string, resultsStatus: string | null): string {
-  const where = `#${f.number} at ${shortTrack(track)}`;
+/**
+ * "#67 at VIR: P13 in GS, gained 3 places in pit cycle 2 (provisional)"; for a followed driver
+ * "Alex Rivera in #67 at VIR: …". Facts only.
+ */
+export function alertSubject(f: CarFacts, track: string, resultsStatus: string | null, driverName?: string | null): string {
+  const where = `${driverName ? `${driverName} in ` : ""}#${f.number} at ${shortTrack(track)}`;
   const finish =
     f.finishClass !== null
       ? `P${f.finishClass} in ${f.cls}`
@@ -98,6 +102,8 @@ function alertHtml(p: {
   settingsUrl: string;
   /** The official follow-up: what changed since the provisional email. */
   changes?: string[];
+  /** Set when the email is about a followed driver rather than a followed car. */
+  driverName?: string | null;
 }): string {
   const { f } = p;
   const lines = [
@@ -111,7 +117,7 @@ function alertHtml(p: {
   const accent = "#F48C34";
   return `
     <div style="font-family: -apple-system, Segoe UI, sans-serif; max-width: 520px; margin: 0 auto; color: #1b1b28;">
-      <p style="margin: 0 0 4px; font-size: 13px; color: #6b6b80;">RaceTrace · ${p.changes ? "the results are official" : "your car's race is up"}</p>
+      <p style="margin: 0 0 4px; font-size: 13px; color: #6b6b80;">RaceTrace · ${p.changes ? "the results are official" : p.driverName ? "your driver's race is up" : "your car's race is up"}</p>
       <h2 style="margin: 0 0 12px; font-size: 20px;">${escapeHtml(p.subject)}</h2>
       <p style="margin: 0 0 12px; color: #444;">${escapeHtml(p.raceName)}</p>
       ${
@@ -128,9 +134,9 @@ function alertHtml(p: {
       </ul>
       <a href="${p.raceUrl}" style="display: inline-block; background: ${accent}; color: #fff; padding: 11px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Open the race</a>
       <p style="margin: 24px 0 0; color: #888; font-size: 12px; line-height: 1.5;">
-        You get this because you follow #${escapeHtml(f.number)} on RaceTrace and turned on race emails.
+        You get this because you follow ${p.driverName ? escapeHtml(p.driverName) : `#${escapeHtml(f.number)}`} on RaceTrace and turned on race emails.
         <a href="${p.unsubscribeUrl}" style="color: #888;">Turn these emails off</a> ·
-        <a href="${p.settingsUrl}" style="color: #888;">My cars</a>
+        <a href="${p.settingsUrl}" style="color: #888;">${p.driverName ? "My drivers" : "My cars"}</a>
       </p>
     </div>`;
 }
@@ -139,6 +145,8 @@ function alertHtml(p: {
 
 /** What an email said about the car, kept to compare with the official results. */
 export interface SentFacts {
+  /** The car the email was about (missing on rows from before drivers could be followed). */
+  carNumber?: string;
   cls: string;
   finishClass: number | null;
   finishOverall: number | null;
@@ -148,6 +156,7 @@ export interface SentFacts {
 
 export function sentFacts(f: CarFacts): SentFacts {
   return {
+    carNumber: f.number,
     cls: f.cls,
     finishClass: f.finishClass,
     finishOverall: f.finishOverall,
@@ -193,6 +202,19 @@ function readSentFacts(raw: unknown): SentFacts | null {
 
 // ─── Sending ──────────────────────────────────────────────────────────────────
 
+/**
+ * The official follow-up is about the car the first email was about: the car number it kept,
+ * or (rows from before drivers could be followed) the followed car it was sent for.
+ */
+function sameSubject(
+  prior: { carId: string | null; facts: unknown },
+  f: { carId: string | null; entry: { carNumber: string } }
+): boolean {
+  const n = readSentFacts(prior.facts)?.carNumber;
+  if (n) return n === f.entry.carNumber;
+  return !prior.carId || prior.carId === f.carId;
+}
+
 export interface AlertRun {
   raceId: string;
   sent: number;
@@ -209,7 +231,7 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
     select: {
       id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true, status: true,
       resultsStatus: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true,
-      entries: { select: { carNumber: true, teamName: true } },
+      entries: { select: { carNumber: true, teamName: true, driverNames: true } },
     },
   })) as any;
   if (!race || race.status !== "PUBLISHED") return { raceId, sent: 0, skipped: "not published" };
@@ -220,11 +242,28 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
   if (!race.chartData) return { raceId, sent: 0, skipped: "no chart data" };
   const chart = await withPitFacts(race, { data: race.chartData, annotations: race.annotationData ?? {} });
 
-  const followers = (await prisma.userCar.findMany({
-    // Opted in for the account, and not switched off for this car.
-    where: { alerts: true, user: { preferences: { raceAlerts: true }, suspendedAt: null } },
+  // Opted in for the account, and not switched off for this car or driver. Cars first: a user who
+  // follows a car and one of its drivers gets the car's email, once.
+  const optedIn = { alerts: true, user: { preferences: { raceAlerts: true }, suspendedAt: null } };
+  const entries = race.entries as { carNumber: string; teamName: string | null; driverNames: string }[];
+  const carRows = (await prisma.userCar.findMany({
+    where: optedIn,
     select: { id: true, userId: true, number: true, series: true, teamName: true, season: true, user: { select: { email: true } } },
   })) as any[];
+  const driverRows = (await prisma.userDriver.findMany({
+    where: optedIn,
+    select: { id: true, userId: true, name: true, user: { select: { email: true } } },
+  })) as any[];
+  type Follower = { userId: string; email: string; carId: string | null; driverName: string | null; entry: { carNumber: string } };
+  const followers: Follower[] = [];
+  for (const c of carRows) {
+    const entry = entryForCar(c, race, entries);
+    if (entry) followers.push({ userId: c.userId, email: c.user.email, carId: c.id, driverName: null, entry });
+  }
+  for (const d of driverRows) {
+    const entry = entries.find((e) => driverInNames(e.driverNames, d.name));
+    if (entry) followers.push({ userId: d.userId, email: d.user.email, carId: null, driverName: d.name, entry });
+  }
   type SendRow = { userId: string; carId: string | null; resultsStatus: string | null; facts: unknown; officialCheckedAt: Date | null };
   const sends = new Map(
     ((await prisma.raceAlertSend.findMany({
@@ -240,10 +279,9 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
     if (done.has(car.userId)) continue;
     const prior = sends.get(car.userId);
     // After the first email, only the official follow-up, and only for the car that email was about.
-    if (prior && (!official || prior.resultsStatus === "official" || prior.officialCheckedAt || (prior.carId && prior.carId !== car.id))) continue;
+    if (prior && (!official || prior.resultsStatus === "official" || prior.officialCheckedAt || !sameSubject(prior, car))) continue;
     if (!prior && !firstOk) continue;
-    const entry = entryForCar(car, race, race.entries as { carNumber: string; teamName: string | null }[]);
-    if (!entry) continue;
+    const entry = car.entry;
     const f = carFacts(chart.data, chart.annotations ?? null, entry.carNumber);
     if (!f) continue;
     done.add(car.userId);
@@ -264,17 +302,19 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
       // Claim the send first: a concurrent trigger for the same race then fails here, not twice in the inbox.
       try {
         await prisma.raceAlertSend.create({
-          data: { userId: car.userId, raceId, carId: car.id, resultsStatus: race.resultsStatus ?? null, facts: sentFacts(f) as object },
+          data: { userId: car.userId, raceId, carId: car.carId, resultsStatus: race.resultsStatus ?? null, facts: sentFacts(f) as object },
         });
       } catch {
         continue;
       }
     }
-    const subject = changes ? `Official: ${alertSubject(f, race.track, "official")}` : alertSubject(f, race.track, race.resultsStatus);
+    const subject = changes
+      ? `Official: ${alertSubject(f, race.track, "official", car.driverName)}`
+      : alertSubject(f, race.track, race.resultsStatus, car.driverName);
     const unsubscribeUrl = `${site.url}/api/alerts/unsubscribe?t=${unsubscribeToken(car.userId)}`;
     try {
       await sendRaceAlertEmail({
-        to: car.user.email,
+        to: car.email,
         subject,
         unsubscribeUrl,
         html: alertHtml({
@@ -283,8 +323,9 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
           f,
           raceUrl: `${site.url}/chart?race=${race.id}&from=alert`,
           unsubscribeUrl,
-          settingsUrl: `${site.url}/settings/cars`,
+          settingsUrl: `${site.url}/settings/${car.driverName ? "drivers" : "cars"}`,
           changes,
+          driverName: car.driverName,
         }),
       });
       sent++;

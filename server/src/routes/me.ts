@@ -6,6 +6,12 @@
  *   PATCH  /api/me/cars/:id                 edit (a new number for a new season, a team…)
  *   DELETE /api/me/cars/:id                 stop following
  *   GET    /api/me/cars/in-race/:raceId     which of the race's cars the user follows
+ * My drivers (followed across cars and series):
+ *   GET    /api/me/drivers                  the drivers the user follows
+ *   POST   /api/me/drivers                  { name } follow one (race page, driver search, Settings)
+ *   PATCH  /api/me/drivers/:id              { alerts } race emails for this driver
+ *   DELETE /api/me/drivers/:id              stop following
+ *   GET    /api/me/drivers/in-race/:raceId  which of the race's drivers the user follows
  * Race-ready emails (engagement plan D):
  *   GET    /api/me/alerts                   { raceAlerts }
  *   PUT    /api/me/alerts                   { raceAlerts: boolean }
@@ -17,6 +23,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { requireAuth } from "../middleware/auth.js";
 import { z } from "zod";
 import * as cars from "../services/my-cars.js";
+import * as drivers from "../services/my-drivers.js";
 import { getRaceAlerts, setRaceAlerts } from "../services/race-alerts.js";
 import { chartDefaultsPatch, getChartDefaults, setChartDefaults } from "../services/chart-defaults.js";
 
@@ -49,6 +56,28 @@ meRouter.patch("/cars/:id", wrap(async (req, res) => {
 
 meRouter.delete("/cars/:id", wrap(async (req, res) => {
   await cars.deleteCar(req.user!.userId, req.params.id as string);
+  res.status(204).end();
+}));
+
+meRouter.get("/drivers", wrap(async (req, res) => {
+  res.json({ drivers: await drivers.listDrivers(req.user!.userId), max: drivers.MAX_DRIVERS });
+}));
+
+meRouter.post("/drivers", wrap(async (req, res) => {
+  const r = await drivers.followDriver(req.user!.userId, req.body);
+  res.status(r.created ? 201 : 200).json(r);
+}));
+
+meRouter.get("/drivers/in-race/:raceId", wrap(async (req, res) => {
+  res.json({ followed: await drivers.followedDriversInRace(req.user!.userId, req.params.raceId as string) });
+}));
+
+meRouter.patch("/drivers/:id", wrap(async (req, res) => {
+  res.json({ driver: await drivers.updateDriver(req.user!.userId, req.params.id as string, req.body) });
+}));
+
+meRouter.delete("/drivers/:id", wrap(async (req, res) => {
+  await drivers.deleteDriver(req.user!.userId, req.params.id as string);
   res.status(204).end();
 }));
 

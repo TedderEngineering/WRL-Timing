@@ -25,6 +25,7 @@ import { IS_GRIP_SITE } from "./site";
 export const ANALYTICS_EVENTS = [
   // RaceTrace
   "follow_car",
+  "follow_driver", // { source }
   "open_story",
   // Finding Grip
   "record_hot",

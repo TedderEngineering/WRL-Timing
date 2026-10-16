@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { Weekend, WeekendRace, WeekendsResponse } from "@shared/types";
 import { fetchWeekends } from "../lib/api";
 import { SearchBar } from "../components/SearchBar";
@@ -35,7 +35,9 @@ export function RaceListPage() {
   const isAdmin = user?.role === "ADMIN";
   const [data, setData] = useState<WeekendsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // ?q= opens the page searched (the Dashboard's "All of a driver's races").
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState(() => params.get("q") ?? "");
   const [season, setSeason] = useState<string>("all");
   const [families, setFamilies] = useState<Set<Family>>(new Set());
   // The same box finds drivers: every race they ran (features/races/DriverResults).
