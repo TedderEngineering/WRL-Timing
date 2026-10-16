@@ -1,697 +1,767 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { carMatchesSearch, carNo } from "./car-number";
-import { isGreenFlag } from "./flags";
+import { COMPARE_PALETTE, TRACE } from "./constants";
+import {
+  type GapRow,
+  type GapTarget,
+  type GapTargetKind,
+  type WindowKind,
+  TARGET_NAMES,
+  gapRate,
+  gapSeries,
+  lapOf,
+  niceTicks,
+  percentText,
+  recentPace,
+  relativeTo,
+  relativeText,
+  resolveTarget,
+  secondsText,
+  lapTimeText,
+  windowStart,
+} from "./gap-math";
+import { ChevronIcon, Eyebrow, PANEL, SearchIcon, Segmented, driversOf } from "./panel-ui";
 
 interface GapEvolutionPanelProps {
   data: RaceChartData;
   focusNum: number;
   activeLap: number;
+  /** The cars on the chart. */
   compSet?: Set<number>;
 }
 
-function secToDisplay(sec: number): string {
-  const abs = Math.abs(sec);
-  const sign = sec < 0 ? "-" : "+";
-  if (abs < 60) return `${sign}${abs.toFixed(2)}s`;
-  const m = Math.floor(abs / 60);
-  const s = abs - m * 60;
-  return `${sign}${m}:${s.toFixed(2).padStart(5, "0")}`;
-}
+const TARGET_COLOR = COMPARE_PALETTE[0];
+const BEHIND_COLOR = COMPARE_PALETTE[4];
+/** Below this, a gap is holding steady (seconds a lap). */
+const STEADY = 0.02;
 
-function formatGap(
-  sec: number | null,
-  unit: "time" | "pct",
-  avgLapSec: number | null
-): string {
-  if (sec === null) return "\u2014";
-  if (unit === "pct") {
-    const base = avgLapSec ?? 90;
-    const pct = (sec / base) * 100;
-    return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
-  }
-  return secToDisplay(sec);
-}
+type Unit = "s" | "pct";
 
 export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvolutionPanelProps) {
-  // gapRefSet: empty = Field Avg (use all compSet cars), non-empty = custom selection
-  const [gapRefSet, setGapRefSet] = useState<Set<number>>(new Set());
-  const [gapRefClassFilter, setGapRefClassFilter] = useState<string>("");
-  const [gapRefSearch, setGapRefSearch] = useState<string>("");
-  const [pickerOpen, setPickerOpen] = useState(true);
-  const [gapUnit, setGapUnit] = useState<"time" | "pct">("time");
+  const [kind, setKind] = useState<GapTargetKind>("ahead");
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [win, setWin] = useState<WindowKind>("stint");
+  const [unit, setUnit] = useState<Unit>("s");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
-  // Stable string key for useMemo dependencies (Set mutations don't trigger re-renders)
-  const gapRefKey = [...gapRefSet].sort((a, b) => a - b).join(",");
+  const target = useMemo(() => {
+    const t = resolveTarget(data, focusNum, kind, activeLap, { compSet, cars: chosen });
+    if (t) return t;
+    // The class leader has no car ahead: measure against the car behind instead.
+    return kind === "ahead" ? resolveTarget(data, focusNum, "behind", activeLap) : null;
+  }, [data, focusNum, kind, activeLap, compSet, chosen]);
 
-  const focusAvgLapSec = useMemo(() => {
-    const laps = data.cars[String(focusNum)]?.laps ?? [];
-    const cutoff = data.greenPaceCutoff ?? 130;
-    const recent = laps
-      .filter((l) => isGreenFlag(l.flag) && l.ltSec > 1 && l.ltSec < cutoff)
-      .slice(-10);
-    if (!recent.length) return null;
-    return recent.reduce((sum, l) => sum + l.ltSec, 0) / recent.length;
-  }, [data, focusNum, activeLap]);
+  const from = windowStart(data, focusNum, activeLap, win, 10);
+  const rows = useMemo(
+    () => (target ? gapSeries(data, focusNum, target.cars, from, activeLap) : []),
+    [data, focusNum, target, from, activeLap],
+  );
+  const rate = useMemo(() => gapRate(rows, 5), [rows]);
+  const focusPace = useMemo(() => recentPace(data, focusNum, activeLap, 10), [data, focusNum, activeLap]);
+  const last = [...rows].reverse().find((r) => r.gap !== null) ?? null;
+  const single = target && target.cars.length === 1 ? target.cars[0] : null;
+  const fmt = (sec: number) => (unit === "pct" ? percentText(sec, focusPace) : secondsText(sec));
 
-  // The cars whose cumulative time is averaged for the gap reference
-  const gapTargetNums = useMemo(() => {
-    if (gapRefSet.size === 0) {
-      // Field Avg: use all compSet cars except focus
-      return [...(compSet ?? [])].filter((n) => n !== focusNum);
-    }
-    return [...gapRefSet].filter((n) => n !== focusNum);
-  }, [gapRefKey, compSet, focusNum]);
-
-  // Label shown in the VS row
-  const gapRefLabel = useMemo(() => {
-    if (gapRefSet.size === 0) {
-      const n = [...(compSet ?? [])].filter((n) => n !== focusNum).length;
-      return `Field Avg \u00b7 ${n} cars`;
-    }
-    if (gapRefSet.size === 1) {
-      const num = [...gapRefSet][0];
-      const car = data.cars[String(num)];
-      return `#${car?.label ?? num}${car?.team ? " " + car.team : ""}`;
-    }
-    // Check if entire class is selected
-    const classes = Object.keys(data.classGroups ?? {});
-    for (const cls of classes) {
-      const clsCars = (data.classGroups[cls] ?? []).filter((n: number) => n !== focusNum);
-      if (
-        clsCars.length > 0 &&
-        clsCars.length === gapRefSet.size &&
-        clsCars.every((n: number) => gapRefSet.has(n))
-      ) {
-        return `${cls} Avg \u00b7 ${clsCars.length} cars`;
-      }
-    }
-    return `Custom \u00b7 ${gapRefSet.size} cars`;
-  }, [gapRefKey, compSet, focusNum, data]);
-
-  // Compute per-lap gap vs reference over the last 10 laps
-  const gapData = useMemo(() => {
-    const focusCar = data.cars[String(focusNum)];
-    if (!focusCar) return null;
-
-    // Build per-lap reference time map (avg ltSec of gapTargetNums at each lap)
-    const refLapTime = new Map<number, number>();
-    for (let lap = 1; lap <= data.maxLap; lap++) {
-      let sum = 0;
-      let cnt = 0;
-      for (const cn of gapTargetNums) {
-        const carLaps = data.cars[String(cn)]?.laps;
-        const ld = carLaps?.find((l) => l.l === lap);
-        if (ld && ld.ltSec > 1) {
-          sum += ld.ltSec;
-          cnt++;
-        }
-      }
-      if (cnt > 0) refLapTime.set(lap, sum / cnt);
-    }
-
-    const focusLapMap = new Map<number, number>();
-    for (const ld of focusCar.laps) {
-      if (ld.ltSec > 1) focusLapMap.set(ld.l, ld.ltSec);
-    }
-
-    const startLap = Math.max(1, activeLap - 9);
-    const gaps: { lap: number; gap: number; delta: number | null }[] = [];
-    let prevGap: number | null = null;
-
-    for (let lap = startLap; lap <= activeLap; lap++) {
-      const ft = focusLapMap.get(lap);
-      const rt = refLapTime.get(lap);
-      if (ft === undefined || rt === undefined) continue;
-
-      const gap = ft - rt; // positive = focus slower this lap
-      const delta = prevGap !== null ? gap - prevGap : null;
-      gaps.push({ lap, gap, delta });
-      prevGap = gap;
-    }
-
-    if (gaps.length === 0) return null;
-
-    const currentGap = gaps[gaps.length - 1].gap;
-
-    // Last 5 valid gaps in the window (most recent)
-    const recent5 = gaps.filter((g) => g.gap !== null).slice(-5);
-    let avgDelta5: number | null = null;
-    if (recent5.length >= 2) {
-      const totalChange = recent5[recent5.length - 1].gap - recent5[0].gap;
-      avgDelta5 = totalChange / (recent5.length - 1);
-    }
-
-    // Trend: compare first and last gap in window
-    let trend: "Closing" | "Fading" | "Steady" = "Steady";
-    if (gaps.length >= 2) {
-      const diff = gaps[gaps.length - 1].gap - gaps[0].gap;
-      if (diff < -0.3) trend = "Closing";
-      else if (diff > 0.3) trend = "Fading";
-    }
-
-    return { gaps, currentGap, avgDelta5, trend };
-  }, [data, focusNum, activeLap, gapRefKey, gapTargetNums]);
-
-  const leaderCalc = useMemo(() => {
-    if (!activeLap || !gapData) return null;
-
-    // Find the leader at activeLap (lowest p value)
-    let leaderNum: number | null = null;
-    let leaderPos = Infinity;
-    for (const [numStr, car] of Object.entries(data.cars)) {
-      const ld = car.laps.find((l) => l.l === activeLap);
-      if (ld && ld.p > 0 && ld.p < leaderPos) {
-        leaderPos = ld.p;
-        leaderNum = Number(numStr);
-      }
-    }
-    if (leaderNum === null) return null;
-
-    const focusIsLeader = leaderNum === focusNum;
-
-    // Per-lap delta between focus and leader over last 10 laps
-    const focusLaps = data.cars[String(focusNum)]?.laps ?? [];
-    const leaderLaps = data.cars[String(leaderNum)]?.laps ?? [];
-
-    const deltas: number[] = [];
-    for (let l = activeLap; l >= Math.max(1, activeLap - 9); l--) {
-      const fl = focusLaps.find((d) => d.l === l);
-      const ll = leaderLaps.find((d) => d.l === l);
-      if (fl && ll && fl.ltSec > 1 && ll.ltSec > 1) {
-        deltas.push(fl.ltSec - ll.ltSec);
-      }
-    }
-
-    let avgRatePerLap: number | null = null;
-    if (deltas.length >= 1) {
-      avgRatePerLap = deltas.reduce((a, b) => a + b, 0) / deltas.length;
-    }
-
-    // Cumulative gap to leader
-    let focusCum = 0, leaderCum = 0;
-    for (let l = 1; l <= activeLap; l++) {
-      const fl = focusLaps.find((d) => d.l === l);
-      const ll = leaderLaps.find((d) => d.l === l);
-      if (fl?.ltSec) focusCum += fl.ltSec;
-      if (ll?.ltSec) leaderCum += ll.ltSec;
-    }
-    const cumGapSec = focusCum - leaderCum; // positive = focus behind
-
-    // Leader avg lap time
-    const leaderAvgLap =
-      leaderLaps
-        .filter((l) => l.ltSec > 1)
-        .slice(-10)
-        .reduce((acc, l, _, arr) => acc + l.ltSec / arr.length, 0) || null;
-
-    // Laps to leader down or laps to catch
-    let lapsResult: { label: string; value: string; color: string } | null = null;
-
-    if (focusIsLeader) {
-      lapsResult = {
-        label: "Status",
-        value: "Leading",
-        color: "text-emerald-400",
-      };
-    } else if (avgRatePerLap === null || leaderAvgLap === null) {
-      lapsResult = {
-        label: "Laps to Down",
-        value: "\u2014",
-        color: "text-white/40",
-      };
-    } else {
-      const lapsDown = cumGapSec / leaderAvgLap; // fractional laps behind leader
-      const wholeDown = Math.floor(lapsDown);
-      const remainder = cumGapSec % leaderAvgLap; // seconds into current lap deficit
-
-      if (avgRatePerLap > 0) {
-        // Focus is SLOWER than leader — compute laps until next lap down
-        if (wholeDown >= 1) {
-          // Already lapped — show laps until ANOTHER lap down
-          const lapsToNextDown = (leaderAvgLap - remainder) / avgRatePerLap;
-          lapsResult = {
-            label: `${wholeDown} Lap${wholeDown !== 1 ? "s" : ""} Down \u00b7 Next in`,
-            value: `\u2248${Math.round(lapsToNextDown)} laps`,
-            color: lapsToNextDown < 20 ? "text-red-400" : "text-amber-400",
-          };
-        } else {
-          // Not yet lapped — show laps until first lap down
-          const lapsToDown = (leaderAvgLap - cumGapSec) / avgRatePerLap;
-          lapsResult = {
-            label: "Laps to Down",
-            value: lapsToDown <= 0 ? "Imminent" : `\u2248${Math.round(lapsToDown)} laps`,
-            color: lapsToDown < 30 ? "text-red-400"
-              : lapsToDown < 80 ? "text-amber-400"
-              : "text-emerald-400",
-          };
-        }
-      } else {
-        // Focus is FASTER than leader — compute laps to close the gap
-        const lapsToClose = Math.abs(cumGapSec) / Math.abs(avgRatePerLap);
-        if (wholeDown >= 1) {
-          lapsResult = {
-            label: `${wholeDown} Lap${wholeDown !== 1 ? "s" : ""} Down \u00b7 Closing`,
-            value: `\u2248${Math.round(lapsToClose)} to unlap`,
-            color: "text-emerald-400",
-          };
-        } else {
-          lapsResult = {
-            label: "Gap Closing",
-            value: `\u2248${Math.round(lapsToClose)} laps`,
-            color: "text-emerald-400",
-          };
-        }
-      }
-    }
-
-    return { focusIsLeader, cumGapSec, avgRatePerLap, lapsResult, leaderNum };
-  }, [data, focusNum, activeLap, gapData]);
+  useEffect(() => setShowAll(false), [win, target?.kind]);
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      {/* VS row — label left, unit toggle right */}
-      <div
-        className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06] cursor-pointer select-none hover:bg-white/[0.03]"
-        onClick={() => setPickerOpen((o) => !o)}
-      >
-        <div className="flex items-center gap-1.5">
-          <span className="text-white/40 font-semibold uppercase tracking-wider text-[9px]">
-            VS
-          </span>
-          <span className="text-white font-semibold truncate max-w-[160px] text-[12px]">
-            {gapRefLabel}
-          </span>
-          <span className="text-white/30 text-[10px] ml-1">
-            {pickerOpen ? "\u25B2" : "\u25BC"}
-          </span>
-        </div>
-        <div
-          className="flex rounded overflow-hidden border border-white/[0.12]"
-          onClick={(e) => e.stopPropagation()}
-        >
+    <div className="flex flex-1 flex-col overflow-y-auto" style={{ scrollbarWidth: "none", color: PANEL.text }}>
+      <div className="flex flex-col gap-2.5 border-b px-4 py-3" style={{ borderColor: PANEL.line }}>
+        <div className="relative flex items-center gap-2">
+          <Eyebrow>Gap to</Eyebrow>
           <button
-            onClick={() => setGapUnit("time")}
-            className={`px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
-              gapUnit === "time"
-                ? "bg-white/[0.15] text-white"
-                : "text-white/40 hover:text-white/70"
-            }`}
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+            className="flex min-h-[40px] min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-semibold"
+            style={{ background: PANEL.raised, borderColor: menuOpen ? TRACE.focus : PANEL.control }}
           >
-            Time
+            <span className="truncate">{target ? target.name : TARGET_NAMES[kind]}</span>
+            <ChevronIcon up={menuOpen} />
           </button>
-          <button
-            onClick={() => setGapUnit("pct")}
-            className={`px-2.5 py-0.5 text-[10px] font-semibold transition-colors border-l border-white/[0.12] ${
-              gapUnit === "pct"
-                ? "bg-white/[0.15] text-white"
-                : "text-white/40 hover:text-white/70"
-            }`}
-          >
-            %
-          </button>
-        </div>
-      </div>
-
-      {/* Inline picker */}
-      {pickerOpen && (
-      <div className="border-b border-white/[0.06]">
-
-        {/* Class filter chips */}
-        <div className="flex flex-wrap gap-1.5 px-3 pt-2 pb-1.5">
-          {["", ...Object.keys(data.classGroups ?? {}).sort()].map((cls) => {
-            const label = cls === "" ? "All" : cls;
-            const isActive = gapRefClassFilter === cls;
-            const clsColors: Record<string, string> = {
-              GP1: "#f87171", GP2: "#fbbf24", GP3: "#a78bfa",
-              GTO: "#60a5fa", GTU: "#4ade80",
-            };
-            const activeColor = cls ? clsColors[cls] ?? "#4472C4" : "#4472C4";
-            return (
+          <div role="group" aria-label="Units" className="flex overflow-hidden rounded-lg border" style={{ borderColor: PANEL.control }}>
+            {(["s", "pct"] as const).map((u) => (
               <button
-                key={cls}
-                onClick={() => setGapRefClassFilter(cls)}
-                className="px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-colors border"
-                style={
-                  isActive
-                    ? {
-                        background: activeColor + "33",
-                        borderColor: activeColor,
-                        color: activeColor,
-                      }
-                    : {
-                        background: "transparent",
-                        borderColor: "rgba(255,255,255,0.12)",
-                        color: "rgba(255,255,255,0.35)",
-                      }
-                }
+                key={u}
+                type="button"
+                aria-pressed={unit === u}
+                onClick={() => setUnit(u)}
+                className="min-h-[40px] min-w-[40px] text-[13px] font-semibold"
+                style={unit === u ? { background: PANEL.control, color: "#fff" } : { color: PANEL.muted }}
+                title={u === "s" ? "Seconds" : "Share of a lap"}
               >
-                {label}
+                {u === "s" ? "s" : "%"}
               </button>
-            );
-          })}
+            ))}
+          </div>
+          {menuOpen && (
+            <TargetMenu
+              data={data}
+              focusNum={focusNum}
+              activeLap={activeLap}
+              compSet={compSet}
+              kind={target?.kind ?? kind}
+              chosen={chosen}
+              onPick={(k, cars) => {
+                setKind(k);
+                if (cars) setChosen(cars);
+                setMenuOpen(false);
+              }}
+              onClose={() => setMenuOpen(false)}
+            />
+          )}
         </div>
 
-        {/* Search */}
-        <div className="px-3 pb-1.5 relative">
-          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 text-[11px] pointer-events-none">
-            &#128269;
-          </span>
-          <input
-            type="text"
-            value={gapRefSearch}
-            onChange={(e) => setGapRefSearch(e.target.value)}
-            placeholder="Search car #, team or driver…"
-            className="w-full bg-white/[0.04] border border-white/[0.10] rounded-md pl-6 pr-2 py-1
-                       text-[11px] text-white placeholder-white/25 outline-none
-                       focus:border-white/30 font-mono"
-          />
-        </div>
+        {target && <TargetLine data={data} focusNum={focusNum} activeLap={activeLap} target={target} />}
 
-        {/* Car list */}
-        <div className="no-scrollbar overflow-y-auto px-2 pb-1" style={{ maxHeight: 120 }}>
-          {(() => {
-            const q = gapRefSearch.trim().toLowerCase();
-            const allCars = Object.keys(data.cars)
-              .map(Number)
-              .filter((n) => n !== focusNum)
-              .filter((n) => {
-                const c = data.cars[String(n)];
-                if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                if (q && !carMatchesSearch(data, n, q))
-                  return false;
-                return true;
-              })
-              .sort((a, b) => a - b);
-
-            const showFieldAvg = !q && !gapRefClassFilter;
-            const isFieldAvgChecked = gapRefSet.size === 0;
-
-            return (
-              <>
-                {showFieldAvg && (
-                  <label className="flex items-center gap-2 px-1.5 py-1 rounded cursor-pointer
-                                    hover:bg-white/[0.04] mb-1 border-b border-white/[0.06] pb-2">
-                    <input
-                      type="checkbox"
-                      checked={isFieldAvgChecked}
-                      onChange={() => setGapRefSet(new Set())}
-                      className="accent-blue-400 w-3 h-3 cursor-pointer"
-                    />
-                    <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                    <span className="font-mono font-bold text-blue-400 text-[11px] w-8 shrink-0">&mdash;</span>
-                    <span className="text-white/60 text-[10px] flex-1">
-                      Field Avg ({[...(compSet ?? [])].filter((n) => n !== focusNum).length} cars)
-                    </span>
-                  </label>
-                )}
-                {allCars.map((n) => {
-                  const c = data.cars[String(n)];
-                  const isChecked = gapRefSet.has(n);
-                  const isInComp = compSet?.has(n);
-                  const swatchColor = isInComp ? "#60a5fa" : "rgba(255,255,255,0.2)";
-                  return (
-                    <label
-                      key={n}
-                      className={`flex items-center gap-2 px-1.5 py-0.5 rounded cursor-pointer
-                                  hover:bg-white/[0.04] ${isChecked ? "bg-white/[0.06]" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          setGapRefSet((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(n)) next.delete(n);
-                            else next.add(n);
-                            return next;
-                          });
-                        }}
-                        className="accent-blue-400 w-3 h-3 cursor-pointer"
-                      />
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ background: swatchColor }}
-                      />
-                      <span className="font-mono font-bold text-white text-[11px] w-8 shrink-0">
-                        #{carNo(data, n)}
-                      </span>
-                      <span className="text-white/50 text-[10px] flex-1 truncate">
-                        {c.team ?? ""}
-                      </span>
-                      <span className="text-white/25 text-[9px] shrink-0">{c.cls}</span>
-                    </label>
-                  );
-                })}
-                {allCars.length === 0 && (
-                  <div className="text-center text-white/25 text-[11px] py-3">
-                    No cars match
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex gap-1.5 px-3 py-2 border-t border-white/[0.06]">
-          {[
-            {
-              label: "Select All",
-              action: () => {
-                const q = gapRefSearch.trim().toLowerCase();
-                const visible = Object.keys(data.cars)
-                  .map(Number)
-                  .filter((n) => n !== focusNum)
-                  .filter((n) => {
-                    const c = data.cars[String(n)];
-                    if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !carMatchesSearch(data, n, q))
-                      return false;
-                    return true;
-                  });
-                setGapRefSet((prev) => {
-                  const next = new Set(prev);
-                  visible.forEach((n) => next.add(n));
-                  return next;
-                });
-              },
-            },
-            {
-              label: "Clear",
-              action: () => {
-                const q = gapRefSearch.trim().toLowerCase();
-                const visible = Object.keys(data.cars)
-                  .map(Number)
-                  .filter((n) => n !== focusNum)
-                  .filter((n) => {
-                    const c = data.cars[String(n)];
-                    if (gapRefClassFilter && c.cls !== gapRefClassFilter) return false;
-                    if (q && !carMatchesSearch(data, n, q))
-                      return false;
-                    return true;
-                  });
-                setGapRefSet((prev) => {
-                  const next = new Set(prev);
-                  visible.forEach((n) => next.delete(n));
-                  return next;
-                });
-              },
-            },
-            {
-              label: "Select Class",
-              disabled: !gapRefClassFilter,
-              action: () => {
-                if (!gapRefClassFilter) return;
-                const clsCars = (data.classGroups[gapRefClassFilter] ?? []).filter(
-                  (n: number) => n !== focusNum
-                );
-                const allOn = clsCars.every((n: number) => gapRefSet.has(n));
-                setGapRefSet((prev) => {
-                  const next = new Set(prev);
-                  if (allOn) clsCars.forEach((n: number) => next.delete(n));
-                  else clsCars.forEach((n: number) => next.add(n));
-                  return next;
-                });
-              },
-            },
-          ].map(({ label, action, disabled }) => (
-            <button
-              key={label}
-              onClick={action}
-              disabled={disabled}
-              className="flex-1 py-1 text-[10px] font-semibold rounded border transition-colors
-                         border-white/[0.12] text-white/40 hover:text-white/70
-                         hover:border-white/25 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Laps shown"
+          value={win}
+          onChange={setWin}
+          options={[
+            { value: "recent", label: "Last 10" },
+            { value: "stint", label: "This stint" },
+            { value: "race", label: "Whole race" },
+          ]}
+        />
       </div>
-      )}
 
-      {!gapData ? (
-        <div className="flex-1 flex items-center justify-center">
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>No overlapping laps</span>
+      {!target || !last ? (
+        <div className="flex flex-1 items-center justify-center px-6 py-10 text-center text-sm" style={{ color: PANEL.muted }}>
+          {!target ? "No car to measure against at this lap." : "No laps to compare in this window."}
         </div>
       ) : (
         <>
-          {/* Stat boxes */}
-          <div className="grid grid-cols-3 gap-px bg-white/[0.06] border-b border-white/[0.06]">
-            {/* Current Gap */}
-            <div className="bg-[#0d0d1f] px-3 py-2">
-              <div className="text-[9px] text-white/40 uppercase tracking-wider font-semibold mb-0.5">
-                Current Gap
-              </div>
-              <div className={`text-[14px] font-mono font-bold ${
-                gapData.currentGap === null ? "text-white/40"
-                : gapData.currentGap < 0 ? "text-emerald-400"
-                : "text-red-400"
-              }`}>
-                {formatGap(gapData.currentGap, gapUnit, focusAvgLapSec)}
-              </div>
-            </div>
-
-            {/* 5L Avg */}
-            <div className="bg-[#0d0d1f] px-3 py-2">
-              <div className="text-[9px] text-white/40 uppercase tracking-wider font-semibold mb-0.5">
-                5L Avg {"\u0394"}
-              </div>
-              <div className={`text-[14px] font-mono font-bold ${
-                gapData.avgDelta5 === null ? "text-white/40"
-                : gapData.avgDelta5 < 0 ? "text-emerald-400"
-                : "text-red-400"
-              }`}>
-                {formatGap(gapData.avgDelta5 ?? null, gapUnit, focusAvgLapSec)}
-              </div>
-            </div>
-
-            {/* Trend */}
-            <div className="bg-[#0d0d1f] px-3 py-2">
-              <div className="text-[9px] text-white/40 uppercase tracking-wider font-semibold mb-0.5">
-                Trend
-              </div>
-              <div className={`text-[14px] font-bold ${
-                gapData.trend === "Closing" ? "text-emerald-400"
-                : gapData.trend === "Fading" ? "text-red-400"
-                : "text-white/60"
-              }`}>
-                {gapData.trend}
-              </div>
-            </div>
+          <Headline data={data} target={target} single={single} lap={last.lap} gap={last.gap!} rate={rate} fmt={fmt} unit={unit} />
+          <div className="px-4 pb-1 pt-3">
+            <GapChart data={data} rows={rows} single={single} />
           </div>
-
-          {/* Laps to leader */}
-          {leaderCalc && (
-            <div className="px-3 py-2 border-b border-white/[0.06]">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] text-white/40 uppercase tracking-wider font-semibold">
-                  {leaderCalc.lapsResult?.label ?? "Laps to Down"}
-                </span>
-                <span className={`text-[13px] font-mono font-bold ${
-                  leaderCalc.lapsResult?.color ?? "text-white/40"
-                }`}>
-                  {leaderCalc.lapsResult?.value ?? "\u2014"}
-                </span>
-              </div>
-              <div className="text-[9px] text-white/25 font-mono">
-                Leader: #{leaderCalc.leaderNum} {"\u00b7"}{" "}
-                Cum gap: {leaderCalc.cumGapSec?.toFixed(1)}s {"\u00b7"}{" "}
-                Rate: {leaderCalc.avgRatePerLap?.toFixed(2)}s/lap
-              </div>
-            </div>
-          )}
-
-          {/* SVG sparkline */}
-          <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-            <Sparkline gaps={gapData.gaps.map((g) => g.gap)} />
-          </div>
-
-          {/* Lap detail table — last 7 */}
-          <div className="flex-1 overflow-y-auto px-4" style={{ scrollbarWidth: "none" }}>
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                  <th className="text-left py-1.5 font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Lap</th>
-                  <th className="text-right py-1.5 font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Gap</th>
-                  <th className="text-right py-1.5 font-medium" style={{ color: "rgba(255,255,255,0.4)" }}>Δ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gapData.gaps.slice(-7).map((g) => (
-                  <tr key={g.lap} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <td className="py-1.5 tabular-nums" style={{ color: "rgba(255,255,255,0.6)" }}>L{g.lap}</td>
-                    <td className="py-1.5 text-right tabular-nums" style={{ color: "rgba(255,255,255,0.8)" }}>
-                      {formatGap(g.gap, gapUnit, focusAvgLapSec)}
-                    </td>
-                    <td className="py-1.5 text-right tabular-nums font-bold" style={{
-                      color: g.delta === null ? "rgba(255,255,255,0.2)"
-                        : g.delta < -0.01 ? "#4ade80"
-                        : g.delta > 0.01 ? "#f87171"
-                        : "rgba(255,255,255,0.3)",
-                    }}>
-                      {g.delta !== null ? (g.delta > 0 ? "+" : "") + g.delta.toFixed(2) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Outlook data={data} focusNum={focusNum} activeLap={activeLap} target={target} single={single} last={last} rate={rate} />
+          <GapTable data={data} focusNum={focusNum} single={single} rows={rows} fmt={fmt} showAll={showAll} onShowAll={() => setShowAll(true)} />
         </>
       )}
     </div>
   );
 }
 
-// ---- Helpers ----
+// ---- Header pieces ----
 
-function Sparkline({ gaps }: { gaps: number[] }) {
-  if (gaps.length < 2) return null;
+function TargetLine({ data, focusNum, activeLap, target }: { data: RaceChartData; focusNum: number; activeLap: number; target: GapTarget }) {
+  if (target.cars.length === 1) {
+    const n = target.cars[0];
+    const car = data.cars[String(n)];
+    const l = lapOf(car, activeLap);
+    const me = lapOf(data.cars[String(focusNum)], activeLap);
+    return (
+      <div className="flex items-stretch gap-2.5">
+        <span className="w-1 shrink-0 rounded" style={{ background: TARGET_COLOR }} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold">
+            <span style={{ color: TARGET_COLOR }}>#{carNo(data, n)}</span> {driversOf(data, n).team}
+          </div>
+          <div className="truncate text-xs" style={{ color: PANEL.muted }}>
+            {l ? `P${l.cp} in ${car?.cls} at lap ${activeLap}` : `Not running at lap ${activeLap}`}
+            {me ? ` · you are P${me.cp}` : ""} · kept for the whole window
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-stretch gap-2.5">
+      <span className="w-1 shrink-0 rounded" style={{ background: PANEL.muted }} />
+      <div className="text-xs" style={{ color: PANEL.muted }}>
+        Average of {target.cars.length} cars: {target.cars.slice(0, 8).map((n) => `#${carNo(data, n)}`).join(" ")}
+        {target.cars.length > 8 ? " …" : ""}
+      </div>
+    </div>
+  );
+}
 
-  const w = 420;
-  const h = 50;
-  const pad = 4;
+interface MenuProps {
+  data: RaceChartData;
+  focusNum: number;
+  activeLap: number;
+  compSet?: Set<number>;
+  kind: GapTargetKind;
+  chosen: number[];
+  onPick: (kind: GapTargetKind, cars?: number[]) => void;
+  onClose: () => void;
+}
 
-  const min = Math.min(...gaps);
-  const max = Math.max(...gaps);
-  const range = max - min || 1;
+/** The "Gap to" menu: a car picked for you, a group average, or any car. */
+function TargetMenu({ data, focusNum, activeLap, compSet, kind, chosen, onPick, onClose }: MenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState("");
+  const [draft, setDraft] = useState<number[]>(kind === "cars" ? chosen : []);
 
-  const points = gaps.map((g, i) => {
-    const x = pad + (i / (gaps.length - 1)) * (w - 2 * pad);
-    const y = pad + (1 - (g - min) / range) * (h - 2 * pad);
-    return `${x},${y}`;
-  });
+  useEffect(() => {
+    const away = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as Element).closest?.("[aria-haspopup=listbox]")) onClose();
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [onClose]);
 
-  const last = gaps[gaps.length - 1];
-  const dotColor = last >= 0 ? "#f87171" : "#4ade80";
+  const singles: GapTargetKind[] = ["ahead", "behind", "classLeader", "leader"];
+  const groups: GapTargetKind[] = ["classAvg", "chartAvg", "fieldAvg"];
+  const cars = useMemo(() => {
+    const query = q.trim();
+    if (!query) return [];
+    return Object.keys(data.cars)
+      .map(Number)
+      .filter((n) => n !== focusNum && carMatchesSearch(data, n, query))
+      .slice(0, 30);
+  }, [data, focusNum, q]);
+
+  const optionCls = "flex min-h-[48px] w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-45";
+  const check = (on: boolean) => (
+    <span className="flex w-4 shrink-0 justify-center">
+      {on && (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TRACE.focus} strokeWidth="3" aria-hidden="true">
+          <path d="M5 12l5 5L20 7" />
+        </svg>
+      )}
+    </span>
+  );
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 50 }}>
-      {/* Zero line if crosses zero */}
-      {min < 0 && max > 0 && (
-        <line
-          x1={pad} x2={w - pad}
-          y1={pad + (1 - (0 - min) / range) * (h - 2 * pad)}
-          y2={pad + (1 - (0 - min) / range) * (h - 2 * pad)}
-          stroke="rgba(255,255,255,0.1)" strokeDasharray="3,3"
-        />
+    <div
+      ref={ref}
+      role="listbox"
+      aria-label="Measure the gap to"
+      onKeyDown={(e) => e.key === "Escape" && onClose()}
+      className="absolute left-0 right-0 top-[46px] z-20 flex max-h-[70vh] flex-col overflow-y-auto rounded-xl border p-1.5"
+      style={{ background: PANEL.raised, borderColor: PANEL.control, boxShadow: "0 12px 32px rgba(0,0,0,0.45)", scrollbarWidth: "thin" }}
+    >
+      <Eyebrow className="px-2.5 pb-1 pt-2">One car · picked for you</Eyebrow>
+      {singles.map((k) => {
+        const t = resolveTarget(data, focusNum, k, activeLap);
+        const n = t?.cars[0];
+        const rel = n !== undefined ? relativeText(relativeTo(data, focusNum, n, activeLap)) : "";
+        const car = n !== undefined ? data.cars[String(n)] : undefined;
+        const pos = n !== undefined ? lapOf(car, activeLap) : undefined;
+        return (
+          <button key={k} type="button" role="option" aria-selected={kind === k} disabled={!t} onClick={() => onPick(k)} className={optionCls} style={kind === k ? { background: "rgba(244,140,52,0.14)" } : undefined}>
+            {check(kind === k)}
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{TARGET_NAMES[k]}</span>
+              <span className="block truncate text-xs" style={{ color: PANEL.muted }}>
+                {n !== undefined
+                  ? `#${carNo(data, n)} ${driversOf(data, n).team}${pos ? ` · P${k === "leader" ? pos.p : pos.cp}` : ""}`
+                  : k === "ahead" || k === "classLeader"
+                    ? "You lead the class"
+                    : k === "leader"
+                      ? "You lead the race"
+                      : "Nobody behind in class"}
+              </span>
+            </span>
+            {rel && <span className="shrink-0 text-xs tabular-nums" style={{ color: PANEL.muted }}>{rel}</span>}
+          </button>
+        );
+      })}
+
+      <div className="mx-1 my-1.5 h-px" style={{ background: PANEL.control }} />
+      <Eyebrow className="px-2.5 pb-1 pt-2">Average pace of a group</Eyebrow>
+      {groups.map((k) => {
+        const t = resolveTarget(data, focusNum, k, activeLap, { compSet });
+        return (
+          <button key={k} type="button" role="option" aria-selected={kind === k} disabled={!t} onClick={() => onPick(k)} className={`${optionCls} min-h-[44px]`} style={kind === k ? { background: "rgba(244,140,52,0.14)" } : undefined}>
+            {check(kind === k)}
+            <span className="flex-1 text-sm font-semibold">{t?.name ?? TARGET_NAMES[k]}</span>
+            <span className="text-xs tabular-nums" style={{ color: PANEL.muted }}>
+              {t ? `${t.cars.length} car${t.cars.length === 1 ? "" : "s"}` : k === "chartAvg" ? "none on the chart" : ""}
+            </span>
+          </button>
+        );
+      })}
+
+      <div className="mx-1 my-1.5 h-px" style={{ background: PANEL.control }} />
+      <label htmlFor="gap-target-search" className="px-2.5 pb-1.5 pt-2 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: PANEL.muted }}>
+        Pick a car
+      </label>
+      <div className="px-1.5 pb-1.5">
+        <div className="flex min-h-[40px] items-center gap-2 rounded-lg border px-2.5" style={{ background: PANEL.well, borderColor: PANEL.control }}>
+          <SearchIcon />
+          <input
+            id="gap-target-search"
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Car #, team or driver"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#6b6b88]"
+            autoComplete="off"
+          />
+        </div>
+      </div>
+      {cars.map((n) => {
+        const car = data.cars[String(n)];
+        const pos = lapOf(car, activeLap);
+        const ticked = draft.includes(n);
+        return (
+          <div key={n} className="flex items-center gap-1">
+            <button type="button" role="option" aria-selected={kind === "cars" && chosen.length === 1 && chosen[0] === n} onClick={() => onPick("cars", [n])} className={`${optionCls.replace(" w-full", "")} min-w-0 flex-1`}>
+              <span className="w-12 shrink-0 font-extrabold tabular-nums">#{carNo(data, n)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{driversOf(data, n).team}</span>
+                <span className="block truncate text-xs" style={{ color: PANEL.muted }}>
+                  {[driversOf(data, n).drivers, pos ? `${car?.cls} P${pos.cp}` : car?.cls].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+            </button>
+            <label className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center" title="Add to an average">
+              <input
+                type="checkbox"
+                checked={ticked}
+                onChange={() => setDraft((d) => (ticked ? d.filter((x) => x !== n) : [...d, n]))}
+                aria-label={`Add #${carNo(data, n)} to an average`}
+                className="h-4 w-4 cursor-pointer accent-[#F48C34]"
+              />
+            </label>
+          </div>
+        );
+      })}
+      {q.trim() && cars.length === 0 && (
+        <div className="px-2.5 py-2 text-xs" style={{ color: PANEL.muted }}>No cars match</div>
       )}
-      <polyline
-        points={points.join(" ")}
-        fill="none"
-        stroke="rgba(255,255,255,0.4)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* End dot */}
-      <circle
-        cx={parseFloat(points[points.length - 1].split(",")[0])}
-        cy={parseFloat(points[points.length - 1].split(",")[1])}
-        r={3}
-        fill={dotColor}
-      />
-    </svg>
+      {draft.length >= 2 ? (
+        <button
+          type="button"
+          onClick={() => onPick("cars", draft)}
+          className="m-1.5 min-h-[40px] rounded-lg text-sm font-semibold"
+          style={{ background: TRACE.focus, color: "#12122a" }}
+        >
+          Average of {draft.length} ticked cars
+        </button>
+      ) : (
+        <div className="px-2.5 pb-2 pt-1 text-xs" style={{ color: PANEL.muted }}>
+          Tick two or more cars to measure against their average
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- The gap now ----
+
+function rateWords(rate: number): { text: string; color: string; down: boolean | null } {
+  const r = Math.abs(rate).toFixed(2);
+  if (Math.abs(rate) < STEADY) return { text: "Holding steady", color: PANEL.muted, down: null };
+  return rate < 0
+    ? { text: `Gaining ${r} s/lap`, color: TRACE.gain, down: false }
+    : { text: `Losing ${r} s/lap`, color: TRACE.loss, down: true };
+}
+
+function Headline({
+  data,
+  target,
+  single,
+  lap,
+  gap,
+  rate,
+  fmt,
+  unit,
+}: {
+  data: RaceChartData;
+  target: GapTarget;
+  single: number | null;
+  lap: number;
+  gap: number;
+  rate: { rate: number; laps: number } | null;
+  fmt: (s: number) => string;
+  unit: Unit;
+}) {
+  const who = single !== null ? `#${carNo(data, single)}` : `the ${target.name.toLowerCase()}`;
+  const w = rate ? rateWords(rate.rate) : null;
+  return (
+    <div className="flex items-end justify-between gap-3 border-b px-4 py-4" style={{ borderColor: PANEL.line }}>
+      <div className="min-w-0">
+        <div className="mb-0.5 text-xs" style={{ color: PANEL.muted }}>
+          {gap >= 0 ? "Behind" : "Ahead of"} {who} at lap {lap}
+        </div>
+        <div className="text-[40px] font-extrabold leading-none tracking-tight tabular-nums">
+          {fmt(gap)}
+          {unit === "s" && <span className="text-xl font-semibold" style={{ color: PANEL.muted }}> s</span>}
+        </div>
+      </div>
+      <div className="shrink-0 text-right">
+        {w ? (
+          <>
+            <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-bold tabular-nums" style={{ color: w.color, background: w.down === null ? "rgba(154,154,180,0.12)" : w.down ? "rgba(248,113,113,0.12)" : "rgba(74,222,128,0.12)" }}>
+              {w.down !== null && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                  <path d={w.down ? "M12 5v14M5 12l7 7 7-7" : "M12 19V5M5 12l7-7 7 7"} />
+                </svg>
+              )}
+              {w.text}
+            </div>
+            <div className="mt-1.5 text-[11px]" style={{ color: PANEL.muted }}>
+              last {rate!.laps} green laps
+            </div>
+          </>
+        ) : (
+          <div className="text-[11px]" style={{ color: PANEL.muted }}>Not enough green laps for a rate</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Chart ----
+
+const W = 368;
+const H = 150;
+const L = 30;
+const R = 360;
+const T = 8;
+const B = 132;
+
+function GapChart({ data, rows, single }: { data: RaceChartData; rows: GapRow[]; single: number | null }) {
+  const pts = rows.filter((r) => r.gap !== null);
+  if (pts.length < 2) return null;
+  const first = rows[0].lap;
+  const lastLap = rows[rows.length - 1].lap;
+  const span = Math.max(1, lastLap - first);
+  const vals = pts.map((r) => r.gap!);
+  const ticks = niceTicks(Math.min(0, ...vals), Math.max(0, ...vals), 3);
+  const d0 = ticks[0];
+  const d1 = ticks[ticks.length - 1];
+  const x = (lap: number) => L + ((lap - first) / span) * (R - L);
+  const y = (v: number) => T + (1 - (v - d0) / (d1 - d0 || 1)) * (B - T);
+
+  // The line, broken where a lap is missing.
+  const segs: string[] = [];
+  let cur: string[] = [];
+  for (const r of rows) {
+    if (r.gap === null) {
+      if (cur.length > 1) segs.push(cur.join(" "));
+      cur = [];
+    } else cur.push(`${x(r.lap).toFixed(1)},${y(r.gap).toFixed(1)}`);
+  }
+  if (cur.length > 1) segs.push(cur.join(" "));
+
+  const fcy = (data.fcy ?? [])
+    .filter(([a, b]) => b >= first && a <= lastLap)
+    .map(([a, b]) => [Math.max(a, first), Math.min(b, lastLap)] as const);
+  const dense = span > 60;
+  const pr = dense ? 3.5 : 7;
+  const end = pts[pts.length - 1];
+  const fp = rows.filter((r) => r.focusPit && r.gap !== null);
+  const tp = single !== null ? rows.filter((r) => r.targetPit && r.gap !== null) : [];
+  const mid = Math.round((first + lastLap) / 2);
+  const desc = `Gap from lap ${first} to ${lastLap}: ${secondsText(pts[0].gap!)} s ${pts[0].gap! >= 0 ? "behind" : "ahead"} to ${secondsText(end.gap!)} s ${end.gap! >= 0 ? "behind" : "ahead"}`;
+
+  return (
+    <figure className="m-0">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" style={{ height: "auto" }} role="img" aria-label={desc}>
+        {fcy.map(([a, b]) => (
+          <rect key={`f${a}`} x={Math.max(L, x(a - 0.5))} y={T - 2} width={Math.max(3, Math.min(R, x(b + 0.5)) - Math.max(L, x(a - 0.5)))} height={B - T + 4} fill="rgba(251,191,36,0.10)" />
+        ))}
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={R} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#3a3a60" : PANEL.line} />
+            <text x={L - 6} y={y(t) + 3.5} textAnchor="end" fontSize="10" fill={PANEL.muted}>
+              {t < 0 ? "−" : ""}{Math.abs(t) >= 60 ? secondsText(t, 0) : Math.abs(t)}
+            </text>
+          </g>
+        ))}
+        {segs.map((s, i) => (
+          <polyline key={i} points={s} fill="none" stroke={TRACE.focus} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+        {tp.map((r) => (
+          <g key={`t${r.lap}`}>
+            <circle cx={x(r.lap)} cy={y(r.gap!)} r={pr} fill={PANEL.card} stroke={TARGET_COLOR} strokeWidth="1.5" />
+            {!dense && <text x={x(r.lap)} y={y(r.gap!) + 3.3} textAnchor="middle" fontSize="9" fontWeight="800" fill={TARGET_COLOR}>P</text>}
+          </g>
+        ))}
+        {fp.map((r) => (
+          <g key={`p${r.lap}`}>
+            <circle cx={x(r.lap)} cy={y(r.gap!)} r={pr} fill={TRACE.focus} />
+            {!dense && <text x={x(r.lap)} y={y(r.gap!) + 3.3} textAnchor="middle" fontSize="9" fontWeight="800" fill={PANEL.card}>P</text>}
+          </g>
+        ))}
+        <line x1={x(end.lap)} x2={x(end.lap)} y1={T - 2} y2={B + 2} stroke="rgba(255,255,255,0.35)" strokeDasharray="3 3" />
+        <circle cx={x(end.lap)} cy={y(end.gap!)} r="4" fill={TRACE.focus} />
+      </svg>
+      <div className="flex justify-between pl-[30px] text-[11px] tabular-nums" style={{ color: PANEL.muted }}>
+        <span>L{first}</span>
+        {span >= 4 && <span>L{mid}</span>}
+        <span>L{lastLap}</span>
+      </div>
+      <figcaption className="flex flex-wrap gap-x-3 gap-y-1 pt-2 text-[11px]" style={{ color: PANEL.muted }}>
+        <span className="flex items-center gap-1">
+          <span className="h-3 w-3 rounded-full" style={{ background: TRACE.focus }} />
+          Your stop
+        </span>
+        {single !== null && (
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full border-[1.5px]" style={{ borderColor: TARGET_COLOR }} />#{carNo(data, single)} stop
+          </span>
+        )}
+        {fcy.length > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(251,191,36,0.35)" }} />
+            Caution
+          </span>
+        )}
+        <span>Seconds behind · below 0 = ahead</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+// ---- At this pace ----
+
+interface Line {
+  dot: string;
+  lead: string;
+  rest: string;
+}
+
+/** How a single car is moving relative to the focus car over the last 10 laps. */
+function trend(data: RaceChartData, focusNum: number, other: number, lap: number) {
+  const rows = gapSeries(data, focusNum, [other], Math.max(1, lap - 9), lap);
+  const last = [...rows].reverse().find((r) => r.gap !== null);
+  return { gap: last?.gap ?? null, rate: gapRate(rows, 5)?.rate ?? null };
+}
+
+function lapsUntil(distance: number, speed: number): number | null {
+  if (!(speed > STEADY) || !(distance > 0)) return null;
+  const n = Math.round(distance / speed);
+  return n >= 1 && n < 1000 ? n : null;
+}
+
+function Outlook({
+  data,
+  focusNum,
+  activeLap,
+  target,
+  single,
+  last,
+  rate,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  activeLap: number;
+  target: GapTarget;
+  single: number | null;
+  last: GapRow;
+  rate: { rate: number; laps: number } | null;
+}) {
+  const lines: Line[] = [];
+  const me = data.cars[String(focusNum)];
+  const at = lapOf(me, activeLap);
+
+  // 1. The car (or group) being measured against.
+  if (rate && last.gap !== null) {
+    const r = rate.rate;
+    const g = last.gap;
+    const quick = Math.abs(r).toFixed(2);
+    if (single !== null) {
+      const who = `#${carNo(data, single)}`;
+      if (g >= 0) {
+        const n = lapsUntil(g, -r);
+        if (n !== null) lines.push({ dot: TARGET_COLOR, lead: `Catching ${who}`, rest: ` — ${quick} s a lap; level around lap ${last.lap + n}.` });
+        else if (r > STEADY) lines.push({ dot: TARGET_COLOR, lead: `Not catching ${who}`, rest: ` — they are ${quick} s a lap quicker.` });
+        else lines.push({ dot: TARGET_COLOR, lead: `Holding ${who}`, rest: " — the gap is steady." });
+      } else {
+        const n = lapsUntil(-g, r);
+        if (n !== null) lines.push({ dot: TARGET_COLOR, lead: `${who} is closing`, rest: ` — ${quick} s a lap; reaches you around lap ${last.lap + n}.` });
+        else if (r < -STEADY) lines.push({ dot: TARGET_COLOR, lead: `Pulling away from ${who}`, rest: ` — ${quick} s a lap.` });
+        else lines.push({ dot: TARGET_COLOR, lead: `Holding off ${who}`, rest: " — the gap is steady." });
+      }
+    } else {
+      lines.push({
+        dot: PANEL.muted,
+        lead: Math.abs(r) < STEADY ? "Matching" : r < 0 ? "Quicker than" : "Slower than",
+        rest: ` the ${target.name.toLowerCase()}${Math.abs(r) < STEADY ? "." : ` by ${quick} s a lap.`}`,
+      });
+    }
+  }
+
+  // 2. The car behind in class, when it isn't the one being measured.
+  const behind = resolveTarget(data, focusNum, "behind", activeLap)?.cars[0];
+  if (behind !== undefined && behind !== single) {
+    const t = trend(data, focusNum, behind, activeLap);
+    if (t.gap !== null && t.rate !== null) {
+      const back = -t.gap; // seconds the car behind is back
+      const who = `#${carNo(data, behind)} behind`;
+      const rel = relativeTo(data, focusNum, behind, activeLap);
+      if (rel.laps > 0) lines.push({ dot: BEHIND_COLOR, lead: who, rest: ` is ${relativeText(rel).replace(" behind", "")} down on you.` });
+      else {
+        const n = lapsUntil(back, t.rate);
+        lines.push({
+          dot: BEHIND_COLOR,
+          lead: who,
+          rest:
+            n !== null
+              ? ` is ${back.toFixed(1)} s back and closing ${t.rate.toFixed(2)} s a lap — reaches you around lap ${activeLap + n}.`
+              : t.rate < -STEADY
+                ? ` is ${back.toFixed(1)} s back and dropping away ${Math.abs(t.rate).toFixed(2)} s a lap.`
+                : ` is ${back.toFixed(1)} s back, holding steady.`,
+        });
+      }
+    }
+  }
+
+  // 3. The class leader: on the lead lap or not, and whether they will lap you.
+  const leader = resolveTarget(data, focusNum, "classLeader", activeLap)?.cars[0];
+  if (at && at.cp === 1) {
+    lines.push({ dot: PANEL.muted, lead: "Leading the class.", rest: "" });
+  } else if (leader !== undefined && leader !== single) {
+    const rel = relativeTo(data, focusNum, leader, activeLap);
+    const t = trend(data, focusNum, leader, activeLap);
+    const leaderLap = recentPace(data, leader, activeLap, 10);
+    const who = `#${carNo(data, leader)}`;
+    const down = rel.laps < 0 ? -rel.laps : 0;
+    let next = "";
+    if (t.gap !== null && t.rate !== null && leaderLap) {
+      const toNext = (down + 1) * leaderLap - t.gap;
+      const n = lapsUntil(toNext, t.rate);
+      next = n !== null ? ` At this pace they lap you${down ? " again" : ""} around lap ${activeLap + n}.` : t.rate > STEADY ? "" : " You're keeping pace with them.";
+    }
+    lines.push({
+      dot: PANEL.muted,
+      lead: down ? `${down} lap${down === 1 ? "" : "s"} down` : "On the lead lap.",
+      rest: down ? ` to class leader ${who}.${next}` : ` Class leader ${who} is ${rel.sec !== null ? `${Math.abs(rel.sec).toFixed(1)} s` : "less than a lap"} ahead.${next}`,
+    });
+  }
+
+  if (lines.length === 0) return null;
+  return (
+    <div className="mx-4 my-3 flex flex-col gap-2.5 rounded-xl border p-3" style={{ background: PANEL.well, borderColor: PANEL.line }}>
+      <Eyebrow>At this pace</Eyebrow>
+      {lines.map((l, i) => (
+        <div key={i} className="flex gap-2.5">
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: l.dot }} />
+          <div className="text-[13px] leading-snug">
+            <strong>{l.lead}</strong>
+            {l.rest}
+          </div>
+        </div>
+      ))}
+      <div className="text-[11px]" style={{ color: PANEL.muted }}>
+        Green-flag laps only · pit stops and cautions are left out of the rates
+      </div>
+    </div>
+  );
+}
+
+// ---- Lap table ----
+
+type Item =
+  | { kind: "lap"; row: GapRow }
+  | { kind: "caution"; from: number; to: number; gapIn: number | null; gapOut: number | null; you: boolean; them: boolean };
+
+function tableItems(rows: GapRow[]): Item[] {
+  const out: Item[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r.caution) {
+      out.push({ kind: "lap", row: r });
+      continue;
+    }
+    let j = i;
+    while (j + 1 < rows.length && rows[j + 1].caution) j++;
+    const run = rows.slice(i, j + 1);
+    out.push({
+      kind: "caution",
+      from: r.lap,
+      to: rows[j].lap,
+      gapIn: i > 0 ? rows[i - 1].gap : null,
+      gapOut: rows[j].gap,
+      you: run.some((x) => x.focusPit),
+      them: run.some((x) => x.targetPit),
+    });
+    i = j;
+  }
+  return out.reverse();
+}
+
+const SHOWN = 8;
+
+function GapTable({
+  data,
+  focusNum,
+  single,
+  rows,
+  fmt,
+  showAll,
+  onShowAll,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  single: number | null;
+  rows: GapRow[];
+  fmt: (s: number) => string;
+  showAll: boolean;
+  onShowAll: () => void;
+}) {
+  const items = tableItems(rows);
+  const shown = showAll ? items : items.slice(0, SHOWN);
+  const them = single !== null ? `#${carNo(data, single)}` : "Avg";
+  const signed = (v: number | null) => (v === null ? "—" : `${v < 0 ? "−" : ""}${fmt(v)}`);
+  return (
+    <div className="flex-1 px-4 pb-4">
+      <table className="w-full border-collapse text-[13px]">
+        <thead>
+          <tr className="text-right text-[11px]" style={{ color: PANEL.muted }}>
+            <th className="py-1.5 text-left font-semibold">Lap</th>
+            <th className="py-1.5 font-semibold">Gap</th>
+            <th className="py-1.5 font-semibold">Change</th>
+            <th className="py-1.5 font-semibold" style={{ color: TRACE.focus }}>#{carNo(data, focusNum)}</th>
+            <th className="py-1.5 font-semibold" style={{ color: single !== null ? TARGET_COLOR : PANEL.muted }}>{them}</th>
+          </tr>
+        </thead>
+        <tbody className="text-right tabular-nums">
+          {shown.map((it, i) => {
+            if (it.kind === "caution") {
+              const who = it.you && it.them ? "both stopped" : it.you ? "you stopped" : it.them ? `${them} stopped` : "";
+              return (
+                <tr key={`c${it.from}`} className="border-t" style={{ borderColor: PANEL.line, color: TRACE.fcyBar }}>
+                  <td colSpan={5} className="py-[7px] pl-1.5 text-left text-xs">
+                    {it.from === it.to ? `Lap ${it.from}` : `Laps ${it.from}–${it.to}`} · caution{who ? ` · ${who}` : ""}
+                    {it.gapIn !== null && it.gapOut !== null ? ` · gap ${signed(it.gapIn)} → ${signed(it.gapOut)}` : ""}
+                  </td>
+                </tr>
+              );
+            }
+            const r = it.row;
+            const c = r.change;
+            const gained = c !== null && c < -0.05;
+            const lost = c !== null && c > 0.05;
+            return (
+              <tr key={r.lap} className="border-t" style={{ borderColor: PANEL.line, background: i === 0 && !showAll ? "rgba(244,140,52,0.08)" : undefined }}>
+                <td className="py-[7px] pl-1.5 text-left" style={{ fontWeight: i === 0 ? 700 : 400 }}>
+                  {r.lap}
+                  {(r.focusPit || r.targetPit) && (
+                    <span className="ml-1.5 rounded px-1 text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.08)", color: r.focusPit ? TRACE.focus : TARGET_COLOR }}>
+                      PIT
+                    </span>
+                  )}
+                </td>
+                <td style={{ fontWeight: i === 0 ? 700 : 400 }}>{signed(r.gap)}</td>
+                <td style={{ color: gained ? TRACE.gain : lost ? TRACE.loss : PANEL.muted }}>
+                  {c === null ? "—" : gained ? `▲ ${fmt(c)}` : lost ? `▼ ${fmt(c)}` : fmt(c)}
+                </td>
+                <td>{lapTimeText(r.focusLt)}</td>
+                <td>{lapTimeText(r.targetLt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!showAll && items.length > SHOWN && (
+        <button type="button" onClick={onShowAll} className="mt-1.5 min-h-[36px] text-[13px] font-semibold" style={{ color: TRACE.focus }}>
+          Show all {rows.length} laps
+        </button>
+      )}
+      <div className="pt-1.5 text-[11px]" style={{ color: PANEL.muted }}>
+        ▲ green = you gained · ▼ red = you lost · newest first · − = ahead
+      </div>
+    </div>
   );
 }
