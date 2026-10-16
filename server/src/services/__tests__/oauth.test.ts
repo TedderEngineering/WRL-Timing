@@ -90,7 +90,13 @@ describe("sign in with another account", () => {
     const s = { provider: "google" as const, state: "a", verifier: "v", nonce: "n", site: "racetrace" as const, next: "/", exp: Date.now() + 1000 };
     const sealed = sealState(s);
     expect(openState(sealed)).toMatchObject({ state: "a" });
-    expect(openState(sealed.replace(/.$/, (c) => (c === "A" ? "B" : "A")))).toBeNull();
+    // Any change to the seal, including the last character's spare bits, is refused.
+    for (const c of ["A", "B", "Q", "g"]) {
+      const tampered = sealed.slice(0, -1) + c;
+      if (tampered !== sealed) expect(openState(tampered)).toBeNull();
+    }
+    const [body, mac] = sealed.split(".");
+    expect(openState(`${body.slice(0, -2)}xx.${mac}`)).toBeNull();
     expect(openState(sealState({ ...s, exp: Date.now() - 1 }))).toBeNull();
     expect(openState(undefined)).toBeNull();
   });
