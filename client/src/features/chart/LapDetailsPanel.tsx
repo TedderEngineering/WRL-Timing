@@ -21,6 +21,7 @@ export function pitKindLabel(kind: string | undefined, driveThrough: boolean): s
   if (kind === "penalty_served") return "■ Penalty served";
   if (kind === "garage") return "● Garage visit";
   if (kind === "retirement") return "✕ Retired in the pits";
+  if (kind === "red_flag_hold") return "■ Red flag: held in the pit lane";
   return "● Pit stop";
 }
 

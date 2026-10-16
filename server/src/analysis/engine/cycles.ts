@@ -193,7 +193,8 @@ export interface Swap {
 }
 
 export function passagesAt(byCar: Map<string, Passage[]>, car: CarId, L: number): Passage[] {
-  return (byCar.get(car) ?? []).filter((p) => p.inLap <= L && L <= (p.outLap ?? p.inLap));
+  // A red-flag hold is not a pit visit for swaps: every held car waits in the pit lane together.
+  return (byCar.get(car) ?? []).filter((p) => p.kind !== "red_flag_hold" && p.inLap <= L && L <= (p.outLap ?? p.inLap));
 }
 
 function rowAtLap(rows: LapRow[], L: number): LapRow | undefined {

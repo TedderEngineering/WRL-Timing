@@ -79,6 +79,9 @@ export interface SynthRace {
   driveTime?: boolean;
   /** Drive Time PIT_TYPE=PENALTY on these (car, in-lap). */
   penaltyPitType?: [string, number][];
+  /** A red flag as race seconds [red flag, restart]: an RF record, then FCY at the restart. Drive Time
+   *  stops its clock during it, so a PIT row that spans it is split at both ends. */
+  red?: [number, number];
 }
 
 interface Built {
@@ -167,6 +170,10 @@ export function synthImsa(r: SynthRace): InputFile[] {
     evs.push([a, "FCY"]);
     evs.push([z, "GF"]);
   }
+  if (r.red) {
+    evs.push([r.red[0], "RF"]);
+    evs.push([r.red[1], "FCY"]);
+  }
   const lastEnd = Math.max(...built.map((b) => b.ends[b.ends.length - 1]));
   const leaderLast = Math.min(...built.filter((b) => b.car.laps === Math.max(...built.map((x) => x.car.laps))).map((b) => b.ends[b.ends.length - 1]));
   void lastEnd;
@@ -206,7 +213,15 @@ export function synthImsa(r: SynthRace): InputFile[] {
         if (p.stop.noCard) continue;
         const pen = (r.penaltyPitType ?? []).some(([c, l]) => c === b.car.car && l === p.stop.lap);
         const out = p.outC ?? lastEnd + 60;
-        dt.push([b.car.car, "T", "V", b.car.cls, "", "", "", clockStr(Math.floor(p.inC)).replace(/\.000$/, ""), clockStr(Math.floor(out)).replace(/\.000$/, ""), "PIT", pen ? "PENALTY" : "NORMAL", durStr(out - p.inC), "", "", ""].join(";"));
+        const row = (a: number, z: number) =>
+          dt.push([b.car.car, "T", "V", b.car.cls, "", "", "", clockStr(Math.floor(a)).replace(/\.000$/, ""), clockStr(Math.floor(z)).replace(/\.000$/, ""), "PIT", pen ? "PENALTY" : "NORMAL", durStr(z - a), "", "", ""].join(";"));
+        const rs = r.red ? start + r.red[0] : null;
+        const re = r.red ? start + r.red[1] : null;
+        if (rs !== null && re !== null && p.inC < re && out > rs) {
+          // Drive Time pauses during the red flag: the part before it, then the part after the restart.
+          if (p.inC < rs) row(p.inC, rs);
+          if (out > re) row(re, out);
+        } else row(p.inC, out);
       }
     }
     files.push(textFile("20_Drive Time_Race.CSV", "drive_time", dt.join("\n") + "\n"));

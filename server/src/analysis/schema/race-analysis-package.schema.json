@@ -1504,8 +1504,10 @@
             "penalty_served",
             "garage",
             "retirement",
-            "pit_lane_start"
-          ]
+            "pit_lane_start",
+            "red_flag_hold"
+          ],
+          "description": "red_flag_hold: a visit that falls mostly inside a red flag (cars held in the pit lane until the restart); not a pit stop, so no stop number, no time lost and no pit cycle."
         },
         "kindBasis": {
           "type": "array",
@@ -1521,7 +1523,8 @@
               "garage_threshold",
               "no_later_lap",
               "pit_lane_start_time",
-              "default_stop"
+              "default_stop",
+              "red_flag_period"
             ]
           },
           "description": "Evidence used by D-PIT-KIND, in order of precedence."

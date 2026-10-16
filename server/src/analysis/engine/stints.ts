@@ -45,7 +45,9 @@ export function buildStints(
       sr = "pit_lane_start";
     }
     for (const p of plist) {
-      if (!SERVICE.has(p.kind)) continue;
+      // A red-flag hold ends a stint only when the driver changed during it.
+      const heldChange = p.kind === "red_flag_hold" && p.inDriverNumber !== null && p.outDriverNumber !== null && p.inDriverNumber !== p.outDriverNumber;
+      if (!SERVICE.has(p.kind) && !heldChange) continue;
       const endIdx = p.inIdx ?? rows.length - 1;
       if (p.kind === "retirement") {
         segs.push({ a, b: p.pinT ?? rows[endIdx].endT, sr, er: "retired", i0, i1: endIdx });

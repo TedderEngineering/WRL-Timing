@@ -346,11 +346,11 @@ export interface Events {
 }
 
 export type PassageKind =
-  | 'stop' | 'drive_through' | 'stop_and_go' | 'penalty_served' | 'garage' | 'retirement' | 'pit_lane_start';
+  | 'stop' | 'drive_through' | 'stop_and_go' | 'penalty_served' | 'garage' | 'retirement' | 'pit_lane_start' | 'red_flag_hold';
 
 export type KindBasis =
   | 'drive_time_pit_type' | 'rc_penalty_match' | 'rc_penalty_served' | 'transit_time' | 'duration_only'
-  | 'loss_fraction_fallback' | 'garage_threshold' | 'no_later_lap' | 'pit_lane_start_time' | 'default_stop';
+  | 'loss_fraction_fallback' | 'garage_threshold' | 'no_later_lap' | 'pit_lane_start_time' | 'default_stop' | 'red_flag_period';
 
 export type TimeLostMethod = 'green_reference' | 'fcy_neighbours' | 'fcy_lap_field' | 'see_group' | 'none';
 
