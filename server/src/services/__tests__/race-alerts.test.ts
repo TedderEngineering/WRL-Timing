@@ -13,8 +13,15 @@ const fake = vi.hoisted(() => {
       findMany: async ({ where }: Row) => state.sends.filter((s) => s.raceId === where.raceId),
       create: async ({ data }: Row) => {
         if (state.sends.some((s) => s.userId === data.userId && s.raceId === data.raceId)) throw Object.assign(new Error("unique"), { code: "P2002" });
-        state.sends.push(data);
+        state.sends.push({ officialCheckedAt: null, ...data });
         return data;
+      },
+      updateMany: async ({ where, data }: Row) => {
+        const rows = state.sends.filter(
+          (s) => s.userId === where.userId && s.raceId === where.raceId && (!("officialCheckedAt" in where) || s.officialCheckedAt === where.officialCheckedAt)
+        );
+        rows.forEach((r) => Object.assign(r, data));
+        return { count: rows.length };
       },
     },
     userPreferences: {
@@ -30,7 +37,7 @@ vi.mock("../email.js", async (orig) => ({
   sendRaceAlertEmail: async (m: Record<string, unknown>) => void fake.state.mail.push(m),
 }));
 
-import { alertSubject, readUnsubscribeToken, sendRaceAlerts, setRaceAlerts, unsubscribeToken } from "../race-alerts.js";
+import { alertSubject, factChanges, readUnsubscribeToken, sendRaceAlerts, setRaceAlerts, unsubscribeToken } from "../race-alerts.js";
 
 const lap = (l: number, p: number, cp: number, pit = 0) => ({ l, p, cp, ltSec: 100, pit, flag: "GF", lt: "" });
 const NOW = Date.UTC(2026, 9, 12);
@@ -86,6 +93,63 @@ describe("race-ready emails", () => {
     const f: any = { number: "7", cls: "GTD", finishClass: 3, finishOverall: 9, status: null, pitCycles: [{ cycle: 2, net: 3 }, { cycle: 1, net: -1 }] };
     expect(alertSubject(f, "Road America", "provisional")).toBe("#7 at Road America: P3 in GTD, gained 3 places in pit cycle 2 (provisional)");
     expect(alertSubject({ ...f, finishClass: null, status: "dnf", pitCycles: [] }, "Road America", "official")).toBe("#7 at Road America: did not finish");
+  });
+});
+
+describe("a second email when official results change the car's result", () => {
+  const provisional = () => {
+    fake.state.race!.resultsStatus = "provisional";
+  };
+  const official = () => {
+    fake.state.race!.resultsStatus = "official";
+  };
+
+  it("follows only when the car's finish or pit cycles changed, once, listing the change", async () => {
+    provisional();
+    await sendRaceAlerts("vir", NOW);
+    expect(fake.state.mail[0].subject).toMatch(/\(provisional\)$/);
+    expect(fake.state.sends[0]).toMatchObject({ resultsStatus: "provisional", facts: { finishClass: 2, cls: "GS" } });
+
+    // Official: #67 is now classified P1 (the other car penalised behind it).
+    official();
+    fake.state.race!.chartData.cars["67"].finishPosClass = 1;
+    fake.state.race!.chartData.cars["8"].finishPosClass = 2;
+    const r = await sendRaceAlerts("vir", NOW + 2 * 86_400_000);
+    expect(r.sent).toBe(1);
+    const m = fake.state.mail[1];
+    expect(m.subject).toMatch(/^Official: #67 at VIRginia International Raceway: P1 in GS/);
+    expect(m.html).toContain("Changed since the provisional results");
+    expect(m.html).toContain("Finish: P2 in GS → P1 in GS");
+    expect(fake.state.sends[0].officialSentAt).toBeInstanceOf(Date);
+
+    // Never a third.
+    expect((await sendRaceAlerts("vir", NOW + 3 * 86_400_000)).sent).toBe(0);
+  });
+
+  it("sends nothing when the official results change nothing for the car", async () => {
+    provisional();
+    await sendRaceAlerts("vir", NOW);
+    official();
+    expect((await sendRaceAlerts("vir", NOW + 86_400_000)).sent).toBe(0);
+    expect(fake.state.mail).toHaveLength(1);
+    expect(fake.state.sends[0].officialCheckedAt).toBeInstanceOf(Date);
+  });
+
+  it("sends no follow-up when the first email was already official, or kept no facts", async () => {
+    await sendRaceAlerts("vir", NOW); // official from the start
+    fake.state.race!.chartData.cars["67"].finishPosClass = 1;
+    expect((await sendRaceAlerts("vir", NOW + 86_400_000)).sent).toBe(0);
+
+    fake.state.sends = [{ userId: "u1", raceId: "vir", carId: "c1", resultsStatus: null, facts: null, officialCheckedAt: null }];
+    expect((await sendRaceAlerts("vir", NOW + 86_400_000)).sent).toBe(0);
+  });
+
+  it("words pit-cycle and status changes as facts", () => {
+    const base = { cls: "GS", finishClass: 4, finishOverall: 10, status: null, pitCycles: [{ cycle: 1, net: -2 }] };
+    expect(factChanges(base, { ...base, pitCycles: [{ cycle: 1, net: 1 }] })).toEqual(["Pit cycle 1: lost 2 → gained 1"]);
+    expect(factChanges(base, { ...base, finishClass: null, status: "dsq" })).toEqual(["Finish: P4 in GS → disqualified"]);
+    expect(factChanges(base, { ...base, finishOverall: 11 })).toEqual(["Overall: P10 → P11"]);
+    expect(factChanges(base, base)).toEqual([]);
   });
 });
 

@@ -371,11 +371,22 @@ model UserCar {
 
 /// One race-ready email per race per user (engagement plan D): the row is written before the
 /// email is sent, so a second trigger (publish, then results turning official) never repeats it.
+/// One exception: when the first email went out on provisional results and the car's finish or
+/// pit cycles changed once they turned official, one "results are official" email follows
+/// (owner decision, Oct 15 2026). `facts` keeps what the first email said, to compare.
 model RaceAlertSend {
-  userId String   @map("user_id")
-  raceId String   @map("race_id")
-  carId  String?  @map("car_id")
-  sentAt DateTime @default(now()) @map("sent_at")
+  userId            String    @map("user_id")
+  raceId            String    @map("race_id")
+  carId             String?   @map("car_id")
+  sentAt            DateTime  @default(now()) @map("sent_at")
+  /// The race's results status when the first email went out ("official" | "provisional").
+  resultsStatus     String?   @map("results_status")
+  /// The facts the first email stated: finish and pit cycles (null on rows from before this).
+  facts             Json?
+  /// When official results were compared with `facts` (set once, email or not).
+  officialCheckedAt DateTime? @map("official_checked_at")
+  /// When the "results are official" email went out, if something had changed.
+  officialSentAt    DateTime? @map("official_sent_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
