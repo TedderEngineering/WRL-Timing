@@ -76,6 +76,8 @@ The validator (`validate-package`, rules V1–V8 and A1–A20; banned phrases in
 
 **Refs in patches.** A ref needs only `factId` and `field` (plus `transform` for a signed value): `analysis.ts merge` fills `value`, `unit` and `display` from the fact. A ref to a missing fact or field is reported, never guessed.
 
+**Race patch shape.** `raceSummary` = `{headline: Prose, paragraphs: Prose[], classSummaries: [{class, text: Prose}], keyMoments: [{lap: ref, lapEnd?: ref, causes, title: Prose, text: Prose, cars, factIds}]}`; a key moment's `lap` is a bare ref to a lap field (`inLap`, `lap`, `leaderLaps[0]`, `lastCompletedLap`). Titles have no digits, so name cars in the text, not the title.
+
 **Evidence rule.**
 - Every number is a placeholder `{n}` with `refs[n] = {value, factId, field, unit}`: positions, laps, times, counts, gaps. Copy `factId` from the digest row and `field` from the column header.
 - Cars `{car:<id>}`, classes `{class:<id>}`, drivers `{driver:<car>:<n>}`. Car ids are strings: `007` ≠ `7`.

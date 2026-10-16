@@ -862,7 +862,7 @@ async function main() {
     case "reimport-plan":
       return cmdReimportPlan(a);
     case "upload":
-      return cmdUpload(args);
+      return cmdUpload(a);
     case "analyze":
       return cmdAnalyze(a);
     case "names":

@@ -71,7 +71,8 @@ export function fillRef(r: Partial<FactRef> & { factId: string; field: string },
   if (obj === null) throw new Error(`unknown fact ${r.factId}`);
   const raw = fieldOf(obj, r.field);
   if (raw === undefined) throw new Error(`${r.factId} has no field ${r.field}`);
-  const unit = r.unit ?? unitFor(r.field) ?? undefined;
+  // A nested field ("positionEffect.classPosBefore") takes the unit of its last part.
+  const unit = r.unit ?? unitFor(r.field) ?? unitFor(r.field.split(".").pop() ?? "") ?? undefined;
   let value = r.value;
   if (value === undefined) {
     if (typeof raw === "number") value = r.transform === "abs" ? Math.abs(raw) : r.transform === "neg" ? -raw : raw;

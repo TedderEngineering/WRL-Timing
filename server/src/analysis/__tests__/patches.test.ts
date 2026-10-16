@@ -53,6 +53,11 @@ describe("analysis patches", () => {
     expect(() => fillRef({ factId: "pit:nope:1", field: "inLap" }, find)).toThrow(/unknown fact/);
   });
 
+  it("gives a nested field the unit of its last part", () => {
+    const find = () => ({ positionEffect: { classPosBefore: 3 } });
+    expect(fillRef({ factId: "pit:x:1", field: "positionEffect.classPosBefore" }, find)).toMatchObject({ value: 3, unit: "pos", display: "P3" });
+  });
+
   it("reports a ref to a missing fact instead of writing it silently", () => {
     const base = sampleFacts();
     const car = base.entries[0].car;
