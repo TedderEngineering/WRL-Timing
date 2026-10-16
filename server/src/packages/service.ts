@@ -381,6 +381,73 @@ export async function listPackages(raceId: string) {
   };
 }
 
+/** One package in the cross-race review list (admin "Analysis drafts"). */
+export interface PackageReviewItem extends PackageSummary {
+  race: {
+    id: string;
+    name: string;
+    series: string;
+    subSeries: string | null;
+    track: string;
+    date: string;
+    /** Version visitors see now, or null when no package is published. */
+    currentVersion: number | null;
+  };
+}
+
+/**
+ * Packages in one state across every race, newest race first: the admin review list. Reads
+ * rows only (no package blobs), so it stays cheap however many drafts are waiting.
+ */
+export async function listPackagesByStatus(status: PackageStatusDb, limit = 200): Promise<PackageReviewItem[]> {
+  const rows = (await prisma.raceAnalysisPackage.findMany({
+    where: { status },
+    orderBy: [{ createdAt: "desc" }],
+    take: limit,
+    include: {
+      race: {
+        select: {
+          id: true,
+          name: true,
+          series: true,
+          subSeries: true,
+          track: true,
+          date: true,
+          currentPackageId: true,
+          currentPackage: { select: { version: true } },
+        },
+      },
+    },
+  })) as Array<
+    PackageRow & {
+      race: {
+        id: string;
+        name: string;
+        series: string;
+        subSeries: string | null;
+        track: string;
+        date: Date;
+        currentPackageId: string | null;
+        currentPackage: { version: number } | null;
+      };
+    }
+  >;
+  return rows
+    .map((r) => ({
+      ...toSummary(r, r.race.currentPackageId),
+      race: {
+        id: r.race.id,
+        name: r.race.name,
+        series: r.race.series,
+        subSeries: r.race.subSeries,
+        track: r.race.track,
+        date: r.race.date.toISOString().slice(0, 10),
+        currentVersion: r.race.currentPackage?.version ?? null,
+      },
+    }))
+    .sort((a, b) => b.race.date.localeCompare(a.race.date) || a.race.name.localeCompare(b.race.name) || b.version - a.version);
+}
+
 // ─── Publish ─────────────────────────────────────────────────────────────────
 
 export type PublishResult =

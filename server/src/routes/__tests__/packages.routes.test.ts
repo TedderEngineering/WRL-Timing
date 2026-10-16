@@ -70,7 +70,16 @@ const fake = vi.hoisted(() => {
             ) ?? null,
       findFirst: async ({ where, select }: Row) =>
         pick(state.packages.filter((p) => matches(p, where)).sort(byVersionDesc)[0], select),
-      findMany: async ({ where }: Row) => state.packages.filter((p) => matches(p, where)).sort(byVersionDesc),
+      findMany: async ({ where, include }: Row) =>
+        state.packages
+          .filter((p) => matches(p, where))
+          .sort(byVersionDesc)
+          .map((p) => {
+            if (!include?.race) return p;
+            const r = state.races.get(p.raceId)!;
+            const cur = state.packages.find((x) => x.id === r.currentPackageId);
+            return { ...p, race: { ...r, currentPackage: cur ? { version: cur.version } : null } };
+          }),
       create: async ({ data }: Row) => {
         if (state.packages.some((p) => p.raceId === data.raceId && p.version === data.version)) {
           throw new Error("Unique constraint failed on (race_id, version)");
@@ -549,5 +558,27 @@ describe("GET /api/races/:id package fields", () => {
     const off = await request(app).get(`/api/races/${RACE}`).set("Authorization", bearer(users.admin));
     expect(off.body).toMatchObject({ hasPackage: false, packageVersion: null });
     expect(off.body.packageAdmin).toMatchObject({ currentVersion: 1, raceDisabled: false, flag: "off" });
+  });
+});
+
+describe("GET /api/admin/packages (review list)", () => {
+  it("lists drafts across races with the race and the version visitors see now", async () => {
+    expect((await upload(JSON.stringify(publishablePackage()))).status).toBe(201);
+    expect((await adminPost("1/publish")).status).toBe(200);
+    expect((await upload(JSON.stringify(draftPackage()))).status).toBe(201);
+
+    const res = await request(app).get("/api/admin/packages?status=draft").set("Authorization", bearer(users.admin));
+    expect(res.status).toBe(200);
+    expect(res.body.packages).toHaveLength(1);
+    expect(res.body.packages[0]).toMatchObject({
+      version: 2,
+      status: "draft",
+      race: { id: RACE, name: "Race 1", series: "GT4 America", date: "2026-10-10", currentVersion: 1 },
+    });
+  });
+
+  it("is admin-only and checks the status", async () => {
+    expect((await request(app).get("/api/admin/packages").set("Authorization", bearer(users.pro))).status).toBe(403);
+    expect((await request(app).get("/api/admin/packages?status=nope").set("Authorization", bearer(users.admin))).status).toBe(400);
   });
 });

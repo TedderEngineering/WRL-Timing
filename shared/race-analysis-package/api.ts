@@ -63,6 +63,27 @@ export interface PackageListResponse {
   packages: PackageSummary[];
 }
 
+/** One row of GET /api/admin/packages?status=draft: a package with its race. */
+export interface PackageReviewItem extends PackageSummary {
+  race: {
+    id: string;
+    name: string;
+    series: string;
+    subSeries: string | null;
+    track: string;
+    /** YYYY-MM-DD */
+    date: string;
+    /** Version visitors see now, or null when none is published. */
+    currentVersion: number | null;
+  };
+}
+
+/** GET /api/admin/packages?status=draft */
+export interface PackageReviewResponse {
+  status: PackageStatus;
+  packages: PackageReviewItem[];
+}
+
 /** POST /api/admin/races/:id/packages (201) */
 export interface PackageUploadResponse {
   package: PackageSummary;
