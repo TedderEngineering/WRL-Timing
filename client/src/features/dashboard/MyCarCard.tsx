@@ -95,7 +95,7 @@ export function MyCarCard({ data, ask = true }: { data: MyCarResponse; /** False
 
   return (
     <article className="overflow-hidden rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left">
-      <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3.5">
+      <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3">
         <SeriesBadge series={race.series} size="sm" />
         <span className="text-sm font-semibold text-[var(--rt-text)]">{name}</span>
         <span className="text-sm text-[var(--rt-text-secondary)]">
@@ -104,7 +104,7 @@ export function MyCarCard({ data, ask = true }: { data: MyCarResponse; /** False
         <StatusPill status={race.resultsStatus} />
       </div>
 
-      <div className="flex flex-col gap-3 px-5 pb-4 pt-3">
+      <div className="flex flex-col gap-2.5 px-5 pb-3.5 pt-2.5">
         {race.locked ? (
           <p className="m-0 text-sm text-[var(--rt-text-secondary)]">
             🔒 {race.lockReason === "available_soon" ? "This race opens to free members shortly." : "Upgrade to Pro to read this race."}{" "}
@@ -202,18 +202,38 @@ export function MyCarCard({ data, ask = true }: { data: MyCarResponse; /** False
  * First steps, the first already ticked; shows until all are done or hidden. It teaches the
  * loop: follow your car, open its race (alerts join it when they ship).
  */
-export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
+export function FirstStepsChecklist({
+  data,
+  driver = null,
+}: {
+  data: MyCarResponse | null;
+  /** The followed drivers' side (Dashboard /my-driver): following a driver counts as following. */
+  driver?: { driverCount: number; race: { id: string } | null; car?: { number: string }; viewed?: boolean } | null;
+}) {
   const [hidden, setHidden] = useState(() => !!readUi().checklistHidden);
   const [alertsOn, setAlertsOn] = useState<boolean | null>(null);
   if (!data) return null;
   const alerts = alertsOn ?? !!data.alerts;
+  const drivers = driver?.driverCount ?? 0;
+  const follows = data.carCount > 0 || drivers > 0;
+  // The race to open: the car's when there is one, else the driver's.
+  const carFirst = data.carCount > 0 || drivers === 0;
+  const openTo = carFirst
+    ? data.race
+      ? chartHref(data.race.id)
+      : null
+    : driver?.race
+      ? `${chartHref(driver.race.id)}${driver.car ? `&car=${encodeURIComponent(driver.car.number)}` : ""}`
+      : null;
+  const whose = carFirst ? "your car's" : "your driver's";
   type Step = {
     key: string;
     label: string;
     done: boolean;
     to: string | null;
     start?: string;
-    alt?: { label: string; to: string; key: string };
+    /** Other ways to do the step, beside `start`. */
+    alts?: { label: string; to: string; key: string }[];
     /** A step done right here (a switch), not on another page. */
     action?: { label: string; run: () => void };
   };
@@ -221,21 +241,24 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
     { key: "account", label: "Create your account", done: true, to: null },
     {
       key: "follow",
-      label: "Follow your car",
-      done: data.carCount > 0,
+      label: "Follow your car or a driver",
+      done: follows,
       to: "/races",
-      start: "Find its race →",
-      // Or type the number: no need to find a race first.
-      alt: { key: "follow_by_number", label: "Add it by number →", to: "/settings/cars" },
+      start: "Find a race →",
+      // Or type the car's number, or find the driver by name: no need to find a race first.
+      alts: [
+        { key: "follow_by_number", label: "Add a car →", to: "/settings/cars" },
+        { key: "follow_driver", label: "Find a driver →", to: "/settings/drivers" },
+      ],
     },
-    { key: "open_race", label: "Open your car's latest race", done: !!data.viewed, to: data.race ? chartHref(data.race.id) : null },
+    { key: "open_race", label: `Open ${whose} latest race`, done: !!data.viewed || !!driver?.viewed, to: openTo },
     {
       key: "alerts",
-      label: "Get an email when your car's race is up",
+      label: `Get an email when ${whose} race is up`,
       done: alerts,
       to: null,
-      // Only once there is a car to be emailed about.
-      action: data.carCount === 0 ? undefined : {
+      // Only once there is a car or driver to be emailed about.
+      action: !follows ? undefined : {
         label: "Turn on",
         run: () => {
           track("checklist_step", { step: "alerts" });
@@ -296,7 +319,7 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
                 {s.label}
                 <span className="sr-only">{s.done ? " (done)" : ""}</span>
               </span>
-              {isNext && !s.alt && !s.action && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
+              {isNext && !s.alts && !s.action && <span className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">Start →</span>}
             </>
           );
           if (!s.done && s.action) {
@@ -309,18 +332,20 @@ export function FirstStepsChecklist({ data }: { data: MyCarResponse | null }) {
               </li>
             );
           }
-          if (isNext && s.alt && s.to) {
-            // Two ways to do this step: find a race and press Follow, or type the number.
+          if (isNext && s.alts && s.to) {
+            // Several ways to do this step: find a race and press Follow, add a car, find a driver.
             return (
               <li key={s.key} className="flex min-h-[40px] flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="flex items-center gap-3">{body}</span>
-                <span className="ml-auto flex items-center gap-4 text-sm font-semibold">
+                <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold">
                   <Link to={s.to} onClick={() => track("checklist_step", { step: s.key })} className="text-[var(--rt-accent)]">
                     {s.start}
                   </Link>
-                  <Link to={s.alt.to} onClick={() => track("checklist_step", { step: s.alt!.key })} className="text-[var(--rt-accent)]">
-                    {s.alt.label}
-                  </Link>
+                  {s.alts.map((a) => (
+                    <Link key={a.key} to={a.to} onClick={() => track("checklist_step", { step: a.key })} className="text-[var(--rt-accent)]">
+                      {a.label}
+                    </Link>
+                  ))}
                 </span>
               </li>
             );

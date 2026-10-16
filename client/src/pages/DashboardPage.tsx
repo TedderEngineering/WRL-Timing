@@ -233,14 +233,15 @@ export function DashboardPage() {
         <main className="flex min-w-0 flex-[999_1_640px] flex-col gap-4">
           {/* Your car (the peak moment), then the first steps until they are done. */}
           {view && (
-            <section aria-labelledby="yours" className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
+            <section aria-labelledby="yours" className="flex flex-col gap-2.5">
+              {/* One row: cars or drivers (when both), the car or driver tabs, the settings link. */}
+              <div className="flex flex-wrap items-end gap-x-3 border-b border-[var(--rt-border)]">
                 {hasCars && hasDrivers ? (
-                  <div id="yours" role="tablist" aria-label="Yours" className="flex gap-1 rounded-lg bg-[var(--rt-surface)] p-[3px]">
+                  <div id="yours" role="tablist" aria-label="Yours" className="mb-1.5 flex shrink-0 gap-0.5 rounded-md bg-[var(--rt-surface)] p-0.5">
                     {(
                       [
-                        ["cars", myCar!.carCount > 1 ? "Your cars" : "Your car"],
-                        ["drivers", myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"],
+                        ["cars", myCar!.carCount > 1 ? "Cars" : "Car"],
+                        ["drivers", myDriver!.driverCount > 1 ? "Drivers" : "Driver"],
                       ] as const
                     ).map(([key, label]) => (
                       <button
@@ -249,7 +250,7 @@ export function DashboardPage() {
                         role="tab"
                         aria-selected={view === key}
                         onClick={() => chooseYours(key)}
-                        className={`min-h-[36px] rounded-md px-3 text-[13px] font-semibold uppercase tracking-[0.06em] ${
+                        className={`min-h-[30px] rounded px-2.5 text-[12px] font-semibold uppercase tracking-[0.06em] ${
                           view === key ? "bg-[var(--rt-border)] text-[var(--rt-text)]" : "text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
                         }`}
                       >
@@ -258,31 +259,28 @@ export function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <h2 id="yours" className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
+                  <h2 id="yours" className="m-0 mb-2.5 shrink-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
                     {view === "cars" ? (myCar!.carCount > 1 ? "Your cars" : "Your car") : myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"}
                   </h2>
                 )}
-                <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="shrink-0 text-[13px] text-[var(--rt-accent)]">
+                <div className="order-last min-w-0 basis-full sm:order-none sm:basis-0 sm:flex-1">
+                  {view === "cars" ? (
+                    <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} className="" />
+                  ) : (
+                    <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} className="" />
+                  )}
+                </div>
+                <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="mb-2.5 ml-auto shrink-0 text-[13px] text-[var(--rt-accent)]">
                   {view === "cars" ? "My cars →" : "My drivers →"}
                 </Link>
               </div>
-              {view === "cars" ? (
-                <>
-                  <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} />
-                  <MyCarCard data={myCar!} ask={shownRecaps.length === 0} />
-                </>
-              ) : (
-                <>
-                  <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} />
-                  <MyDriverCard data={myDriver!} />
-                </>
-              )}
+              {view === "cars" ? <MyCarCard data={myCar!} ask={shownRecaps.length === 0} /> : <MyDriverCard data={myDriver!} />}
             </section>
           )}
           {/* "Your 2026", series by series as each season ends (plan H), for the car shown. */}
           {view !== "drivers" &&
             shownRecaps.map((r, i) => <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />)}
-          <FirstStepsChecklist data={myCar} />
+          <FirstStepsChecklist data={myCar} driver={myDriver} />
 
           <div className={`flex items-baseline justify-between ${view ? "mt-4" : ""}`}>
             <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">

@@ -133,6 +133,16 @@ export function rememberPendingDriver(name: string): void {
   }
 }
 
+/** A driver follow is waiting for the visitor to finish signing up (onboarding then skips asking). */
+export function hasPendingDriver(now = Date.now()): boolean {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(KEY) || "null") as { at?: unknown } | null;
+    return !!p && typeof p.at === "number" && now - p.at <= MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 /** The pending driver follow, removed once read; null when none or too old. */
 export function takePendingDriver(now = Date.now()): string | null {
   try {

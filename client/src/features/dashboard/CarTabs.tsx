@@ -14,7 +14,17 @@ export function carTabLabel(c: Car): string {
  * The user's cars as tabs, the same look and feel as the race tabs (grab, wheel or arrows to
  * scroll). Choosing one shows its latest race and its season recaps.
  */
-export function CarTabs({ cars, active, onChoose }: { cars: Car[]; active: string | null; onChoose: (id: string) => void }) {
+export function CarTabs({
+  cars,
+  active,
+  onChoose,
+  className = "border-b border-[var(--rt-border)]",
+}: {
+  cars: Car[];
+  active: string | null;
+  onChoose: (id: string) => void;
+  className?: string;
+}) {
   if (cars.length < 2) return null;
   const idx = Math.max(0, cars.findIndex((c) => c.id === active));
   return (
@@ -22,7 +32,7 @@ export function CarTabs({ cars, active, onChoose }: { cars: Car[]; active: strin
       role="tablist"
       aria-label="Your cars"
       activeKey={idx}
-      className="border-b border-[var(--rt-border)]"
+      className={className}
       innerClassName="gap-1"
       onKeyDown={(e) => {
         if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
