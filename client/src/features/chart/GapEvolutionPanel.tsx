@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { carMatchesSearch, carNo } from "./car-number";
 import { COMPARE_PALETTE, TRACE } from "./constants";
@@ -21,7 +21,7 @@ import {
   lapTimeText,
   windowStart,
 } from "./gap-math";
-import { ChevronIcon, Eyebrow, PANEL, SearchIcon, Segmented, driversOf } from "./panel-ui";
+import { ChevronIcon, Eyebrow, PANEL, SearchIcon, Section, Segmented, driversOf } from "./panel-ui";
 
 interface GapEvolutionPanelProps {
   data: RaceChartData;
@@ -65,21 +65,24 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
   const fmt = (sec: number) => (unit === "pct" ? percentText(sec, focusPace) : secondsText(sec));
 
   useEffect(() => setShowAll(false), [win, target?.kind]);
+  const outlook = useMemo(
+    () => (target && last ? outlookLines({ data, focusNum, activeLap, target, single, last, rate }) : []),
+    [data, focusNum, activeLap, target, single, last, rate],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto" style={{ scrollbarWidth: "none", color: PANEL.text }}>
-      <div className="flex flex-col gap-2.5 border-b px-4 py-3" style={{ borderColor: PANEL.line }}>
-        <div className="relative flex items-center gap-2">
-          <Eyebrow>Gap to</Eyebrow>
+      <div className="flex flex-col gap-2 border-b px-4 py-2.5" style={{ borderColor: PANEL.line }}>
+        <div className="relative flex items-stretch gap-2">
           <button
             type="button"
             aria-haspopup="listbox"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex min-h-[40px] min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border px-3 text-sm font-semibold"
+            className="flex min-h-[44px] min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border px-3 py-1 text-left"
             style={{ background: PANEL.raised, borderColor: menuOpen ? TRACE.focus : PANEL.control }}
           >
-            <span className="truncate">{target ? target.name : TARGET_NAMES[kind]}</span>
+            <TargetLabel data={data} focusNum={focusNum} activeLap={activeLap} target={target} fallback={TARGET_NAMES[kind]} />
             <ChevronIcon up={menuOpen} />
           </button>
           <div role="group" aria-label="Units" className="flex overflow-hidden rounded-lg border" style={{ borderColor: PANEL.control }}>
@@ -89,7 +92,7 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
                 type="button"
                 aria-pressed={unit === u}
                 onClick={() => setUnit(u)}
-                className="min-h-[40px] min-w-[40px] text-[13px] font-semibold"
+                className="min-h-[44px] min-w-[36px] text-[13px] font-semibold"
                 style={unit === u ? { background: PANEL.control, color: "#fff" } : { color: PANEL.muted }}
                 title={u === "s" ? "Seconds" : "Share of a lap"}
               >
@@ -115,9 +118,8 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
           )}
         </div>
 
-        {target && <TargetLine data={data} focusNum={focusNum} activeLap={activeLap} target={target} />}
-
         <Segmented
+          compact
           label="Laps shown"
           value={win}
           onChange={setWin}
@@ -136,11 +138,19 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
       ) : (
         <>
           <Headline data={data} target={target} single={single} lap={last.lap} gap={last.gap!} rate={rate} fmt={fmt} unit={unit} />
-          <div className="px-4 pb-1 pt-3">
-            <GapChart data={data} rows={rows} single={single} />
-          </div>
-          <Outlook data={data} focusNum={focusNum} activeLap={activeLap} target={target} single={single} last={last} rate={rate} />
-          <GapTable data={data} focusNum={focusNum} single={single} rows={rows} fmt={fmt} showAll={showAll} onShowAll={() => setShowAll(true)} />
+          <Section id="gap.chart" title="Chart" summary={<Sparkline rows={rows} />}>
+            <div className="px-4 pb-2">
+              <GapChart data={data} rows={rows} single={single} />
+            </div>
+          </Section>
+          {outlook.length > 0 && (
+            <Section id="gap.outlook" title="At this pace" summary={outlook[0].lead.replace(/\.$/, "")}>
+              <Outlook lines={outlook} />
+            </Section>
+          )}
+          <Section id="gap.laps" title="Laps" summary={`${rows.length} laps · newest first`}>
+            <GapTable data={data} focusNum={focusNum} single={single} rows={rows} fmt={fmt} showAll={showAll} onShowAll={() => setShowAll(true)} />
+          </Section>
         </>
       )}
     </div>
@@ -149,35 +159,50 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
 
 // ---- Header pieces ----
 
-function TargetLine({ data, focusNum, activeLap, target }: { data: RaceChartData; focusNum: number; activeLap: number; target: GapTarget }) {
-  if (target.cars.length === 1) {
+/** What the menu button shows: the choice, and the car it means at this lap. */
+function TargetLabel({
+  data,
+  focusNum,
+  activeLap,
+  target,
+  fallback,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  activeLap: number;
+  target: GapTarget | null;
+  fallback: string;
+}) {
+  let detail: ReactNode = null;
+  if (target && target.cars.length === 1) {
     const n = target.cars[0];
     const car = data.cars[String(n)];
     const l = lapOf(car, activeLap);
     const me = lapOf(data.cars[String(focusNum)], activeLap);
-    return (
-      <div className="flex items-stretch gap-2.5">
-        <span className="w-1 shrink-0 rounded" style={{ background: TARGET_COLOR }} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold">
-            <span style={{ color: TARGET_COLOR }}>#{carNo(data, n)}</span> {driversOf(data, n).team}
-          </div>
-          <div className="truncate text-xs" style={{ color: PANEL.muted }}>
-            {l ? `P${l.cp} in ${car?.cls} at lap ${activeLap}` : `Not running at lap ${activeLap}`}
-            {me ? ` · you are P${me.cp}` : ""} · kept for the whole window
-          </div>
-        </div>
-      </div>
+    detail = (
+      <>
+        <span style={{ color: TARGET_COLOR }}>#{carNo(data, n)}</span> {driversOf(data, n).team}
+        <span className="font-normal" style={{ color: PANEL.muted }}>
+          {l ? ` · P${l.cp}` : " · not running"}
+          {me ? ` (you P${me.cp})` : ""}
+        </span>
+      </>
+    );
+  } else if (target) {
+    detail = (
+      <span className="font-normal" style={{ color: PANEL.muted }}>
+        {target.cars.slice(0, 6).map((n) => `#${carNo(data, n)}`).join(" ")}
+        {target.cars.length > 6 ? " …" : ""}
+      </span>
     );
   }
   return (
-    <div className="flex items-stretch gap-2.5">
-      <span className="w-1 shrink-0 rounded" style={{ background: PANEL.muted }} />
-      <div className="text-xs" style={{ color: PANEL.muted }}>
-        Average of {target.cars.length} cars: {target.cars.slice(0, 8).map((n) => `#${carNo(data, n)}`).join(" ")}
-        {target.cars.length > 8 ? " …" : ""}
-      </div>
-    </div>
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-[11px] font-semibold" style={{ color: PANEL.muted }}>
+        Gap to · {target ? target.name : fallback}
+      </span>
+      {detail && <span className="block truncate text-sm font-bold">{detail}</span>}
+    </span>
   );
 }
 
@@ -377,20 +402,20 @@ function Headline({
   const who = single !== null ? `#${carNo(data, single)}` : `the ${target.name.toLowerCase()}`;
   const w = rate ? rateWords(rate.rate) : null;
   return (
-    <div className="flex items-end justify-between gap-3 border-b px-4 py-4" style={{ borderColor: PANEL.line }}>
+    <div className="flex items-end justify-between gap-3 border-b px-4 py-2.5" style={{ borderColor: PANEL.line }}>
       <div className="min-w-0">
         <div className="mb-0.5 text-xs" style={{ color: PANEL.muted }}>
           {gap >= 0 ? "Behind" : "Ahead of"} {who} at lap {lap}
         </div>
-        <div className="text-[40px] font-extrabold leading-none tracking-tight tabular-nums">
+        <div className="text-[30px] font-extrabold leading-none tracking-tight tabular-nums">
           {fmt(gap)}
-          {unit === "s" && <span className="text-xl font-semibold" style={{ color: PANEL.muted }}> s</span>}
+          {unit === "s" && <span className="text-base font-semibold" style={{ color: PANEL.muted }}> s</span>}
         </div>
       </div>
       <div className="shrink-0 text-right">
         {w ? (
           <>
-            <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-bold tabular-nums" style={{ color: w.color, background: w.down === null ? "rgba(154,154,180,0.12)" : w.down ? "rgba(248,113,113,0.12)" : "rgba(74,222,128,0.12)" }}>
+            <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-bold tabular-nums" style={{ color: w.color, background: w.down === null ? "rgba(154,154,180,0.12)" : w.down ? "rgba(248,113,113,0.12)" : "rgba(74,222,128,0.12)" }}>
               {w.down !== null && (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
                   <path d={w.down ? "M12 5v14M5 12l7 7 7-7" : "M12 19V5M5 12l7-7 7 7"} />
@@ -398,7 +423,7 @@ function Headline({
               )}
               {w.text}
             </div>
-            <div className="mt-1.5 text-[11px]" style={{ color: PANEL.muted }}>
+            <div className="mt-1 text-[11px]" style={{ color: PANEL.muted }}>
               last {rate!.laps} green laps
             </div>
           </>
@@ -413,11 +438,11 @@ function Headline({
 // ---- Chart ----
 
 const W = 368;
-const H = 150;
+const H = 112;
 const L = 30;
 const R = 360;
 const T = 8;
-const B = 132;
+const B = 94;
 
 function GapChart({ data, rows, single }: { data: RaceChartData; rows: GapRow[]; single: number | null }) {
   const pts = rows.filter((r) => r.gap !== null);
@@ -491,9 +516,9 @@ function GapChart({ data, rows, single }: { data: RaceChartData; rows: GapRow[];
         {span >= 4 && <span>L{mid}</span>}
         <span>L{lastLap}</span>
       </div>
-      <figcaption className="flex flex-wrap gap-x-3 gap-y-1 pt-2 text-[11px]" style={{ color: PANEL.muted }}>
+      <figcaption className="flex flex-wrap gap-x-3 gap-y-1 pt-1.5 text-[11px]" style={{ color: PANEL.muted }}>
         <span className="flex items-center gap-1">
-          <span className="h-3 w-3 rounded-full" style={{ background: TRACE.focus }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: TRACE.focus }} />
           Your stop
         </span>
         {single !== null && (
@@ -503,11 +528,11 @@ function GapChart({ data, rows, single }: { data: RaceChartData; rows: GapRow[];
         )}
         {fcy.length > 0 && (
           <span className="flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm" style={{ background: "rgba(251,191,36,0.35)" }} />
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "rgba(251,191,36,0.35)" }} />
             Caution
           </span>
         )}
-        <span>Seconds behind · below 0 = ahead</span>
+        <span>below 0 = ahead</span>
       </figcaption>
     </figure>
   );
@@ -534,7 +559,8 @@ function lapsUntil(distance: number, speed: number): number | null {
   return n >= 1 && n < 1000 ? n : null;
 }
 
-function Outlook({
+/** The "At this pace" sentences: the target, the car behind, the class leader. */
+function outlookLines({
   data,
   focusNum,
   activeLap,
@@ -630,10 +656,12 @@ function Outlook({
     });
   }
 
-  if (lines.length === 0) return null;
+  return lines;
+}
+
+function Outlook({ lines }: { lines: Line[] }) {
   return (
-    <div className="mx-4 my-3 flex flex-col gap-2.5 rounded-xl border p-3" style={{ background: PANEL.well, borderColor: PANEL.line }}>
-      <Eyebrow>At this pace</Eyebrow>
+    <div className="flex flex-col gap-2 px-4 pb-3" title="Green-flag laps only: pit stops and cautions are left out of the rates">
       {lines.map((l, i) => (
         <div key={i} className="flex gap-2.5">
           <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: l.dot }} />
@@ -643,9 +671,6 @@ function Outlook({
           </div>
         </div>
       ))}
-      <div className="text-[11px]" style={{ color: PANEL.muted }}>
-        Green-flag laps only · pit stops and cautions are left out of the rates
-      </div>
     </div>
   );
 }
@@ -681,7 +706,7 @@ function tableItems(rows: GapRow[]): Item[] {
   return out.reverse();
 }
 
-const SHOWN = 8;
+const SHOWN = 5;
 
 function GapTable({
   data,
@@ -705,7 +730,7 @@ function GapTable({
   const them = single !== null ? `#${carNo(data, single)}` : "Avg";
   const signed = (v: number | null) => (v === null ? "—" : `${v < 0 ? "−" : ""}${fmt(v)}`);
   return (
-    <div className="flex-1 px-4 pb-4">
+    <div className="px-4 pb-3">
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="text-right text-[11px]" style={{ color: PANEL.muted }}>
@@ -763,5 +788,24 @@ function GapTable({
         ▲ green = you gained · ▼ red = you lost · newest first · − = ahead
       </div>
     </div>
+  );
+}
+
+/** The gap line in miniature, for the folded chart section. */
+function Sparkline({ rows }: { rows: GapRow[] }) {
+  const pts = rows.filter((r) => r.gap !== null);
+  if (pts.length < 2) return null;
+  const vals = pts.map((r) => r.gap!);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const w = 96;
+  const h = 18;
+  const d = pts
+    .map((r, i) => `${((i / (pts.length - 1)) * (w - 4) + 2).toFixed(1)},${(2 + (1 - (r.gap! - lo) / (hi - lo || 1)) * (h - 4)).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="inline-block align-middle" aria-hidden="true">
+      <polyline points={d} fill="none" stroke={TRACE.focus} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
   );
 }

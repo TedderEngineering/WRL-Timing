@@ -15,7 +15,7 @@ import {
   secondsText,
   windowStart,
 } from "./gap-math";
-import { Eyebrow, PANEL, SearchIcon, Segmented, driversOf } from "./panel-ui";
+import { Eyebrow, PANEL, SearchIcon, Section, Segmented, driversOf } from "./panel-ui";
 import { stopsOf } from "./pit-stops";
 
 interface HeadToHeadPanelProps {
@@ -42,10 +42,14 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum, 
   const stintLaps = activeLap - windowStart(data, focusNum, activeLap, "stint", RECENT) + 1;
 
   const cmp = useMemo(() => (rival === null ? null : compare(data, focusNum, rival, from, activeLap)), [data, focusNum, rival, from, activeLap]);
+  const rows = useMemo(
+    () => (cmp && rival !== null ? matchupRows(data, focusNum, rival, activeLap, cmp, annotations) : []),
+    [data, focusNum, rival, activeLap, cmp, annotations],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto" style={{ scrollbarWidth: "none", color: PANEL.text }}>
-      <div className="grid items-stretch gap-1.5 border-b px-4 pb-3 pt-3.5" style={{ borderColor: PANEL.line, gridTemplateColumns: "minmax(0,1fr) 28px minmax(0,1fr)" }}>
+      <div className="grid items-stretch gap-1.5 border-b px-4 py-2.5" style={{ borderColor: PANEL.line, gridTemplateColumns: "minmax(0,1fr) 28px minmax(0,1fr)" }}>
         <CarCard data={data} num={focusNum} lap={activeLap} color={TRACE.focus} />
         <div className="flex items-center justify-center text-xs font-bold" style={{ color: PANEL.muted }}>
           vs
@@ -53,7 +57,7 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum, 
         {rival !== null && !picking ? (
           <CarCard data={data} num={rival} lap={activeLap} color={RIVAL} onChange={() => setPicking(true)} />
         ) : (
-          <div className="flex items-center justify-center rounded-lg border-[1.5px] border-dashed p-2.5 text-center text-[13px]" style={{ borderColor: "#3a3a60", color: PANEL.muted }}>
+          <div className="flex items-center justify-center rounded-lg border-[1.5px] border-dashed p-2 text-center text-[13px]" style={{ borderColor: "#3a3a60", color: PANEL.muted }}>
             Pick a rival below
           </div>
         )}
@@ -73,9 +77,10 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum, 
         />
       ) : (
         <>
-          <div className="flex flex-col gap-2.5 border-b px-4 py-3" style={{ borderColor: PANEL.line }}>
+          <div className="flex flex-col gap-2 border-b px-4 py-2.5" style={{ borderColor: PANEL.line }}>
             <Summary data={data} focusNum={focusNum} rival={rival} lap={activeLap} cmp={cmp} win={win} />
             <Segmented
+              compact
               label="Laps compared"
               value={win}
               onChange={setWin}
@@ -88,9 +93,21 @@ export function HeadToHeadPanel({ data, focusNum, activeLap, defaultCompareNum, 
           </div>
           {cmp && (
             <>
-              <Matchup data={data} focusNum={focusNum} rival={rival} lap={activeLap} cmp={cmp} annotations={annotations} />
-              <LapBars data={data} focusNum={focusNum} rival={rival} cmp={cmp} />
-              <LapTable data={data} focusNum={focusNum} rival={rival} cmp={cmp} showAll={showAll} onShowAll={() => setShowAll(true)} />
+              <Section id="h2h.compare" title="Comparison" summary={matchupSummary(data, rival, rows)}>
+                <Matchup rows={rows} />
+              </Section>
+              {cmp.compared > 0 && cmp.laps.length >= 2 && (
+                <Section
+                  id="h2h.bars"
+                  title="Each lap"
+                  summary={`#${carNo(data, rival)} quicker on ${cmp.rivalQuicker} of ${cmp.compared}`}
+                >
+                  <LapBars data={data} focusNum={focusNum} rival={rival} cmp={cmp} />
+                </Section>
+              )}
+              <Section id="h2h.laps" title="Laps" summary={`${cmp.laps.length} laps · newest first`}>
+                <LapTable data={data} focusNum={focusNum} rival={rival} cmp={cmp} showAll={showAll} onShowAll={() => setShowAll(true)} />
+              </Section>
             </>
           )}
         </>
@@ -177,27 +194,38 @@ function CarCard({ data, num, lap, color, onChange }: { data: RaceChartData; num
   const car = data.cars[String(num)];
   const at = lapOf(car, lap);
   const { team, drivers } = driversOf(data, num);
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg p-2.5" style={{ background: PANEL.well, borderTop: `3px solid ${color}` }}>
-      <div className="flex items-baseline justify-between gap-1.5">
-        <span className="text-2xl font-extrabold tabular-nums" style={{ color }}>
+  const body = (
+    <>
+      <span className="flex items-baseline justify-between gap-1.5">
+        <span className="text-xl font-extrabold leading-tight tabular-nums" style={{ color }}>
           #{carNo(data, num)}
         </span>
         <span className="truncate text-xs font-bold tabular-nums">{at ? `P${at.cp} ${car?.cls}` : car?.cls}</span>
-      </div>
-      <div className="truncate text-[13px] font-semibold" title={team}>
+      </span>
+      <span className="block truncate text-[13px] font-semibold" title={team}>
         {team || "—"}
-      </div>
-      {drivers && (
-        <div className="line-clamp-2 text-xs leading-snug" style={{ color: PANEL.muted }} title={drivers}>
-          {drivers}
-        </div>
-      )}
-      {onChange && (
-        <button type="button" onClick={onChange} className="mt-1.5 min-h-[32px] self-start rounded-md border px-2.5 text-xs font-semibold" style={{ borderColor: PANEL.control }}>
-          Change
-        </button>
-      )}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate text-xs" style={{ color: PANEL.muted }} title={drivers ?? undefined}>
+          {drivers ?? "\u00a0"}
+        </span>
+        {onChange && (
+          <span className="shrink-0 text-xs font-semibold" style={{ color: TRACE.focus }}>
+            Change
+          </span>
+        )}
+      </span>
+    </>
+  );
+  const cls = "flex min-w-0 flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left";
+  const style = { background: PANEL.well, borderTop: `3px solid ${color}` };
+  return onChange ? (
+    <button type="button" onClick={onChange} className={`${cls} hover:bg-white/[0.04]`} style={style} aria-label={`#${carNo(data, num)} ${team}: change rival`}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls} style={style}>
+      {body}
     </div>
   );
 }
@@ -247,7 +275,8 @@ interface Row {
   edge: number | null;
 }
 
-function Matchup({ data, focusNum, rival, lap, cmp, annotations }: { data: RaceChartData; focusNum: number; rival: number; lap: number; cmp: Comparison; annotations?: AnnotationData }) {
+/** The comparison rows: average and best lap, laps quicker, spread, stops. */
+function matchupRows(data: RaceChartData, focusNum: number, rival: number, lap: number, cmp: Comparison, annotations?: AnnotationData): Row[] {
   const lower = (a: number | null, b: number | null, scale: number) => (a === null || b === null ? null : (a - b) / scale);
   const rows: Row[] = [
     { label: "Avg green lap", mine: lapTimeText(cmp.avgMine), theirs: lapTimeText(cmp.avgTheirs), edge: lower(cmp.avgMine, cmp.avgTheirs, 1) },
@@ -282,19 +311,37 @@ function Matchup({ data, focusNum, rival, lap, cmp, annotations }: { data: RaceC
       edge: a.lost !== null && b.lost !== null && a.count === b.count ? (a.lost - b.lost) / 30 : a.count === b.count ? 0 : null,
     });
   }
+  return rows;
+}
+
+function edgeOf(r: Row): number {
+  return r.edge === null || Math.abs(r.edge) < 1e-6 ? 0 : r.edge > 0 ? 1 : -1; // 1 = rival ahead
+}
+
+/** "#37 ahead on 4 of 5" for the folded comparison. */
+function matchupSummary(data: RaceChartData, rival: number, rows: Row[]): string {
+  const known = rows.filter((r) => r.edge !== null);
+  const theirs = known.filter((r) => edgeOf(r) > 0).length;
+  const mine = known.filter((r) => edgeOf(r) < 0).length;
+  if (!known.length) return "";
+  if (!theirs && !mine) return "Level";
+  return theirs >= mine ? `#${carNo(data, rival)} ahead on ${theirs} of ${known.length}` : `You ahead on ${mine} of ${known.length}`;
+}
+
+function Matchup({ rows }: { rows: Row[] }) {
   return (
-    <div className="flex flex-col px-4 pb-1 pt-2">
+    <div className="flex flex-col px-4 pb-2" title="✓ and the bar mark who is ahead; the longer the bar, the bigger the margin. Green laps both cars ran clean.">
       {rows.map((r, i) => {
         const e = r.edge;
-        const lead = e === null || Math.abs(e) < 1e-6 ? 0 : e > 0 ? 1 : -1; // 1 = rival ahead
+        const lead = edgeOf(r);
         const w = e === null ? 0 : Math.min(50, Math.abs(e) * 50);
         return (
-          <div key={r.label} className={`grid items-center gap-2 py-2 ${i < rows.length - 1 ? "border-b" : ""}`} style={{ borderColor: PANEL.line, gridTemplateColumns: "84px minmax(0,1fr) 84px" }}>
+          <div key={r.label} className={`grid items-center gap-2 py-1.5 ${i < rows.length - 1 ? "border-b" : ""}`} style={{ borderColor: PANEL.line, gridTemplateColumns: "84px minmax(0,1fr) 84px" }}>
             <span className="text-sm font-bold tabular-nums" style={{ color: lead < 0 ? TRACE.focus : undefined }}>
               {r.mine}
               {lead < 0 ? " ✓" : ""}
             </span>
-            <div className="flex flex-col items-center gap-[5px]">
+            <div className="flex flex-col items-center gap-1">
               <span className="text-center text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: PANEL.muted }}>
                 {r.label}
               </span>
@@ -312,9 +359,6 @@ function Matchup({ data, focusNum, rival, lap, cmp, annotations }: { data: RaceC
           </div>
         );
       })}
-      <div className="pt-0.5 text-[11px]" style={{ color: PANEL.muted }}>
-        ✓ and the bar mark who is ahead; the longer the bar, the bigger the margin · green laps both cars ran clean
-      </div>
     </div>
   );
 }
@@ -325,11 +369,11 @@ function LapBars({ data, focusNum, rival, cmp }: { data: RaceChartData; focusNum
   const laps = cmp.laps;
   if (laps.length < 2 || cmp.compared === 0) return null;
   const W = 368;
-  const H = 120;
+  const H = 84;
   const L = 30;
   const R = 360;
-  const mid = 60;
-  const half = 40;
+  const mid = 42;
+  const half = 34;
   const deltas = laps.map((l) => l.delta).filter((d): d is number => d !== null).map(Math.abs).sort((a, b) => a - b);
   const p90 = deltas[Math.min(deltas.length - 1, Math.floor(deltas.length * 0.9))];
   const cap = p90 <= 0.25 ? 0.25 : p90 <= 0.5 ? 0.5 : p90 <= 1 ? 1 : 2;
@@ -339,10 +383,9 @@ function LapBars({ data, focusNum, rival, cmp }: { data: RaceChartData; focusNum
   const last = laps[laps.length - 1].lap;
   const quicker = cmp.rivalQuicker;
   return (
-    <div className="px-4 pb-1 pt-3">
-      <div className="flex justify-between pb-1 text-[11px] font-bold uppercase tracking-[0.06em]" style={{ color: PANEL.muted }}>
+    <div className="px-4 pb-2">
+      <div className="flex justify-between pb-1 text-[11px] font-bold" style={{ color: PANEL.muted }}>
         <span style={{ color: TRACE.focus }}>▲ #{carNo(data, focusNum)} quicker</span>
-        <span>Each lap</span>
         <span style={{ color: RIVAL }}>▼ #{carNo(data, rival)} quicker</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" style={{ height: "auto" }} role="img" aria-label={`Lap-by-lap difference, laps ${first} to ${last}: #${carNo(data, rival)} quicker on ${quicker} of ${cmp.compared} green laps`}>
@@ -375,7 +418,7 @@ function LapTable({ data, focusNum, rival, cmp, showAll, onShowAll }: { data: Ra
   const shown = showAll ? rows : rows.slice(0, SHOWN);
   const them = `#${carNo(data, rival)}`;
   return (
-    <div className="flex-1 px-4 pb-4 pt-2">
+    <div className="px-4 pb-3">
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="text-right text-[11px]" style={{ color: PANEL.muted }}>
