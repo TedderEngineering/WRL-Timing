@@ -4,6 +4,7 @@
  * Admin (mounted at /api/admin/races/:id/packages; requireAuth + requireAdmin):
  *   POST   /                      upload a package (JSON or gzip, ≤ 25 MB) → draft, or 422 + report
  *   GET    /                      version list
+ *   GET    /:version              that version's full package JSON (drafts included; for writing stories)
  *   PUT    /override              { disabled: boolean } per-race fallback to legacy chartData
  *   POST   /:version/publish      publish a draft; the previous published version becomes superseded
  *   POST   /:version/rollback     make a superseded version current again
@@ -117,6 +118,35 @@ adminPackagesRouter.get("/", async (req: Request, res: Response, next: NextFunct
       },
       packages,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * One stored version, in full (rule checks included), whatever its status. The intake reads a
+ * facts-only draft back with this to write the stories on, when the timing site can only be
+ * reached from the GitHub runner that built the facts.
+ */
+adminPackagesRouter.get("/:version(\\d+)", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const raceId = req.params.id as string;
+    const version = svc.parseVersion(req.params.version);
+    const row = (await prisma.raceAnalysisPackage.findUnique({
+      where: { raceId_version: { raceId, version } },
+    })) as svc.PackageRow | null;
+    if (!row) throw new AppError(404, `Package v${version} not found`, "PACKAGE_NOT_FOUND");
+    const gz = await getServedGzip(row, "full");
+    res.set("Cache-Control", "private, no-store");
+    res.set("X-RaceTrace-Package-Version", String(row.version));
+    res.set("X-RaceTrace-Package-Status", row.status.toLowerCase());
+    res.type("application/json; charset=utf-8");
+    if (req.headers["accept-encoding"] && req.acceptsEncodings("gzip") === "gzip") {
+      res.set("Content-Encoding", "gzip");
+      res.end(gz);
+    } else {
+      res.end(gunzip(gz));
+    }
   } catch (err) {
     next(err);
   }

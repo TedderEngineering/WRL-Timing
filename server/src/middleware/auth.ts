@@ -38,6 +38,7 @@ const API_TOKEN_ROUTES: ReadonlyArray<[method: string, path: RegExp]> = [
   ["GET", /^\/api\/admin\/intake(\/.*)?$/],
   ["POST", /^\/api\/admin\/intake(\/.*)?$/],
   ["GET", /^\/api\/admin\/races\/[^/]+\/packages\/?$/],
+  ["GET", /^\/api\/admin\/races\/[^/]+\/packages\/\d+\/?$/],
   ["POST", /^\/api\/admin\/races\/[^/]+\/packages\/?$/],
 ];
 

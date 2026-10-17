@@ -12,6 +12,7 @@ describe("API token route allowlist", () => {
     expect(apiTokenMayCall("POST", "/api/admin/races/abc123/packages")).toBe(true);
     expect(apiTokenMayCall("GET", "/api/admin/races/abc123/packages/")).toBe(true);
     expect(apiTokenMayCall("HEAD", "/api/admin/races/abc123/packages")).toBe(true);
+    expect(apiTokenMayCall("GET", "/api/admin/races/abc123/packages/2")).toBe(true);
   });
 
   it("refuses publishing, overrides, token management and every other admin or user route", () => {
@@ -20,6 +21,8 @@ describe("API token route allowlist", () => {
       ["POST", "/api/admin/races/abc/packages/3/rollback"],
       ["POST", "/api/admin/races/abc/packages/3/reject"],
       ["PUT", "/api/admin/races/abc/packages/override"],
+      ["GET", "/api/admin/races/abc/packages/override"],
+      ["POST", "/api/admin/races/abc/packages/2"],
       ["DELETE", "/api/admin/intake/races"],
       ["GET", "/api/admin/api-tokens"],
       ["POST", "/api/admin/api-tokens"],

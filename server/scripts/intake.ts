@@ -17,6 +17,10 @@
  *   npx tsx scripts/intake.ts speedhive-org --from-session <URL|id>
  *   npx tsx scripts/intake.ts analyze [--series imsa-*,sro-*,wrl] [--season 2025,2026] [--race <raceId>]… [--force] [--limit N] [--no-upload]
  *       --no-upload keeps the facts package on disk to write the stories on (scripts/analysis.ts)
+ *   npx tsx scripts/intake.ts package <raceId> [--version N]
+ *       reads a stored package back (default: the newest version that is not rejected) into
+ *       intake-work/<slug>/analysis/, as analyze --no-upload would: for races whose timing site only
+ *       the GitHub runner can reach (WRL from RedMist)
  *   npx tsx scripts/intake.ts upload <raceId> <package.json> [--notes "<text>"]
  *       uploads a package as a DRAFT version (it is validated on the server; nothing is published)
  *                                      [--notes <file>]   facts + rule checks for races with a source key, uploaded as a
@@ -818,6 +822,38 @@ async function cmdAnalyze(a: ReturnType<typeof parseArgs>) {
   if (rows.some((x) => !["draft uploaded", "kept", "blocked"].includes(x.result))) process.exitCode = 1;
 }
 
+/**
+ * Read a stored package (usually the facts-only draft the workflow's analyze mode uploaded) back
+ * into the race's work folder, the same files analyze --no-upload leaves: analysis/package.json
+ * and analysis/race.json. The stories are then written on it and uploaded as a new draft.
+ */
+async function cmdPackage(a: ReturnType<typeof parseArgs>) {
+  const cfg = apiConfigFromEnv();
+  if (!cfg) throw new UsageError("package needs RACETRACE_API_URL and RACETRACE_API_TOKEN");
+  const [raceId] = a.pos;
+  if (!raceId) throw new UsageError("package <raceId> [--version N]");
+  const race = ((await knownRaces()) ?? []).find((r) => r.raceId === raceId);
+  if (!race) throw new UsageError(`package: ${raceId} is not a race with a source key`);
+  let version = Number(a.one("version") ?? "0");
+  if (!version) {
+    const list = await apiRequest<any>(cfg, "GET", `/admin/races/${encodeURIComponent(raceId)}/packages`);
+    if (list.status !== 200) throw new Error(`version list: HTTP ${list.status} ${list.data?.code ?? ""}`);
+    const kept = (list.data.packages ?? []).filter((p: any) => String(p.status).toUpperCase() !== "REJECTED");
+    version = Math.max(0, ...kept.map((p: any) => Number(p.version)));
+    if (!version) throw new Error(`${raceId} has no stored package yet (run the workflow's analyze mode first)`);
+  }
+  const got = await apiRequest<any>(cfg, "GET", `/admin/races/${encodeURIComponent(raceId)}/packages/${version}`);
+  if (got.status !== 200 || typeof got.data !== "object" || got.data === null) {
+    throw new Error(`package v${version}: HTTP ${got.status} ${got.data?.code ?? ""}`);
+  }
+  const runDir = join(workDirFor(WORK, race.sourceKey), "analysis");
+  mkdirSync(runDir, { recursive: true });
+  const pkgPath = join(runDir, "package.json");
+  writeFileSync(pkgPath, JSON.stringify(got.data, null, 2));
+  writeFileSync(join(runDir, "race.json"), JSON.stringify({ raceId, name: race.name, date: race.date, sourceKey: race.sourceKey, fromVersion: version }, null, 2));
+  console.log(`kept: ${pkgPath} · v${version} · ${(got.data.entries ?? []).length} cars · rule checks ${got.data.ruleChecks?.length ?? 0}`);
+}
+
 /** Upload a package (stories written) as a DRAFT version of a race. The server validates it. */
 async function cmdUpload(a: ReturnType<typeof parseArgs>) {
   const cfg = apiConfigFromEnv();
@@ -863,6 +899,8 @@ async function main() {
       return cmdReimportPlan(a);
     case "upload":
       return cmdUpload(a);
+    case "package":
+      return cmdPackage(a);
     case "analyze":
       return cmdAnalyze(a);
     case "names":
@@ -870,7 +908,7 @@ async function main() {
     case "refresh":
       return cmdRefresh(a);
     default:
-      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, upload, names, refresh`);
+      throw new UsageError(`Unknown command "${cmd ?? ""}". Commands: preflight, discover, pull, push, status, facts, validate, steps, speedhive-org, reimport-plan, analyze, package, upload, names, refresh`);
   }
 }
 
