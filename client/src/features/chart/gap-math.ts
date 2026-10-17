@@ -359,12 +359,10 @@ export function lapTimeText(sec: number | null): string {
   return m > 0 ? `${m}:${s.toFixed(2).padStart(5, "0")}` : s.toFixed(2);
 }
 
-/** A gap or margin without its sign: 4.82 → "4.8", 75.2 → "1:15.2". */
+/** A gap or margin without its sign, in seconds: 4.82 → "4.8", 75.2 → "75.2". */
 export function secondsText(sec: number, digits = 1): string {
-  const a = Math.abs(sec);
-  if (a < 60) return a.toFixed(digits);
-  const m = Math.floor(a / 60);
-  return `${m}:${(a - m * 60).toFixed(digits).padStart(digits ? 3 + digits : 2, "0")}`;
+  // Always plain seconds ("73.1", not "1:13.1"): gaps are read and compared in seconds.
+  return Math.abs(sec).toFixed(digits);
 }
 
 /** A gap as a share of a lap: "5.2%". */

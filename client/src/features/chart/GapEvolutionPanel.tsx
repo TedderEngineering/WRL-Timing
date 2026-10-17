@@ -489,7 +489,7 @@ function GapChart({ data, rows, single }: { data: RaceChartData; rows: GapRow[];
           <g key={t}>
             <line x1={L} x2={R} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#3a3a60" : PANEL.line} />
             <text x={L - 6} y={y(t) + 3.5} textAnchor="end" fontSize="10" fill={PANEL.muted}>
-              {t < 0 ? "−" : ""}{Math.abs(t) >= 60 ? secondsText(t, 0) : Math.abs(t)}
+              {t < 0 ? "−" : ""}{Math.abs(t)}
             </text>
           </g>
         ))}

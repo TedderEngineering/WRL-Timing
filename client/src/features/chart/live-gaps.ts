@@ -12,11 +12,13 @@
  *   Δ crosses −1, −2… → the focus car goes a lap down to the car
  * crossing back towards 0 is getting a lap back.
  *
- * Between updates (RaceTrace Live), `now` (race seconds) moves every car on
- * at its pace, so gaps and projections keep moving until the next crossing
- * arrives; without `now`, everything is as of the cars' last crossings.
+ * Between updates (RaceTrace Live), `drift` (seconds since the data arrived)
+ * moves every pair of cars on at their paces from the later of their two last
+ * crossings, so gaps and projections keep moving until the next update.
+ * There is no race-wide "now": a car's summed lap times can run ahead of the
+ * race clock (an overlapping pit lap), and it would skew every other car.
  *
- * Pace is the median of a car's last PACE_LAPS green laps (no pit laps, no
+ * Pace is the average of a car's last PACE_LAPS green laps (no pit laps, no
  * yellow laps, under the race's green-pace cutoff). A projection is a straight
  * line: it is left out when either car has no pace, is stopped or in the pits,
  * or the two paces are within STEADY_S of each other.
@@ -67,6 +69,8 @@ export interface GapRow {
   gapSec: number | null;
   /** Car pace − focus pace (s/lap): positive = the focus car is gaining. */
   gainPerLap: number | null;
+  /** The focus car's pace (s/lap), which turns a gap in laps into laps + seconds. */
+  focusPace: number | null;
   next: { event: GapEvent; laps: number; /** laps between them after the event (0 = same lap) */ k: number } | null;
 }
 
@@ -83,9 +87,25 @@ export function paceOf(laps: Lap[], data: RaceChartData, fcy = fcyLapSet(data)):
   const xs: number[] = [];
   for (let i = laps.length - 1; i >= 0 && xs.length < PACE_LAPS; i--) if (isPaceLap(laps[i], data, fcy)) xs.push(laps[i].ltSec);
   if (xs.length < MIN_PACE_LAPS) return null;
-  xs.sort((a, b) => a - b);
-  const m = xs.length >> 1;
-  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+/**
+ * A gap of `laps` (fractional) at `pace` (s/lap), as the timing screens say it: the whole laps,
+ * and the rest of the gap in seconds. 1.284 laps at 191.0 s → "54.1 (+1L)"; under a lap → "54.1".
+ * Without a pace, laps to a tenth ("1.3 L").
+ */
+export function lapsAndSeconds(laps: number, pace: number | null): string {
+  const a = Math.abs(laps);
+  if (pace === null || !(pace > 0)) return `${a.toFixed(1)} L`;
+  let whole = Math.floor(a + 1e-9);
+  let rest = (a - whole) * pace;
+  // A rest that rounds up to a full lap is the next lap.
+  if (Number(rest.toFixed(1)) >= Number(pace.toFixed(1))) {
+    whole += 1;
+    rest = 0;
+  }
+  return whole > 0 ? `${rest.toFixed(1)} (+${whole}L)` : rest.toFixed(1);
 }
 
 /** Cumulative time at each completed lap (index = lap count). */
@@ -123,11 +143,14 @@ export function nextEvent(delta: number, rate: number): GapRow["next"] {
   return { event, laps, k };
 }
 
+/** A stopped car (in the pits or the garage) held where it stopped, near the end of its lap. */
+const heldAt = (c: CarClock) => c.laps + 0.999;
+
 /**
- * @param now race seconds to extrapolate to (each car moved on at its pace since its last
- *   crossing); omit for the gaps as of the last crossings.
+ * @param drift seconds since the data arrived: each pair of cars moved on at their paces from
+ *   the later of their last crossings. Omit for the gaps as of the last crossings.
  */
-export function gapRows(data: RaceChartData, focusNum: number, nums: number[], now?: number | null): GapRow[] {
+export function gapRows(data: RaceChartData, focusNum: number, nums: number[], drift?: number | null): GapRow[] {
   const fcy = fcyLapSet(data);
   const clocks = new Map<number, CarClock>();
   const clockOf = (n: number): CarClock | null => {
@@ -157,25 +180,35 @@ export function gapRows(data: RaceChartData, focusNum: number, nums: number[], n
       delta: null,
       gapSec: null,
       gainPerLap: null,
+      focusPace: f?.pace ?? null,
       next: null,
     };
+    if (num === focusNum && f && f.laps > 0) {
+      // The focus car's own row: is it stopped, as the other cars see it?
+      const latest = Math.max(...list.map((n) => clockOf(n)!.cum[clockOf(n)!.laps]));
+      row.stopped = f.pace !== null && latest - f.cum[f.laps] > f.pace * STOPPED_FACTOR;
+    }
     if (!f || num === focusNum || c.laps === 0 || f.laps === 0) return row;
     const at0 = Math.max(f.cum[f.laps], c.cum[c.laps]);
-    const at = now != null && Number.isFinite(now) ? Math.max(at0, now) : at0;
-    const df = distance(f, at);
-    const dc = distance(c, at);
-    row.stopped = dc === null;
-    if (df !== null && dc !== null) row.delta = df - dc;
+    const at = drift != null && Number.isFinite(drift) && drift > 0 ? at0 + drift : at0;
+    const dfRun = distance(f, at);
+    const dcRun = distance(c, at);
+    row.stopped = dcRun === null;
+    // A stopped car still has a gap (held where it stopped); only the projection needs both moving.
+    const df = dfRun ?? heldAt(f);
+    const dc = dcRun ?? heldAt(c);
+    row.delta = df - dc;
+    const bothMoving = dfRun !== null && dcRun !== null;
     // Same lap: the time between them at the last lap both completed, moved on since by the
     // pace difference (seconds per focus lap) for the time since the later crossing.
     if (row.delta !== null && Math.abs(row.delta) < 1) {
       const L = Math.min(f.laps, c.laps);
       row.gapSec = c.cum[L] - f.cum[L];
-      if (at > at0 && f.pace !== null && c.pace !== null) row.gapSec += ((c.pace - f.pace) * (at - at0)) / f.pace;
+      if (at > at0 && bothMoving && f.pace !== null && c.pace !== null) row.gapSec += ((c.pace - f.pace) * (at - at0)) / f.pace;
     }
     if (f.pace !== null && c.pace !== null) {
       row.gainPerLap = c.pace - f.pace;
-      if (row.delta !== null && Math.abs(row.gainPerLap) >= STEADY_S) row.next = nextEvent(row.delta, 1 - f.pace / c.pace);
+      if (bothMoving && Math.abs(row.gainPerLap) >= STEADY_S) row.next = nextEvent(row.delta, 1 - f.pace / c.pace);
     }
     return row;
   });
@@ -189,14 +222,16 @@ export interface LeaderGap {
   laps: number;
   /** Those laps at the focus car's recent green pace, in seconds (null without a pace yet). */
   sec: number | null;
+  /** The pace used (s/lap): the focus car's, or the other car's when it has none yet. */
+  pace: number | null;
 }
 
 /**
  * How far the focus car is behind a car ahead, in laps and in seconds of its own recent green
- * pace (median of its last PACE_LAPS green laps). Under a caution this is the time to make up
+ * pace (average of its last PACE_LAPS green laps). Under a caution this is the time to make up
  * once racing resumes. Null when the focus car is that car, or either has no laps.
  */
-export function gapBehind(data: RaceChartData, focusNum: number, leaderNum: number, now?: number | null): LeaderGap | null {
+export function gapBehind(data: RaceChartData, focusNum: number, leaderNum: number, drift?: number | null): LeaderGap | null {
   if (focusNum === leaderNum) return null;
   const f = data.cars[String(focusNum)];
   const l = data.cars[String(leaderNum)];
@@ -205,7 +240,7 @@ export function gapBehind(data: RaceChartData, focusNum: number, leaderNum: numb
   const fc: CarClock = { laps: f.laps.length, cum: cumulative(f.laps), pace: paceOf(f.laps, data, fcy) };
   const lc: CarClock = { laps: l.laps.length, cum: cumulative(l.laps), pace: paceOf(l.laps, data, fcy) };
   const at0 = Math.max(fc.cum[fc.laps], lc.cum[lc.laps]);
-  const at = now != null && Number.isFinite(now) ? Math.max(at0, now) : at0;
+  const at = drift != null && Number.isFinite(drift) && drift > 0 ? at0 + drift : at0;
   // A car with no pace yet is counted at its last crossing; a car stopped (in the pits) is held
   // where it stopped, near the end of its lap, so its gap grows as the other car moves on.
   const held = (c: CarClock) => (c.pace !== null && at - c.cum[c.laps] > c.pace * STOPPED_FACTOR ? c.laps + 0.999 : c.laps);
@@ -213,39 +248,24 @@ export function gapBehind(data: RaceChartData, focusNum: number, leaderNum: numb
   const dl = distance(lc, at) ?? held(lc);
   const laps = Math.max(0, dl - df);
   const pace = fc.pace ?? lc.pace;
-  return { leader: leaderNum, laps, sec: pace !== null ? laps * pace : null };
+  return { leader: leaderNum, laps, sec: pace !== null ? laps * pace : null, pace };
 }
 
 /** The focus car's gap to the overall leader and to its class leader (null when it leads). */
-export function leaderGaps(data: RaceChartData, focusNum: number, now?: number | null): { overall: LeaderGap | null; cls: LeaderGap | null; clsName: string } {
+export function leaderGaps(data: RaceChartData, focusNum: number, drift?: number | null): { overall: LeaderGap | null; cls: LeaderGap | null; clsName: string } {
   const me = data.cars[String(focusNum)];
   const entries = Object.entries(data.cars);
   const overall = entries.find(([, c]) => c.finishPos === 1)?.[0];
   const clsLead = me ? entries.find(([, c]) => c.cls === me.cls && c.finishPosClass === 1)?.[0] : undefined;
   return {
-    overall: overall !== undefined ? gapBehind(data, focusNum, Number(overall), now) : null,
-    cls: clsLead !== undefined && clsLead !== overall ? gapBehind(data, focusNum, Number(clsLead), now) : null,
+    overall: overall !== undefined ? gapBehind(data, focusNum, Number(overall), drift) : null,
+    cls: clsLead !== undefined && clsLead !== overall ? gapBehind(data, focusNum, Number(clsLead), drift) : null,
     clsName: me?.cls ?? "",
   };
 }
 
-/** Seconds → "56.2 s" under a minute, else "3:31". */
+/** Seconds, always: "56.2 s", "211 s" (a tenth under 100 s). */
 export function gapClock(sec: number): string {
-  if (sec < 60) return `${sec.toFixed(1)} s`;
-  const t = Math.round(sec);
-  const h = Math.floor(t / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const ss = String(t % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
-}
-
-/** The latest crossing in the chart (race seconds): the moment the data describes. */
-export function latestCrossing(data: RaceChartData): number {
-  let t = 0;
-  for (const car of Object.values(data.cars)) {
-    let sum = 0;
-    for (const l of car.laps) sum += l.ltSec;
-    if (sum > t) t = sum;
-  }
-  return t;
+  const a = Math.abs(sec);
+  return a < 100 ? `${a.toFixed(1)} s` : `${Math.round(a)} s`;
 }
