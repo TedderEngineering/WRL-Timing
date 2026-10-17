@@ -126,12 +126,21 @@ export function setLiveHttp(h: HttpClient | null) {
   slugIndex.clear();
 }
 
+/**
+ * Every state read of a session, as decoded (all of it, positions included): the recorder keeps
+ * them (recorder.ts). Emits ("state", eventId, sessionId, decoded).
+ */
+export const feedStates = new EventEmitter();
+
 async function loadState(h: HttpClient, eventId: number, sessionId: number): Promise<LiveState | null> {
   try {
     const res = await h.get(liveUrls.state(eventId), { headers: { Accept: "application/x-msgpack" } });
-    const s = resultsFromState(decode(res.body));
+    const raw = decode(res.body);
+    const s = resultsFromState(raw);
     // The state is the event's current session: ignore it when another session is running.
-    return s && (s.sessionId === null || s.sessionId === sessionId) ? s : null;
+    if (!s || (s.sessionId !== null && s.sessionId !== sessionId)) return null;
+    feedStates.emit("state", eventId, sessionId, raw);
+    return s;
   } catch {
     return null;
   }
