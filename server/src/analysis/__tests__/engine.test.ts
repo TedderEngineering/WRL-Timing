@@ -7,7 +7,7 @@ import { buildFacts } from "../buildFacts.js";
 import { validatePackage } from "../validate-package.js";
 import { AdapterBlocker } from "../adapters/index.js";
 import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
-import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace } from "./scenarios.js";
+import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace, noCardPenaltyRace } from "./scenarios.js";
 import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
 
 const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
@@ -409,5 +409,35 @@ describe("penalty linking", () => {
     const ps = f.events.penalties.filter((x) => x.car === "63");
     expect(ps).toHaveLength(1);
     expect(ps[0].source.refs).toHaveLength(2);
+  });
+});
+
+describe("penalties without pit-lane times, and a post-race penalty printed twice", () => {
+  const f = buildFacts({ format: "alkamel-imsa", files: synthImsa(noCardPenaltyRace()), options: OPTS });
+
+  it("is schema-valid", () => {
+    expect(validatePackage(f).errors).toEqual([]);
+  });
+
+  it("a pit-lane pass with no time card right after a drive-through penalty is that drive-through", () => {
+    const p = f.events.pitPassages.find((x) => x.car === "70")!;
+    expect(p.kind).toBe("drive_through");
+    expect(p.confidenceNotes).toContain("drive_through_without_pit_time");
+    expect(f.events.penalties.find((x) => x.car === "70")!.servedByPassageId).toBe(p.id);
+    expect(f.pitCycles.flatMap((c) => c.members.map((m) => m.passageId))).not.toContain(p.id);
+  });
+
+  it("race control's post-race penalty and the results line for it are one penalty", () => {
+    const ps = f.events.penalties.filter((x) => x.car === "71");
+    expect(ps).toHaveLength(1);
+    expect(ps[0].status).toBe("applied_post_race");
+    expect(ps[0].source.refs!.length).toBe(2);
+  });
+
+  it("reads 'moved to the back of the field' and 'post race time penalty' lines from the results", () => {
+    const back = f.events.penalties.find((x) => x.car === "72")!;
+    expect(back).toMatchObject({ penaltyType: "position", status: "applied_post_race", amountS: null });
+    expect(back.reason).toMatch(/^Moved to the back of the field/);
+    expect(f.events.penalties.find((x) => x.car === "73")).toMatchObject({ penaltyType: "post_race_time", amountS: 5, status: "applied_post_race" });
   });
 });
