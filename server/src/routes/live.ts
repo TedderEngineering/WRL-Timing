@@ -59,6 +59,8 @@ liveRouter.get("/:slug", async (req, res, next) => {
       res.json({ live });
       return;
     }
+    // How old the race clock in `status` is, so the page can keep it ticking (a header: the body stays cacheable).
+    if (snap.updatedAt) res.set("X-Live-Age-Ms", String(Math.max(0, Date.now() - Date.parse(snap.updatedAt))));
     if (snap.etag) {
       res.set("ETag", snap.etag);
       if (!snap.lastError && req.headers["if-none-match"] === snap.etag) {
