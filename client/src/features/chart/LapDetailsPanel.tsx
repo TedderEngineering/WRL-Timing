@@ -82,7 +82,18 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
  * The focus car: number, team, class, vehicle and finish (top of both charts' side panels), and
  * its class benchmarks as facts (top three only; a weak result gets no badge).
  */
-export function CarSummary({ data, focusNum, annotations = null }: { data: RaceChartData; focusNum: number; annotations?: AnnotationData | null }) {
+export function CarSummary({
+  data,
+  focusNum,
+  annotations = null,
+  drivers = true,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  annotations?: AnnotationData | null;
+  /** False when the panel shows the drivers itself (RaceTrace Live, at the foot: the lap comes first). */
+  drivers?: boolean;
+}) {
   const car = data.cars[String(focusNum)];
   const f = finishInfo(data, focusNum);
   const live = useContext(LiveRaceContext);
@@ -125,7 +136,7 @@ export function CarSummary({ data, focusNum, annotations = null }: { data: RaceC
           ))}
         </ul>
       )}
-      <CarDrivers data={data} focusNum={focusNum} annotations={annotations} />
+      {drivers && <CarDrivers data={data} focusNum={focusNum} annotations={annotations} />}
       {(f.changed || (f.pos === null && f.crossed && f.status !== "dnf")) && f.crossed && (
         <div
           className="mt-1 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug"
@@ -156,6 +167,7 @@ export function LapDetailsPanel({
   classView: string;
   onOpen: (panel: "pit" | "gap" | "h2h" | "event") => void;
 }) {
+  const live = useContext(LiveRaceContext);
   const car = data.cars[String(focusNum)];
   if (!car) return null;
 
@@ -174,7 +186,7 @@ export function LapDetailsPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <CarSummary data={data} focusNum={focusNum} annotations={annotations} />
+      <CarSummary data={data} focusNum={focusNum} annotations={annotations} drivers={!live} />
       <ShareCarImageButton data={data} annotations={annotations} carNum={focusNum} />
 
       {!lap ? (
@@ -281,6 +293,9 @@ export function LapDetailsPanel({
           </div>
         </>
       )}
+
+      {/* RaceTrace Live: the lap (position, lap time, pace) is what the panel is for during a race. */}
+      {live && <CarDrivers data={data} focusNum={focusNum} annotations={annotations} heading="Drivers" />}
     </div>
   );
 }

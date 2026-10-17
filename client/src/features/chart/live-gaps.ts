@@ -19,7 +19,7 @@
  * race clock (an overlapping pit lap), and it would skew every other car.
  *
  * Pace is the average of a car's last PACE_LAPS green laps (no pit laps, no
- * yellow laps, under the race's green-pace cutoff). A projection is a straight
+ * out-laps, no yellow laps, under the race's green-pace cutoff). A projection is a straight
  * line: it is left out when either car has no pace, is stopped or in the pits,
  * or the two paces are within STEADY_S of each other.
  */
@@ -31,6 +31,8 @@ export const MIN_PACE_LAPS = 3;
 export const STEADY_S = 0.05;
 /** A car this many paces past its last crossing is stopped or in the pits. */
 const STOPPED_FACTOR = 1.35;
+/** The focus car's own row takes "now" as the other cars' crossing this far from the latest (0 = the latest). */
+const NOW_RANK = 2;
 /** Projections further out than this are not shown. */
 export const MAX_PROJECTION_LAPS = 500;
 
@@ -83,9 +85,17 @@ function fcyLapSet(data: RaceChartData): Set<number> {
 const isPaceLap = (l: Lap, data: RaceChartData, fcy: Set<number>) =>
   l.pit === 0 && l.ltSec > 1 && l.ltSec < data.greenPaceCutoff && !fcy.has(l.l) && (l.flag === undefined || l.flag === "GREEN");
 
+/**
+ * An out-lap: the lap after a pit lap, or after a lap far over green pace (a stop in the garage
+ * the timing does not always mark as a pit lap). It starts from rest, so it is not race pace.
+ */
+const isOutLap = (prev: Lap | undefined, data: RaceChartData) => !!prev && (prev.pit !== 0 || prev.ltSec >= data.greenPaceCutoff);
+
 export function paceOf(laps: Lap[], data: RaceChartData, fcy = fcyLapSet(data)): number | null {
   const xs: number[] = [];
-  for (let i = laps.length - 1; i >= 0 && xs.length < PACE_LAPS; i--) if (isPaceLap(laps[i], data, fcy)) xs.push(laps[i].ltSec);
+  for (let i = laps.length - 1; i >= 0 && xs.length < PACE_LAPS; i--) {
+    if (isPaceLap(laps[i], data, fcy) && !isOutLap(laps[i - 1], data)) xs.push(laps[i].ltSec);
+  }
   if (xs.length < MIN_PACE_LAPS) return null;
   return xs.reduce((a, b) => a + b, 0) / xs.length;
 }
@@ -191,8 +201,14 @@ export function gapRows(data: RaceChartData, focusNum: number, nums: number[], d
       next: null,
     };
     if (num === focusNum && f && f.laps > 0) {
-      // The focus car's own row: is it stopped, as the other cars see it?
-      const latest = Math.max(...list.map((n) => clockOf(n)!.cum[clockOf(n)!.laps]));
+      // The focus car's own row: is it stopped, as the other cars see it? "Now" is the other cars'
+      // third-latest crossing, so a car or two whose lap times add up past the race clock (an overlapping pit
+      // lap) does not make a running focus car look stopped.
+      const crossings = list
+        .filter((n) => n !== focusNum)
+        .map((n) => clockOf(n)!.cum[clockOf(n)!.laps])
+        .sort((a, b) => b - a);
+      const latest = crossings.length ? crossings[Math.min(NOW_RANK, crossings.length - 1)] : f.cum[f.laps];
       row.stopped = f.pace !== null && latest - f.cum[f.laps] > f.pace * STOPPED_FACTOR;
     }
     if (!f || num === focusNum || c.laps === 0 || f.laps === 0) return row;

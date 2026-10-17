@@ -15,6 +15,7 @@ import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
 import { LapScrubber } from "./LapScrubber";
 import { CarSummary, Stat } from "./LapDetailsPanel";
+import { CarDrivers } from "../my-drivers/CarDrivers";
 import type { TraceView } from "./trace-view";
 import { useAuth } from "../../features/auth/AuthContext";
 import {
@@ -903,8 +904,9 @@ export function LapTimeChart({
           style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
         >
           <div className="no-scrollbar flex flex-col gap-3 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
-            <CarSummary data={data} focusNum={focusNum} annotations={annotations} />
+            <CarSummary data={data} focusNum={focusNum} annotations={annotations} drivers={!live} />
             <LapTimeDetails info={info} classView={classView} />
+            {live && <CarDrivers data={data} focusNum={focusNum} annotations={annotations} heading="Drivers" />}
             <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
           </div>
         </aside>
