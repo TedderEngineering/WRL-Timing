@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { gapBehind, gapClock, gapRows, latestCrossing, leaderGaps, nextEvent, paceOf } from "../live-gaps";
+import { gapBehind, gapClock, gapRows, lapsAndSeconds, leaderGaps, nextEvent, paceOf } from "../live-gaps";
 
 /** A car with `n` laps of `lt` seconds (lap 1 offset by `start`), in position `pos`. */
 function car(num: number, n: number, lt: number, pos: number, opts: { start?: number; pitLap?: number; cls?: string } = {}) {
@@ -31,7 +31,12 @@ function race(cars: ReturnType<typeof car>[]): RaceChartData {
 }
 
 describe("paceOf", () => {
-  it("takes the median of the last green laps, leaving out pit laps", () => {
+  it("averages the last five green laps", () => {
+    const d = race([car(1, 10, 100, 1)]);
+    const laps = d.cars["1"].laps.map((l, i) => ({ ...l, ltSec: 100 + (i % 5) }));
+    expect(paceOf(laps, d)).toBeCloseTo((100 + 101 + 102 + 103 + 104) / 5, 9);
+  });
+  it("leaves out pit laps", () => {
     const d = race([car(1, 10, 100, 1, { pitLap: 9 })]);
     expect(paceOf(d.cars["1"].laps, d)).toBe(100);
   });
@@ -130,34 +135,65 @@ describe("leaderGaps", () => {
   });
   it("formats seconds", () => {
     expect(gapClock(56.24)).toBe("56.2 s");
-    expect(gapClock(211)).toBe("3:31");
-    expect(gapClock(3725)).toBe("1:02:05");
+    expect(gapClock(211)).toBe("211 s");
+    expect(gapClock(3725.4)).toBe("3725 s");
   });
 });
 
 describe("between updates (extrapolation)", () => {
   // Focus #2 laps in 99 s, 10 s behind #1 (100 s laps), both just completed lap 10.
   const d = race([car(1, 10, 100, 1), car(2, 10, 99, 2, { start: 20 })]);
-  const at0 = latestCrossing(d); // 1010: #2's crossing
 
   it("is the last crossings' gap with no time passed", () => {
-    expect(gapRows(d, 2, [1], at0).find((r) => r.num === 1)!.gapSec).toBeCloseTo(-10, 6);
+    expect(gapRows(d, 2, [1], 0).find((r) => r.num === 1)!.gapSec).toBeCloseTo(-10, 6);
   });
 
   it("closes the gap by the pace difference as time passes", () => {
-    // 49.5 s later (half a focus lap): 0.5 s closed.
-    const r = gapRows(d, 2, [1], at0 + 49.5).find((x) => x.num === 1)!;
+    // 49.5 s after the data (half a focus lap): 0.5 s closed.
+    const r = gapRows(d, 2, [1], 49.5).find((x) => x.num === 1)!;
     expect(r.gapSec).toBeCloseTo(-9.5, 6);
     expect(r.next?.laps).toBeLessThan(gapRows(d, 2, [1]).find((x) => x.num === 1)!.next!.laps);
   });
 
   it("moves the gap to the leader on too", () => {
-    const before = gapBehind(d, 2, 1, at0)!.laps;
-    const after = gapBehind(d, 2, 1, at0 + 49.5)!.laps;
-    expect(after).toBeLessThan(before);
+    expect(gapBehind(d, 2, 1, 49.5)!.laps).toBeLessThan(gapBehind(d, 2, 1, 0)!.laps);
   });
 
-  it("finds the moment the data describes", () => {
-    expect(latestCrossing(d)).toBeCloseTo(20 + 990, 6);
+  it("is not thrown off by a car whose lap times add up past the others", () => {
+    // #3's summed lap times run 200 s ahead (an overlapping pit lap); #1 and #2 stay as they were.
+    const odd = race([car(1, 10, 100, 1), car(2, 10, 99, 2, { start: 20 }), car(3, 10, 120, 3)]);
+    const r = gapRows(odd, 2, [1, 3], 5).find((x) => x.num === 1)!;
+    expect(r.stopped).toBe(false);
+    expect(r.gapSec).toBeCloseTo(-10 + 5 / 99, 6);
+  });
+});
+
+describe("a stopped focus car", () => {
+  it("still has gaps to the others, but no projections", () => {
+    // Focus #2 stopped after lap 6 (its last crossing 4 laps of pace ago).
+    const d = race([car(1, 10, 100, 1), car(2, 6, 100, 2)]);
+    const rows = gapRows(d, 2, [1]);
+    const focus = rows.find((x) => x.isFocus)!;
+    const leader = rows.find((x) => x.num === 1)!;
+    expect(focus.stopped).toBe(true);
+    expect(leader.delta).toBeCloseTo(6.999 - 10, 6);
+    expect(leader.next).toBeNull();
+  });
+});
+
+describe("lapsAndSeconds", () => {
+  it("says whole laps at the car's average lap and the rest in seconds", () => {
+    // Average lap 3:11.0, 4:05.1 behind: a lap and 54.1 s.
+    expect(lapsAndSeconds(245.1 / 191, 191)).toBe("54.1 (+1L)");
+    expect(lapsAndSeconds(23.5, 140)).toBe("70.0 (+23L)");
+  });
+  it("is seconds alone under a lap", () => {
+    expect(lapsAndSeconds(0.25, 140)).toBe("35.0");
+  });
+  it("rolls a rest that rounds to a full lap into the next lap", () => {
+    expect(lapsAndSeconds(1.99999, 140)).toBe("0.0 (+2L)");
+  });
+  it("falls back to laps without a pace", () => {
+    expect(lapsAndSeconds(1.28, null)).toBe("1.3 L");
   });
 });

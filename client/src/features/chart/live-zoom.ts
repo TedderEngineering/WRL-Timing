@@ -40,7 +40,7 @@ export function useLapZoomOnGrow(
 export const LiveRaceContext = createContext(false);
 
 /**
- * RaceTrace Live: "now" in race seconds, for moving gaps on between updates (null = hold them
- * as of the last crossings: a caution, the finish, or no clock).
+ * RaceTrace Live: seconds since the chart data arrived, for moving gaps on between updates
+ * (null = hold them as of the last crossings: a caution or the finish).
  */
 export const LiveClockContext = createContext<(() => number | null) | null>(null);

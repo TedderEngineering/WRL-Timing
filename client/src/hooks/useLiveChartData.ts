@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, API_BASE } from "../lib/api";
+import { api } from "../lib/api";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { applyDelta, applyFull, type WireDelta, type WireFull } from "../features/chart/live-wire";
 
@@ -22,9 +22,16 @@ interface LiveHead {
   live: LiveInfo;
 }
 
+/**
+ * Where the shared live requests go: the site's own /api, which Vercel's edge caches and
+ * forwards to the API. Not the API host itself (VITE_API_URL, used for logins across the sites),
+ * which has no CDN in front: requests there would all reach the server.
+ */
+export const LIVE_API_BASE: string = import.meta.env.VITE_LIVE_API_URL || "/api";
+
 /** A public request without the login, so every phone asks the same question and the CDN can answer. */
 async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
-  const res = await fetch(`${API_BASE}${path}`, { credentials: "omit" });
+  const res = await fetch(`${LIVE_API_BASE}${path}`, { credentials: "omit" });
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   // A copy the edge has held adds its Age (seconds) to how old the race clock is.
   const age = Number(res.headers.get("Age"));
@@ -306,7 +313,7 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
     const open = () => {
       if (mode.current === "legacy") return;
       errors = 0;
-      es = new EventSource(`${API_BASE}/live/${encodeURIComponent(slug)}/events`);
+      es = new EventSource(`${LIVE_API_BASE}/live/${encodeURIComponent(slug)}/events`);
       lastMessage = Date.now();
       es.addEventListener("head", (ev) => {
         lastMessage = Date.now();
