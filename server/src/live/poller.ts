@@ -99,6 +99,17 @@ export function feedUtc(t: string | null | undefined): string | null {
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
+/**
+ * Sessions RaceTrace Live leaves out of its list and banner: open track time and HPDE run on the
+ * same timing but are not WRL racing ("Max Track Time" stays marked live for days).
+ */
+export function isListedSession(name: string): boolean {
+  return !/max\s*track\s*time|hpde/i.test(name);
+}
+
+/** A practice or qualifying session the feed has marked live this long is a stale mark, not a session running. */
+export const STALE_LIVE_MS = 12 * 3600_000;
+
 /** Practice and qualifying sessions are marked by the feed; anything else is a race. */
 export function sessionKind(s: { pq?: boolean; n?: string }): SessionKind {
   return s.pq ? (/qual/i.test(s.n ?? "") ? "qualify" : "practice") : "race";
@@ -510,8 +521,11 @@ async function scanSessions(): Promise<{ sessions: LiveSessionRef[]; recent: Liv
         endedAt,
         kind: sessionKind(s),
       };
-      if (s.il && e.l === true) live.push(ref);
-      else if (endedAt && now - Date.parse(endedAt) <= RECENT_MS) recent.push(ref);
+      if (!isListedSession(sessionName)) continue; // indexed (its page works), never listed
+      const stale = ref.kind !== "race" && ref.startedAt !== null && now - Date.parse(ref.startedAt) > STALE_LIVE_MS;
+      if (s.il && e.l === true) {
+        if (!stale) live.push(ref);
+      } else if (endedAt && now - Date.parse(endedAt) <= RECENT_MS) recent.push(ref);
     }
   }
   listCache = { at: Date.now(), sessions: live, recent };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedUtc, sessionKind } from "../poller.js";
+import { feedUtc, isListedSession, sessionKind } from "../poller.js";
 import { LIVE_SCHEDULE, upcomingSessions, type ScheduledSession } from "../schedule.js";
 
 const race: ScheduledSession = {
@@ -41,6 +41,12 @@ describe("feed session helpers", () => {
   it("reads the feed's zone-less times as UTC", () => {
     expect(feedUtc("2026-10-17T11:18:13.345109")).toBe("2026-10-17T11:18:13.345Z");
     expect(feedUtc(null)).toBeNull();
+  });
+  it("leaves open track time and HPDE out of RaceTrace Live, not race practice or qualifying", () => {
+    expect(isListedSession("Max Track Time")).toBe(false);
+    expect(isListedSession("HPDE S3")).toBe(false);
+    expect(isListedSession("Race Practice 4")).toBe(true);
+    expect(isListedSession("GP1/GP2 Qualifying")).toBe(true);
   });
   it("names practice, qualifying and race sessions", () => {
     expect(sessionKind({ pq: true, n: "GTO/GTU Qualifying" })).toBe("qualify");

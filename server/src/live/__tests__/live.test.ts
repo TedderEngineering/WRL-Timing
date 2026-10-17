@@ -163,6 +163,24 @@ describe("live poller and routes", () => {
     ]);
   });
 
+  it("leaves out open track time and a practice the feed has marked live for days", async () => {
+    const now = Date.now();
+    const iso = (ms: number) => new Date(ms).toISOString().replace("Z", "");
+    setLiveHttp(
+      fakeHttp({
+        [feedUrls.liveAndRecent()]: JSON.stringify([{ eid: 9004, oid: 1, en: "World Racing League - Synthetic Park 2026", t: "Synthetic Park", l: true }]),
+        [feedUrls.sessions(9004)]: JSON.stringify([
+          { sid: 95, eid: 9004, n: "Max Track Time", st: iso(now - 50 * 3600_000), et: null, tz: -4, il: true, pq: true },
+          { sid: 13, eid: 9004, n: "Race Practice 1", st: iso(now - 40 * 3600_000), et: null, tz: -4, il: true, pq: true },
+          { sid: 16, eid: 9004, n: "Race Practice 4", st: iso(now - 600_000), et: null, tz: -4, il: true, pq: true },
+        ]),
+      })
+    );
+    expect((await listLiveSessions()).map((s) => s.sessionName)).toEqual(["Race Practice 4"]);
+    // Their pages still resolve.
+    expect(await resolveLiveSlug("synthetic-park-2026-max-track-time")).toEqual({ eventId: 9004, sessionId: 95 });
+  });
+
   it("lists sessions that ended within two hours, and keeps their addresses working", async () => {
     const ended = new Date(Date.now() - 3600_000).toISOString().replace("Z", "");
     const old = new Date(Date.now() - 5 * 3600_000).toISOString().replace("Z", "");
