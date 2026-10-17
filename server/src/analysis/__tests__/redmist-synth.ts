@@ -8,6 +8,9 @@
  *  car 4 (GP1)  report stop at lap 10 only, while the car was already in the pit lane at the lap-9
  *               crossing (re-anchored to 9-10); 1-lap penalty in the control log.
  *  car 5 (GP1)  pit-lane start: lap-1 report stop holding the pre-start wait (1500 s).
+ *
+ * With { garage: true }, car 3's visit (laps 15-16) lasts 1300 s more and the pit report lists it
+ * with a 70-s pit-lane time: the car was repaired behind the wall, outside the timed pit lane.
  */
 import type { InputFile } from "../types.js";
 import { textFile } from "./synth.js";
@@ -65,10 +68,14 @@ export function crossing(c: CarSpec, lap: number): number {
   return t;
 }
 
-export function redmistFiles(opts: { pits?: boolean; prefix?: string } = {}): InputFile[] {
+/** Car 3's extra out-lap time with { garage: true }. */
+export const RM_GARAGE_EXTRA_S = 1300;
+
+export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean } = {}): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
+  const cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
   const laps: Record<string, unknown>[] = [];
-  for (const c of RM_CARS) {
+  for (const c of cars) {
     for (let lap = 1; lap <= 20; lap++) {
       const end = crossing(c, lap);
       laps.push({
@@ -115,8 +122,11 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string } = {}): In
       { carNumber: "2", stopNumber: 1, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 88000, pitDuration: "1:28.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
       { carNumber: "4", stopNumber: 1, startLap: 10, endLap: 10, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Eve Egan", driverAfter: "Eve Egan", driverChanged: false },
       { carNumber: "5", stopNumber: 1, startLap: 1, endLap: 1, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 1500000, pitDuration: "25:00.000", driverBefore: "", driverAfter: "Fay Fox", driverChanged: false },
+      ...(opts.garage
+        ? [{ carNumber: "3", stopNumber: 1, startLap: 15, endLap: 16, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Dan Drew", driverAfter: "Dan Drew", driverChanged: false }]
+        : []),
     ],
-    pitStopCount: 4,
+    pitStopCount: opts.garage ? 5 : 4,
     truncated: false,
     skippedLapRows: 0,
   };
@@ -127,8 +137,8 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string } = {}): In
     runningRaceTime: "03:00:00",
     sessionStartTime: "0001-01-01T00:00:00",
     localTimeZoneOffset: 0,
-    eventEntries: RM_CARS.map((c) => ({ no: c.car, nm: c.team, t: "Sponsor Co", c: c.cls })),
-    carPositions: RM_CARS.map((c, i) => ({ n: c.car, class: c.cls, ovp: i + 1, clp: c.cls === "GTO" ? i + 1 : i - 1, llp: 20, bt: "00:01:40.000", bl: 2, ttm: hms(crossing(c, 20)) })),
+    eventEntries: cars.map((c) => ({ no: c.car, nm: c.team, t: "Sponsor Co", c: c.cls })),
+    carPositions: cars.map((c, i) => ({ n: c.car, class: c.cls, ovp: i + 1, clp: c.cls === "GTO" ? i + 1 : i - 1, llp: 20, bt: "00:01:40.000", bl: 2, ttm: hms(crossing(c, 20)) })),
     classOrder: { GTO: "1", GP1: "2" },
   };
   const flagsDoc = [

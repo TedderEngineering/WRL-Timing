@@ -10,7 +10,7 @@ import { buildLaps, type LapRow } from "../engine/context.js";
 import { redmistFlagVisits } from "../engine/passages.js";
 import { validatePackage } from "../validate-package.js";
 import type { BuildOptions, SourceFileInfo } from "../types.js";
-import { crossing, RM_CAR1_ENTRY, RM_CAR1_PIT, RM_CARS, redmistFiles } from "./redmist-synth.js";
+import { crossing, RM_CAR1_ENTRY, RM_CAR1_PIT, RM_CARS, RM_GARAGE_EXTRA_S, redmistFiles } from "./redmist-synth.js";
 
 const OPTS: BuildOptions = {
   series: "World Racing League",
@@ -241,6 +241,32 @@ describe("RedMist pit passages (with the Flagtronics pit report)", () => {
 
   it("is deterministic", () => {
     expect(JSON.stringify(build())).toEqual(JSON.stringify(pkg));
+  });
+});
+
+describe("RedMist repairs behind the wall (pit report times the pit lane only)", () => {
+  const pkg = buildFacts({ format: "redmist", files: redmistFiles({ garage: true }), options: OPTS });
+  const p3 = pkg.events.pitPassages.find((e: any) => e.car === "3" && e.inLap === 15) as any;
+
+  it("a visit whose time lost is over the garage threshold is a garage visit, not a stop", () => {
+    expect(p3).toBeTruthy();
+    expect(p3.officialPitLaneTimeS).toBeLessThan(600);
+    expect(p3.timeLost.valueS).toBeGreaterThan(RM_GARAGE_EXTRA_S);
+    expect(p3.kind).toBe("garage");
+    expect(p3.kindBasis).toEqual(["garage_threshold"]);
+    expect(p3.notes.some((n: string) => n.startsWith("garage_by_time_lost"))).toBe(true);
+    expect(p3.stopNumber).toBe(1);
+  });
+
+  it("joins no pit cycle, and the package still validates", () => {
+    expect(p3.cycleId).toBeNull();
+    expect(pkg.pitCycles.some((c: any) => c.members.some((m: any) => m.passageId === p3.id))).toBe(false);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("leaves ordinary stops alone", () => {
+    const p1 = pkg.events.pitPassages.find((e: any) => e.car === "1" && e.inLap === 6) as any;
+    expect(p1.kind).toBe("stop");
   });
 });
 

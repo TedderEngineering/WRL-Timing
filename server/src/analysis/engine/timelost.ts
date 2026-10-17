@@ -399,6 +399,23 @@ export function classifyWrl(ctx: Ctx, passages: Passage[], groups: PitGroup[], g
   }
 }
 
+/**
+ * RedMist with a pit report: the report times the pit lane only, and a reissued entry leaves no
+ * usable duration. A car that went behind the wall for repairs shows a short or missing pit-lane
+ * time and a time lost of many minutes or hours. Such a visit is a garage visit, not a stop: it is
+ * no pit-cycle member (its window would otherwise join cycles hours apart) and is not ranked.
+ */
+export function promoteLongStopsToGarage(passages: Passage[], groups: PitGroup[], garageS: number): void {
+  for (const p of passages) {
+    if (p.kind !== "stop" || p.outcome !== "rejoined") continue;
+    const v = p.timeLost.method === "see_group" ? groups.find((g) => g.id === p.groupId)?.timeLost.valueS ?? null : p.timeLost.valueS;
+    if (v === null || v <= garageS) continue;
+    p.kind = "garage";
+    p.kindBasis = ["garage_threshold"];
+    p.notes.push("garage_by_time_lost: time lost is over the garage threshold, though the pit report's pit-lane time is not.");
+  }
+}
+
 export function lowerConfidence(p: { confidence: "high" | "medium" | "low" }, c: "high" | "medium" | "low"): void {
   lowerConf(p, c);
 }

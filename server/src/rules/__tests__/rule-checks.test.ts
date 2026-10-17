@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { runRuleChecks } from "../run-rule-checks.js";
+import { formatKeyOf } from "../checks/context.js";
 import type { OverrideDef, RuleDef } from "../rulebook-types.js";
 import { makePkg, makeRulebook, rule } from "./helpers.js";
 
@@ -26,6 +27,16 @@ const statuses = (r: Res, ruleId: string) => {
 };
 
 // ─── severity, citations, generic outcomes ─────────────────────────────────
+
+describe("timing format keys", () => {
+  it("maps every package source format to its rulebook format key, RedMist included", () => {
+    expect(formatKeyOf("alkamel-imsa")).toBe("alkamel_imsa");
+    expect(formatKeyOf("speedhive")).toBe("speedhive");
+    expect(formatKeyOf("wrl-website")).toBe("wrl_website");
+    expect(formatKeyOf("redmist")).toBe("wrl_redmist");
+    expect(formatKeyOf("nope")).toBeNull();
+  });
+});
 
 describe("generic behaviour", () => {
   const minPit = (extra: Partial<RuleDef> = {}) =>
