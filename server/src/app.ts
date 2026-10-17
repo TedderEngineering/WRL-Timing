@@ -9,6 +9,7 @@ import { apiLimiter } from "./middleware/rate-limit.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { racesRouter } from "./routes/races.js";
+import { liveRouter } from "./routes/live.js";
 import { meRouter } from "./routes/me.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { shareRouter } from "./routes/share.js";
@@ -84,6 +85,9 @@ export function createApp() {
   // an address and open pages poll for changes, so Setup Sheet limits per
   // person instead (see routes/setup.ts).
   app.use("/api/setup", setupRouter);
+  // RaceTrace Live: same reason (a paddock full of phones polling one race). It only serves
+  // the cached chart; RedMist is read by one paced poller per session (live/poller.ts).
+  app.use("/api/live", liveRouter);
 
   // ─── Rate Limiting ───────────────────────────────────────────────────────
   app.use("/api", apiLimiter);

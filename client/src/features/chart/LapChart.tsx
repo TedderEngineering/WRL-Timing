@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { useLapZoomOnGrow } from "./live-zoom";
 import { hasFullAccess } from "../../lib/utils";
 import type {
   RaceChartData,
@@ -44,6 +45,8 @@ interface LapChartProps {
   view: TraceView;
   /** The bottom axis to start with (the user's chart defaults). */
   defaultAxis?: "laps" | "hours" | "both";
+  /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
+  live?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -51,7 +54,7 @@ interface LapChartProps {
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, defaultAxis,
+  classView, activeLap, setActiveLap, view, defaultAxis, live = false,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -92,8 +95,8 @@ export function LapChart({
   const maxLapRef = useRef(data.maxLap);
   maxLapRef.current = data.maxLap;
 
-  // Reset zoom when race data changes
-  useEffect(() => { setLapStart(1); setLapEnd(data.maxLap); }, [data.maxLap]);
+  // Reset zoom when race data changes; a live race keeps the viewer's zoom as laps arrive.
+  useLapZoomOnGrow(data.maxLap, lapStart, lapEnd, setLapStart, setLapEnd, live);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 

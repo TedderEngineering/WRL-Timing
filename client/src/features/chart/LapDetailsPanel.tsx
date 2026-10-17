@@ -3,7 +3,9 @@
  * on a phone): the focus car, the selected lap, its pit stop, what changed,
  * and the deeper panels.
  */
+import { useContext } from "react";
 import { finishInfo } from "./finish";
+import { LiveRaceContext } from "./live-zoom";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { classBenchmarks } from "./benchmarks";
 import { ShareCarImageButton } from "./raceCard";
@@ -83,11 +85,12 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
 export function CarSummary({ data, focusNum, annotations = null }: { data: RaceChartData; focusNum: number; annotations?: AnnotationData | null }) {
   const car = data.cars[String(focusNum)];
   const f = finishInfo(data, focusNum);
+  const live = useContext(LiveRaceContext);
   if (!car || !f) return null;
   const marks = classBenchmarks(data, annotations, focusNum);
   const finish =
     f.pos !== null
-      ? `Finished P${f.posClass ?? "?"} in ${car.cls} · P${f.pos} overall`
+      ? `${live ? "Running" : "Finished"} P${f.posClass ?? "?"} in ${car.cls} · P${f.pos} overall`
       : f.status === "dsq"
         ? "Disqualified"
         : f.status === "dns"
