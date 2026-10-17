@@ -1,3 +1,4 @@
+import { LiveBanner } from "../features/live/LiveBanner";
 import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
@@ -213,6 +214,7 @@ export function Layout() {
           </div>
         </nav>
       </header>
+      <LiveBanner />
 
       {/* Page content */}
       <main className={appPage ? "flex-1 min-h-0" : "flex-1"}>
