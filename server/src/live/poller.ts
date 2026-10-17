@@ -18,6 +18,7 @@
  * here goes through the intake's `paced` client (1.6 s between calls).
  */
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { decode } from "@msgpack/msgpack";
 import { createHttpClient, type HttpClient } from "../intake/http.js";
 import {
@@ -35,7 +36,7 @@ import {
   type FeedSession,
 } from "./feed.js";
 import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
-import { lapPrefixes, summarize, type VersionSummary } from "./wire.js";
+import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -50,6 +51,8 @@ export const KEEP_VERSIONS = 180;
  * at once; batched laps are kept and go into the next rebuild.
  */
 export const REBUILD_COST_FACTOR = 25;
+/** Charts kept for full copies of recent versions (a phone told about version v a few seconds ago). */
+export const KEEP_CHARTS = 3;
 export const SLOW_MS = Number(process.env.LIVE_SLOW_MS || 60_000);
 export const IDLE_MS = Number(process.env.LIVE_IDLE_MS || 10 * 60_000);
 const LIST_MS = 60_000;
@@ -139,6 +142,19 @@ class Poller {
   snap: LiveSnapshot = { chart: null, v: 0, prefixes: null, waiting: "Connecting to the timing", updatedAt: null, lastError: null, etag: null, ended: false };
   /** Recent versions a phone may hold → what it holds (for deltas). */
   readonly versions = new Map<number, VersionSummary>();
+  /** Step deltas: v → JSON of the changes from v − 1 to v (wire.ts), made once at rebuild and shared by every phone. */
+  readonly steps = new Map<number, string>();
+  /** The last few charts by version, for full copies of a version a phone was just told about. */
+  readonly charts = new Map<number, LiveChart>();
+  /** "update" after every tick that changed the chart or the live status (push streams listen). */
+  readonly events = new EventEmitter();
+  /** Open push streams on this session (they keep the poller alive). */
+  streams = 0;
+  /**
+   * This poller's run. Versions restart at 1 with every poller (a deploy, or an idle stop), and
+   * the CDN keeps update files forever, so every cacheable URL names the epoch too.
+   */
+  readonly epoch = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   lastView = Date.now();
   private laps: FeedLap[] = [];
   private flags: FeedFlag[] | null = null;
@@ -175,7 +191,7 @@ class Poller {
 
   private schedule() {
     this.timer = setTimeout(() => {
-      if (Date.now() - this.lastView > IDLE_MS || this.snap.ended) {
+      if ((this.streams === 0 && Date.now() - this.lastView > IDLE_MS) || this.snap.ended) {
         this.onStop();
         return;
       }
@@ -277,7 +293,17 @@ class Poller {
         v += 1;
         prefixes = lapPrefixes(chart.data);
         this.versions.set(v, summarize(chart.data, chart.annotations, prefixes));
+        const prev = this.charts.get(v - 1);
+        const prevSummary = this.versions.get(v - 1);
+        if (prev && prevSummary) {
+          this.steps.set(v, JSON.stringify(encodeDelta(v - 1, prevSummary, v, chart.data, chart.annotations, prefixes, prev.annotations)));
+        }
+        this.charts.set(v, chart);
         for (const k of this.versions.keys()) if (k <= v - KEEP_VERSIONS) this.versions.delete(k);
+        for (const k of this.steps.keys()) if (k <= v - KEEP_VERSIONS) this.steps.delete(k);
+        for (const k of this.charts.keys()) if (k <= v - KEEP_CHARTS) this.charts.delete(k);
+      } else if (this.charts.has(v)) {
+        this.charts.set(v, chart); // same version, newer live status
       }
       this.snap = {
         chart,
@@ -289,6 +315,7 @@ class Poller {
         etag: `"${hashOf(`${v}|${JSON.stringify(chart.status)}`)}"`,
         ended: this.snap.ended,
       };
+      this.events.emit("update");
     } catch (e) {
       if (e instanceof LiveNoLapsError) this.snap = { ...this.snap, waiting: "Waiting for the first completed lap", lastError: null };
       // Keep the last good chart; say what went wrong.
@@ -362,13 +389,43 @@ export async function getLiveSnapshot(
   eventId: number,
   sessionId: number,
   slug: string
-): Promise<LiveSnapshot & { meta: LiveSessionMeta | null; versions: ReadonlyMap<number, VersionSummary> }> {
+): Promise<
+  LiveSnapshot & {
+    meta: LiveSessionMeta | null;
+    versions: ReadonlyMap<number, VersionSummary>;
+    steps: ReadonlyMap<number, string>;
+    charts: ReadonlyMap<number, LiveChart>;
+    epoch: string;
+  }
+> {
+  const p = pollerFor(eventId, sessionId, slug);
+  p.lastView = Date.now();
+  await p.ready();
+  return { ...p.snap, meta: p.meta, versions: p.versions, steps: p.steps, charts: p.charts, epoch: p.epoch };
+}
+
+/**
+ * Follow a session's updates (push streams). `onUpdate` runs after every tick that changed the
+ * chart or the live status. The poller keeps running while anyone listens. Returns unsubscribe.
+ */
+export function subscribeLive(eventId: number, sessionId: number, slug: string, onUpdate: () => void): () => void {
+  const p = pollerFor(eventId, sessionId, slug);
+  p.streams += 1;
+  p.events.on("update", onUpdate);
+  return () => {
+    p.events.off("update", onUpdate);
+    p.streams = Math.max(0, p.streams - 1);
+    p.lastView = Date.now();
+  };
+}
+
+function pollerFor(eventId: number, sessionId: number, slug: string): Poller {
   const key = `${eventId}/${sessionId}`;
   let p = pollers.get(key);
   if (!p) {
     if (pollers.size >= MAX_POLLERS) {
       // Drop the least recently viewed session.
-      const oldest = [...pollers.entries()].sort((a, b) => a[1].lastView - b[1].lastView)[0];
+      const oldest = [...pollers.entries()].sort((a, b) => a[1].streams - b[1].streams || a[1].lastView - b[1].lastView)[0];
       oldest[1].stop();
       pollers.delete(oldest[0]);
     }
@@ -379,9 +436,7 @@ export async function getLiveSnapshot(
     p = created;
     p.start();
   }
-  p.lastView = Date.now();
-  await p.ready();
-  return { ...p.snap, meta: p.meta, versions: p.versions };
+  return p;
 }
 
 let listCache: { at: number; sessions: LiveSessionRef[] } | null = null;

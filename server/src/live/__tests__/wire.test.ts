@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
-import { encodeDelta, encodeFull, LAP_TIME_CASES, lapPrefixes, lapTimeText, rowEncoding, summarize } from "../wire.js";
+import { annDiff, encodeDelta, encodeFull, LAP_TIME_CASES, lapPrefixes, lapTimeText, rowEncoding, summarize } from "../wire.js";
 import { mergeStateLaps } from "../poller.js";
 import { lapRowFromState } from "../build.js";
 import type { RaceDataJson } from "../../utils/race-validators.js";
@@ -97,19 +97,52 @@ describe("deltas", () => {
 
   it("matches the phone's fixture (client/src/features/chart/__tests__/fixtures/live-wire.json)", () => {
     const next = chart({ "7": [lap(1, 120), lap(2, 119), lap(3, 118.5, { flag: "FCY", pit: 1 })], "11": [lap(1, 121), lap(2, 3723.456)] });
+    // #11's pit marker: a cycle average moves (patched); #7's marker set grows (sent whole).
+    const pitMarker = (avg: number, delta: number) => ({
+      pits: [{ lap: 1, pitTiming: { totalPitLoss: 160.2, cycleComparison: { compAvgTotalPitLoss: avg, deltaTotalLoss: delta, note: "a long note the patch does not repeat. ".repeat(6) } } }],
+      reasons: { "1": "Pit stop" },
+    });
+    const baseAnnotations = { "7": { stops: [] }, "11": pitMarker(157.59, -36.24) };
+    const nextAnnotations = { "7": { stops: [3] }, "11": pitMarker(161.5, -40.16) };
+    const baseSummary2 = summarize(base, baseAnnotations);
     const fixture = {
       lapTimeCases: LAP_TIME_CASES,
       base,
-      baseAnnotations: { "7": { stops: [] } },
-      full: encodeFull(1, base, { "7": { stops: [] } }),
-      delta: encodeDelta(1, baseSummary, 2, next, { "7": { stops: [3] } }),
+      baseAnnotations,
+      full: encodeFull(1, base, baseAnnotations),
+      delta: encodeDelta(1, baseSummary2, 2, next, nextAnnotations, lapPrefixes(next), baseAnnotations),
       next,
-      nextAnnotations: { "7": { stops: [3] } },
+      nextAnnotations,
     };
+    expect(fixture.delta.annPatch?.["11"]).toHaveLength(2);
+    expect(fixture.delta.ann["7"]).toEqual({ stops: [3] });
     const path = new URL("../../../../client/src/features/chart/__tests__/fixtures/live-wire.json", import.meta.url);
     const text = JSON.stringify(fixture, null, 1) + "\n";
     if (process.env.UPDATE_LIVE_WIRE_FIXTURE) writeFileSync(path, text);
     expect(readFileSync(path, "utf-8")).toBe(text);
+  });
+});
+
+describe("pit-marker patches", () => {
+  it("lists only the leaves that changed", () => {
+    const a = { pits: [{ t: { avg: 157.5, d: -36.2, n: "same" } }], reasons: { "4": "Pit" }, gone: 1 };
+    const b = { pits: [{ t: { avg: 161.5, d: -40.1, n: "same" } }], reasons: { "4": "Pit", "9": "Pass" } };
+    expect(annDiff(a, b)).toEqual([
+      [["gone"]],
+      [["pits", 0, "t", "avg"], 161.5],
+      [["pits", 0, "t", "d"], -40.1],
+      [["reasons", "9"], "Pass"],
+    ]);
+  });
+  it("replaces an array that changed length", () => {
+    expect(annDiff({ s: [1] }, { s: [1, 2] })).toEqual([[["s"], [1, 2]]]);
+  });
+  it("sends patches instead of the whole marker set when smaller", () => {
+    const big = (avg: number) => ({ pits: Array.from({ length: 6 }, (_, i) => ({ lap: i * 30, note: "x".repeat(80), avg })) });
+    const b = chart({ "7": [lap(1, 120)] });
+    const d = encodeDelta(1, summarize(b, { "7": big(157) }), 2, b, { "7": big(161) }, lapPrefixes(b), { "7": big(157) });
+    expect(d.ann).toEqual({});
+    expect(d.annPatch?.["7"]).toHaveLength(6);
   });
 });
 

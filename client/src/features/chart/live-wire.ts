@@ -43,8 +43,31 @@ export interface WireDelta {
   cars: Record<string, WireCar>;
   removed: string[];
   ann: Record<string, unknown>;
+  /** Changed pit markers as patches ([path, value], or [path] to delete). */
+  annPatch?: Record<string, AnnPatch[]>;
   annRemoved: string[];
   total: number;
+}
+
+export type AnnPatch = [(string | number)[]] | [(string | number)[], unknown];
+
+/** A copy of `obj` with the patches applied (the original is not changed). */
+export function applyAnnPatch(obj: unknown, patches: AnnPatch[]): unknown {
+  const out = structuredClone(obj) as Record<string | number, unknown>;
+  for (const p of patches) {
+    const path = p[0];
+    if (path.length === 0) return p.length === 2 ? structuredClone(p[1]) : undefined;
+    let node = out as Record<string | number, unknown>;
+    for (let i = 0; i < path.length - 1; i++) {
+      const next = node[path[i]];
+      if (next === null || typeof next !== "object") return null; // does not fit: caller asks for a full copy
+      node = next as Record<string | number, unknown>;
+    }
+    const last = path[path.length - 1];
+    if (p.length === 2) node[last] = structuredClone(p[1]);
+    else delete node[last];
+  }
+  return out;
 }
 
 /** Seconds → "2:19.637" / "1:02:03.456": must match the server's lapTimeText exactly. */
@@ -102,5 +125,11 @@ export function applyDelta(
   const ann: Record<string, unknown> = { ...(annotations as Record<string, unknown>) };
   for (const k of delta.annRemoved) delete ann[k];
   Object.assign(ann, delta.ann);
+  for (const [k, patches] of Object.entries(delta.annPatch ?? {})) {
+    if (!(k in ann)) return null;
+    const next = applyAnnPatch(ann[k], patches);
+    if (next === null) return null;
+    ann[k] = next;
+  }
   return { data: { ...delta.top, cars } as RaceChartData, annotations: ann as AnnotationData };
 }
