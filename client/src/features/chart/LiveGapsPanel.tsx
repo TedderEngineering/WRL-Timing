@@ -25,8 +25,8 @@ function gapText(r: GapRow): string {
   if (r.isFocus) return "—";
   if (r.gapSec !== null) return signed(r.gapSec, 1);
   if (r.delta === null) return r.stopped ? "pit" : "";
-  const laps = Math.trunc(r.delta);
-  return laps === 0 ? "" : `${laps > 0 ? "+" : "−"}${Math.abs(laps)} L`;
+  // A lap or more apart: laps to a tenth ("+1.5 L" = a lap and a half behind).
+  return `${r.delta > 0 ? "+" : "−"}${Math.abs(r.delta).toFixed(1)} L`;
 }
 
 const NEXT: Record<NonNullable<GapRow["next"]>["event"], [string, (k: number) => string]> = {

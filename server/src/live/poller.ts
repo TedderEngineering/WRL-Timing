@@ -2,10 +2,17 @@
  * RaceTrace Live: one timing-feed poller per live session, shared by every viewer.
  *
  * A poller starts on the first request for a session and stops once nobody
- * has asked for it for IDLE_MS. Each tick (TICK_MS) reads the session state;
- * the completed laps are re-read every LAPS_MS and the flags, race-control log
- * and session list every SLOW_MS. Then the chart is rebuilt. Viewers only ever read the last built
- * chart, so the timing feed sees one caller however many people watch.
+ * has asked for it for IDLE_MS. Each tick (TICK_MS, 5 s) reads the session
+ * state, the same cheap read the feed's own viewer pages make every 5 s, and
+ * adds each car's newly completed lap from it. The full lap list is re-read
+ * every LAPS_MS (or at once when a lap was missed), and the flags,
+ * race-control log and session list every SLOW_MS. The chart is rebuilt only
+ * when something in it changed; otherwise only the live status moves.
+ *
+ * Each rebuild is a version. A small summary of every recent version (per car:
+ * lap count and a hash of those laps) lets the route send a phone only what
+ * changed since the version it holds (wire.ts). Viewers only ever read the
+ * last build, so the timing feed sees one caller however many people watch.
  *
  * The feed asks anonymous callers for about one request per 1.1 s; every call
  * here goes through the intake's `paced` client (1.6 s between calls).
@@ -27,12 +34,22 @@ import {
   type FeedLap,
   type FeedSession,
 } from "./feed.js";
-import { buildLiveChart, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
+import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
+import { lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 
 /** How often a poller wakes (session state). */
-export const TICK_MS = Number(process.env.LIVE_TICK_MS || 30_000);
-/** How often the full lap list is re-read (it grows to several MB over an enduro). */
-export const LAPS_MS = Number(process.env.LIVE_LAPS_MS || 60_000);
+export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
+/** How often the full lap list is re-read (it grows to several MB over an enduro); laps arrive from the state in between. */
+export const LAPS_MS = Number(process.env.LIVE_LAPS_MS || 120_000);
+/** Versions a phone can still get a delta from (15 min at 5 s). */
+export const KEEP_VERSIONS = 180;
+/**
+ * New laps alone wait this many times the last rebuild's duration since it (at least TICK_MS):
+ * a rebuild of a full enduro takes ~0.3 s of the server's one thread, so late in the race laps
+ * are batched into a rebuild every ~7 s rather than every tick. Flag and entry changes rebuild
+ * at once; batched laps are kept and go into the next rebuild.
+ */
+export const REBUILD_COST_FACTOR = 25;
 export const SLOW_MS = Number(process.env.LIVE_SLOW_MS || 60_000);
 export const IDLE_MS = Number(process.env.LIVE_IDLE_MS || 10 * 60_000);
 const LIST_MS = 60_000;
@@ -45,6 +62,10 @@ export const liveUrls = {
 
 export interface LiveSnapshot {
   chart: LiveChart | null;
+  /** Chart version (rises on every rebuild; status-only updates keep it). */
+  v: number;
+  /** Chained hashes of each car's laps in this version (wire.ts lapPrefixes). */
+  prefixes: Record<string, string[]> | null;
   /** Why there is no chart yet ("waiting" before the first lap). */
   waiting: string | null;
   updatedAt: string | null;
@@ -115,13 +136,23 @@ async function loadState(h: HttpClient, eventId: number, sessionId: number): Pro
 
 class Poller {
   meta: LiveSessionMeta | null = null;
-  snap: LiveSnapshot = { chart: null, waiting: "Connecting to the timing", updatedAt: null, lastError: null, etag: null, ended: false };
+  snap: LiveSnapshot = { chart: null, v: 0, prefixes: null, waiting: "Connecting to the timing", updatedAt: null, lastError: null, etag: null, ended: false };
+  /** Recent versions a phone may hold → what it holds (for deltas). */
+  readonly versions = new Map<number, VersionSummary>();
   lastView = Date.now();
   private laps: FeedLap[] = [];
   private flags: FeedFlag[] | null = null;
   private control: FeedControlEntry[] | null = null;
   private lastSlow = 0;
   private lastLaps = 0;
+  /** A lap went missing between state reads: re-read the full list on the next tick. */
+  private needFull = false;
+  /** What the last build was made from (rebuild only when one of these changed). */
+  private builtFrom = "";
+  /** Laps merged since the last rebuild (waiting for the next one). */
+  private lapsPending = false;
+  private lastBuildAt = 0;
+  private lastBuildMs = 0;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
 
@@ -188,12 +219,22 @@ class Poller {
     try {
       if (!this.meta || Date.now() - this.lastSlow >= SLOW_MS) await this.loadMeta(h);
       const state = await loadState(h, this.eventId, this.sessionId);
-      if (this.laps.length === 0 || Date.now() - this.lastLaps >= LAPS_MS) {
+      let lapsChanged = false;
+      if (this.laps.length === 0 || this.needFull || Date.now() - this.lastLaps >= LAPS_MS) {
         const laps = await h.getJson<FeedLap[]>(liveUrls.sessionLaps(this.eventId, this.sessionId));
         if (Array.isArray(laps)) {
           this.laps = laps;
           this.lastLaps = Date.now();
+          this.needFull = false;
+          lapsChanged = true;
         }
+      } else if (state) {
+        const m = mergeStateLaps(this.laps, state.laps);
+        if (m.added) {
+          this.laps = m.laps;
+          lapsChanged = true;
+        }
+        if (m.gap) this.needFull = true;
       }
       if (Date.now() - this.lastSlow >= SLOW_MS) {
         this.lastSlow = Date.now();
@@ -202,22 +243,50 @@ class Poller {
         const control = await h.getJson<FeedControlEntry[]>(feedUrls.control(this.eventId, this.sessionId)).catch(() => null);
         if (Array.isArray(control)) this.control = control;
       }
-      const chart = await buildLiveChart({
-        meta: this.meta!,
-        laps: this.laps,
-        results: state?.results ?? null,
-        flags: this.flags,
-        control: this.control,
-        currentFlag: state?.currentFlag ?? null,
-        timeToGo: state?.timeToGo ?? null,
-      });
-      const body = JSON.stringify(chart.data);
+      // What else goes into the chart: flags and race control (FCY bands), entry names, and the
+      // current flag (an open flag's band runs to "now").
+      const inputs = [
+        hashOf(JSON.stringify(this.flags) + JSON.stringify(this.control)),
+        hashOf(JSON.stringify(state?.results.eventEntries ?? null)),
+        state?.currentFlag ?? "",
+      ].join("|");
+      if (lapsChanged) this.lapsPending = true;
+      const lapsDue = this.lapsPending && Date.now() - this.lastBuildAt >= Math.max(TICK_MS, this.lastBuildMs * REBUILD_COST_FACTOR) - 50;
+      const rebuild = !this.snap.chart || inputs !== this.builtFrom || lapsDue;
+      const t0 = Date.now();
+      const chart = !rebuild
+        ? withStatus(this.snap.chart!, state)
+        : await buildLiveChart({
+            meta: this.meta!,
+            laps: this.laps,
+            results: state?.results ?? null,
+            flags: this.flags,
+            control: this.control,
+            currentFlag: state?.currentFlag ?? null,
+            timeToGo: state?.timeToGo ?? null,
+          });
+      const rebuilt = rebuild;
+      if (rebuild) {
+        this.builtFrom = inputs;
+        this.lapsPending = false;
+        this.lastBuildAt = Date.now();
+        this.lastBuildMs = Date.now() - t0;
+      }
+      let { v, prefixes } = this.snap;
+      if (rebuilt) {
+        v += 1;
+        prefixes = lapPrefixes(chart.data);
+        this.versions.set(v, summarize(chart.data, chart.annotations, prefixes));
+        for (const k of this.versions.keys()) if (k <= v - KEEP_VERSIONS) this.versions.delete(k);
+      }
       this.snap = {
         chart,
+        v,
+        prefixes,
         waiting: null,
         updatedAt: new Date().toISOString(),
         lastError: null,
-        etag: `"${createHash("sha1").update(body).update(JSON.stringify(chart.status)).digest("hex").slice(0, 20)}"`,
+        etag: `"${hashOf(`${v}|${JSON.stringify(chart.status)}`)}"`,
         ended: this.snap.ended,
       };
     } catch (e) {
@@ -234,6 +303,48 @@ class Poller {
   }
 }
 
+const hashOf = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 20);
+
+/** The last chart with the state's flag, race time and time to go (no rebuild). */
+function withStatus(chart: LiveChart, state: LiveState | null): LiveChart {
+  if (!state) return chart;
+  return {
+    ...chart,
+    status: {
+      ...chart.status,
+      flag: state.currentFlag != null ? (FLAG_NAMES[state.currentFlag] ?? null) : chart.status.flag,
+      runningRaceTime: typeof state.results.runningRaceTime === "string" ? state.results.runningRaceTime : chart.status.runningRaceTime,
+      timeToGo: state.timeToGo ?? chart.status.timeToGo,
+    },
+  };
+}
+
+/**
+ * Add each car's newly completed lap from the session state. Only the next lap
+ * of a car is added; a car that skipped ahead (a missed read) sets `gap`, and
+ * the full lap list is re-read instead.
+ */
+export function mergeStateLaps(laps: FeedLap[], fresh: FeedLap[]): { laps: FeedLap[]; added: number; gap: boolean } {
+  const last = new Map<string, number>();
+  for (const l of laps) {
+    const n = l.n ? String(l.n) : "";
+    const lap = Number(l.llp);
+    if (n && lap > (last.get(n) ?? 0)) last.set(n, lap);
+  }
+  const add: FeedLap[] = [];
+  let gap = false;
+  for (const f of fresh) {
+    const n = String(f.n);
+    const lap = Number(f.llp);
+    const prev = last.get(n) ?? 0;
+    if (lap === prev + 1) {
+      add.push(f);
+      last.set(n, lap);
+    } else if (lap > prev + 1) gap = true;
+  }
+  return { laps: add.length ? laps.concat(add) : laps, added: add.length, gap };
+}
+
 const pollers = new Map<string, Poller>();
 
 const sameIds = (a: { eventId: number; sessionId: number }, b: { eventId: number; sessionId: number }) => a.eventId === b.eventId && a.sessionId === b.sessionId;
@@ -247,7 +358,11 @@ export async function resolveLiveSlug(slug: string): Promise<{ eventId: number; 
 }
 
 /** The current live chart for a feed session, starting its poller if needed. */
-export async function getLiveSnapshot(eventId: number, sessionId: number, slug: string): Promise<LiveSnapshot & { meta: LiveSessionMeta | null }> {
+export async function getLiveSnapshot(
+  eventId: number,
+  sessionId: number,
+  slug: string
+): Promise<LiveSnapshot & { meta: LiveSessionMeta | null; versions: ReadonlyMap<number, VersionSummary> }> {
   const key = `${eventId}/${sessionId}`;
   let p = pollers.get(key);
   if (!p) {
@@ -266,7 +381,7 @@ export async function getLiveSnapshot(eventId: number, sessionId: number, slug: 
   }
   p.lastView = Date.now();
   await p.ready();
-  return { ...p.snap, meta: p.meta };
+  return { ...p.snap, meta: p.meta, versions: p.versions };
 }
 
 let listCache: { at: number; sessions: LiveSessionRef[] } | null = null;

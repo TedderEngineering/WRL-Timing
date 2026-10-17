@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { gapRows, nextEvent, paceOf } from "../live-gaps";
+import { gapClock, gapRows, leaderGaps, nextEvent, paceOf } from "../live-gaps";
 
 /** A car with `n` laps of `lt` seconds (lap 1 offset by `start`), in position `pos`. */
 function car(num: number, n: number, lt: number, pos: number, opts: { start?: number; pitLap?: number; cls?: string } = {}) {
@@ -97,5 +97,34 @@ describe("gapRows", () => {
   it("calls a tiny pace difference steady", () => {
     const d = race([car(1, 10, 100, 1), car(2, 10, 100.01, 2, { start: 5 })]);
     expect(gapRows(d, 2, [1]).find((x) => x.num === 1)!.next).toBeNull();
+  });
+});
+
+describe("leaderGaps", () => {
+  it("gives laps and seconds behind the overall and class leaders", () => {
+    // Leader #1 laps in 100 s; focus #3 (GTU) in 104 s: after 20 laps #1 is 80 s and ~0.8 lap up the road.
+    const d = race([car(1, 20, 100, 1), car(2, 20, 102, 2, { cls: "GTU" }), car(3, 20, 104, 3, { cls: "GTU" })]);
+    d.cars["2"].finishPosClass = 1;
+    d.cars["3"].finishPosClass = 2;
+    const g = leaderGaps(d, 3);
+    // At #3's last crossing (2080 s), #1 is 80 s into lap 21: 0.8 laps on, so 0.8 laps ahead.
+    expect(g.overall?.laps).toBeCloseTo(0.8, 6);
+    expect(g.overall?.sec).toBeCloseTo(0.8 * 104, 6);
+    expect(g.cls?.leader).toBe(2);
+    expect(g.cls?.laps).toBeCloseTo(40 / 102, 6);
+    expect(g.clsName).toBe("GTU");
+  });
+  it("counts whole laps when the leader is laps ahead", () => {
+    const d = race([car(1, 22, 100, 1), car(2, 20, 100, 2)]);
+    expect(leaderGaps(d, 2).overall?.laps).toBeCloseTo(2, 6);
+  });
+  it("is empty for the leader itself", () => {
+    const d = race([car(1, 20, 100, 1), car(2, 20, 101, 2)]);
+    expect(leaderGaps(d, 1).overall).toBeNull();
+  });
+  it("formats seconds", () => {
+    expect(gapClock(56.24)).toBe("56.2 s");
+    expect(gapClock(211)).toBe("3:31");
+    expect(gapClock(3725)).toBe("1:02:05");
   });
 });

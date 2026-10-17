@@ -191,6 +191,51 @@ describe("live poller and routes", () => {
   });
 });
 
+describe("live route, compact format", () => {
+  afterEach(() => setLiveHttp(null));
+
+  it("sends a full copy, then nothing new for the same version, brotli-compressed", async () => {
+    const liveSessions = JSON.stringify([{ sid: 7, eid: 9001, n: "Saturday 8 Hour", st: "2026-05-02T23:40:00", et: null, tz: -6, il: true }]);
+    setLiveHttp(
+      fakeHttp({
+        [feedUrls.sessions(9001)]: liveSessions,
+        [feedUrls.event(9001)]: JSON.stringify({ n: "World Racing League - Synthetic Park 2026", t: "Synthetic Park" }),
+        [liveUrls.state(9001)]: Buffer.from(encode(stateArray({ entries: [["11", "Synthetic Racing", "", "GTO"]] }))),
+        [liveUrls.sessionLaps(9001, 7)]: JSON.stringify(upTo(4)),
+        [feedUrls.flags(9001, 7)]: "[]",
+        [feedUrls.control(9001, 7)]: "[]",
+        [feedUrls.liveAndRecent()]: JSON.stringify([{ eid: 9001, oid: 1, en: "World Racing League - Synthetic Park 2026", l: true }]),
+      })
+    );
+    const app = express();
+    app.use("/api/live", liveRouter);
+    const server = app.listen(0);
+    try {
+      const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live/synthetic-park-2026-saturday-8-hour`;
+      const r = await fetch(`${url}?enc=2&v=0`, { headers: { "accept-encoding": "br" } });
+      expect(r.headers.get("content-encoding")).toBe("br");
+      const text = await r.clone().text();
+      expect(text).not.toMatch(/\b9001\b|"eventId"|"sessionId"|red\s*mist/i);
+      const body = (await r.json()) as { v: number; full?: { kind: string; total: number }; delta?: unknown };
+      expect(body.v).toBe(1);
+      expect(body.full?.kind).toBe("full");
+      // Every lap of the chart (the parser drops duplicate feed rows, so not the feed's row count).
+      const legacy = (await (await fetch(url)).json()) as { data: { cars: Record<string, { laps: unknown[] }> } };
+      expect(body.full?.total).toBe(Object.values(legacy.data.cars).reduce((n, c) => n + c.laps.length, 0));
+      const same = (await (await fetch(`${url}?enc=2&v=1`)).json()) as Record<string, unknown>;
+      expect(same.v).toBe(1);
+      expect(same.full).toBeUndefined();
+      expect(same.delta).toBeUndefined();
+      expect(same.live).toBeTruthy();
+      // An unknown version gets a full copy.
+      const old = (await (await fetch(`${url}?enc=2&v=999`)).json()) as Record<string, unknown>;
+      expect(old.full).toBeTruthy();
+    } finally {
+      server.close();
+    }
+  });
+});
+
 describe("live slugs", () => {
   it("names a session from its event and session, never its ids", () => {
     expect(liveSlug("Sebring International Raceway 2026", "Saturday 8 Hour")).toBe("sebring-international-raceway-2026-saturday-8-hour");
