@@ -134,7 +134,7 @@ export function CarSummary({
               className="rounded-md border px-2 py-0.5 text-[12px]"
               style={{ borderColor: "rgba(74,222,128,0.35)", color: T.soft, background: "rgba(74,222,128,0.06)" }}
             >
-              {m.text}
+              {m.at ? `${m.text} · ${m.at}` : m.text}
             </li>
           ))}
         </ul>

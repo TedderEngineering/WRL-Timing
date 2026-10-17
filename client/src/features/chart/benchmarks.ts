@@ -5,6 +5,8 @@
  *   "Fastest lap 2nd of 24 in GS"            its best green lap against the class's
  *   "Gained 4 places over 3 pit cycles"      the pit cycles' settled results added up
  *
+ * Each also says when (`at`: the stop's lap, the best lap's, the laps the cycles settled on).
+ *
  * The rule: never "worst" or "slowest". A weak result is simply not given a badge: ranks are
  * only stated in the top three (with at least three cars to rank), and pit cycles only when
  * they gained places overall. The server's "Your car" card uses the same rules
@@ -17,6 +19,16 @@ import { isGreenFlag } from "./flags";
 export interface Benchmark {
   kind: "pit_loss" | "fastest_lap" | "pit_cycles";
   text: string;
+  /** When it happened: "lap 23", "laps 23, 47, 71" (the notes on the race page show it). */
+  at: string;
+}
+
+/** "lap 23"; several: "laps 23, 47, 71", or "laps 23–150" for more than three. */
+export function lapsAt(laps: number[]): string {
+  const xs = [...new Set(laps)].sort((a, b) => a - b);
+  if (xs.length === 0) return "";
+  if (xs.length === 1) return `lap ${xs[0]}`;
+  return xs.length <= 3 ? `laps ${xs.join(", ")}` : `laps ${xs[0]}–${xs[xs.length - 1]}`;
 }
 
 const TOP = 3;
@@ -29,10 +41,15 @@ export function ordinal(n: number): string {
 
 /** Best green-flag lap that is not an in-lap. */
 export function bestGreenLap(laps: LapData[]): number | null {
-  let best: number | null = null;
+  return bestGreenLapOf(laps)?.ltSec ?? null;
+}
+
+/** That lap itself (its number and time). */
+export function bestGreenLapOf(laps: LapData[]): LapData | null {
+  let best: LapData | null = null;
   for (const l of laps) {
     if (l.pit === 1 || (l.flag && !isGreenFlag(l.flag)) || !(l.ltSec > 0)) continue;
-    if (best === null || l.ltSec < best) best = l.ltSec;
+    if (best === null || l.ltSec < best.ltSec) best = l;
   }
   return best;
 }
@@ -56,17 +73,22 @@ function stopLoss(t: { totalPitLoss?: number | null; isDriveThrough?: boolean; c
  * chart's class view, pit-band.ts settleLabels).
  */
 export function classCycleNets(laps: LapData[], settles: { l: number; su: string; cpBefore?: number; cpAfter?: number }[]): number[] {
-  const out: number[] = [];
+  return classCycleResults(laps, settles).map((r) => r.net);
+}
+
+/** The same, with the lap each cycle settled on. */
+export function classCycleResults(laps: LapData[], settles: { l: number; su: string; cpBefore?: number; cpAfter?: number }[]): { net: number; l: number }[] {
+  const out: { net: number; l: number }[] = [];
   for (const s of settles) {
     if (typeof s.cpBefore === "number" && typeof s.cpAfter === "number") {
-      out.push(s.cpBefore - s.cpAfter);
+      out.push({ net: s.cpBefore - s.cpAfter, l: s.l });
       continue;
     }
     const at = laps.find((l) => l.l === s.l);
     const was = Number(/Was P(\d+)/.exec(s.su)?.[1]);
     const stop = [...laps].reverse().find((l) => l.l < s.l && l.pit === 1);
     const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;
-    if (at && before) out.push(before.cp - at.cp);
+    if (at && before) out.push({ net: before.cp - at.cp, l: s.l });
   }
   return out;
 }
@@ -95,26 +117,29 @@ export function classBenchmarks(data: RaceChartData, annotations: AnnotationData
         out.push({
           kind: "pit_loss",
           text: `Pit loss ${ordinal(rank)} of ${field.length} in ${cycle ? `${car.cls} pit cycle ${cycle.ordinal}` : `${car.cls}'s ${ordinal(i + 1)} stops`}`,
+          at: lapsAt([s.pitLap]),
         });
       }
     });
   }
 
   // Fastest lap against the class.
-  const best = bestGreenLap(car.laps);
-  if (best !== null) {
+  const bestLap = bestGreenLapOf(car.laps);
+  if (bestLap !== null) {
+    const best = bestLap.ltSec;
     const field = classCars.map((n) => bestGreenLap(data.cars[String(n)].laps)).filter((v): v is number => v !== null);
     const rank = rankOf(best, field);
-    if (field.length >= MIN_FIELD && rank <= TOP) out.push({ kind: "fastest_lap", text: `Fastest lap ${ordinal(rank)} of ${field.length} in ${car.cls}` });
+    if (field.length >= MIN_FIELD && rank <= TOP) out.push({ kind: "fastest_lap", text: `Fastest lap ${ordinal(rank)} of ${field.length} in ${car.cls}`, at: lapsAt([bestLap.l]) });
   }
 
   // Places gained over the pit cycles, when they add up to a gain.
-  const nets = classCycleNets(car.laps, annotations?.[String(carNum)]?.settles ?? []);
-  const gained = nets.reduce((a, b) => a + b, 0);
+  const cycles = classCycleResults(car.laps, annotations?.[String(carNum)]?.settles ?? []);
+  const gained = cycles.reduce((a, b) => a + b.net, 0);
   if (gained > 0) {
     out.push({
       kind: "pit_cycles",
-      text: `Gained ${gained} place${gained === 1 ? "" : "s"} over ${nets.length} pit cycle${nets.length === 1 ? "" : "s"} in ${car.cls}`,
+      text: `Gained ${gained} place${gained === 1 ? "" : "s"} over ${cycles.length} pit cycle${cycles.length === 1 ? "" : "s"} in ${car.cls}`,
+      at: lapsAt(cycles.map((c) => c.l)),
     });
   }
   return out;

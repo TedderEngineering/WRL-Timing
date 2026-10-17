@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationData, RaceChartData } from "@shared/types";
-import { classBenchmarks, ordinal } from "../benchmarks";
+import { classBenchmarks, lapsAt, ordinal } from "../benchmarks";
 
 const lap = (l: number, p: number, cp: number, ltSec: number, pit = 0) => ({ l, p, cp, lt: "", ltSec, flag: "GF", pit });
 const car = (num: number, cls: string, laps: ReturnType<typeof lap>[]) => ({ num, team: `T${num}`, cls, finishPos: num, finishPosClass: num, laps });
@@ -35,6 +35,10 @@ describe("class benchmarks", () => {
       "Fastest lap 2nd of 4 in GS",
       "Gained 2 places over 1 pit cycle in GS",
     ]);
+  });
+
+  it("says when: the stop's lap, the best lap's, the laps the cycles settled on", () => {
+    expect(classBenchmarks(data, ann, 1).map((b) => b.at)).toEqual(["lap 2", "lap 1", "lap 3"]);
   });
 
   it("gives a weak result no badge", () => {
@@ -81,5 +85,13 @@ describe("benchmarks from the analysis package's pit facts", () => {
 
   it("counts places gained from the class positions the package gives", () => {
     expect(classBenchmarks(data, facts, 1).find((b) => b.kind === "pit_cycles")?.text).toBe("Gained 2 places over 1 pit cycle in GS");
+  });
+});
+
+describe("lapsAt", () => {
+  it("lists up to three laps, then a range", () => {
+    expect(lapsAt([23])).toBe("lap 23");
+    expect(lapsAt([71, 23, 47])).toBe("laps 23, 47, 71");
+    expect(lapsAt([23, 47, 71, 95, 150])).toBe("laps 23–150");
   });
 });
