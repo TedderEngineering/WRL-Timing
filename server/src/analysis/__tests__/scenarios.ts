@@ -149,15 +149,42 @@ export function noCardPenaltyRace(): SynthRace {
       car("71", "GS", 1, { resultsPenalty: 10 }),
       car("72", "GS", 2),
       car("73", "GS", 3, { stops: [{ lap: 10, pitLane: 65 }], resultsPenalty: 5 }),
+      car("76", "GS", 4),
+      car("77", "GS", 5),
+      car("78", "GS", 6),
     ],
     rc: [
       [520, "Car 70: Penalty - Incident Responsibility - Drive Through"],
       [300, "Car 71: Penalty - False Start - +10 Seconds Post-Race"],
+      [400, "Cars 76, 77 & 78: Penalty - Unserved Mandatory Pit Stop - +95 seconds Post-Race"],
     ],
     postRace: [
       "Car #71 - 10 second time penalty for False Start",
       "Car #72 - Moved to the back of the field as per Penalty #TP 26-18, as posted on the notice board",
       "Car #73 - 5 second post race time penalty for incident responsibility",
+      "Car #72 - 28 second post race drive-through penalty for incident responsibility",
     ],
+  };
+}
+
+/**
+ * Serve windows (window 600 s): #80 is given a drive-through at 250 s, spends laps 4–8 in the garage
+ * (about 900 s), then serves it on lap 6. #81 enters the pit lane for a long stop on lap 15 just
+ * before race control announces a Stop + 60 for it.
+ */
+export function serveWindowRace(stopPlusAt: number): SynthRace {
+  const lap = (c: string, i: number, stops: SynthCar["stops"]) => car(c, "GS", i, { laps: 30, stops });
+  return {
+    cars: [
+      lap("80", 0, [{ lap: 4, pitLane: 900 }, { lap: 6, pitLane: 34 }]),
+      lap("81", 1, [{ lap: 15, pitLane: 125 }]),
+      lap("82", 2, [{ lap: 15, pitLane: 65 }]),
+      lap("83", 3, [{ lap: 15, pitLane: 66 }]),
+    ],
+    rc: [
+      [250, "Car 80: Penalty - Improperly attired person(s) over wall - Drive Through"],
+      [stopPlusAt, "Car 81: Penalty - More than Emergency Service in closed pit - Stop + 60"],
+    ],
+    driveTime: true,
   };
 }

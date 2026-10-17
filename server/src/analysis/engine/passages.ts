@@ -682,10 +682,11 @@ function redmistPassages(ctx: Ctx): Passage[] {
 /* ------------------------------------------------------------------ M7 penalties */
 
 const PEN_RE = /^Car\s+#?(\w+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
+const MULTI_PEN_RE = /^Cars\s+(#?\w+(?:\s*(?:,|&|and)\s*#?\w+)+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
 const SERVED_RE = /^Car\s+#?(\w+):\s*Penalty(\s*#\d+)?\s+Served$/i;
-const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?time\s+penalty\s+for\s+(.+)$/i;
+const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?(?:time|drive[- ]through)\s+penalty\s+for\s+(.+)$/i;
 /** "Car #45 - Moved to the back of the field as per Penalty …": a post-race position penalty. */
-const BACK_RE = /^Car\s+#?(\w+)\s*-\s*(moved to the (?:back|rear) of the (?:field|class)\b.*)$/i;
+const BACK_RE = /^Car\s+#?(\w+)\s*-\s*(moved to the (?:back|rear) of (?:the|its) (?:field|class)\b.*)$/i;
 
 export function penaltyType(decision: string): { type: PenaltyType; amount: number | null } {
   const d = decision.trim();
@@ -727,7 +728,15 @@ export function parsePenalties(ctx: Ctx): { penalties: PenaltyDraft[]; served: S
   const penalties: PenaltyDraft[] = [];
   const served: ServedMsg[] = [];
   const count = new Map<string, number>();
-  const msgs = [...ctx.race.raceControl].sort((a, b) => (a.tS ?? 0) - (b.tS ?? 0) || a.row - b.row);
+  // "Cars 1, 40 & 41: Penalty - … - …" is one penalty per car.
+  const msgs = [...ctx.race.raceControl]
+    .sort((a, b) => (a.tS ?? 0) - (b.tS ?? 0) || a.row - b.row)
+    .flatMap((m) => {
+      const mm = m.text.trim().match(MULTI_PEN_RE);
+      if (!mm) return [m];
+      const cars = mm[1].split(/\s*(?:,|&|\band\b)\s*/i).map((x) => x.replace(/^#/, "").trim()).filter(Boolean);
+      return cars.map((c) => ({ ...m, text: `Car ${c}: Penalty - ${mm[2]} - ${mm[3]}` }));
+    });
   const nextId = (car: string) => {
     const n = (count.get(car) ?? 0) + 1;
     count.set(car, n);
@@ -918,15 +927,30 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       p.notes.push("The car's last crossing (the chequered flag) was made in the pit lane.");
       continue;
     }
-    // The serve window counts green-flag time only: the pit lane is closed under caution.
+    // The serve window counts green-flag time on track only: the pit lane is closed under caution,
+    // and a car in the garage can't serve (its own earlier visits are taken out too).
+    const ownVisits = passages
+      .filter((q) => q.car === p.car && q !== p && q.pinT !== null && q.poutT !== null && q.poutT <= pin)
+      .map((q) => ({ start: q.pinT!, end: q.poutT! }));
+    const neutral = [...periods, ...ownVisits];
     const cand = pens
-      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(periods, x.t, pin) <= serveWindowS)
+      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(neutral, x.t, pin) <= serveWindowS)
       .sort((a, b) => a.t! - b.t!);
     const short = pl !== null && T !== null && pl <= 1.15 * T;
-    // A short visit with no penalty before it, and a drive-through announced just after it.
+    // A visit with no penalty before it, and a penalty of its kind announced just after it (the
+    // team is told before the message appears): a drive-through for a short visit, a stop penalty
+    // for a longer one.
     const early =
-      !cand.length && short && p.pitType !== "PENALTY"
-        ? pens.find((x) => x.car === p.car && !x.servedBy && x.ptype === "drive_through" && x.t !== null && x.t > pin && x.t - pin <= SERVED_BEFORE_MESSAGE_S)
+      !cand.length && p.pitType !== "PENALTY"
+        ? pens.find(
+            (x) =>
+              x.car === p.car &&
+              !x.servedBy &&
+              x.t !== null &&
+              x.t > pin &&
+              x.t - pin <= SERVED_BEFORE_MESSAGE_S &&
+              ((x.ptype === "drive_through" && short) || ((x.ptype === "stop_plus" || x.ptype === "stop_and_go") && pl !== null && !short))
+          )
         : undefined;
     if (early) {
       cand.push(early);
@@ -956,7 +980,8 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
     } else if (sg) {
       set("stop_and_go", ["rc_penalty_match"]);
       link(sg);
-    } else if (sp) {
+    } else if (sp && !short) {
+      // A Stop + N holds the car for N seconds: a pass at transit speed did not serve it.
       set("penalty_served", ["rc_penalty_match"]);
       link(sp);
     } else if (p.pitType === "PENALTY" && pl !== null && T !== null && pl > 1.15 * T) {

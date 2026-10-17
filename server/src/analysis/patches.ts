@@ -264,7 +264,7 @@ export function classDigest(P: RaceAnalysisPackage, cls: string): string {
     for (const p of ev.pitPassages.filter((x) => x.car === car)) {
       const cr = P.cycleResults.find((x) => x.passageId === p.id);
       L.push(
-        `${p.id} kind=${p.kind} stopNumber=${num(p.stopNumber)} inLap=${p.inLap} outLap=${num(p.outLap)} fcyContext=${p.fcyContext} officialPitLaneTimeS=${secs(p.officialPitLaneTimeS)} timeLost.valueS=${secs(p.timeLost.valueS)} (${p.timeLost.method}) driverIn=${num(p.driverIn)} driverOut=${num(p.driverOut)} cycleId=${p.cycleId ?? "-"} outcome=${p.outcome} confidence=${p.confidence}${p.positionEffect ? ` positionEffect classPosBefore=${num(p.positionEffect.classPosBefore)} classPosAfter=${num(p.positionEffect.classPosAfter)} netClass=${num(p.positionEffect.netClass)} gainedOn=${cps(p.positionEffect.gainedOn)} lostTo=${cps(p.positionEffect.lostTo)}` : ""}`
+        `${p.id} kind=${p.kind} stopNumber=${num(p.stopNumber)} inLap=${p.inLap} outLap=${num(p.outLap)} fcyContext=${p.fcyContext} officialPitLaneTimeS=${secs(p.officialPitLaneTimeS)} timeLost.valueS=${secs(p.timeLost.valueS)} (${p.timeLost.method}) driverIn=${num(p.driverIn)} driverOut=${num(p.driverOut)} cycleId=${p.cycleId ?? "-"} outcome=${p.outcome} confidence=${p.confidence}${p.positionEffect ? ` positionEffect.classPosBefore=${num(p.positionEffect.classPosBefore)} positionEffect.classPosAfter=${num(p.positionEffect.classPosAfter)} positionEffect.netClass=${num(p.positionEffect.netClass)} gainedOn=${cps(p.positionEffect.gainedOn)} lostTo=${cps(p.positionEffect.lostTo)}` : ""}`
       );
       if (cr) {
         L.push(

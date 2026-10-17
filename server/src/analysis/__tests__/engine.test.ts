@@ -7,7 +7,7 @@ import { buildFacts } from "../buildFacts.js";
 import { validatePackage } from "../validate-package.js";
 import { AdapterBlocker } from "../adapters/index.js";
 import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
-import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace, noCardPenaltyRace } from "./scenarios.js";
+import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace, noCardPenaltyRace, serveWindowRace } from "./scenarios.js";
 import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
 
 const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
@@ -439,5 +439,57 @@ describe("penalties without pit-lane times, and a post-race penalty printed twic
     expect(back).toMatchObject({ penaltyType: "position", status: "applied_post_race", amountS: null });
     expect(back.reason).toMatch(/^Moved to the back of the field/);
     expect(f.events.penalties.find((x) => x.car === "73")).toMatchObject({ penaltyType: "post_race_time", amountS: 5, status: "applied_post_race" });
+  });
+
+  it("reads 'N second post race drive-through penalty' and 'moved to the back of its class'", () => {
+    expect(f.events.penalties.filter((x) => x.car === "72").map((x) => x.penaltyType).sort()).toEqual(["position", "post_race_time"]);
+    const g = noCardPenaltyRace();
+    g.postRace = ["Car #72 - Moved to the back of its class as per Penalty #MX5 TP 26 - 13, as posted on the notice board"];
+    const h = buildFacts({ format: "alkamel-imsa", files: synthImsa(g), options: OPTS });
+    expect(h.events.penalties.find((x) => x.car === "72")).toMatchObject({ penaltyType: "position" });
+  });
+
+  it("a race-control penalty naming several cars is one penalty per car", () => {
+    for (const c of ["76", "77", "78"]) expect(f.events.penalties.some((x) => x.car === c && x.reason === "Unserved Mandatory Pit Stop" && x.amountS === 95)).toBe(true);
+  });
+
+  it("a car with no laps that race control named during the race started (not 'did not start')", () => {
+    const g = noCardPenaltyRace();
+    g.cars.push({ ...g.cars[2], car: "74", laps: 0, stops: [] });
+    g.rc = [...(g.rc ?? []), [200, "Car 74: Penalty - Incident Responsibility - Drive Through"]];
+    const h = buildFacts({ format: "alkamel-imsa", files: synthImsa(g), options: OPTS });
+    const r = h.events.retirements.find((x) => x.car === "74")!;
+    expect(r.where).toBe("unknown");
+    expect(r.confidenceNotes).toContain("no_laps_named_by_race_control");
+  });
+});
+
+describe("serve windows: garage time and stop penalties announced after the car came in", () => {
+  const opts = { ...OPTS, rulebook: { ...OPTS.rulebook!, serveWindowS: 600 } };
+  const probe = buildFacts({ format: "alkamel-imsa", files: synthImsa(serveWindowRace(99999)), options: opts });
+  const pin81 = probe.events.pitPassages.find((x) => x.car === "81")!.pitIn!.raceTimeS!;
+  const f = buildFacts({ format: "alkamel-imsa", files: synthImsa(serveWindowRace(Math.round(pin81) + 2)), options: opts });
+  const pen = (car: string) => f.events.penalties.find((x) => x.car === car)!;
+
+  it("is schema-valid", () => {
+    expect(validatePackage(f).errors).toEqual([]);
+  });
+
+  it("time the car spent in the garage does not use up the serve window", () => {
+    expect(pen("80").servedByPassageId).toBe("pit:80:2");
+  });
+
+  it("a long stop that began just before race control's Stop + 60 message served it", () => {
+    expect(pen("81").servedByPassageId).toBe("pit:81:1");
+    expect(f.events.pitPassages.find((x) => x.id === "pit:81:1")!.kind).toBe("penalty_served");
+    expect(pen("81").confidenceNotes).toContain("served_before_message");
+  });
+
+  it("a Stop + 60 is not served by a pass at transit speed", () => {
+    const race = serveWindowRace(99999);
+    race.cars[1] = { ...race.cars[1], stops: [{ lap: 13, pitLane: 34 }, { lap: 15, pitLane: 125 }] };
+    race.rc = [[1150, "Car 81: Penalty - More than Emergency Service in closed pit - Stop + 60"]];
+    const g = buildFacts({ format: "alkamel-imsa", files: synthImsa(race), options: opts });
+    expect(g.events.penalties.find((x) => x.car === "81")!.servedByPassageId).not.toBe("pit:81:1");
   });
 });
