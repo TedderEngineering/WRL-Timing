@@ -33,6 +33,7 @@ const FORMAT_KEYS: Record<string, TimingFormatKey> = {
   "alkamel-grcup": "alkamel_grcup",
   speedhive: "speedhive",
   "wrl-website": "wrl_website",
+  redmist: "wrl_redmist",
 };
 
 export function formatKeyOf(sourceFormat: string | undefined): TimingFormatKey | null {

@@ -31,13 +31,13 @@ import {
   passageRows,
   type Passage,
 } from "./engine/passages.js";
-import { classMedians, classifyWrl, computeTimeLost, markClean } from "./engine/timelost.js";
+import { classMedians, classifyWrl, computeTimeLost, markClean, promoteLongStopsToGarage } from "./engine/timelost.js";
 import { buildPitCycles, buildPositionChanges, computeCycleResults, detectSwaps, toPitCycles } from "./engine/cycles.js";
 import { buildStints } from "./engine/stints.js";
 import { buildResults, finalisePenalties } from "./engine/results.js";
 import { carOrder, matchDriver, rd } from "./util.js";
 
-export const ENGINE_VERSION = "1.2.3"; // 1.1.0: C8, cycle positions count from before the cycle opened. 1.1.1: red-flag holds (kind red_flag_hold), Drive Time rows split by a red flag joined. 1.2.0: one cycle result per car (nMembers counts cars), green_loss_exceeds_pit_lane, serve window in green time, time penalties at the next stop, repeated RC messages merged. 1.2.1: a post-race time penalty printed twice (race control and results) is one; a drive-through with no pit-lane time is linked to its penalty. 1.2.2: garage time excluded from the serve window; stop penalties announced just after the car came in. 1.2.3: a Stop + N is never served by a transit-speed pass; low-confidence stops are not ranked in a cycle; more results wordings; no-lap cars named by race control started
+export const ENGINE_VERSION = "1.2.4"; // 1.1.0: C8, cycle positions count from before the cycle opened. 1.1.1: red-flag holds (kind red_flag_hold), Drive Time rows split by a red flag joined. 1.2.0: one cycle result per car (nMembers counts cars), green_loss_exceeds_pit_lane, serve window in green time, time penalties at the next stop, repeated RC messages merged. 1.2.1: a post-race time penalty printed twice (race control and results) is one; a drive-through with no pit-lane time is linked to its penalty. 1.2.2: garage time excluded from the serve window; stop penalties announced just after the car came in. 1.2.3: a Stop + N is never served by a transit-speed pass; low-confidence stops are not ranked in a cycle; more results wordings; no-lap cars named by race control started. 1.2.4: RedMist stops whose time lost is over the garage threshold are garage visits (no pit-cycle member); a black flag is not a disqualification unless it says so.
 export type FactsPackage = RaceAnalysisPackage;
 
 export interface BuildFactsInput {
@@ -186,6 +186,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   const medians = classMedians(ctx);
   const { groups } = computeTimeLost(ctx, passages);
   if (lapOnly) classifyWrl(ctx, passages, groups, garageS);
+  else if (race.format === "redmist") promoteLongStopsToGarage(passages, groups, garageS);
   assignStopNumbers(passages);
   linkServedMessages(pens, served);
 
