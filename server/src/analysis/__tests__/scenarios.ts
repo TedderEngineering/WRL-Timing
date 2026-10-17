@@ -135,3 +135,25 @@ export function penaltyRace(dt61Message: number): SynthRace {
     driveTime: true,
   };
 }
+
+/**
+ * A sprint with no time cards for its pit-lane passes: #70 is given a drive-through on lap 5 and
+ * passes through the pit lane on lap 7 (B flag only). #71 gets a post-race time penalty announced by
+ * race control and printed again in the results.
+ */
+export function noCardPenaltyRace(): SynthRace {
+  return {
+    mark: "Official",
+    cars: [
+      car("70", "GS", 0, { stops: [{ lap: 7, pitLane: 34, noCard: true }] }),
+      car("71", "GS", 1, { resultsPenalty: 10 }),
+      car("72", "GS", 2),
+      car("73", "GS", 3, { stops: [{ lap: 10, pitLane: 65 }] }),
+    ],
+    rc: [
+      [520, "Car 70: Penalty - Incident Responsibility - Drive Through"],
+      [300, "Car 71: Penalty - False Start - +10 Seconds Post-Race"],
+    ],
+    postRace: ["Car #71 - 10 second time penalty for False Start"],
+  };
+}

@@ -917,6 +917,12 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
     if (dt && short) {
       set("drive_through", p.pitType === "PENALTY" ? ["drive_time_pit_type", "rc_penalty_match", "transit_time"] : ["rc_penalty_match", "transit_time"]);
       link(dt);
+    } else if (dt && pl === null && p.bOnly) {
+      // No pit-lane time (no time card or pit report): a pit-lane pass right after race control
+      // issued a drive-through is that drive-through, not a stop.
+      set("drive_through", ["rc_penalty_match"]);
+      p.confNotes.push("drive_through_without_pit_time");
+      link(dt);
     } else if (p.pitType === "PENALTY" && short) {
       set("drive_through", ["drive_time_pit_type", "transit_time"]);
       p.confNotes.push("no_rc_penalty_text");

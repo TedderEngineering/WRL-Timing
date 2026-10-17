@@ -195,9 +195,23 @@ export function buildResults(ctx: Ctx, passages: Passage[]): ResultsOut {
 }
 
 /** Final penalty records (D-PENALTY statuses), after results and retirements are known. */
-export function finalisePenalties(ctx: Ctx, pens: PenaltyDraft[], entries: Entry[], tookFlag: (c: CarId) => boolean): Penalty[] {
+export function finalisePenalties(ctx: Ctx, allPens: PenaltyDraft[], entries: Entry[], tookFlag: (c: CarId) => boolean): Penalty[] {
   const leaderLap = leaderLapFinder(ctx);
   const byCar = new Map(entries.map((e) => [e.car, e]));
+  // A post-race time penalty announced by race control ("+10 Seconds Post-Race") and printed again
+  // in the results ("10 second time penalty for …") is one decision: the results line joins it.
+  const dup = new Set<PenaltyDraft>();
+  const joined = new Set<PenaltyDraft>();
+  for (const line of allPens.filter((p) => p.postRace && p.t === null)) {
+    const rc = allPens.find((x) => x.car === line.car && x.postRace && x.t !== null && x.amountS !== null && x.amountS === line.amountS && !joined.has(x));
+    if (!rc) continue;
+    dup.add(line);
+    joined.add(rc);
+    rc.refs.push(...line.refs);
+    rc.files = [...new Set([...rc.files, ...line.files])];
+    ctx.issues.push({ severity: "note", code: "PEN-RESULTS-SAME", message: `The results line '${line.rawText}' repeats race control's post-race penalty for car ${rc.car}; it is read as one penalty (${rc.id}).`, factIds: [rc.id], files: line.files });
+  }
+  const pens = allPens.filter((p) => !dup.has(p));
   // Post-race lines: link to the unserved penalty they convert.
   for (const x of pens.filter((p) => p.postRace && p.t === null)) {
     const text = x.reason.toLowerCase();
