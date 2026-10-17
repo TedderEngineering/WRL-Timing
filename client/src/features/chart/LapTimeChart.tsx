@@ -443,6 +443,8 @@ interface LapTimeChartProps {
   view: TraceView;
   /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
   live?: boolean;
+  /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
+  headSlot?: HTMLElement | null;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -450,7 +452,7 @@ interface LapTimeChartProps {
 export function LapTimeChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, live = false,
+  classView, activeLap, setActiveLap, view, live = false, headSlot = null,
 }: LapTimeChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -849,6 +851,7 @@ export function LapTimeChart({
         classView={classView}
         compSet={compSet}
         view={view}
+        headSlot={headSlot}
       />
 
       <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">

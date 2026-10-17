@@ -48,6 +48,8 @@ interface LapChartProps {
   defaultAxis?: "laps" | "hours" | "both";
   /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
   live?: boolean;
+  /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
+  headSlot?: HTMLElement | null;
 }
 
 /** RaceTrace Live: a lap the viewer picked stays selected this long, then the latest lap returns. */
@@ -58,7 +60,7 @@ export const FOLLOW_AFTER_MS = 60_000;
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, defaultAxis, live = false,
+  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -571,6 +573,7 @@ export function LapChart({
         view={view}
         xAxisMode={xAxisMode}
         setXAxisMode={setXAxisMode}
+        headSlot={headSlot}
       />
 
       <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
