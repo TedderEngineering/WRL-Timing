@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { useLapZoomOnGrow } from "./live-zoom";
+import { LiveGapsPanel } from "./LiveGapsPanel";
 import { hasFullAccess } from "../../lib/utils";
 import type {
   RaceChartData,
@@ -74,6 +75,8 @@ export function LapChart({
     if (defaultAxis) setXAxisMode(defaultAxis);
   }, [defaultAxis]);
   const [sidePanel, setSidePanel] = useState<string | null>(null);
+  /** RaceTrace Live: the side panel's tab (the focus car's lap details, or the Gaps table). */
+  const [liveTab, setLiveTab] = useState<"details" | "gaps">("details");
   const h2hDefaultCarRef = useRef<number | undefined>(undefined);
 
   // ── Zoom state ─────────────────────────────────────────────────
@@ -624,6 +627,27 @@ export function LapChart({
               </div>
             </div>
           ) : (
+            <>
+            {live && (
+              <div role="tablist" aria-label="Side panel" className="flex shrink-0 gap-1 border-b px-2" style={{ borderColor: CHART_STYLE.border }}>
+                {(["details", "gaps"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={liveTab === t}
+                    onClick={() => setLiveTab(t)}
+                    className="px-3 py-2 text-[13px]"
+                    style={{ color: liveTab === t ? "#e0e0e8" : TRACE.axis, fontWeight: liveTab === t ? 600 : 400, borderBottom: `2px solid ${liveTab === t ? TRACE.focus : "transparent"}`, marginBottom: -1 }}
+                  >
+                    {t === "details" ? "Lap details" : "Gaps"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {live && liveTab === "gaps" ? (
+              <LiveGapsPanel data={data} focusNum={focusNum} compSet={compSet} fieldCars={view.fieldCars} />
+            ) : (
             <div className="no-scrollbar flex flex-col gap-3 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
               {teamNote && (
                 <div className="rounded-lg border px-3 py-2 text-[13px]" style={{ borderColor: CHART_STYLE.border, color: TRACE.axis }}>
@@ -633,6 +657,8 @@ export function LapChart({
               <LapDetailsPanel data={data} annotations={annotations} info={info} focusNum={focusNum} classView={classView} onOpen={openPanel} />
               <div className="mt-auto hidden border-t pt-3 md:block" style={{ borderColor: CHART_STYLE.border }}>{legend}</div>
             </div>
+            )}
+            </>
           )}
         </aside>
       </div>

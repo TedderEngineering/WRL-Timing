@@ -160,6 +160,18 @@ export function computeLapElapsedHours(data: RaceChartData): Map<number, number>
   return map;
 }
 
+/**
+ * Laps between lap-number labels: the old steps (1, 5, 10) while the labels fit, then wider
+ * steps so labels stay about LAP_LABEL_MIN_PX apart (a long race on a phone).
+ */
+export const LAP_LABEL_MIN_PX = 34;
+export function lapLabelStep(visLaps: number, pxPerLap: number): number {
+  const base = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+  if (!(pxPerLap > 0)) return base;
+  for (const step of [base, 10, 20, 25, 50, 100, 200, 500]) if (step >= base && step * pxPerLap >= LAP_LABEL_MIN_PX) return step;
+  return 1000;
+}
+
 /** Per-car cumulative race time (in hours) for Hrs/Both x-axis modes. */
 function computeAllCarCumulativeHours(data: RaceChartData): Map<string, Map<number, number>> {
   const result = new Map<string, Map<number, number>>();
@@ -628,7 +640,7 @@ export function drawChart(
     ctx.font = "500 11px 'IBM Plex Mono', ui-monospace, monospace";
     ctx.fillStyle = TRACE.axis;
     const lapY = xAxisMode === "both" ? adjDim.H - adjDim.MB + 14 : adjDim.H - adjDim.MB + 16;
-    const labelStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+    const labelStep = lapLabelStep(visLaps, Math.abs(x(2) - x(1)));
     const labelStart = Math.max(1, Math.ceil(lapStart / labelStep) * labelStep);
     for (let l = labelStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += labelStep) {
       ctx.fillText(String(l), x(l), lapY);

@@ -9,8 +9,7 @@ import {
   getCompColor,
   getMaxPos,
   type ChartDimensions,
-  formatLapTime,
-} from "./chart-renderer";
+  formatLapTime, lapLabelStep } from "./chart-renderer";
 import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
 import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
@@ -267,7 +266,7 @@ function drawLapTimeChart(
     ctx.fillText(String(r), dim.ML - 6, y(r) + 4);
   }
   ctx.textAlign = "center";
-  const labelStep = visLaps < 15 ? 1 : visLaps < 50 ? 5 : 10;
+  const labelStep = lapLabelStep(visLaps, Math.abs(x(2) - x(1)));
   const labelStart = Math.max(1, Math.ceil(lapStart / labelStep) * labelStep);
   for (let l = labelStart; l <= Math.min(maxLap, Math.ceil(lapEnd)); l += labelStep) {
     ctx.fillText(String(l), x(l), dim.H - dim.MB + 16);
