@@ -139,10 +139,10 @@ export function Layout() {
   }, []);
   const { isAuthenticated, isLoading, user } = useAuth();
   useSiteConfig(); // re-render when free mode / support settings arrive
-  // Race and qualifying pages are apps: they fill the window exactly (no page scroll, no footer)
-  // and each part scrolls on its own.
+  // Race, live race and qualifying pages are apps: they fill the window exactly (no page scroll,
+  // no footer) and each part scrolls on its own.
   const { pathname } = useLocation();
-  const appPage = pathname === "/chart" || pathname.startsWith("/qualifying/");
+  const appPage = pathname === "/chart" || pathname.startsWith("/live/") || pathname.startsWith("/qualifying/");
 
   return (
     <SupportProvider>

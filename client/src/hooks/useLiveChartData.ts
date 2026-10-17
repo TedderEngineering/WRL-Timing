@@ -51,6 +51,8 @@ export interface UseLiveChartData {
   live: LiveInfo | null;
   /** When this page last heard from the server (ms). */
   checkedAt: number | null;
+  /** When (this device's clock, ms) the race time and time to go in `live.status` were true. */
+  clockAt: number | null;
   error: string | null;
   isLoading: boolean;
   refresh: () => void;
@@ -63,6 +65,7 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
   const [race, setRace] = useState<LiveRaceMeta | null>(null);
   const [live, setLive] = useState<LiveInfo | null>(null);
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [clockAt, setClockAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const etag = useRef<string | null>(null);
@@ -80,6 +83,8 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
       if (res.status === 304) return;
       etag.current = res.headers.get("ETag");
       const body = (await res.json()) as LiveResponse;
+      const age = Number(res.headers.get("X-Live-Age-Ms"));
+      setClockAt(Date.now() - (Number.isFinite(age) && age >= 0 ? age : 0));
       setLive(body.live);
       if (body.data && body.race) {
         setData(body.data);
@@ -114,7 +119,7 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
     };
   }, [load]);
 
-  return { data, annotations, race, live, checkedAt, error, isLoading, refresh: () => void load() };
+  return { data, annotations, race, live, checkedAt, clockAt, error, isLoading, refresh: () => void load() };
 }
 
 export interface LiveSessionListing {

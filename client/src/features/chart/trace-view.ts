@@ -31,8 +31,11 @@ export function useTraceView(args: {
   setCompSet: React.Dispatch<React.SetStateAction<Set<number>>>;
   classView: string;
   setClassView: (c: string) => void;
+  /** Which race this is. A live race's data changes every update but is the same race; without a key, new data = new race. */
+  raceKey?: string;
 }): TraceView {
-  const { data, focusNum, setFocusNum, setCompSet, classView, setClassView } = args;
+  const { data, focusNum, setFocusNum, setCompSet, classView, setClassView, raceKey } = args;
+  const race = raceKey ?? data;
   const [makeFilter, setMakeFilter] = useState<string[]>([]);
   const [compareAll, setCompareAll] = useState(true);
 
@@ -45,10 +48,10 @@ export function useTraceView(args: {
     return base.filter((n) => keep.has(n) || n === focusNum);
   }, [data, classView, makeFilter, focusNum]);
 
-  // A new race, class or make goes back to every car.
+  // A new race, class or make goes back to every car (a live update is not a new race).
   useEffect(() => {
     setCompareAll(true);
-  }, [classView, makeFilter, data]);
+  }, [classView, makeFilter, race]);
   useEffect(() => {
     if (!compareAll || !data) return;
     setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && (data.cars[String(n)]?.laps.length ?? 0) > 0)));

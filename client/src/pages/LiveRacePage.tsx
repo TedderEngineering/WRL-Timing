@@ -28,18 +28,39 @@ const FLAG_COLORS: Record<string, string> = {
   Black: "#9ca3af",
 };
 
-/** "07:35:12.000" → "7:35:12". */
-function clock(s: string | null | undefined): string | null {
-  const m = String(s ?? "").match(/^(?:(\d+)\.)?(\d{1,2}):(\d{2}):(\d{2})/);
-  if (!m) return null;
-  const h = Number(m[1] ?? 0) * 24 + Number(m[2]);
-  return `${h}:${m[3]}:${m[4]}`;
-}
-
 function ago(ms: number | null, now: number): string {
   if (ms === null) return "";
   const s = Math.max(0, Math.round((now - ms) / 1000));
   return s < 60 ? `${s} s ago` : `${Math.floor(s / 60)} min ago`;
+}
+
+/** "7:35:12"-style span → seconds. */
+function spanSec(s: string | null | undefined): number | null {
+  const m = String(s ?? "").match(/^(?:(\d+)\.)?(\d{1,2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
+  return m ? Number(m[1] ?? 0) * 86400 + Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4]) : null;
+}
+
+function hms(sec: number): string {
+  const t = Math.max(0, Math.floor(sec));
+  return `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Race time and time to go, counting every second between updates from the last values the
+ * timing gave (`at` = when they were true on this device's clock). Frozen under a red flag, at
+ * the finish, or when `frozen`. Its own timer, so the charts do not re-render each second.
+ */
+function RaceClock({ run, ttg, at, frozen }: { run: string | null | undefined; ttg: string | null | undefined; at: number | null; frozen: boolean }) {
+  const now = useNow(1000);
+  const runSec = spanSec(run);
+  const ttgSec = spanSec(ttg);
+  const elapsed = !frozen && at !== null ? Math.max(0, (now - at) / 1000) : 0;
+  return (
+    <>
+      {runSec !== null && <span style={{ color: RT.soft }}>Race time {hms(runSec + elapsed)}</span>}
+      {ttgSec !== null && <span style={{ color: RT.soft }}>{hms(ttgSec - elapsed)} to go</span>}
+    </>
+  );
 }
 
 function useNow(every = 5000) {
@@ -132,7 +153,7 @@ export function LiveRacePage() {
   const { slug } = useParams<{ slug: string }>();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
-  const { data, annotations, race, live, checkedAt, error, isLoading } = useLiveChartData(slug);
+  const { data, annotations, race, live, checkedAt, clockAt, error, isLoading } = useLiveChartData(slug);
   const now = useNow();
   const [tab, setTab] = useState<"position" | "laptimes">("position");
 
@@ -140,13 +161,14 @@ export function LiveRacePage() {
   const [compSet, setCompSet] = useState<Set<number>>(new Set());
   const [classView, setClassView] = useState("");
   const [activeLap, setActiveLap] = useState<number | null>(null);
-  /** Cars already placed in compSet, so a car that appears mid-race joins the comparison once. */
-  const seen = useRef<Set<number>>(new Set());
+  /** The first chart sets focus and compare; later updates keep the viewer's choices. */
+  const initialised = useRef(false);
 
   useEffect(() => {
     if (!data) return;
     const nums = Object.keys(data.cars).map(Number);
-    if (seen.current.size === 0) {
+    if (!initialised.current) {
+      initialised.current = true;
       // First chart: focus on the leader (or ?car=), compare against the field.
       let lead = 0;
       for (const [n, c] of Object.entries(data.cars)) if (c.finishPos === 1) lead = Number(n);
@@ -157,16 +179,11 @@ export function LiveRacePage() {
       setFocusNum(lead);
       setClassView(chartDefaults.classView === "focus_class" ? (data.cars[String(lead)]?.cls ?? "") : "");
       setCompSet(new Set(nums.filter((n) => n !== lead)));
-      nums.forEach((n) => seen.current.add(n));
       return;
-    }
-    const fresh = nums.filter((n) => !seen.current.has(n));
-    if (fresh.length) {
-      fresh.forEach((n) => seen.current.add(n));
-      setCompSet((prev) => new Set([...prev, ...fresh.filter((n) => n !== focusNum)]));
     }
     // A car can drop out of the data (its laps re-scored): keep the focus on a car that exists.
     if (focusNum && !data.cars[String(focusNum)]) setFocusNum(nums[0] ?? 0);
+    // Compare keeps the viewer's picks; "All cars" (trace-view) takes in cars that appear mid-race.
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFocusChange = useCallback((num: number) => {
@@ -179,7 +196,7 @@ export function LiveRacePage() {
     setActiveLap(null);
   }, []);
 
-  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView });
+  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, raceKey: slug });
 
   if (!slug) return <Navigate to="/live" replace />;
 
@@ -208,8 +225,6 @@ export function LiveRacePage() {
 
   const st = live?.status;
   const flag = st?.flag ?? null;
-  const ttg = clock(st?.timeToGo);
-  const run = clock(st?.runningRaceTime);
   const serverAge = live?.updatedAt ? now - Date.parse(live.updatedAt) : 0;
   const delayed = !!live?.delayed || !!error || serverAge > 3 * 60_000;
   const isTeam = hasTeamAccess(user);
@@ -222,54 +237,45 @@ export function LiveRacePage() {
     // No RaceMetaContext: the race-card share image describes a finished result.
     <LiveRaceContext.Provider value={!live?.ended}>
       <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
-        <section className="flex shrink-0 flex-col gap-1.5 px-3 pt-2.5 sm:px-6 sm:pt-3">
-          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: RT.muted }}>
-            <Link to="/live" className="hover:underline" style={{ color: RT.muted }}>
-              Live
-            </Link>
-            <span aria-hidden>/</span>
-            <span className="rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
+        {/* One line: series, race, event, then the live status (wraps on a phone). */}
+        <section
+          className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-3 pb-1.5 pt-2.5 text-sm sm:px-6 sm:pt-3"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span className="self-center rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
               WRL
             </span>
-            <span>{race.season}</span>
-          </nav>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="m-0 text-xl font-semibold sm:text-2xl">{live?.sessionName ?? race.name}</h1>
-            <span className="text-sm" style={{ color: RT.soft }}>
+            <span style={{ color: RT.soft }}>
               {[live?.eventName, live?.eventName?.includes(race.track) ? null : race.track].filter(Boolean).join(" · ")}
             </span>
-          </div>
-          {/* Live status bar */}
-          <div
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-sm"
-            style={{ background: RT.card, borderColor: RT.line }}
-            role="status"
-            aria-live="polite"
+          </span>
+          <Link
+            to="/live"
+            className="flex items-center gap-2 font-semibold tracking-wider"
+            style={{ color: live?.ended ? RT.muted : RT.live }}
+            title="Positions are as of each completed lap and may change when results are official. The full race analysis follows after the finish."
           >
-            <span className="flex items-center gap-2 font-semibold tracking-wider" style={{ color: live?.ended ? RT.muted : RT.live }}>
-              {!live?.ended && <LiveDot />}
-              {live?.ended ? "FINISHED" : "LIVE"}
+            {!live?.ended && <LiveDot />}
+            {live?.ended ? "FINISHED" : "LIVE"}
+          </Link>
+          <span>
+            Lap <b>{st?.leaderLap ?? data.maxLap}</b>
+          </span>
+          {flag && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: FLAG_COLORS[flag] ?? RT.muted }} aria-hidden />
+              {flag}
             </span>
-            <span>
-              Lap <b>{st?.leaderLap ?? data.maxLap}</b>
-            </span>
-            {flag && (
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded-sm" style={{ background: FLAG_COLORS[flag] ?? RT.muted }} aria-hidden />
-                {flag}
-              </span>
-            )}
-            {run && <span style={{ color: RT.soft }}>Race time {run}</span>}
-            {ttg && !live?.ended && <span style={{ color: RT.soft }}>{ttg} to go</span>}
-            <span>{st?.carCount ?? Object.keys(data.cars).length} cars</span>
-            <span className="flex-1" />
-            <span style={{ color: delayed ? "#fab219" : RT.muted }}>
-              {delayed ? "Timing feed delayed · " : ""}checked {ago(checkedAt, now)}
-            </span>
-          </div>
-          <p className="text-xs" style={{ color: RT.muted }}>
-            Positions are as of each completed lap and may change when results are official. The full race analysis follows after the finish.
-          </p>
+          )}
+          <RaceClock run={st?.runningRaceTime} ttg={live?.ended ? null : st?.timeToGo} at={clockAt} frozen={!!live?.ended || flag === "Red" || flag === "Checkered"} />
+          <span>{st?.carCount ?? Object.keys(data.cars).length} cars</span>
+          <span className="flex-1" />
+          <span className="text-xs" style={{ color: delayed ? "#fab219" : RT.muted }}>
+            {delayed ? "Timing feed delayed · " : ""}checked {ago(checkedAt, now)}
+          </span>
         </section>
 
         <nav aria-label="Race views" className="no-scrollbar mt-0.5 flex shrink-0 gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
