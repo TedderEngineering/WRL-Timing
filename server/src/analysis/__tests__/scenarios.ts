@@ -161,3 +161,25 @@ export function noCardPenaltyRace(): SynthRace {
     ],
   };
 }
+
+/**
+ * Serve windows (window 600 s): #80 is given a drive-through at 250 s, spends laps 4–8 in the garage
+ * (about 900 s), then serves it on lap 6. #81 enters the pit lane for a long stop on lap 15 just
+ * before race control announces a Stop + 60 for it.
+ */
+export function serveWindowRace(stopPlusAt: number): SynthRace {
+  const lap = (c: string, i: number, stops: SynthCar["stops"]) => car(c, "GS", i, { laps: 30, stops });
+  return {
+    cars: [
+      lap("80", 0, [{ lap: 4, pitLane: 900 }, { lap: 6, pitLane: 34 }]),
+      lap("81", 1, [{ lap: 15, pitLane: 125 }]),
+      lap("82", 2, [{ lap: 15, pitLane: 65 }]),
+      lap("83", 3, [{ lap: 15, pitLane: 66 }]),
+    ],
+    rc: [
+      [250, "Car 80: Penalty - Improperly attired person(s) over wall - Drive Through"],
+      [stopPlusAt, "Car 81: Penalty - More than Emergency Service in closed pit - Stop + 60"],
+    ],
+    driveTime: true,
+  };
+}
