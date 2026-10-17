@@ -7,7 +7,7 @@ import { buildFacts } from "../buildFacts.js";
 import { validatePackage } from "../validate-package.js";
 import { AdapterBlocker } from "../adapters/index.js";
 import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
-import { fcyRace, greenRace, OPTS, redFlagRace } from "./scenarios.js";
+import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace } from "./scenarios.js";
 import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
 
 const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
@@ -322,5 +322,92 @@ describe("red flag: cars held in the pit lane", () => {
     const ps = red.events.pitPassages.filter((p) => p.car === "43");
     expect(ps.map((p) => p.kind)).toEqual(["retirement"]);
     expect(red.events.retirements.find((r) => r.car === "43")!.passageId).toBe(ps[0].id);
+  });
+});
+
+describe("a car that stops twice in one pit cycle", () => {
+  const f = buildFacts({ format: "alkamel-imsa", files: synthImsa(doubleStopRace()), options: OPTS });
+  const cy = f.pitCycles.find((c) => c.members.some((m) => m.passageId === "pit:52:2"))!;
+
+  it("is schema-valid", () => {
+    expect(validatePackage(f).errors).toEqual([]);
+  });
+
+  it("counts the car once: nMembers is the number of cars", () => {
+    expect(cy.members.map((m) => m.passageId)).toContain("pit:52:1");
+    expect(cy.stats.nMembers).toBe(5);
+  });
+
+  it("gives the car one result, on its first stop, ranked by its stops' total time lost", () => {
+    const rs = f.cycleResults.filter((r) => r.cycleId === cy.id);
+    expect(rs.map((r) => r.car).sort()).toEqual(["50", "51", "52", "53", "54"]);
+    expect(new Set(rs.map((r) => r.id)).size).toBe(rs.length);
+    const r52 = rs.find((r) => r.car === "52")!;
+    expect(r52.passageId).toBe("pit:52:1");
+    expect(r52.confidenceNotes).toContain("several_stops_in_cycle");
+    const total = pass(f, "pit:52:1").timeLost.valueS! + pass(f, "pit:52:2").timeLost.valueS!;
+    expect(r52.timeLostRank).toBe(5);
+    const others = rs.filter((r) => r.car !== "52").map((r) => pass(f, r.passageId).timeLost.valueS!);
+    const mu = (others.reduce((a, b) => a + b, 0) + total) / 5;
+    expect(r52.deltaToCycleMeanS).toBeCloseTo(total - mu, 2);
+    expect(cy.stats.meanTimeLostS).toBeCloseTo(mu, 2);
+  });
+});
+
+describe("green time lost above the official pit-lane time", () => {
+  const race = doubleStopRace();
+  race.cars = race.cars.filter((c) => c.car !== "52");
+  race.cars[0] = { ...race.cars[0], extra: { 11: 45 } };
+  const f = buildFacts({ format: "alkamel-imsa", files: synthImsa(race), options: OPTS });
+
+  it("keeps the value, adds green_loss_exceeds_pit_lane and lowers confidence to medium", () => {
+    const p = pass(f, "pit:50:1");
+    expect(p.timeLost.valueS!).toBeGreaterThan(p.officialPitLaneTimeS! + 10);
+    expect(p.confidenceNotes).toContain("green_loss_exceeds_pit_lane");
+    expect(p.confidence).toBe("medium");
+    const q = pass(f, "pit:51:1");
+    expect(q.confidenceNotes ?? []).not.toContain("green_loss_exceeds_pit_lane");
+  });
+});
+
+describe("penalty linking", () => {
+  const opts = { ...OPTS, rulebook: { ...OPTS.rulebook!, serveWindowS: 300 } };
+  const build = (dt61: number) => buildFacts({ format: "alkamel-imsa", files: synthImsa(penaltyRace(dt61)), options: opts });
+  const pen = (f: RaceAnalysisPackage, id: string) => f.events.penalties.find((x) => x.id === id)!;
+  const f = build(2062);
+
+  it("is schema-valid", () => {
+    expect(validatePackage(f).errors).toEqual([]);
+  });
+
+  it("counts the serve window in green-flag time: a caution doesn't use it up", () => {
+    expect(pen(f, "pen:60:1").servedByPassageId).toBe("pit:60:1");
+    expect(pass(f, "pit:60:1").kind).toBe("drive_through");
+    expect(pass(f, "pit:60:1").kindBasis).toContain("rc_penalty_match");
+  });
+
+  it("links a drive-through served just before race control's message, at medium confidence", () => {
+    const x = pen(f, "pen:61:1");
+    expect(x.servedByPassageId).toBe("pit:61:1");
+    expect(x.status).toBe("served");
+    expect(x.confidence).toBe("medium");
+    expect(x.confidenceNotes).toContain("served_before_message");
+    expect(pass(f, "pit:61:1").confidenceNotes).toContain("served_before_message");
+  });
+
+  it("does not link a drive-through that came long before the message", () => {
+    const g = build(5000);
+    expect(pen(g, "pen:61:1").servedByPassageId).toBeNull();
+    expect(pass(g, "pit:61:1").confidenceNotes).toContain("drive_through_by_duration");
+  });
+
+  it("serves a time penalty at the car's next stop, however long the stint", () => {
+    expect(pen(f, "pen:62:1").servedByPassageId).toBe("pit:62:2");
+  });
+
+  it("reads a penalty message sent twice as one penalty", () => {
+    const ps = f.events.penalties.filter((x) => x.car === "63");
+    expect(ps).toHaveLength(1);
+    expect(ps[0].source.refs).toHaveLength(2);
   });
 });

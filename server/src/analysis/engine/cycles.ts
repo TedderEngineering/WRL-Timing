@@ -30,6 +30,40 @@ export function isMember(p: Passage): boolean {
   return p.kind === "stop" && p.outcome === "rejoined" && !p.noLoss;
 }
 
+type PitGroupLoss = { id: string; timeLost: { valueS: number | null } };
+
+/**
+ * A cycle's members by car, each car's stops in time order. A car is one member of a cycle even
+ * when it stopped more than once inside it (a second stop for a problem, or a stop either side of
+ * a caution): the cycle compares cars, not stops.
+ */
+export function membersByCar(cy: { members: Passage[] }): Map<string, Passage[]> {
+  const out = new Map<string, Passage[]>();
+  for (const p of [...cy.members].sort((a, b) => a.sortT - b.sortT)) out.set(p.car, [...(out.get(p.car) ?? []), p]);
+  return out;
+}
+
+/**
+ * What the cycle cost a car: the sum of its stops' time lost, or null when any is unknown. Stops
+ * on back-to-back laps share one pit group's time lost (D-PITGROUP), counted once.
+ */
+export function carCycleLoss(ps: Passage[], groups: PitGroupLoss[] = []): number | null {
+  let sum = 0;
+  const seen = new Set<string>();
+  for (const p of ps) {
+    let v = p.timeLost.valueS;
+    if (p.timeLost.method === "see_group") {
+      const gid = p.groupId ?? "";
+      if (seen.has(gid)) continue;
+      seen.add(gid);
+      v = groups.find((g) => g.id === gid)?.timeLost.valueS ?? null;
+    }
+    if (v === null) return null;
+    sum += v;
+  }
+  return rd(sum);
+}
+
 export function chooseModel(ctx: Ctx, passages: Passage[], cls: string, configured: CycleModel | undefined): { model: CycleModel; defaulted: boolean } {
   if (configured) return { model: configured, defaulted: false };
   const cars = ctx.cars.filter((c) => ctx.classOf[c] === cls && (ctx.laps[c]?.length ?? 0) > 0 && ctx.laps[c][ctx.laps[c].length - 1].endT >= ctx.chequerT - 1e-6);
@@ -111,7 +145,7 @@ export function buildPitCycles(ctx: Ctx, passages: Passage[], periods: Period[],
   return all;
 }
 
-export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[], classMed: Record<string, number | null>): PitCycle[] {
+export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[], classMed: Record<string, number | null>, groups: PitGroupLoss[] = []): PitCycle[] {
   const wrl = ctx.race.format === "speedhive" || ctx.race.format === "wrl-website";
   return drafts.map((cy) => {
     const med = classMed[cy.cls] ?? 120;
@@ -137,9 +171,11 @@ export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[],
     if (cy.members.some((p) => p.confidence === "low")) conf = "low";
     const ctxs = cy.members.map((p) => p.fcyContext);
     const trigger = ctxs.every((x) => x !== "green") ? "fcy" : ctxs.every((x) => x === "green") ? "green" : "mixed";
-    const vals = cy.members.filter((p) => p.timeLost.valueS !== null);
+    // Stats per car: a car that stopped twice in the cycle counts once, with its stops' total loss.
+    const byCar = membersByCar(cy);
+    const vals = [...byCar.values()].map((ps) => ({ first: ps[0], loss: carCycleLoss(ps, groups) })).filter((x): x is { first: Passage; loss: number } => x.loss !== null);
     const pls = cy.members.filter((p) => p.official !== null);
-    const bestTl = vals.length ? vals.reduce((a, b) => (b.timeLost.valueS! < a.timeLost.valueS! ? b : a)) : null;
+    const bestTl = vals.length ? vals.reduce((a, b) => (b.loss < a.loss ? b : a)) : null;
     const bestPl = pls.length ? pls.reduce((a, b) => (b.official! < a.official! ? b : a)) : null;
     const memberSet = new Set(cy.members);
     const over = passages
@@ -165,11 +201,11 @@ export function toPitCycles(ctx: Ctx, drafts: CycleDraft[], passages: Passage[],
       members: [...cy.members].sort((a, b) => a.sortT - b.sortT).map((p) => ({ car: p.car, passageId: p.id })),
       overlappingPassageIds: over,
       stats: {
-        nMembers: cy.members.length,
-        meanTimeLostS: vals.length ? rd(mean(vals.map((p) => p.timeLost.valueS!))) : null,
-        medianTimeLostS: vals.length ? rd(median(vals.map((p) => p.timeLost.valueS!))) : null,
-        bestTimeLostS: bestTl ? bestTl.timeLost.valueS : null,
-        bestTimeLostPassageId: bestTl ? bestTl.id : null,
+        nMembers: byCar.size,
+        meanTimeLostS: vals.length ? rd(mean(vals.map((x) => x.loss))) : null,
+        medianTimeLostS: vals.length ? rd(median(vals.map((x) => x.loss))) : null,
+        bestTimeLostS: bestTl ? rd(bestTl.loss) : null,
+        bestTimeLostPassageId: bestTl ? bestTl.first.id : null,
         meanPitLaneS: pls.length ? rd(mean(pls.map((p) => p.official!))) : null,
         bestPitLaneS: bestPl ? rd(bestPl.official) : null,
         bestPitLanePassageId: bestPl ? bestPl.id : null,
@@ -306,7 +342,7 @@ function effectThrough(ctx: Ctx, pos: PositionIndex, swapIdx: Map<string, Swap[]
   return { beforeRow, afterRow, gainedOn, lostTo };
 }
 
-export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleDraft[], passages: Passage[], swaps: Swap[]): CycleResult[] {
+export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleDraft[], passages: Passage[], swaps: Swap[], groups: PitGroupLoss[] = []): CycleResult[] {
   const swapIdx = new Map<string, Swap[]>();
   for (const s of swaps) {
     const key = s.winner < s.loser ? `${s.winner}\u0000${s.loser}` : `${s.loser}\u0000${s.winner}`;
@@ -318,14 +354,16 @@ export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleD
   for (const cy of drafts) for (const p of cy.members) memberOf.set(p, cy);
   const cycleConf = new Map<string, "high" | "medium" | "low">();
   for (const cy of drafts) {
-    const vals = cy.members.filter((p) => p.timeLost.valueS !== null);
-    const mu = vals.length ? mean(vals.map((p) => p.timeLost.valueS!)) : null;
-    const ranked = [...vals].sort((a, b) => a.timeLost.valueS! - b.timeLost.valueS! || carOrder(a.car, b.car));
-    const seenCar = new Map<string, number>();
-    for (const p of [...cy.members].sort((a, b) => a.sortT - b.sortT)) {
-      // A car with two stops in one cycle gets ':<k>' on its second and later results (id stays unique).
-      const k = (seenCar.get(p.car) ?? 0) + 1;
-      seenCar.set(p.car, k);
+    // One result per car (D-CYCLE): a car's stops in the cycle are compared together, by their
+    // total time lost, and its positions run from before the cycle to after its last stop.
+    const byCar = membersByCar(cy);
+    const losses = new Map([...byCar].map(([car, ps]) => [car, carCycleLoss(ps, groups)]));
+    const vals = [...losses].filter((x): x is [string, number] => x[1] !== null);
+    const mu = vals.length ? mean(vals.map((x) => x[1])) : null;
+    const ranked = [...vals].sort((a, b) => a[1] - b[1] || carOrder(a[0], b[0])).map((x) => x[0]);
+    for (const [car, ps] of byCar) {
+      const p = ps[0];
+      const loss = losses.get(car) ?? null;
       const e = effectThrough(ctx, pos, swapIdx, p, cy.closes, true, cy.opens);
       const cb = e.beforeRow?.cpos ?? null;
       const ca = e.afterRow?.cpos ?? null;
@@ -335,14 +373,16 @@ export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleD
       const ldb = own?.lapsDown ?? null;
       const lda = e.afterRow?.lapsDown ?? null;
       p.lapDown = ldb !== null && lda !== null ? lda > ldb : null;
+      for (const q of ps.slice(1)) q.lapDown = p.lapDown;
       const notes: string[] = [];
       let conf: "high" | "medium" | "low" = cycleConf.get(cy.id) ?? "high";
+      if (ps.length > 1) notes.push("several_stops_in_cycle");
       if (!e.afterRow) {
         notes.push("retired_before_cycle_close");
         if (conf === "high") conf = "medium";
       }
       const r: CycleResult = {
-        id: `cycres:${cy.cls}:${cy.ordinal}:${p.car}${k > 1 ? `:${k}` : ""}`,
+        id: `cycres:${cy.cls}:${cy.ordinal}:${p.car}`,
         cycleId: cy.id,
         car: p.car,
         passageId: p.id,
@@ -359,8 +399,8 @@ export function computeCycleResults(ctx: Ctx, pos: PositionIndex, drafts: CycleD
         lapsDownBefore: ldb,
         lapsDownAfter: lda,
         lapDown: p.lapDown,
-        timeLostRank: ranked.includes(p) ? ranked.indexOf(p) + 1 : null,
-        deltaToCycleMeanS: mu !== null && p.timeLost.valueS !== null ? rd(p.timeLost.valueS - mu) : null,
+        timeLostRank: loss !== null ? ranked.indexOf(car) + 1 : null,
+        deltaToCycleMeanS: mu !== null && loss !== null ? rd(loss - mu) : null,
         source: { kind: "derived", method: "D-CYCLE-POS", files: [...new Set([...p.files, ...(ctx.laps[p.car]?.slice(0, 1).map((x) => x.fileId) ?? [])])] },
         confidence: conf,
       };

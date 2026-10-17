@@ -77,7 +77,7 @@ describe("validator: core negatives (T11)", () => {
   });
 });
 
-describe("validator: one mutation per analysis rule (A1–A20)", () => {
+describe("validator: one mutation per analysis rule (A1–A22)", () => {
   const M: [string, string, (p: RaceAnalysisPackage) => void][] = [
     ["A1", "pit-lane time edited in the package", (p) => (p.events.pitPassages.find((x) => x.id === "pit:7:1")!.officialPitLaneTimeS = 61)],
     ["A2", "downgrade with no written judgement", (p) => {
@@ -108,6 +108,7 @@ describe("validator: one mutation per analysis rule (A1–A20)", () => {
     }],
     ["A19", "class summary deleted", (p) => (p.raceSummary!.classSummaries = p.raceSummary!.classSummaries!.filter((c) => c.class !== "TCR"))],
     ["A20", "rule-check confidence raised low -> high", (p) => (p.ruleChecks[0].confidence = "high")],
+    ["A22", "a retired car said to have finished", (p) => (story(p, "24").paragraphs[0].text += " The car finished the race.")],
   ];
   for (const [rule, desc, fn] of M) {
     it(`${rule}: ${desc}`, () => {
@@ -209,5 +210,22 @@ describe("validator: rule-check contract (schema 1.1.0) and A21", () => {
     const q = clone(BASE);
     q.ruleCoverage!.run = [];
     expect(errs(facts(q))).toMatch(/V8 ruleCoverage.run counts 0 checks for min-pit-lane-time/);
+  });
+});
+
+describe("validator: A23 direction of a difference to the cycle mean", () => {
+  const withDelta = (word: string) => {
+    const p = clone(GOOD);
+    const cr = p.cycleResults.find((r) => r.car === "7" && r.deltaToCycleMeanS !== null && r.deltaToCycleMeanS !== 0)!;
+    const v = Math.abs(cr.deltaToCycleMeanS!);
+    story(p, "7").paragraphs.push({ text: `It lost {0} ${word} than the cycle mean.`, refs: [{ value: v, factId: cr.id, field: "deltaToCycleMeanS", unit: "s", display: formatDuration(v), transform: "abs" }] });
+    return { p, sign: Math.sign(cr.deltaToCycleMeanS!) };
+  };
+  it("accepts the right word and refuses the wrong one", () => {
+    const { sign } = withDelta("more");
+    const right = sign > 0 ? "more" : "less";
+    const wrong = sign > 0 ? "less" : "more";
+    expect(run(withDelta(right).p).errors.filter((e) => e.startsWith("A23"))).toEqual([]);
+    expect(run(withDelta(wrong).p).errors.join("\n")).toMatch(/^A23 /m);
   });
 });

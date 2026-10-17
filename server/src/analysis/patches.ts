@@ -225,12 +225,21 @@ const secs = (v: unknown) => (typeof v === "number" ? `${num(v)}s (${formatDurat
  * A plain-text digest of one class (or the race), one line per fact with its id and the field
  * names to cite. Written to be read by the person or agent writing the stories.
  */
+/** Counterparties as `car(cause)[pass:…]`, so the row behind each one can be cited. */
+function cps(xs: { car: string; cause: string; passId?: string | null }[] | undefined): string {
+  return (xs ?? []).map((g) => `${g.car}(${g.cause})${g.passId ? `[${g.passId}]` : ""}`).join(",") || "-";
+}
+
 export function classDigest(P: RaceAnalysisPackage, cls: string): string {
   const L: string[] = [];
   const entries = P.entries.filter((e) => e.class === cls).sort((a, b) => (a.result?.positionClass ?? 999) - (b.result?.positionClass ?? 999));
   const ev = P.events;
   const className = P.metadata.classes.find((c) => c.id === cls)?.name ?? cls;
   L.push(`# Class ${cls} (${className}) · ${entries.length} cars · results ${P.metadata.resultsStatus}`);
+  L.push("");
+  L.push(
+    "Row facts are citable like any other: `pass:<winner>:<lap>:<loser>` (fields lap, winner, loser, mechanism) and `lapdown:<car>:<lap>` (fields lap, lapsDown, cause). Each gainedOn / lostTo entry below names its row in brackets. stats.nMembers counts cars: a car that stopped twice in one cycle is one member."
+  );
   L.push("");
   L.push("## Pit cycles in class");
   for (const c of P.pitCycles.filter((x) => x.class === cls)) {
@@ -255,11 +264,11 @@ export function classDigest(P: RaceAnalysisPackage, cls: string): string {
     for (const p of ev.pitPassages.filter((x) => x.car === car)) {
       const cr = P.cycleResults.find((x) => x.passageId === p.id);
       L.push(
-        `${p.id} kind=${p.kind} stopNumber=${num(p.stopNumber)} inLap=${p.inLap} outLap=${num(p.outLap)} fcyContext=${p.fcyContext} officialPitLaneTimeS=${secs(p.officialPitLaneTimeS)} timeLost.valueS=${secs(p.timeLost.valueS)} (${p.timeLost.method}) driverIn=${num(p.driverIn)} driverOut=${num(p.driverOut)} cycleId=${p.cycleId ?? "-"} outcome=${p.outcome} confidence=${p.confidence}${p.positionEffect ? ` positionEffect classPosBefore=${num(p.positionEffect.classPosBefore)} classPosAfter=${num(p.positionEffect.classPosAfter)} netClass=${num(p.positionEffect.netClass)}` : ""}`
+        `${p.id} kind=${p.kind} stopNumber=${num(p.stopNumber)} inLap=${p.inLap} outLap=${num(p.outLap)} fcyContext=${p.fcyContext} officialPitLaneTimeS=${secs(p.officialPitLaneTimeS)} timeLost.valueS=${secs(p.timeLost.valueS)} (${p.timeLost.method}) driverIn=${num(p.driverIn)} driverOut=${num(p.driverOut)} cycleId=${p.cycleId ?? "-"} outcome=${p.outcome} confidence=${p.confidence}${p.positionEffect ? ` positionEffect classPosBefore=${num(p.positionEffect.classPosBefore)} classPosAfter=${num(p.positionEffect.classPosAfter)} netClass=${num(p.positionEffect.netClass)} gainedOn=${cps(p.positionEffect.gainedOn)} lostTo=${cps(p.positionEffect.lostTo)}` : ""}`
       );
       if (cr) {
         L.push(
-          `  ${cr.id} beforeLap=${num(cr.beforeLap)} afterLap=${num(cr.afterLap)} classPosBefore=${num(cr.classPosBefore)} classPosAfter=${num(cr.classPosAfter)} netClass=${num(cr.netClass)} timeLostRank=${num(cr.timeLostRank)} deltaToCycleMeanS=${secs(cr.deltaToCycleMeanS)} gainedOn=${cr.gainedOn.map((g) => `${g.car}(${g.cause})`).join(",") || "-"} lostTo=${cr.lostTo.map((g) => `${g.car}(${g.cause})`).join(",") || "-"} confidence=${cr.confidence}`
+          `  ${cr.id} beforeLap=${num(cr.beforeLap)} afterLap=${num(cr.afterLap)} classPosBefore=${num(cr.classPosBefore)} classPosAfter=${num(cr.classPosAfter)} netClass=${num(cr.netClass)} timeLostRank=${num(cr.timeLostRank)} deltaToCycleMeanS=${secs(cr.deltaToCycleMeanS)} gainedOn=${cps(cr.gainedOn)} lostTo=${cps(cr.lostTo)} confidence=${cr.confidence}${cr.confidenceNotes?.includes("several_stops_in_cycle") ? " (car stopped more than once in this cycle: rank and delta are over its stops combined)" : ""}`
         );
       }
     }
