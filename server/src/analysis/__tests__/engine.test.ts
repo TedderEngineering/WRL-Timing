@@ -462,4 +462,12 @@ describe("serve windows: garage time and stop penalties announced after the car 
     expect(f.events.pitPassages.find((x) => x.id === "pit:81:1")!.kind).toBe("penalty_served");
     expect(pen("81").confidenceNotes).toContain("served_before_message");
   });
+
+  it("a Stop + 60 is not served by a pass at transit speed", () => {
+    const race = serveWindowRace(99999);
+    race.cars[1] = { ...race.cars[1], stops: [{ lap: 13, pitLane: 34 }, { lap: 15, pitLane: 125 }] };
+    race.rc = [[1150, "Car 81: Penalty - More than Emergency Service in closed pit - Stop + 60"]];
+    const g = buildFacts({ format: "alkamel-imsa", files: synthImsa(race), options: opts });
+    expect(g.events.penalties.find((x) => x.car === "81")!.servedByPassageId).not.toBe("pit:81:1");
+  });
 });

@@ -971,7 +971,8 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
     } else if (sg) {
       set("stop_and_go", ["rc_penalty_match"]);
       link(sg);
-    } else if (sp) {
+    } else if (sp && !short) {
+      // A Stop + N holds the car for N seconds: a pass at transit speed did not serve it.
       set("penalty_served", ["rc_penalty_match"]);
       link(sp);
     } else if (p.pitType === "PENALTY" && pl !== null && T !== null && pl > 1.15 * T) {
