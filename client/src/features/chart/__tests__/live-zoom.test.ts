@@ -8,7 +8,16 @@ describe("nextZoom", () => {
   });
   it("follows the latest lap on a live race", () => {
     expect(nextZoom(100, 101, 1, 100, true)).toEqual([1, 101]);
-    expect(nextZoom(100, 101, 60, 100, true)).toEqual([60, 101]);
+  });
+  it("slides a zoomed-in window at the end along, keeping its width", () => {
+    expect(nextZoom(100, 101, 60, 100, true)).toEqual([61, 101]);
+  });
+  it("keeps following after a swipe left the end a fraction short", () => {
+    // Laps 1-99.97 of 100: still the whole race, so it shows 1-101 of 101.
+    expect(nextZoom(100, 101, 1, 99.97, true)).toEqual([1, 101]);
+    const [s, e] = nextZoom(100, 102, 60.5, 99.6, true);
+    expect(e).toBe(102);
+    expect(s).toBeCloseTo(102 - 39.1, 6);
   });
   it("keeps a live view zoomed into earlier laps", () => {
     expect(nextZoom(100, 101, 20, 40, true)).toEqual([20, 40]);

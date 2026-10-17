@@ -6,13 +6,21 @@ import { createContext, useEffect, useRef } from "react";
  * A finished race: a new lap count is a new race, so the zoom resets to the
  * whole race (the charts' behaviour before RaceTrace Live).
  *
- * A live race (`live`): the lap count grows as laps complete. A view that
- * showed the latest lap keeps following it; a view zoomed into earlier laps
- * stays where the viewer put it.
+ * A live race (`live`): the lap count grows as laps complete. A view at the
+ * latest lap keeps following it: the whole race stays the whole race, and a
+ * zoomed-in window at the end slides along, keeping its width. "At the latest
+ * lap" allows FOLLOW_TOLERANCE laps, since swiping or pinching on a phone
+ * leaves the end a fraction of a lap short (99.97 of 100), and an exact test
+ * then stopped following for good. A view zoomed into earlier laps stays where
+ * the viewer put it.
  */
+export const FOLLOW_TOLERANCE = 1;
+
 export function nextZoom(prevMax: number, nextMax: number, start: number, end: number, live: boolean): [number, number] {
   if (!live || nextMax < prevMax) return [1, nextMax];
-  return [start, end >= prevMax ? nextMax : end];
+  if (end < prevMax - FOLLOW_TOLERANCE) return [start, end];
+  if (start <= 1.001) return [1, nextMax];
+  return [Math.max(1, nextMax - (end - start)), nextMax];
 }
 
 export function useLapZoomOnGrow(
