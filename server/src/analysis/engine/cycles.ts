@@ -44,13 +44,16 @@ export function membersByCar(cy: { members: Passage[] }): Map<string, Passage[]>
 }
 
 /**
- * What the cycle cost a car: the sum of its stops' time lost, or null when any is unknown. Stops
+ * What the cycle cost a car: the sum of its stops' time lost, or null when any is unknown or low
+ * confidence. Stops
  * on back-to-back laps share one pit group's time lost (D-PITGROUP), counted once.
  */
 export function carCycleLoss(ps: Passage[], groups: PitGroupLoss[] = []): number | null {
   let sum = 0;
   const seen = new Set<string>();
   for (const p of ps) {
+    // A low-confidence time lost (no reference pace, a negative loss under caution…) is not ranked.
+    if (p.confidence === "low") return null;
     let v = p.timeLost.valueS;
     if (p.timeLost.method === "see_group") {
       const gid = p.groupId ?? "";

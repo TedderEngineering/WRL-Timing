@@ -683,9 +683,9 @@ function redmistPassages(ctx: Ctx): Passage[] {
 
 const PEN_RE = /^Car\s+#?(\w+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
 const SERVED_RE = /^Car\s+#?(\w+):\s*Penalty(\s*#\d+)?\s+Served$/i;
-const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?time\s+penalty\s+for\s+(.+)$/i;
+const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?(?:time|drive[- ]through)\s+penalty\s+for\s+(.+)$/i;
 /** "Car #45 - Moved to the back of the field as per Penalty …": a post-race position penalty. */
-const BACK_RE = /^Car\s+#?(\w+)\s*-\s*(moved to the (?:back|rear) of the (?:field|class)\b.*)$/i;
+const BACK_RE = /^Car\s+#?(\w+)\s*-\s*(moved to the (?:back|rear) of (?:the|its) (?:field|class)\b.*)$/i;
 
 export function penaltyType(decision: string): { type: PenaltyType; amount: number | null } {
   const d = decision.trim();

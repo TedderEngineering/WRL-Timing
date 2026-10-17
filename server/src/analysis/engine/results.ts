@@ -170,7 +170,22 @@ export function buildResults(ctx: Ctx, passages: Passage[]): ResultsOut {
     const rows = ctx.laps[e.car] ?? [];
     if (e.result?.status === "dns" || (!rows.length && !passages.some((p) => p.car === e.car))) {
       if (e.result?.status === "dns" || !rows.length) {
-        retirements.push({ id: `ret:${e.car}`, car: e.car, lastCompletedLap: 0, at: null, where: "did_not_start", passageId: null, classPosAtRetirement: null, source: { kind: "official", files: res?.fileIds ?? [] }, confidence: e.result?.status === "dns" ? "high" : "medium", ...(e.result?.status === "dns" ? {} : { confidenceNotes: ["no_laps_no_dns_status"] }) });
+        // No laps and no DNS status: a car race control named during the race (a penalty for a
+        // lap-1 incident, say) started; it stopped before completing a lap.
+        const esc = e.car.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const named = e.result?.status !== "dns" && ctx.race.raceControl.some((m) => new RegExp(`\\bcars?\\s*#?${esc}\\b`, "i").test(m.text));
+        retirements.push({
+          id: `ret:${e.car}`,
+          car: e.car,
+          lastCompletedLap: 0,
+          at: null,
+          where: named ? "unknown" : "did_not_start",
+          passageId: null,
+          classPosAtRetirement: null,
+          source: { kind: "official", files: res?.fileIds ?? [] },
+          confidence: e.result?.status === "dns" ? "high" : "medium",
+          ...(e.result?.status === "dns" ? {} : { confidenceNotes: [named ? "no_laps_named_by_race_control" : "no_laps_no_dns_status"] }),
+        });
       }
       continue;
     }
