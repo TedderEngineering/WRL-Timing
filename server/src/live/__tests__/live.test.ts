@@ -191,7 +191,7 @@ describe("live poller and routes", () => {
     try {
       const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live`;
       // The list names sessions by slug only.
-      const list = await (await fetch(base)).json();
+      const list = (await (await fetch(base)).json()) as { sessions: unknown[]; upcoming: unknown; recent: unknown[] };
       expect(list.sessions).toEqual([
         { slug: "synthetic-park-2026-saturday-8-hour", eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", track: "Synthetic Park", startedAt: "2026-05-02T23:40:00.000Z", endedAt: null, kind: "race", status: null },
       ]);
