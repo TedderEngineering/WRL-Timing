@@ -3,11 +3,12 @@
  * last and best lap, its gap to the focus car, the pace difference, and the
  * laps until the next pass or lapping if both keep their current pace.
  */
-import { useMemo } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { TRACE } from "./constants";
 import { gapRows, PACE_LAPS, type GapRow } from "./live-gaps";
+import { LiveClockContext } from "./live-zoom";
 
 const T = { muted: "#9a9ab4", soft: "#cbd5e1", line: "#1e1e38", gain: "#4ade80", lose: "#f87171" };
 
@@ -39,10 +40,19 @@ const NEXT: Record<NonNullable<GapRow["next"]>["event"], [string, (k: number) =>
 };
 
 export function LiveGapsPanel({ data, focusNum, compSet, fieldCars }: { data: RaceChartData; focusNum: number; compSet: Set<number>; fieldCars: number[] }) {
+  // Between updates the gaps move on at each car's pace: redraw every second.
+  const raceNow = useContext(LiveClockContext);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!raceNow) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [raceNow]);
   const rows = useMemo(() => {
     const nums = compSet.size ? [...compSet] : fieldCars;
-    return gapRows(data, focusNum, nums);
-  }, [data, focusNum, compSet, fieldCars]);
+    return gapRows(data, focusNum, nums, raceNow?.());
+    // tick: recompute each second
+  }, [data, focusNum, compSet, fieldCars, raceNow, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cell = "whitespace-nowrap px-1 py-1.5 text-right font-mono tabular-nums";
   return (
@@ -103,7 +113,8 @@ export function LiveGapsPanel({ data, focusNum, compSet, fieldCars }: { data: Ra
         </tbody>
       </table>
       <p className="px-3 py-2 text-[11px] leading-snug" style={{ color: T.muted }}>
-        Gap: + behind the focus car, − ahead; L = laps. You/lap: what you gain (+) or lose (−) each lap, from the last {PACE_LAPS} green laps. Next: laps until the
+        Gap: + behind the focus car, − ahead; L = laps. Between updates, gaps move on at each car's pace (an estimate; held under a
+        caution). You/lap: what you gain (+) or lose (−) each lap, from the last {PACE_LAPS} green laps. Next: laps until the
         next pass or lapping if both keep that pace.
       </p>
     </div>

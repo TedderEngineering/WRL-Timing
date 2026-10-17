@@ -3,7 +3,7 @@
  * Position Trace and Lap Times as a finished race and refreshed as laps
  * complete. Public, no login. Nothing here is stored as a race.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
@@ -11,8 +11,8 @@ import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { useTraceView } from "../features/chart/trace-view";
 import { useChartDefaults } from "../features/chart/chart-defaults";
 import { carKey, carNo } from "../features/chart/car-number";
-import { gapClock, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
-import { LiveRaceContext } from "../features/chart/live-zoom";
+import { gapClock, latestCrossing, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
+import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
 import { fetchLiveSessions, useLiveChartData, type LiveSessionListing } from "../hooks/useLiveChartData";
 
@@ -102,9 +102,10 @@ function gapPart(g: LeaderGap, label: string) {
  * The focus car's gap to the overall and class leaders, in laps and seconds of its recent green
  * pace. Under a caution it stands out: the gap is what the car has to make up at the restart.
  */
-function LeaderGapBadge({ data, focusNum, flag }: { data: Parameters<typeof leaderGaps>[0]; focusNum: number; flag: string | null }) {
+function LeaderGapBadge({ data, focusNum, flag, raceNow }: { data: Parameters<typeof leaderGaps>[0]; focusNum: number; flag: string | null; raceNow: () => number | null }) {
+  useNow(1000); // moves on every second between updates
   if (!focusNum || !data.cars[String(focusNum)]) return null;
-  const g = leaderGaps(data, focusNum);
+  const g = leaderGaps(data, focusNum, raceNow());
   const caution = !!flag && CAUTION_FLAGS.has(flag);
   const num = carNo(data, focusNum);
   const parts = [g.overall && gapPart(g.overall, "the leader"), g.cls && gapPart(g.cls, `the ${g.clsName} leader`)].filter(Boolean);
@@ -112,7 +113,7 @@ function LeaderGapBadge({ data, focusNum, flag }: { data: Parameters<typeof lead
     <span
       className={caution ? "flex flex-wrap items-center gap-x-2 rounded-md border px-2 py-0.5 text-[15px] font-medium" : "flex flex-wrap items-center gap-x-2"}
       style={caution ? { borderColor: "#facc15", background: "rgba(250,204,21,0.12)", color: "#fde68a" } : { color: RT.soft }}
-      title="Laps behind, and those laps at the car's recent green-flag pace (median of its last 5 green laps): the time to make up once racing resumes."
+      title="Laps behind, and those laps at the car's recent green-flag pace (median of its last 5 green laps): the time to make up once racing resumes. Between updates it moves on at each car's pace (an estimate); under a caution it holds the last timed gap."
     >
       <span className="font-mono font-semibold" style={{ color: caution ? "#fde68a" : RT.accent }}>
         #{num}
@@ -238,6 +239,25 @@ export function LiveRacePage() {
     setActiveLap(null);
   }, []);
 
+  // ── Moving gaps on between updates ──────────────────────────────
+  // "Now" in race seconds: the latest crossing in the data, plus how far the race clock was past
+  // it when the data arrived (at most 30 s), plus the time since. Gaps then move on at each car's
+  // pace until the next update. Held under a caution, red or at the finish (the field bunches in
+  // ways green pace does not predict), and never more than 90 s past the data.
+  const dataAt = useMemo(() => Date.now(), [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tLatest = useMemo(() => (data ? latestCrossing(data) : 0), [data]);
+  const runAtData = useMemo(() => {
+    const run = spanSec(live?.status?.runningRaceTime);
+    return run !== null && clockAt !== null ? run + (dataAt - clockAt) / 1000 : null;
+  }, [dataAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const flagNow = live?.status?.flag ?? null;
+  const holdGaps = !!live?.ended || (!!flagNow && CAUTION_FLAGS.has(flagNow));
+  const raceNow = useCallback(() => {
+    if (holdGaps || !data) return null;
+    const lead = runAtData !== null ? Math.min(30, Math.max(0, runAtData - tLatest)) : 0;
+    return tLatest + lead + Math.min(90, (Date.now() - dataAt) / 1000);
+  }, [holdGaps, data, runAtData, tLatest, dataAt]);
+
   const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, raceKey: slug });
 
   if (!slug) return <Navigate to="/live" replace />;
@@ -278,6 +298,7 @@ export function LiveRacePage() {
   return (
     // No RaceMetaContext: the race-card share image describes a finished result.
     <LiveRaceContext.Provider value={!live?.ended}>
+    <LiveClockContext.Provider value={raceNow}>
       <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
         {/* One line: series, race, event, then the live status (wraps on a phone). */}
         <section
@@ -314,7 +335,7 @@ export function LiveRacePage() {
           )}
           <RaceClock run={st?.runningRaceTime} ttg={live?.ended ? null : st?.timeToGo} at={clockAt} frozen={!!live?.ended || flag === "Red" || flag === "Checkered"} />
           <span>{st?.carCount ?? Object.keys(data.cars).length} cars</span>
-          <LeaderGapBadge data={data} focusNum={focusNum} flag={flag} />
+          <LeaderGapBadge data={data} focusNum={focusNum} flag={flag} raceNow={raceNow} />
           <span className="flex-1" />
           <span className="text-xs" style={{ color: delayed ? "#fab219" : RT.muted }}>
             {delayed ? "Timing feed delayed · " : ""}
@@ -383,6 +404,7 @@ export function LiveRacePage() {
           </div>
         )}
       </div>
+    </LiveClockContext.Provider>
     </LiveRaceContext.Provider>
   );
 }
