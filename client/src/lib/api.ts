@@ -1,6 +1,8 @@
 import type { ApiError, EventSummary, EventWithRaces, SearchResult, WeekendsResponse } from "@shared/types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+/** The API base, for public requests made without the login (so a CDN can share their answers). */
+export const API_BASE = BASE_URL;
 
 class ApiClient {
   private accessToken: string | null = null;

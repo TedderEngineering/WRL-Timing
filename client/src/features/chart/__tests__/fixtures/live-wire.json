@@ -89,6 +89,24 @@
  "baseAnnotations": {
   "7": {
    "stops": []
+  },
+  "11": {
+   "pits": [
+    {
+     "lap": 1,
+     "pitTiming": {
+      "totalPitLoss": 160.2,
+      "cycleComparison": {
+       "compAvgTotalPitLoss": 157.59,
+       "deltaTotalLoss": -36.24,
+       "note": "a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. "
+      }
+     }
+    }
+   ],
+   "reasons": {
+    "1": "Pit stop"
+   }
   }
  },
  "full": {
@@ -165,6 +183,24 @@
   "annotations": {
    "7": {
     "stops": []
+   },
+   "11": {
+    "pits": [
+     {
+      "lap": 1,
+      "pitTiming": {
+       "totalPitLoss": 160.2,
+       "cycleComparison": {
+        "compAvgTotalPitLoss": 157.59,
+        "deltaTotalLoss": -36.24,
+        "note": "a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. "
+       }
+      }
+     }
+    ],
+    "reasons": {
+     "1": "Pit stop"
+    }
    }
   },
   "total": 3
@@ -241,6 +277,30 @@
      3
     ]
    }
+  },
+  "annPatch": {
+   "11": [
+    [
+     [
+      "pits",
+      0,
+      "pitTiming",
+      "cycleComparison",
+      "compAvgTotalPitLoss"
+     ],
+     161.5
+    ],
+    [
+     [
+      "pits",
+      0,
+      "pitTiming",
+      "cycleComparison",
+      "deltaTotalLoss"
+     ],
+     -40.16
+    ]
+   ]
   },
   "annRemoved": [],
   "total": 5
@@ -335,6 +395,24 @@
    "stops": [
     3
    ]
+  },
+  "11": {
+   "pits": [
+    {
+     "lap": 1,
+     "pitTiming": {
+      "totalPitLoss": 160.2,
+      "cycleComparison": {
+       "compAvgTotalPitLoss": 161.5,
+       "deltaTotalLoss": -40.16,
+       "note": "a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. a long note the patch does not repeat. "
+      }
+     }
+    }
+   ],
+   "reasons": {
+    "1": "Pit stop"
+   }
   }
  }
 }

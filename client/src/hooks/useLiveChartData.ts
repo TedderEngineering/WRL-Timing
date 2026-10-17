@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../lib/api";
+import { api, API_BASE } from "../lib/api";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { applyDelta, applyFull, type WireDelta, type WireFull } from "../features/chart/live-wire";
 
@@ -9,6 +9,27 @@ export const LIVE_POLL_MS = 5_000;
 export const LIVE_POLL_SAVER_MS = 30_000;
 /** A full copy of the chart this often, whatever the deltas say (insurance). */
 export const LIVE_FULL_EVERY_MS = 10 * 60_000;
+/** Further behind than this many versions, a full copy is cheaper than the update files. */
+export const LIVE_MAX_STEPS = 8;
+/** A push stream that says nothing (not even its 15 s ping) for this long is treated as dead. */
+const STREAM_SILENT_MS = 40_000;
+
+/** What the server pushes and the edge caches: the version to be at, and the live status. */
+interface LiveHead {
+  epoch: string;
+  v: number;
+  ageMs: number;
+  live: LiveInfo;
+}
+
+/** A public request without the login, so every phone asks the same question and the CDN can answer. */
+async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "omit" });
+  if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+  // A copy the edge has held adds its Age (seconds) to how old the race clock is.
+  const age = Number(res.headers.get("Age"));
+  return { body: (await res.json()) as T, edgeAgeMs: Number.isFinite(age) && age > 0 ? age * 1000 : 0 };
+}
 
 interface NetworkInformationLike extends EventTarget {
   saveData?: boolean;
@@ -77,6 +98,8 @@ export interface UseLiveChartData {
   isLoading: boolean;
   /** Checking every 30 s because the phone is saving data. */
   saver: boolean;
+  /** Updates arrive by push (not polling). */
+  streaming: boolean;
   refresh: () => void;
 }
 
@@ -96,10 +119,96 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
   const [isLoading, setIsLoading] = useState(true);
   const [saver, setSaver] = useState(() => savingData());
   const inFlight = useRef(false);
-  /** The chart this page holds (version, and the objects deltas apply to). */
-  const held = useRef<{ v: number; data: RaceChartData | null; annotations: AnnotationData | null; fullAt: number }>({ v: 0, data: null, annotations: null, fullAt: 0 });
+  /** The chart this page holds (epoch and version, and the objects deltas apply to). */
+  const held = useRef<{ epoch: string; v: number; data: RaceChartData | null; annotations: AnnotationData | null; fullAt: number }>({
+    epoch: "",
+    v: 0,
+    data: null,
+    annotations: null,
+    fullAt: 0,
+  });
+  /** "edge": head + update files (pushed or polled). "legacy": the per-phone request, if the edge routes are missing. */
+  const mode = useRef<"edge" | "legacy">("edge");
+  const edgeFailures = useRef(0);
+  /** The push stream is up and talking (polling then stops). */
+  const [streaming, setStreaming] = useState(false);
+  const latestHead = useRef<LiveHead | null>(null);
+  /** A head arrived while an update was being fetched. */
+  const pendingHead = useRef(false);
 
-  const load = useCallback(async () => {
+  const show = useCallback((next: { data: RaceChartData; annotations: AnnotationData }, v: number, epoch: string, raceMeta?: LiveRaceMeta) => {
+    held.current = { ...held.current, epoch, v, data: next.data, annotations: next.annotations };
+    setData(next.data);
+    setAnnotations(next.annotations);
+    if (raceMeta) setRace(raceMeta);
+  }, []);
+
+  /** Bring the chart to the head's version: update files when a few behind, a full copy otherwise. */
+  const sync = useCallback(
+    async (head: LiveHead, edgeAgeMs: number) => {
+      if (!slug) return;
+      setCheckedAt(Date.now());
+      setError(null);
+      setClockAt(Date.now() - head.ageMs - edgeAgeMs);
+      setLive(head.live);
+      latestHead.current = head;
+      if (!head.v) {
+        setIsLoading(false); // no lap yet: the page shows "waiting"
+        return;
+      }
+      if (inFlight.current) {
+        pendingHead.current = true; // caught up once the current fetch ends
+        return;
+      }
+      const h = held.current;
+      if (h.epoch === head.epoch && h.v === head.v) return;
+      inFlight.current = true;
+      const base = `/live/${encodeURIComponent(slug)}`;
+      try {
+        const behind = head.v - h.v;
+        const stepsOk = h.epoch === head.epoch && !!h.data && !!h.annotations && behind > 0 && behind <= LIVE_MAX_STEPS && Date.now() - h.fullAt < LIVE_FULL_EVERY_MS;
+        if (stepsOk) {
+          let cur = { data: h.data!, annotations: h.annotations! };
+          let ok = true;
+          for (let v = h.v + 1; v <= head.v && ok; v++) {
+            try {
+              const { body } = await getPublic<WireDelta>(`${base}/d/${head.epoch}/${v}`);
+              const next = applyDelta(cur.data, cur.annotations, body);
+              if (next) cur = next;
+              else ok = false;
+            } catch {
+              ok = false;
+            }
+          }
+          if (ok) {
+            show(cur, head.v, head.epoch);
+            return;
+          }
+        }
+        const { body } = await getPublic<{ race: LiveRaceMeta; full: WireFull }>(`${base}/full/${head.epoch}/${head.v}`);
+        const next = applyFull(body.full);
+        held.current.fullAt = Date.now();
+        show(next, head.v, head.epoch, body.race);
+      } catch (e) {
+        // The version just went (a 4 s old head): the next head brings a newer one.
+        if ((e as { status?: number }).status !== 404) setError(e instanceof Error ? e.message : "Could not reach RaceTrace");
+      } finally {
+        inFlight.current = false;
+        setIsLoading(false);
+        if (pendingHead.current && latestHead.current) {
+          pendingHead.current = false;
+          const latest = latestHead.current;
+          setTimeout(() => void syncRef.current?.(latest, 0), 0);
+        }
+      }
+    },
+    [slug, show]
+  );
+  const syncRef = useRef<typeof sync | null>(null);
+  syncRef.current = sync;
+
+  /** The per-phone request (before the edge routes): used only if the head is missing. */
+  const loadLegacy = useCallback(async () => {
     if (!slug || inFlight.current) return;
     inFlight.current = true;
     let again = false;
@@ -121,24 +230,40 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
         next = applyDelta(h.data, h.annotations, body.delta);
         // A delta that does not fit: ask again for a full copy at once.
         if (!next) {
-          held.current = { v: 0, data: h.data, annotations: h.annotations, fullAt: 0 };
+          held.current = { ...h, v: 0, fullAt: 0 };
           again = true;
         }
       }
-      if (next && typeof body.v === "number") {
-        held.current = { ...held.current, v: body.v, data: next.data, annotations: next.annotations };
-        setData(next.data);
-        setAnnotations(next.annotations);
-        if (body.race) setRace(body.race);
-      }
+      if (next && typeof body.v === "number") show(next, body.v, "", body.race);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach RaceTrace");
     } finally {
       inFlight.current = false;
       setIsLoading(false);
     }
-    if (again) void load();
-  }, [slug]);
+    if (again) void loadLegacy();
+  }, [slug, show]);
+
+  /** One poll: the edge-cached head, or the per-phone request in legacy mode. */
+  const load = useCallback(async () => {
+    if (!slug) return;
+    if (mode.current === "legacy") return loadLegacy();
+    try {
+      const { body, edgeAgeMs } = await getPublic<LiveHead>(`/live/${encodeURIComponent(slug)}/head`);
+      edgeFailures.current = 0;
+      await sync(body, edgeAgeMs);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (status === 404 && !latestHead.current) {
+        // No head route on this server (or no such race): try the per-phone request.
+        mode.current = "legacy";
+        return loadLegacy();
+      }
+      if (++edgeFailures.current >= 3) mode.current = "legacy";
+      setError(e instanceof Error ? e.message : "Could not reach RaceTrace");
+      setIsLoading(false);
+    }
+  }, [slug, sync, loadLegacy]);
 
   // Data saver can change while the page is open.
   useEffect(() => {
@@ -150,7 +275,10 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
   }, []);
 
   useEffect(() => {
-    held.current = { v: 0, data: null, annotations: null, fullAt: 0 };
+    held.current = { epoch: "", v: 0, data: null, annotations: null, fullAt: 0 };
+    mode.current = "edge";
+    edgeFailures.current = 0;
+    latestHead.current = null;
     setData(null);
     setRace(null);
     setLive(null);
@@ -158,7 +286,60 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
     void load();
   }, [load]);
 
+  // Push: the server sends the head whenever the chart or the status changes. If the stream
+  // cannot open, goes quiet or keeps failing, the page polls instead (and retries push later).
   useEffect(() => {
+    if (!slug || typeof EventSource === "undefined") return;
+    let es: EventSource | null = null;
+    let lastMessage = 0;
+    let errors = 0;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let watchdog: ReturnType<typeof setInterval> | null = null;
+    const stop = (retryInMs: number | null) => {
+      es?.close();
+      es = null;
+      setStreaming(false);
+      if (watchdog) clearInterval(watchdog);
+      watchdog = null;
+      if (retryInMs !== null) retry = setTimeout(open, retryInMs);
+    };
+    const open = () => {
+      if (mode.current === "legacy") return;
+      errors = 0;
+      es = new EventSource(`${API_BASE}/live/${encodeURIComponent(slug)}/events`);
+      lastMessage = Date.now();
+      es.addEventListener("head", (ev) => {
+        lastMessage = Date.now();
+        errors = 0;
+        setStreaming(true);
+        try {
+          void sync(JSON.parse((ev as MessageEvent).data) as LiveHead, 0);
+        } catch {
+          // a bad message: the next one, or polling, catches up
+        }
+      });
+      es.addEventListener("ping", () => {
+        lastMessage = Date.now();
+      });
+      es.onerror = () => {
+        setStreaming(false);
+        // The browser reconnects by itself; after a few failures in a row, poll and try again in 5 min.
+        if (++errors >= 3) stop(5 * 60_000);
+      };
+      watchdog = setInterval(() => {
+        if (Date.now() - lastMessage > STREAM_SILENT_MS) stop(60_000);
+      }, 5_000);
+    };
+    open();
+    return () => {
+      if (retry) clearTimeout(retry);
+      stop(null);
+    };
+  }, [slug, sync]);
+
+  // Polling while push is not working (and in legacy mode).
+  useEffect(() => {
+    if (streaming) return;
     const timer = setInterval(() => {
       if (typeof document === "undefined" || document.visibilityState === "visible") void load();
     }, saver ? LIVE_POLL_SAVER_MS : LIVE_POLL_MS);
@@ -170,9 +351,9 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [load, saver]);
+  }, [load, saver, streaming]);
 
-  return { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver, refresh: () => void load() };
+  return { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver: saver && !streaming, streaming, refresh: () => void load() };
 }
 
 export interface LiveSessionListing {

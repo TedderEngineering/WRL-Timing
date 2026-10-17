@@ -82,8 +82,34 @@ export interface WireDelta {
   cars: Record<string, WireCar>;
   removed: string[];
   ann: Record<string, unknown>;
+  /** Changed pit markers as patches ([path, value], or [path] to delete), when smaller than the whole object. */
+  annPatch?: Record<string, AnnPatch[]>;
   annRemoved: string[];
   total: number;
+}
+
+export type AnnPatch = [(string | number)[]] | [(string | number)[], unknown];
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
+
+/**
+ * Leaf-level changes from `a` to `b`. Arrays that change length are replaced whole. A pit
+ * cycle's average moving shifts two numbers on every car in the cycle: this sends those two
+ * numbers, not the car's whole marker set.
+ */
+export function annDiff(a: unknown, b: unknown, path: (string | number)[] = [], out: AnnPatch[] = []): AnnPatch[] {
+  if (Object.is(a, b)) return out;
+  if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) {
+    for (let i = 0; i < a.length; i++) annDiff(a[i], b[i], [...path, i], out);
+    return out;
+  }
+  if (isObj(a) && isObj(b)) {
+    for (const k of Object.keys(a)) if (!(k in b)) out.push([[...path, k]]);
+    for (const k of Object.keys(b)) annDiff(a[k], b[k], [...path, k], out);
+    return out;
+  }
+  if (JSON.stringify(a) !== JSON.stringify(b)) out.push([path, b]);
+  return out;
 }
 
 /** Laps between remembered hashes of a car's laps. */
@@ -181,7 +207,9 @@ export function encodeDelta(
   v: number,
   data: RaceDataJson,
   annotations: Record<string, unknown>,
-  prefixes = lapPrefixes(data)
+  prefixes = lapPrefixes(data),
+  /** The base version's markers, when kept: changed markers then go as patches. */
+  baseAnnotations?: Record<string, unknown>
 ): WireDelta {
   const plan: { num: string; car: Car; from: number; head: boolean }[] = [];
   for (const [num, car] of Object.entries(data.cars)) {
@@ -195,7 +223,20 @@ export function encodeDelta(
   const cars: Record<string, WireCar> = {};
   for (const p of plan) cars[p.num] = { ...(p.head ? { h: headOf(p.car) } : {}), from: p.from, L: encodeRows(p.car.laps.slice(p.from), enc) };
   const ann: Record<string, unknown> = {};
-  for (const [k, a] of Object.entries(annotations)) if (baseSummary.anns[k] !== h16(JSON.stringify(a))) ann[k] = a;
+  const annPatch: Record<string, AnnPatch[]> = {};
+  for (const [k, a] of Object.entries(annotations)) {
+    const whole = JSON.stringify(a);
+    if (baseSummary.anns[k] === h16(whole)) continue;
+    const old = baseAnnotations?.[k];
+    if (old !== undefined) {
+      const patch = annDiff(old, a);
+      if (JSON.stringify(patch).length < whole.length * 0.6) {
+        annPatch[k] = patch;
+        continue;
+      }
+    }
+    ann[k] = a;
+  }
   return {
     kind: "delta",
     base,
@@ -205,6 +246,7 @@ export function encodeDelta(
     cars,
     removed: Object.keys(baseSummary.laps).filter((n) => !data.cars[n]),
     ann,
+    ...(Object.keys(annPatch).length ? { annPatch } : {}),
     annRemoved: Object.keys(baseSummary.anns).filter((k) => !(k in annotations)),
     total: totalLaps(data),
   };

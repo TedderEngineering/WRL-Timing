@@ -32,5 +32,16 @@
       "source": "/((?!assets/).*)",
       "destination": "/racetrace.html"
     }
+  ],
+  "headers": [
+    {
+      "source": "/api/live/:path*",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "1"
+        }
+      ]
+    }
   ]
 }
