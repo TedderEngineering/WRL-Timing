@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
 import { ScrollRow } from "../../components/ScrollRow";
@@ -397,9 +397,10 @@ function MiniBody({ race }: { race: LatestRace }) {
 }
 
 /**
- * A weekend: its races as tabs (hover or focus previews one below, a click opens it on
- * Position Trace). "hero" and "compact" are the latest weekends, with the recap; "mini" is
- * the smaller card in the "Earlier races" grid, with the same tabs and links.
+ * A weekend: its races as tabs. A tap or click shows that race's summary below (on a phone
+ * there is no hover, so a tab never leaves the page); the summary's own buttons open the
+ * recap or Position Trace. "hero" and "compact" are the latest weekends, with the recap;
+ * "mini" is the smaller card in the "Earlier races" grid, with the same tabs and links.
  */
 export function RecapCard({
   event,
@@ -414,6 +415,7 @@ export function RecapCard({
     event.races.findIndex((r) => r.recap)
   );
   const [tab, setTab] = useState(firstWithRecap);
+  const uid = useId();
   const race = event.races[tab] ?? event.races[0];
   const status = race.resultsStatus;
   const pad = mini ? "px-4" : "px-5";
@@ -444,31 +446,32 @@ export function RecapCard({
       )}
       {event.races.length > 1 ? (
         <ScrollRow
-          role="navigation"
-          aria-label="Races this weekend: open on Position Trace"
+          role="tablist"
+          aria-label="Races this weekend"
           activeKey={tab}
           className={`${mini ? "mt-1.5" : "mt-2.5"} border-b border-[var(--rt-border)]`}
           innerClassName={`gap-1 ${mini ? "px-2" : "px-5"}`}
           onKeyDown={(e) => {
-            // Arrows move between races (previewing each); Enter opens it.
+            // Arrows move between races, showing each one's summary.
             if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
             e.preventDefault();
             const n = event.races.length;
             const next = (tab + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
             setTab(next);
-            (e.currentTarget.querySelectorAll<HTMLElement>("a")[next])?.focus();
+            (e.currentTarget.querySelectorAll<HTMLElement>("[role=tab]")[next])?.focus();
           }}
         >
           {event.races.map((r, i) => (
-            // One click opens the race on Position Trace; hovering or focusing a race previews it below.
-            <Link
+            <button
               key={r.id}
-              to={chartHref(r.id)}
-              aria-current={i === tab ? "true" : undefined}
+              type="button"
+              role="tab"
+              id={`${uid}-tab-${i}`}
+              aria-selected={i === tab}
+              aria-controls={`${uid}-panel`}
               data-active={i === tab}
               tabIndex={i === tab ? 0 : -1}
-              onMouseEnter={() => setTab(i)}
-              onFocus={() => setTab(i)}
+              onClick={() => setTab(i)}
               draggable={false}
               className={`flex items-center whitespace-nowrap border-b-2 transition-colors ${
                 mini ? "min-h-[34px] px-2 text-xs" : "min-h-[40px] px-3 text-sm"
@@ -479,7 +482,7 @@ export function RecapCard({
               }`}
             >
               {r.session}
-            </Link>
+            </button>
           ))}
         </ScrollRow>
       ) : (
@@ -487,7 +490,12 @@ export function RecapCard({
           {race.session}
         </div>
       )}
-      <div className={mini ? "mt-auto px-4 pb-3 pt-2.5" : "px-5 pb-4 pt-4"}>
+      <div
+        id={`${uid}-panel`}
+        role={event.races.length > 1 ? "tabpanel" : undefined}
+        aria-labelledby={event.races.length > 1 ? `${uid}-tab-${tab}` : undefined}
+        className={mini ? "mt-auto px-4 pb-3 pt-2.5" : "px-5 pb-4 pt-4"}
+      >
         {mini ? <MiniBody race={race} /> : <RaceBody key={race.id} race={race} variant={variant as "hero" | "compact"} />}
       </div>
     </article>

@@ -88,11 +88,13 @@ describe("RecapCard", () => {
     expect(out).toContain("After the race: #77 given a 0:14.018 time penalty, P2 → P7 in Pro-Am");
   });
 
-  it("has one link per race that opens it on Position Trace, and links into the chart pages", () => {
+  it("has one tab per race that shows its summary here (not a link away), and links into the chart pages", () => {
     const h = html(<RecapCard event={EVENT} variant="hero" />);
-    const raceLinks = (h.match(/<a [^>]*>[^<]*<\/a>/g) ?? []).filter((a) => /data-active/.test(a));
-    expect(raceLinks.length).toBe(EVENT.races.length);
-    expect(raceLinks.find((a) => a.includes('aria-current="true"'))).toMatch(/href="\/chart\?race=[^"]+"[^>]*>Race 1</);
+    const tabs = h.match(/<button [^>]*role="tab"[^>]*>[^<]*<\/button>/g) ?? [];
+    expect(tabs.length).toBe(EVENT.races.length);
+    expect(tabs.find((a) => a.includes('aria-selected="true"'))).toMatch(/>Race 1</);
+    expect(tabs.some((a) => a.includes("href"))).toBe(false);
+    expect(h).toContain('role="tabpanel"');
     expect(h).toContain('href="/chart?race=r1&amp;tab=pitanalysis"');
   });
 
@@ -103,8 +105,9 @@ describe("RecapCard", () => {
     expect(t).toContain("Oct 10–11");
     expect(t).toContain("34 cars · 34 laps");
     expect(t).not.toContain("RAFA");
-    const raceLinks = (h.match(/<a [^>]*>[^<]*<\/a>/g) ?? []).filter((a) => /data-active/.test(a));
-    expect(raceLinks.map((a) => a.match(/href="([^"]+)"/)?.[1])).toEqual(["/chart?race=r1", "/chart?race=r2"]);
+    const tabs = h.match(/<button [^>]*role="tab"[^>]*>[^<]*<\/button>/g) ?? [];
+    expect(tabs.map((a) => a.replace(/<[^>]+>/g, ""))).toEqual(["Race 1", "Race 2"]);
+    expect(h).toContain('href="/chart?race=r1"');
     expect(h).toContain(">Position Trace →<");
   });
 
