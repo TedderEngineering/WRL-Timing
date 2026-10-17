@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carFacts, classPitCycles, extractCarStory } from "../my-car.js";
+import { carFacts, classPitCycles, extractCarStory, tookFlag } from "../my-car.js";
 
 // Two GS cars and one TCR car over 6 laps; #7 pits on lap 3 and settles on lap 5.
 const lap = (l: number, p: number, cp: number, ltSec: number, pit = 0, flag = "GF") => ({ l, p, cp, ltSec, pit, flag, lt: "" });
@@ -78,5 +78,18 @@ describe("the car's story from a package", () => {
     expect(s.cars["7"]).toMatchObject({ team: "Blackdog Racing", make: "Ford", drivers: ["A B"] });
     expect(s.classes).toEqual({ GS: "GS" });
     expect(extractCarStory(pkg, "8")).toBeNull();
+  });
+});
+
+describe("tookFlag", () => {
+  const lap = (l: number, t = 100) => ({ l, p: 1, cp: 1, ltSec: t, pit: 0 });
+  const car = (n: number, laps: number, t = 100, status?: string) => ({ num: n, team: "T", cls: "Am", status, finishPos: n, finishPosClass: n, laps: Array.from({ length: laps }, (_, i) => lap(i + 1, t)) });
+  const data = { maxLap: 23, cars: { "1": car(1, 23), "2": car(2, 22, 106), "21": car(21, 16) } } as never;
+  it("is true for the full distance and for a lapped car still running at the flag, false for a car that stopped early", () => {
+    const cars = (data as { cars: Record<string, never> }).cars;
+    expect(tookFlag(data, cars["1"], null)).toBe(true);
+    expect(tookFlag(data, cars["2"], null)).toBe(true);
+    expect(tookFlag(data, cars["21"], "classified")).toBe(false);
+    expect(tookFlag(data, cars["1"], "dnf")).toBe(false);
   });
 });

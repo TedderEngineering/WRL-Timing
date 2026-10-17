@@ -71,3 +71,8 @@ export function driveTimeText(s: number): string {
   }
   return `${Math.max(1, Math.round(s / 60))} min`;
 }
+
+/** Every stint is the driver's own (or unnamed): a single-driver car, as in a sprint series. */
+export function isSoloDrive(drive: { stints: { mine: boolean; driver: string | null }[] }): boolean {
+  return drive.stints.every((s) => s.mine || !s.driver);
+}

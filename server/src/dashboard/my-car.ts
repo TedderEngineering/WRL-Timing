@@ -73,6 +73,11 @@ export interface CarFacts {
   finishOverall: number | null;
   classSize: number | null;
   status: string | null;
+  /**
+   * The car took the chequered flag. False for a car that stopped before the end, even when the
+   * results still classify it (SRO and IMSA classify cars that retired late).
+   */
+  finished: boolean;
   laps: number;
   raceLaps: number;
   bestLap: { sec: number; lap: number } | null;
@@ -181,6 +186,22 @@ export function classBenchmarks(data: ChartData, ann: Annotations | null, key: s
   return out;
 }
 
+/**
+ * Whether a car took the chequered flag: it ran the full distance, or its last crossing came after
+ * the winner's finish (a lapped car still running). A car that stopped earlier did not, whatever
+ * the results call it. Lap times add up to each car's race time (the grid offset is a few seconds,
+ * hence the margin).
+ */
+export function tookFlag(data: ChartData, car: ChartCar, status: string | null): boolean {
+  if (status && /^(dns|dsq|dnf|ret|retired|not running|nc)\b/.test(status)) return false;
+  if (car.laps.length >= data.maxLap) return true;
+  const total = (c: ChartCar) => c.laps.reduce((a, l) => a + (l.ltSec > 0 ? l.ltSec : 0), 0);
+  const full = Object.values(data.cars).filter((c) => c.laps.length >= data.maxLap);
+  if (!full.length) return true;
+  const winnerEnd = Math.min(...full.map(total));
+  return total(car) >= winnerEnd - 30;
+}
+
 export function carFacts(data: ChartData, ann: Annotations | null, carNumber: string): CarFacts | null {
   const key = chartKeyFor(data, carNumber);
   if (!key) return null;
@@ -202,6 +223,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
   }
 
   const pitCycles = classPitCycles(car.laps, ann?.[key]?.settles ?? []);
+  const finished = tookFlag(data, car, status);
   return {
     carKey: key,
     number: car.label ?? String(car.num ?? key),
@@ -212,6 +234,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     finishOverall: classified ? car.finishPos : null,
     classSize: data.classCarCounts?.[car.cls] ?? Object.values(data.cars).filter((c) => c.cls === car.cls).length,
     status,
+    finished,
     laps: car.laps.length,
     raceLaps: data.maxLap,
     bestLap: best,
