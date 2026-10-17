@@ -6,7 +6,7 @@ import { carKey } from "./car-number";
 
 // ─── API response types ─────────────────────────────────────────────────────
 
-interface PitStop {
+export interface PitStop {
   stopNumber: number;
   pitLap: number;
   condition: string;
@@ -26,7 +26,7 @@ interface PitStop {
   cycle?: number | null;
 }
 
-interface CarAnalysis {
+export interface CarAnalysis {
   carNumber: string;
   teamName: string;
   carClass: string;
@@ -35,7 +35,7 @@ interface CarAnalysis {
   stops: PitStop[];
 }
 
-interface PitAnalysisResponse {
+export interface PitAnalysisResponse {
   /** "facts": the race's analysis package, the same stops as the Position Trace. */
   source?: "facts";
   raceId: string;
@@ -68,6 +68,15 @@ const S = {
   red: "#ef4444",
   pit: "#ff6b9d",
 } as const;
+
+/** What the car did in the pit lane, when it was not an ordinary stop (left out of the averages). */
+const KIND_LABEL: Record<string, string> = {
+  garage: "Garage / long stop",
+  drive_through: "Drive-through",
+  stop_and_go: "Stop and go",
+  penalty_served: "Penalty",
+  retirement: "Retired",
+};
 
 // ─── Format helpers ─────────────────────────────────────────────────────────
 
@@ -110,7 +119,10 @@ type SortKey = "finishPos" | "carNumber" | "teamName" | "stopCount" | "avgServic
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 interface PitAnalysisTabProps {
-  raceId: string;
+  /** The saved race to load the analysis for (not needed with `analysis`). */
+  raceId?: string;
+  /** RaceTrace Live: the analysis built from the live chart (live-pit-analysis.ts), kept current. */
+  analysis?: PitAnalysisResponse | null;
   /** The race's chart data, to turn a published car number ("007") into its chart car. */
   chart?: RaceChartData | null;
   focusNum: number;
@@ -120,9 +132,10 @@ interface PitAnalysisTabProps {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function PitAnalysisTab({ raceId, chart, focusNum, setFocusNum, onSwitchToTrace }: PitAnalysisTabProps) {
-  const [data, setData] = useState<PitAnalysisResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum, onSwitchToTrace }: PitAnalysisTabProps) {
+  const [loaded, setData] = useState<PitAnalysisResponse | null>(null);
+  const data = analysis !== undefined ? analysis : loaded;
+  const [loading, setLoading] = useState(analysis === undefined);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("finishPos");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -130,6 +143,7 @@ export function PitAnalysisTab({ raceId, chart, focusNum, setFocusNum, onSwitchT
 
   // Fetch pit analysis data
   useEffect(() => {
+    if (analysis !== undefined || !raceId) return; // RaceTrace Live: given, not loaded
     setLoading(true);
     setError(null);
     setData(null);
@@ -144,6 +158,8 @@ export function PitAnalysisTab({ raceId, chart, focusNum, setFocusNum, onSwitchT
         }
       })
       .finally(() => setLoading(false));
+    // `analysis` only says whether to load; its updates (each live update) need no reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raceId]);
 
   // Build rows
@@ -250,7 +266,7 @@ export function PitAnalysisTab({ raceId, chart, focusNum, setFocusNum, onSwitchT
     return (
       <div style={{ color: S.txt, padding: 40, textAlign: "center" }}>
         <div style={{ fontSize: "0.9rem", color: S.dim }}>
-          No pit stop analysis available for this race. Analysis may not have been run yet.
+          {analysis !== undefined ? "No pit stops yet." : "No pit stop analysis available for this race. Analysis may not have been run yet."}
         </div>
       </div>
     );
@@ -607,6 +623,11 @@ function DetailPanel({ row, trackConfig, facts, onClose, onGoToTrace }: {
                     }}>
                       {stop.condition}
                     </span>
+                    {stop.kind && stop.kind !== "stop" && (
+                      <span style={{ marginLeft: 6, fontSize: "0.65rem", color: S.txt2 }} title="Not counted in the green-stop averages">
+                        {KIND_LABEL[stop.kind] ?? stop.kind}
+                      </span>
+                    )}
                   </td>
                   {!facts && (
                     <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>

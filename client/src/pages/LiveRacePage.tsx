@@ -8,6 +8,8 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
+import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+import { pitAnalysisFromChart } from "../features/chart/live-pit-analysis";
 import { useTraceView } from "../features/chart/trace-view";
 import { useChartDefaults } from "../features/chart/chart-defaults";
 import { carKey, carNo } from "../features/chart/car-number";
@@ -194,7 +196,7 @@ export function LiveRacePage() {
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
   const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
   const now = useNow();
-  const [tab, setTab] = useState<"position" | "laptimes">("position");
+  const [tab, setTab] = useState<"position" | "pitanalysis" | "laptimes">("position");
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
@@ -242,6 +244,11 @@ export function LiveRacePage() {
   // their last crossings (live-gaps.ts). Held under a caution, red or at the finish (the field
   // bunches in ways green pace does not predict), and never more than 90 s past the data.
   const dataAt = useMemo(() => Date.now(), [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Pit Stops: the live chart's own stops, rebuilt on each update while the tab is open.
+  const pitAnalysis = useMemo(
+    () => (tab === "pitanalysis" && data ? pitAnalysisFromChart(data, annotations, race?.track ?? "") : null),
+    [tab, data, annotations, race?.track]
+  );
   const flagNow = live?.status?.flag ?? null;
   const holdGaps = !!live?.ended || (!!flagNow && CAUTION_FLAGS.has(flagNow));
   const drift = useCallback(() => (holdGaps || !data ? null : Math.min(90, (Date.now() - dataAt) / 1000)), [holdGaps, data, dataAt]);
@@ -280,6 +287,7 @@ export function LiveRacePage() {
   const isTeam = hasTeamAccess(user);
   const tabs = [
     { id: "position" as const, label: "Position Trace", locked: false },
+    { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
   ];
 
@@ -381,6 +389,11 @@ export function LiveRacePage() {
             headSlot={tab === "position" ? headSlot : null}
           />
         </div>
+        {tab === "pitanalysis" && (
+          <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+            <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} />
+          </div>
+        )}
         {tab === "laptimes" && (
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <LapTimeChart
