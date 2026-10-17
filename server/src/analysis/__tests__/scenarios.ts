@@ -158,6 +158,7 @@ export function noCardPenaltyRace(): SynthRace {
       "Car #71 - 10 second time penalty for False Start",
       "Car #72 - Moved to the back of the field as per Penalty #TP 26-18, as posted on the notice board",
       "Car #73 - 5 second post race time penalty for incident responsibility",
+      "Car #72 - 28 second post race drive-through penalty for incident responsibility",
     ],
   };
 }

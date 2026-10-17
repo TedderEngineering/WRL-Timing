@@ -440,6 +440,24 @@ describe("penalties without pit-lane times, and a post-race penalty printed twic
     expect(back.reason).toMatch(/^Moved to the back of the field/);
     expect(f.events.penalties.find((x) => x.car === "73")).toMatchObject({ penaltyType: "post_race_time", amountS: 5, status: "applied_post_race" });
   });
+
+  it("reads 'N second post race drive-through penalty' and 'moved to the back of its class'", () => {
+    expect(f.events.penalties.filter((x) => x.car === "72").map((x) => x.penaltyType).sort()).toEqual(["position", "post_race_time"]);
+    const g = noCardPenaltyRace();
+    g.postRace = ["Car #72 - Moved to the back of its class as per Penalty #MX5 TP 26 - 13, as posted on the notice board"];
+    const h = buildFacts({ format: "alkamel-imsa", files: synthImsa(g), options: OPTS });
+    expect(h.events.penalties.find((x) => x.car === "72")).toMatchObject({ penaltyType: "position" });
+  });
+
+  it("a car with no laps that race control named during the race started (not 'did not start')", () => {
+    const g = noCardPenaltyRace();
+    g.cars.push({ ...g.cars[2], car: "74", laps: 0, stops: [] });
+    g.rc = [...(g.rc ?? []), [200, "Car 74: Penalty - Incident Responsibility - Drive Through"]];
+    const h = buildFacts({ format: "alkamel-imsa", files: synthImsa(g), options: OPTS });
+    const r = h.events.retirements.find((x) => x.car === "74")!;
+    expect(r.where).toBe("unknown");
+    expect(r.confidenceNotes).toContain("no_laps_named_by_race_control");
+  });
 });
 
 describe("serve windows: garage time and stop penalties announced after the car came in", () => {
