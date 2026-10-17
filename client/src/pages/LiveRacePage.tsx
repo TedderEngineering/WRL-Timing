@@ -195,6 +195,8 @@ export function LiveRacePage() {
   const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
   const now = useNow();
   const [tab, setTab] = useState<"position" | "laptimes">("position");
+  /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
+  const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
   const [focusNum, setFocusNum] = useState(0);
   const [compSet, setCompSet] = useState<Set<number>>(new Set());
@@ -330,7 +332,9 @@ export function LiveRacePage() {
           </span>
         </section>
 
-        <nav aria-label="Race views" className="no-scrollbar mt-0.5 flex shrink-0 gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+        {/* The tabs, and (wider than a phone) the focus car and class picker on the same row. */}
+        <div className="mt-0.5 flex shrink-0 flex-wrap items-stretch gap-x-4 border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+        <nav aria-label="Race views" className="no-scrollbar flex min-w-0 items-end gap-1 overflow-x-auto">
           {tabs.map((t) => {
             const active = tab === t.id;
             return (
@@ -353,6 +357,8 @@ export function LiveRacePage() {
             );
           })}
         </nav>
+        <div ref={setHeadSlot} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1.5 empty:hidden" />
+        </div>
 
         <div className={tab !== "position" ? "hidden" : "flex flex-col md:min-h-0 md:flex-1"}>
           <LapChart
@@ -372,6 +378,7 @@ export function LiveRacePage() {
             // and each car's stops at its own lap count.
             defaultAxis="hours"
             live
+            headSlot={tab === "position" ? headSlot : null}
           />
         </div>
         {tab === "laptimes" && (
@@ -388,6 +395,7 @@ export function LiveRacePage() {
               setActiveLap={setActiveLap}
               view={traceView}
               live
+              headSlot={headSlot}
             />
           </div>
         )}

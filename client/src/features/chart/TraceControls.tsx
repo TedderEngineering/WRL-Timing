@@ -2,6 +2,7 @@
  * Control bar of the race charts (Position Trace and Lap Times; mockups F1 / F6): focus car,
  * class, make and the compare cars, the same on both tabs.
  */
+import { createPortal } from "react-dom";
 import { finishInfo } from "./finish";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
@@ -34,6 +35,11 @@ export interface TraceControlsProps {
   /** Position Trace only: the x axis (shown in the phone Filters panel). */
   xAxisMode?: "laps" | "hours" | "both";
   setXAxisMode?: (m: "laps" | "hours" | "both") => void;
+  /**
+   * RaceTrace Live: where the focus car and class picker go instead of their own row (the page's
+   * tab row). Wider than a phone only; a phone keeps them here.
+   */
+  headSlot?: HTMLElement | null;
 }
 
 /** The small pills and car chips of the compare row (the Lap Times look, used on both tabs). */
@@ -235,11 +241,9 @@ export function TraceControls(p: TraceControlsProps) {
     fontWeight: on ? 600 : 400,
   });
 
-  return (
-    <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-6"
-      style={{ borderColor: T.line }}
-    >
+  const head = !compact && p.headSlot ? p.headSlot : null;
+  const focusAndClass = (
+    <>
       {/* Focus */}
       <div className={`relative flex items-center gap-2 ${compact ? "w-full" : ""}`}>
         {!compact && (
@@ -326,6 +330,15 @@ export function TraceControls(p: TraceControlsProps) {
           ))}
         </div>
       )}
+    </>
+  );
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 sm:px-6"
+      style={{ borderColor: T.line }}
+    >
+      {head ? createPortal(focusAndClass, head) : focusAndClass}
 
       {/* Make */}
       {showFilters && makes.length >= 2 && (
