@@ -170,3 +170,57 @@ export function gapRows(data: RaceChartData, focusNum: number, nums: number[]): 
   });
   return rows.sort((a, b) => (a.pos ?? 9999) - (b.pos ?? 9999) || a.num - b.num);
 }
+
+export interface LeaderGap {
+  /** The car ahead (overall or class leader). */
+  leader: number;
+  /** Laps the focus car is behind it (fractional: 1.5 = a lap and a half). */
+  laps: number;
+  /** Those laps at the focus car's recent green pace, in seconds (null without a pace yet). */
+  sec: number | null;
+}
+
+/**
+ * How far the focus car is behind a car ahead, in laps and in seconds of its own recent green
+ * pace (median of its last PACE_LAPS green laps). Under a caution this is the time to make up
+ * once racing resumes. Null when the focus car is that car, or either has no laps.
+ */
+export function gapBehind(data: RaceChartData, focusNum: number, leaderNum: number): LeaderGap | null {
+  if (focusNum === leaderNum) return null;
+  const f = data.cars[String(focusNum)];
+  const l = data.cars[String(leaderNum)];
+  if (!f?.laps.length || !l?.laps.length) return null;
+  const fcy = fcyLapSet(data);
+  const fc: CarClock = { laps: f.laps.length, cum: cumulative(f.laps), pace: paceOf(f.laps, data, fcy) };
+  const lc: CarClock = { laps: l.laps.length, cum: cumulative(l.laps), pace: paceOf(l.laps, data, fcy) };
+  const at = Math.max(fc.cum[fc.laps], lc.cum[lc.laps]);
+  // A car with no pace yet (or stopped) is counted at its last crossing.
+  const df = distance(fc, at) ?? fc.laps;
+  const dl = distance(lc, at) ?? lc.laps;
+  const laps = Math.max(0, dl - df);
+  const pace = fc.pace ?? lc.pace;
+  return { leader: leaderNum, laps, sec: pace !== null ? laps * pace : null };
+}
+
+/** The focus car's gap to the overall leader and to its class leader (null when it leads). */
+export function leaderGaps(data: RaceChartData, focusNum: number): { overall: LeaderGap | null; cls: LeaderGap | null; clsName: string } {
+  const me = data.cars[String(focusNum)];
+  const entries = Object.entries(data.cars);
+  const overall = entries.find(([, c]) => c.finishPos === 1)?.[0];
+  const clsLead = me ? entries.find(([, c]) => c.cls === me.cls && c.finishPosClass === 1)?.[0] : undefined;
+  return {
+    overall: overall !== undefined ? gapBehind(data, focusNum, Number(overall)) : null,
+    cls: clsLead !== undefined && clsLead !== overall ? gapBehind(data, focusNum, Number(clsLead)) : null,
+    clsName: me?.cls ?? "",
+  };
+}
+
+/** Seconds → "56.2 s" under a minute, else "3:31". */
+export function gapClock(sec: number): string {
+  if (sec < 60) return `${sec.toFixed(1)} s`;
+  const t = Math.round(sec);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}

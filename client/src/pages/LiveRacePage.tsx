@@ -10,7 +10,8 @@ import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { useTraceView } from "../features/chart/trace-view";
 import { useChartDefaults } from "../features/chart/chart-defaults";
-import { carKey } from "../features/chart/car-number";
+import { carKey, carNo } from "../features/chart/car-number";
+import { gapClock, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
 import { fetchLiveSessions, useLiveChartData, type LiveSessionListing } from "../hooks/useLiveChartData";
@@ -77,6 +78,47 @@ function Centered({ children }: { children: React.ReactNode }) {
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-24 text-center" style={{ background: "#0b0b18", color: RT.text }}>
       {children}
     </div>
+  );
+}
+
+/** Flags under which the gap to the leader matters most (the field bunches; the gap is time to make up at the restart). */
+const CAUTION_FLAGS = new Set(["Yellow", "Code 35", "Code 60", "Red"]);
+
+function gapPart(g: LeaderGap, label: string) {
+  // Under a twentieth of a lap, the seconds say it better than "0.0 laps".
+  if (g.laps < 0.05) {
+    return <span className="whitespace-nowrap">{g.sec !== null ? <b>{gapClock(g.sec)}</b> : <b>just</b>} behind {label}</span>;
+  }
+  const laps = `${g.laps.toFixed(1)} lap${g.laps >= 0.95 && g.laps < 1.05 ? "" : "s"}`;
+  return (
+    <span className="whitespace-nowrap">
+      <b>{laps}</b>
+      {g.sec !== null ? <> · {gapClock(g.sec)}</> : null} behind {label}
+    </span>
+  );
+}
+
+/**
+ * The focus car's gap to the overall and class leaders, in laps and seconds of its recent green
+ * pace. Under a caution it stands out: the gap is what the car has to make up at the restart.
+ */
+function LeaderGapBadge({ data, focusNum, flag }: { data: Parameters<typeof leaderGaps>[0]; focusNum: number; flag: string | null }) {
+  if (!focusNum || !data.cars[String(focusNum)]) return null;
+  const g = leaderGaps(data, focusNum);
+  const caution = !!flag && CAUTION_FLAGS.has(flag);
+  const num = carNo(data, focusNum);
+  const parts = [g.overall && gapPart(g.overall, "the leader"), g.cls && gapPart(g.cls, `the ${g.clsName} leader`)].filter(Boolean);
+  return (
+    <span
+      className={caution ? "flex flex-wrap items-center gap-x-2 rounded-md border px-2 py-0.5 text-[15px] font-medium" : "flex flex-wrap items-center gap-x-2"}
+      style={caution ? { borderColor: "#facc15", background: "rgba(250,204,21,0.12)", color: "#fde68a" } : { color: RT.soft }}
+      title="Laps behind, and those laps at the car's recent green-flag pace (median of its last 5 green laps): the time to make up once racing resumes."
+    >
+      <span className="font-mono font-semibold" style={{ color: caution ? "#fde68a" : RT.accent }}>
+        #{num}
+      </span>
+      {parts.length ? parts.map((x, i) => <span key={i}>{i > 0 ? "· " : ""}{x}</span>) : <span>leads the race</span>}
+    </span>
   );
 }
 
@@ -153,7 +195,7 @@ export function LiveRacePage() {
   const { slug } = useParams<{ slug: string }>();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
-  const { data, annotations, race, live, checkedAt, clockAt, error, isLoading } = useLiveChartData(slug);
+  const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
   const now = useNow();
   const [tab, setTab] = useState<"position" | "laptimes">("position");
 
@@ -217,7 +259,7 @@ export function LiveRacePage() {
         </h1>
         {live?.eventName && <p style={{ color: RT.soft }}>{[live.eventName, live.track].filter(Boolean).join(" · ")}</p>}
         <p className="max-w-md" style={{ color: RT.muted }}>
-          {error ?? live?.waiting ?? "Waiting for the timing."} This page checks again every 30 seconds.
+          {error ?? live?.waiting ?? "Waiting for the timing."} This page checks again every few seconds.
         </p>
       </Centered>
     );
@@ -272,9 +314,12 @@ export function LiveRacePage() {
           )}
           <RaceClock run={st?.runningRaceTime} ttg={live?.ended ? null : st?.timeToGo} at={clockAt} frozen={!!live?.ended || flag === "Red" || flag === "Checkered"} />
           <span>{st?.carCount ?? Object.keys(data.cars).length} cars</span>
+          <LeaderGapBadge data={data} focusNum={focusNum} flag={flag} />
           <span className="flex-1" />
           <span className="text-xs" style={{ color: delayed ? "#fab219" : RT.muted }}>
-            {delayed ? "Timing feed delayed · " : ""}checked {ago(checkedAt, now)}
+            {delayed ? "Timing feed delayed · " : ""}
+            {saver ? <span title="Your phone is saving data, so this page checks every 30 seconds instead of every 5.">Data saver · </span> : null}
+            checked {ago(checkedAt, now)}
           </span>
         </section>
 

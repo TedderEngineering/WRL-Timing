@@ -167,9 +167,41 @@ export async function buildLiveChart(inp: LiveInputs): Promise<LiveChart> {
 const SS = { sessionId: 2, localTimeOfDay: 6, runningRaceTime: 7, timeToGo: 5, eventEntries: 13, carPositions: 14, currentFlag: 15 } as const;
 const CP = { number: 2, class: 4, lastLapCompleted: 15, overallPosition: 20, classPosition: 21 } as const;
 
+/**
+ * A car's state as a lap row (the shape of the feed's lap list, short keys),
+ * so a crossing can be added between full lap reloads. Positions are the
+ * state's at the time it was read, a few seconds after the crossing at most;
+ * the next full reload replaces the row with the logged one.
+ */
+const LAP_FIELDS: [keyof FeedLap & string, number][] = [
+  ["n", 2],
+  ["class", 4],
+  ["og", 11],
+  ["od", 12],
+  ["ttm", 13],
+  ["ltm", 14],
+  ["llp", 15],
+  ["ovp", 20],
+  ["clp", 21],
+  ["ip", 34],
+  ["lip", 35],
+  ["flg", 38],
+  ["dn", 44],
+  ["pet", 55],
+  ["pdm", 56],
+];
+
+export function lapRowFromState(x: unknown[]): FeedLap | null {
+  const row: Record<string, unknown> = {};
+  for (const [k, i] of LAP_FIELDS) if (x[i] !== undefined && x[i] !== null) row[k] = x[i];
+  return typeof row.n === "string" && typeof row.llp === "number" && row.llp >= 1 ? (row as FeedLap) : null;
+}
+
 export interface LiveState {
   sessionId: number | null;
   results: FeedResults;
+  /** Each car's latest completed lap, as a lap row. */
+  laps: FeedLap[];
   currentFlag: number | null;
   timeToGo: string | null;
 }
@@ -205,5 +237,6 @@ export function resultsFromState(a: unknown): LiveState | null {
       // A car with no position yet (the feed sends -999) keeps the order from its laps.
       .filter((p) => p.n && (p.ovp ?? 0) > 0),
   };
-  return { sessionId: num(a[SS.sessionId]) ?? null, results, currentFlag: num(a[SS.currentFlag]) ?? null, timeToGo: str(a[SS.timeToGo]) ?? null };
+  const laps = positions.filter(Array.isArray).map((p) => lapRowFromState(p as unknown[])).filter((l): l is FeedLap => l !== null);
+  return { sessionId: num(a[SS.sessionId]) ?? null, results, laps, currentFlag: num(a[SS.currentFlag]) ?? null, timeToGo: str(a[SS.timeToGo]) ?? null };
 }

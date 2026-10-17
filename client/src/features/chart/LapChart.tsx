@@ -50,6 +50,9 @@ interface LapChartProps {
   live?: boolean;
 }
 
+/** RaceTrace Live: a lap the viewer picked stays selected this long, then the latest lap returns. */
+export const FOLLOW_AFTER_MS = 60_000;
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function LapChart({
@@ -166,11 +169,14 @@ export function LapChart({
   );
 
   // ── Interaction: show info for a lap ────────────────────────────
+  /** RaceTrace Live: when the viewer last picked a lap (null = following the latest lap). */
+  const pickedAt = useRef<number | null>(null);
   const showLapInfo = useCallback(
-    (lapNum: number) => {
+    (lapNum: number, auto = false) => {
       const laps = data.cars[String(focusNum)]?.laps || [];
       const valid = laps.map((l) => l.l);
       if (!valid.length) return;
+      if (!auto) pickedAt.current = Date.now();
       lapNum = Math.max(valid[0], Math.min(valid[valid.length - 1], lapNum));
       setActiveLap(lapNum);
 
@@ -469,6 +475,40 @@ export function LapChart({
   // Clear info panel when focus car or class filter changes externally
   useEffect(() => { setInfo(null); }, [focusNum, classView]);
 
+  // ── RaceTrace Live: follow the latest lap ──────────────────────
+  // The focus car's latest lap is selected as laps arrive, unless the viewer picked a lap less
+  // than FOLLOW_AFTER_MS ago or has a detail panel open; then it returns to the latest lap.
+  const focusLaps = data.cars[String(focusNum)]?.laps;
+  const latestLap = focusLaps && focusLaps.length ? focusLaps[focusLaps.length - 1].l : null;
+  /** What the follow last selected (so a once-a-second check does nothing when nothing changed). */
+  const followed = useRef<{ data: unknown; focusNum: number; lap: number } | null>(null);
+  const [followTick, setFollowTick] = useState(0);
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setFollowTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  const pickedLap = live && pickedAt.current !== null && latestLap !== null && activeLap !== null && activeLap !== latestLap;
+  const followIn = pickedLap ? Math.max(0, Math.ceil((pickedAt.current! + FOLLOW_AFTER_MS - Date.now()) / 1000)) : 0;
+  useEffect(() => {
+    if (!live || latestLap === null || sidePanel) return;
+    if (pickedAt.current !== null) {
+      if (Date.now() - pickedAt.current < FOLLOW_AFTER_MS) return;
+      pickedAt.current = null;
+      followed.current = null;
+    }
+    const f = followed.current;
+    if (f && f.data === data && f.focusNum === focusNum && f.lap === latestLap) return;
+    followed.current = { data, focusNum, lap: latestLap };
+    showLapInfo(latestLap, true);
+    // followTick re-checks each second, so a picked lap times out without waiting for a new lap.
+  }, [live, latestLap, data, focusNum, sidePanel, followTick, showLapInfo]);
+  const backToLatest = () => {
+    pickedAt.current = null;
+    followed.current = null;
+    if (latestLap !== null) showLapInfo(latestLap, true);
+  };
+
   // Close side panel when active lap changes — gap and h2h persist
   useEffect(() => {
     setSidePanel((prev) => {
@@ -643,6 +683,16 @@ export function LapChart({
                     {t === "details" ? "Lap details" : "Gaps"}
                   </button>
                 ))}
+              </div>
+            )}
+            {pickedLap && (
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-1.5 text-[12px]" style={{ borderColor: CHART_STYLE.border, color: TRACE.axis }}>
+                <span>
+                  Lap {activeLap} · back to the latest lap in {followIn} s
+                </span>
+                <button type="button" onClick={backToLatest} className="min-h-[28px] rounded border px-2" style={{ borderColor: CHART_STYLE.border, color: TRACE.focus }}>
+                  Latest lap ›
+                </button>
               </div>
             )}
             {live && liveTab === "gaps" ? (
