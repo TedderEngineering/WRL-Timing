@@ -682,6 +682,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
 /* ------------------------------------------------------------------ M7 penalties */
 
 const PEN_RE = /^Car\s+#?(\w+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
+const MULTI_PEN_RE = /^Cars\s+(#?\w+(?:\s*(?:,|&|and)\s*#?\w+)+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
 const SERVED_RE = /^Car\s+#?(\w+):\s*Penalty(\s*#\d+)?\s+Served$/i;
 const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?(?:time|drive[- ]through)\s+penalty\s+for\s+(.+)$/i;
 /** "Car #45 - Moved to the back of the field as per Penalty …": a post-race position penalty. */
@@ -727,7 +728,15 @@ export function parsePenalties(ctx: Ctx): { penalties: PenaltyDraft[]; served: S
   const penalties: PenaltyDraft[] = [];
   const served: ServedMsg[] = [];
   const count = new Map<string, number>();
-  const msgs = [...ctx.race.raceControl].sort((a, b) => (a.tS ?? 0) - (b.tS ?? 0) || a.row - b.row);
+  // "Cars 1, 40 & 41: Penalty - … - …" is one penalty per car.
+  const msgs = [...ctx.race.raceControl]
+    .sort((a, b) => (a.tS ?? 0) - (b.tS ?? 0) || a.row - b.row)
+    .flatMap((m) => {
+      const mm = m.text.trim().match(MULTI_PEN_RE);
+      if (!mm) return [m];
+      const cars = mm[1].split(/\s*(?:,|&|\band\b)\s*/i).map((x) => x.replace(/^#/, "").trim()).filter(Boolean);
+      return cars.map((c) => ({ ...m, text: `Car ${c}: Penalty - ${mm[2]} - ${mm[3]}` }));
+    });
   const nextId = (car: string) => {
     const n = (count.get(car) ?? 0) + 1;
     count.set(car, n);

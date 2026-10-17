@@ -449,6 +449,10 @@ describe("penalties without pit-lane times, and a post-race penalty printed twic
     expect(h.events.penalties.find((x) => x.car === "72")).toMatchObject({ penaltyType: "position" });
   });
 
+  it("a race-control penalty naming several cars is one penalty per car", () => {
+    for (const c of ["76", "77", "78"]) expect(f.events.penalties.some((x) => x.car === c && x.reason === "Unserved Mandatory Pit Stop" && x.amountS === 95)).toBe(true);
+  });
+
   it("a car with no laps that race control named during the race started (not 'did not start')", () => {
     const g = noCardPenaltyRace();
     g.cars.push({ ...g.cars[2], car: "74", laps: 0, stops: [] });

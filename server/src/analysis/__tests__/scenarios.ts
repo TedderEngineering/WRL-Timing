@@ -149,10 +149,14 @@ export function noCardPenaltyRace(): SynthRace {
       car("71", "GS", 1, { resultsPenalty: 10 }),
       car("72", "GS", 2),
       car("73", "GS", 3, { stops: [{ lap: 10, pitLane: 65 }], resultsPenalty: 5 }),
+      car("76", "GS", 4),
+      car("77", "GS", 5),
+      car("78", "GS", 6),
     ],
     rc: [
       [520, "Car 70: Penalty - Incident Responsibility - Drive Through"],
       [300, "Car 71: Penalty - False Start - +10 Seconds Post-Race"],
+      [400, "Cars 76, 77 & 78: Penalty - Unserved Mandatory Pit Stop - +95 seconds Post-Race"],
     ],
     postRace: [
       "Car #71 - 10 second time penalty for False Start",
