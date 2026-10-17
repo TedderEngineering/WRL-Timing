@@ -416,6 +416,29 @@ describe("publish, supersede, rollback, reject", () => {
 
 // ─── Read ────────────────────────────────────────────────────────────────────
 
+describe("GET /api/admin/races/:id/packages/:version", () => {
+  const get = (version: string, auth: string) =>
+    request(app).get(`/api/admin/races/${RACE}/packages/${version}`).set("Authorization", auth);
+
+  it("returns a stored draft in full to an admin, not cached", async () => {
+    await upload(JSON.stringify(draftPackage()));
+    const res = await get("1", bearer(users.admin));
+    expect(res.status).toBe(200);
+    expect(res.headers["x-racetrace-package-status"]).toBe("draft");
+    expect(res.headers["x-racetrace-package-version"]).toBe("1");
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body.packageId).toBe("test-minimal-r1");
+  });
+
+  it("answers 404 for a version that does not exist and 403 for a user", async () => {
+    await upload(JSON.stringify(draftPackage()));
+    const missing = await get("7", bearer(users.admin));
+    expect(missing.status).toBe(404);
+    expect(missing.body.code).toBe("PACKAGE_NOT_FOUND");
+    expect((await get("1", bearer(users.pro))).status).toBe(403);
+  });
+});
+
 describe("GET /api/races/:id/package", () => {
   const get = (query = "", auth?: string) => {
     const r = request(app).get(`/api/races/${RACE}/package${query}`);
