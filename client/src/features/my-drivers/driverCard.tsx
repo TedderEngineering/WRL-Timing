@@ -23,7 +23,7 @@ import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { finishLine, type MyCarResponse } from "../dashboard/MyCarCard";
 import type { MyDriverResponse } from "../dashboard/MyDriverCard";
 import { displayName } from "./api";
-import { driveTimeText } from "./stints";
+import { driveTimeText, isSoloDrive } from "./stints";
 
 type Race = NonNullable<MyCarResponse["race"]>;
 type Car = NonNullable<MyDriverResponse["car"]>;
@@ -106,12 +106,12 @@ function drawOverallTrace(ctx: CanvasRenderingContext2D, box: Box, style: SiteSt
   // Legend: the driver, and the co-drivers when the timing says who drove when.
   const owner = lapOwners(input.drive);
   const known = !!input.drive?.known && input.drive.myStints > 0;
-  const legend: [string, string][] = known
+  const legend: [string, string][] = known && !isSoloDrive(input.drive!)
     ? [
         [first(input.driverName), style.accent],
         [input.car.coDrivers.length ? list(input.car.coDrivers.map((d) => displayName(d))) : "Co-drivers", OTHER_DRIVER],
       ]
-    : [[`#${input.car.number}`, style.accent]];
+    : [[known ? first(input.driverName) : `#${input.car.number}`, style.accent]];
   let lx = box.x + 24;
   for (const [label, color] of legend) {
     ctx.fillStyle = color;
@@ -170,11 +170,16 @@ function drawOverallTrace(ctx: CanvasRenderingContext2D, box: Box, style: SiteSt
 export function driverCardLines(input: DriverCardInput): string[] {
   const { facts, drive, driverName } = input;
   const out: string[] = [];
-  if (facts) out.push(`${finishLine(facts)} · ${facts.laps} laps`);
+  if (facts) out.push(facts.finished === false ? finishLine(facts) : `${finishLine(facts)} · ${facts.laps} laps`);
   if (drive?.known && drive.myStints > 0) {
-    const share = drive.carTimeS > 0 ? ` (${Math.round((drive.driveTimeS / drive.carTimeS) * 100)}%)` : "";
     const best = drive.bestLap ? ` · best lap ${formatDuration(drive.bestLap.sec)}` : "";
-    out.push(`${first(driverName)}: ${driveTimeText(drive.driveTimeS)}${share} · ${drive.myStints} stint${drive.myStints === 1 ? "" : "s"}${best}`);
+    if (isSoloDrive(drive)) {
+      // A single-driver car: the drive is the car's race, so no share and no stint count.
+      out.push(`${first(driverName)}: ${driveTimeText(drive.driveTimeS)}${best}`);
+    } else {
+      const share = drive.carTimeS > 0 ? ` (${Math.round((drive.driveTimeS / drive.carTimeS) * 100)}%)` : "";
+      out.push(`${first(driverName)}: ${driveTimeText(drive.driveTimeS)}${share} · ${drive.myStints} stint${drive.myStints === 1 ? "" : "s"}${best}`);
+    }
   } else if (facts?.bestLap) {
     out.push(`Car's best lap ${formatDuration(facts.bestLap.sec)} on lap ${facts.bestLap.lap}`);
   }
@@ -187,7 +192,7 @@ const ORD = ["", "", "2nd ", "3rd "];
  * The fact line: something the driver did for the car, never a comparison with the co-drivers
  * (they race together). In order: laps led while the driver was at the wheel (overall, else in
  * class); the driver's best lap among the class when it is the car's best and in the class top
- * three; bringing the car home when the driver drove the last stint; else the car's own best
+ * three; bringing the car home when the driver drove the last stint and the car took the flag; else the car's own best
  * class benchmark (a team fact).
  */
 export function driverCardFact(input: DriverCardInput, chart: RaceChartData | null = null, key: string | null = null): { text: string; tone: "good" } | undefined {
@@ -214,7 +219,8 @@ export function driverCardFact(input: DriverCardInput, chart: RaceChartData | nu
     }
   }
   const last = drive?.stints[drive.stints.length - 1];
-  if (mineKnown && last?.mine && facts?.finishClass) return { text: `Brought #${car.number} home P${facts.finishClass} in ${car.cls}`, tone: "good" };
+  // Only a car that took the flag was brought home.
+  if (mineKnown && last?.mine && facts?.finishClass && facts.finished !== false) return { text: `Brought #${car.number} home P${facts.finishClass} in ${car.cls}`, tone: "good" };
   const b = facts?.benchmarks?.[0];
   return b ? { text: b, tone: "good" } : undefined;
 }

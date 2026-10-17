@@ -7,7 +7,7 @@ import { FollowTabs } from "./FollowTabs";
 import { formatDayRange } from "./format";
 import { StatusPill } from "./RecapCard";
 import { finishLine, type MyCarResponse } from "./MyCarCard";
-import { driveTimeText } from "../my-drivers/stints";
+import { driveTimeText, isSoloDrive } from "../my-drivers/stints";
 import { displayName } from "../my-drivers/api";
 import { ShareDriverCardButton } from "../my-drivers/driverCard";
 
@@ -262,7 +262,9 @@ function DriveBox({
       </div>
     );
   }
-  const share = drive.carTimeS > 0 ? Math.round((drive.driveTimeS / drive.carTimeS) * 100) : null;
+  // A single-driver car (sprint series): the driver drove it all, so no share, no stints, no bar.
+  const solo = isSoloDrive(drive);
+  const share = !solo && drive.carTimeS > 0 ? Math.round((drive.driveTimeS / drive.carTimeS) * 100) : null;
   const total = Math.max(1, drive.stints.reduce((n, s) => n + s.end - s.start + 1, 0));
   const others = [...new Set(drive.stints.filter((s) => !s.mine && s.driver).map((s) => displayName(s.driver!)))];
   const shade = (d: string | null) => (d ? OTHER[Math.max(0, others.indexOf(displayName(d))) % 2] : "var(--rt-border)");
@@ -276,10 +278,19 @@ function DriveBox({
           <dt className="mt-1 text-[12px] text-[var(--rt-text-muted)]">drive time{share !== null ? ` · ${share}%` : ""}</dt>
         </div>
         <div>
-          <dd className="m-0 text-[20px] font-bold leading-none text-[var(--rt-text)]">
-            {drive.myStints} <span className="text-[13px] font-semibold text-[var(--rt-text-muted)]">stint{drive.myStints === 1 ? "" : "s"}</span>
-          </dd>
-          <dt className="mt-1 truncate text-[12px] text-[var(--rt-text-muted)]">laps {mine.map((s) => `${s.start}–${s.end}`).join(", ")}</dt>
+          {solo ? (
+            <>
+              <dd className="m-0 text-[20px] font-bold leading-none text-[var(--rt-text)]">{total}</dd>
+              <dt className="mt-1 text-[12px] text-[var(--rt-text-muted)]">laps</dt>
+            </>
+          ) : (
+            <>
+              <dd className="m-0 text-[20px] font-bold leading-none text-[var(--rt-text)]">
+                {drive.myStints} <span className="text-[13px] font-semibold text-[var(--rt-text-muted)]">stint{drive.myStints === 1 ? "" : "s"}</span>
+              </dd>
+              <dt className="mt-1 truncate text-[12px] text-[var(--rt-text-muted)]">laps {mine.map((s) => `${s.start}–${s.end}`).join(", ")}</dt>
+            </>
+          )}
         </div>
         <div>
           <dd className="m-0 font-mono text-[20px] font-bold leading-none text-[var(--rt-text)]">{drive.bestLap ? formatDuration(drive.bestLap.sec) : "—"}</dd>
@@ -289,6 +300,7 @@ function DriveBox({
           </dt>
         </div>
       </dl>
+      {!solo && (
       <div>
         <div
           role="img"
@@ -313,6 +325,7 @@ function DriveBox({
           <span className="ml-auto tabular-nums">{total} laps</span>
         </div>
       </div>
+      )}
     </div>
   );
 }

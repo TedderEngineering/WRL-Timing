@@ -152,6 +152,18 @@ describe("driver card share image", () => {
     expect(driverCardFact({ ...input, drive: middle })).toBeUndefined();
   });
 
+  it("never says a car that retired was brought home, even when the results classify it", () => {
+    const retired = { ...input, facts: { ...input.facts!, finished: false } };
+    expect(driverCardFact(retired)?.text ?? "").not.toMatch(/home/);
+  });
+
+  it("a single-driver car shows the drive without a stint count or share", () => {
+    const solo = { ...input, car: { ...input.car, coDrivers: [] }, drive: { ...input.drive, stints: input.drive.stints.map((x) => ({ ...x, driver: "ALEX MORGAN", mine: true })) } };
+    const lines = driverCardLines(solo);
+    expect(lines[1]).not.toMatch(/stint|%/);
+    expect(lines[1]).toMatch(/^Alex: /);
+  });
+
   it("colours each lap by who drove it", () => {
     const own = lapOwners(input.drive);
     expect([own(5), own(15), own(25), own(40)]).toEqual([true, false, true, null]);

@@ -58,6 +58,8 @@ export interface SeasonRecap {
     finishClass: number | null;
     finishOverall: number | null;
     classSize: number | null;
+    /** Took the chequered flag (false for a car that retired, even when classified). */
+    finished: boolean;
     laps: number;
     cls: string;
     pitCycles: { net: number }[];
@@ -133,6 +135,7 @@ export function buildRecap(
       finishClass: f.finishClass,
       finishOverall: f.finishOverall,
       classSize: f.classSize,
+      finished: f.finished,
       laps: f.laps,
       cls: f.cls,
       pitCycles: f.pitCycles.map((c) => ({ net: c.net })),

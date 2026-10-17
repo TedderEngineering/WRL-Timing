@@ -37,6 +37,8 @@ export interface MyCarResponse {
     finishOverall: number | null;
     classSize: number | null;
     status: string | null;
+    /** Took the chequered flag (false for a car that retired, even when classified). */
+    finished?: boolean;
     laps: number;
     raceLaps: number;
     bestLap: { sec: number; lap: number } | null;
@@ -59,6 +61,8 @@ const ORDINAL = ["", "fastest", "2nd fastest", "3rd fastest"];
 export function finishLine(f: NonNullable<MyCarResponse["facts"]>): string {
   if (f.finishClass !== null) {
     const of = f.classSize ? ` of ${f.classSize}` : "";
+    // A car that stopped before the end can still be classified: say both, never "finished".
+    if (f.finished === false) return `Retired after lap ${f.laps} · classified P${f.finishClass} in ${f.cls}${of}`;
     return `Finished P${f.finishClass} in ${f.cls}${of} · P${f.finishOverall} overall`;
   }
   if (f.status === "dsq") return "Disqualified";

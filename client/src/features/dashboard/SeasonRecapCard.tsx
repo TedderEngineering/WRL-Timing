@@ -38,6 +38,7 @@ export interface SeasonRecap {
     /** Older responses may lack the fields below. */
     track?: string;
     finishClass: number | null;
+    finished?: boolean;
     finishOverall?: number | null;
     classSize?: number | null;
     laps?: number;
@@ -102,8 +103,8 @@ export function raceTabLabels(list: SeasonRecap["raceList"]): string[] {
 }
 
 /**
- * Every race of the season, as the race cards do it: a row of tabs (hover or focus previews the
- * race below, a click opens it on Position Trace on this car, grab or wheel to scroll).
+ * Every race of the season, as the race cards do it: a row of tabs (a tap or click shows the race
+ * below, whose link opens it on Position Trace on this car; grab or wheel to scroll).
  */
 function RaceTabs({ recap }: { recap: SeasonRecap }) {
   const list = recap.raceList;
@@ -114,15 +115,17 @@ function RaceTabs({ recap }: { recap: SeasonRecap }) {
   if (!r) return null;
   const href = (id: string) => `/chart?race=${id}&car=${encodeURIComponent(recap.number)}`;
   const finish =
-    r.finishClass !== null
+    r.finishClass !== null && r.finished === false
+      ? `Retired after lap ${r.laps} · classified P${r.finishClass} in ${r.cls}${r.classSize ? ` of ${r.classSize}` : ""}`
+      : r.finishClass !== null
       ? `Finished P${r.finishClass} in ${r.cls}${r.classSize ? ` of ${r.classSize}` : ""}${r.finishOverall ? ` · P${r.finishOverall} overall` : ""}`
       : "Not classified";
   const gained = (r.pitCycles ?? []).reduce((a, c) => a + c.net, 0);
   return (
     <div className="-mx-5 border-y border-[var(--rt-border)]">
       <ScrollRow
-        role="navigation"
-        aria-label={`${recap.season} races of #${recap.number}: open on Position Trace`}
+        role="tablist"
+        aria-label={`${recap.season} races of #${recap.number}`}
         activeKey={tab}
         className="border-b border-[var(--rt-border)]"
         innerClassName="gap-1 px-5"
@@ -132,18 +135,19 @@ function RaceTabs({ recap }: { recap: SeasonRecap }) {
           const n = list.length;
           const next = (tab + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
           setTab(next);
-          e.currentTarget.querySelectorAll<HTMLElement>("a")[next]?.focus();
+          e.currentTarget.querySelectorAll<HTMLElement>("[role=tab]")[next]?.focus();
         }}
       >
         {list.map((x, i) => (
-          <Link
+          // A tap shows that race's line below (phones have no hover); "Position Trace →" opens it.
+          <button
             key={x.id}
-            to={href(x.id)}
-            aria-current={i === tab ? "true" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={i === tab}
             data-active={i === tab}
             tabIndex={i === tab ? 0 : -1}
-            onMouseEnter={() => setTab(i)}
-            onFocus={() => setTab(i)}
+            onClick={() => setTab(i)}
             draggable={false}
             title={x.name}
             className={`flex min-h-[40px] items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm transition-colors ${
@@ -154,7 +158,7 @@ function RaceTabs({ recap }: { recap: SeasonRecap }) {
           >
             <span className="font-mono text-xs">{x.finishClass ? `P${x.finishClass}` : "–"}</span>
             {labels[i]}
-          </Link>
+          </button>
         ))}
       </ScrollRow>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-sm">

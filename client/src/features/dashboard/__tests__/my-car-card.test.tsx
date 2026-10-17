@@ -69,6 +69,7 @@ describe("your car's latest race", () => {
   it("names a car with no position plainly", () => {
     expect(finishLine({ ...facts, finishClass: null, finishOverall: null, status: "dsq" })).toBe("Disqualified");
     expect(finishLine({ ...facts, finishClass: null, finishOverall: null, status: "dnf" })).toBe("Did not finish");
+    expect(finishLine({ ...facts, laps: 16, finished: false })).toBe("Retired after lap 16 · classified P2 in Silver of 14");
     expect(pitCycleLine({ cycle: 1, lap: 9, before: 4, after: 4, net: 0 }, "GS")).toBe("Pit cycle 1 (settled lap 9): P4 → P4 in GS, held position");
   });
 });
