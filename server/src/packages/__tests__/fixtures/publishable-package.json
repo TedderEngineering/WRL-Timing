@@ -9329,7 +9329,7 @@
    "id": "story:24",
    "car": "24",
    "headline": {
-    "text": "{car:24} finished {0} in {class:TCR} on the provisional results.",
+    "text": "{car:24} is classified {0} in {class:TCR} on the provisional results.",
     "refs": [
      {
       "value": 6,

@@ -90,3 +90,48 @@ export function redFlagRace(): SynthRace {
     driveTime: true,
   };
 }
+
+/**
+ * One green round of stops in class GS (laps 10–11), where #52 stops on lap 10 and again on lap 12
+ * (a short second visit inside the same round): the cycle must count #52 once.
+ */
+export function doubleStopRace(): SynthRace {
+  return {
+    cars: [
+      car("50", "GS", 0, { stops: [{ lap: 10, pitLane: 62 }] }),
+      car("51", "GS", 1, { stops: [{ lap: 10, pitLane: 63 }] }),
+      car("52", "GS", 2, { stops: [{ lap: 10, pitLane: 61 }, { lap: 12, pitLane: 90 }] }),
+      car("53", "GS", 3, { stops: [{ lap: 11, pitLane: 64 }] }),
+      car("54", "GS", 4, { stops: [{ lap: 11, pitLane: 65 }] }),
+    ],
+  };
+}
+
+/**
+ * Penalty linking (D-PENALTY), 50 laps of about 100 s, serve window 300 s of green running:
+ * #60 drive-through announced at 250 s, served on lap 9 after a caution (400–800 s): 650 s later, but
+ * only 250 s of green. #61 serves a drive-through on lap 20 and the message comes 50 s later.
+ * #62 has a time penalty for its next stop, which comes about an hour later (lap 45).
+ * #63's penalty message is sent twice.
+ */
+export function penaltyRace(dt61Message: number): SynthRace {
+  const lap = (c: string, i: number, stops: SynthCar["stops"]) => car(c, "GS", i, { laps: 50, stops });
+  return {
+    cars: [
+      lap("60", 0, [{ lap: 9, pitLane: 34 }, { lap: 25, pitLane: 65 }]),
+      lap("61", 1, [{ lap: 20, pitLane: 34 }, { lap: 25, pitLane: 65 }]),
+      lap("62", 2, [{ lap: 3, pitLane: 65 }, { lap: 45, pitLane: 70 }]),
+      lap("63", 3, [{ lap: 25, pitLane: 65 }]),
+      lap("64", 4, [{ lap: 25, pitLane: 66 }]),
+    ],
+    fcy: [[400, 800]],
+    rc: [
+      [250, "Car 60: Penalty - Speeding in pit lane - Drive Through"],
+      [dt61Message, "Car 61: Penalty - Incident Responsibility with 64 - Drive Through"],
+      [360, "Car 62: Penalty - Short Pit Stop Time - 5 sec Time Penalty to be served at next eligible stop"],
+      [900, "Car 63: Penalty - Pass Under Yellow - Drive Through"],
+      [905, "Car 63: Penalty - Pass Under Yellow - Drive Through"],
+    ],
+    driveTime: true,
+  };
+}

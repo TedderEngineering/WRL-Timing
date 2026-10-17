@@ -37,7 +37,7 @@ import { buildStints } from "./engine/stints.js";
 import { buildResults, finalisePenalties } from "./engine/results.js";
 import { carOrder, matchDriver, rd } from "./util.js";
 
-export const ENGINE_VERSION = "1.1.1"; // 1.1.0: C8, cycle positions count from before the cycle opened. 1.1.1: red-flag holds (kind red_flag_hold), Drive Time rows split by a red flag joined
+export const ENGINE_VERSION = "1.2.0"; // 1.1.0: C8, cycle positions count from before the cycle opened. 1.1.1: red-flag holds (kind red_flag_hold), Drive Time rows split by a red flag joined. 1.2.0: one cycle result per car (nMembers counts cars), green_loss_exceeds_pit_lane, serve window in green time, time penalties at the next stop, repeated RC messages merged
 export type FactsPackage = RaceAnalysisPackage;
 
 export interface BuildFactsInput {
@@ -67,6 +67,8 @@ const MEDIUM_NOTES = new Set([
   "pit_clock_lap_mismatch",
   "not_in_pit_report",
   "pit_flag_lap_late",
+  "green_loss_exceeds_pit_lane",
+  "served_before_message",
 ]);
 const LOW_NOTES = new Set([
   "drive_through_by_duration",
@@ -174,8 +176,8 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
 
   /* M9, M10 (Alkamel; RedMist with a pit report) */
   if (!lapOnly) {
-    classifyAlkamel(ctx, passages, pens, transit, garageS, serveWindowS);
-    linkTimeAtStop(passages, pens, serveWindowS);
+    classifyAlkamel(ctx, passages, pens, transit, garageS, serveWindowS, fcy.periods);
+    linkTimeAtStop(passages, pens);
   }
 
   /* M11 */
@@ -205,7 +207,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
   /* M13 - M15 */
   const drafts = buildPitCycles(ctx, passages, fcy.periods, medians, rb?.pitCycleModel);
   const swaps = detectSwaps(ctx, pos, passages);
-  const cycleResults = computeCycleResults(ctx, pos, drafts, passages, swaps);
+  const cycleResults = computeCycleResults(ctx, pos, drafts, passages, swaps, groups);
   const positionChanges = buildPositionChanges(ctx, swaps, drafts, passages);
 
   /* M12 */
@@ -219,7 +221,7 @@ export function buildFacts(input: BuildFactsInput): FactsPackage {
 
   /* M18 confidence (passages) */
   for (const p of passages) p.confidence = confidenceFromNotes(p.confNotes, p.confidence);
-  const pitCycles = toPitCycles(ctx, drafts, passages, medians);
+  const pitCycles = toPitCycles(ctx, drafts, passages, medians, groups);
   const lowShare = passages.length ? passages.filter((p) => p.confidence === "low").length / passages.length : 0;
   if (lowShare > 0.1) {
     issues.push({ severity: "warning", code: "LOW-CONFIDENCE-SHARE", message: `${Math.round(lowShare * 100)} % of pit passages are low confidence; their numbers need a judgement before a story states them.` });

@@ -77,7 +77,7 @@ export function sampleAnalysis(base: RaceAnalysisPackage): RaceAnalysisPackage {
     return {
       id: `story:${car}`,
       car,
-      headline: { text: `{car:${car}} finished {0} in {class:${e.class}} on the provisional results.`, refs: [ref(P, `result:${car}`, "positionClass", "pos")] },
+      headline: { text: `{car:${car}} ${P.events.retirements.some((r) => r.car === car) ? "is classified" : "finished"} {0} in {class:${e.class}} on the provisional results.`, refs: [ref(P, `result:${car}`, "positionClass", "pos")] },
       paragraphs,
       keyFactIds: [...need],
       events: evs,

@@ -208,6 +208,18 @@ function lowerConf(p: { confidence: "high" | "medium" | "low" }, c: "high" | "me
   if (rank[c] > rank[p.confidence]) p.confidence = c;
 }
 
+/**
+ * Green time lost is the in-lap and out-lap against reference pace, so it includes anything else
+ * that slowed those laps (traffic, a slow in-lap, a spin). It can't honestly exceed the official
+ * pit-lane time, which already includes the stop: when it does by more than this margin (real green stops run from about 12 s under to 5 s over), the
+ * passage's time lost is flagged and its confidence lowered (the value is kept as measured).
+ */
+export const LOSS_OVER_PIT_LANE_MARGIN_S = 10;
+
+export function exceedsPitLane(lossS: number | null, pitLaneS: number | null): boolean {
+  return lossS !== null && pitLaneS !== null && lossS > pitLaneS + LOSS_OVER_PIT_LANE_MARGIN_S;
+}
+
 export function computeTimeLost(ctx: Ctx, passages: Passage[]): TimeLostResult {
   const passageIdx = new Map<string, Set<number>>();
   for (const p of passages) {
@@ -254,6 +266,11 @@ export function computeTimeLost(ctx: Ctx, passages: Passage[]): TimeLostResult {
             conf = "medium";
             notes.push("ref_window_widened");
           }
+          const off = g.every((p) => p.official !== null) ? g.reduce((a, p) => a + p.official!, 0) : null;
+          if (exceedsPitLane(tl.valueS, off)) {
+            if (conf === "high") conf = "medium";
+            notes.push("green_loss_exceeds_pit_lane");
+          }
           if (tl.valueS === null) {
             conf = "low";
             notes.push("no_reference_pace");
@@ -297,6 +314,10 @@ export function computeTimeLost(ctx: Ctx, passages: Passage[]): TimeLostResult {
       if (p.timeLost.valueS === null) {
         p.confNotes.push("no_reference_pace");
         lowerConf(p, "low");
+      }
+      if (exceedsPitLane(p.timeLost.valueS, p.official)) {
+        p.confNotes.push("green_loss_exceeds_pit_lane");
+        lowerConf(p, "medium");
       }
     } else {
       const r = fcyLoss(ctx, s, passageIdx, p.official);

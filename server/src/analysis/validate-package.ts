@@ -2,7 +2,7 @@
  * Race Analysis Package validator.
  *
  * Core rules V1–V8 (FACT_ENGINE_SPEC.md §7; port of stage2/core/tools/check_package.py) and analysis
- * rules A1–A21 (CLAUDE_ANALYSIS_DESIGN.md §6.2; port of stage2/claude/tools/check_analysis.py with
+ * rules A1–A23 (CLAUDE_ANALYSIS_DESIGN.md §6.2; port of stage2/claude/tools/check_analysis.py with
  * schema/prose-rules.json). V1 (JSON Schema 2020-12, Ajv) stops everything on failure.
  *
  * Rule-check contract (schema 1.1.0): the engine writes ruleChecks[] (passes included), ruleMarkers[] and
@@ -12,7 +12,7 @@
  *
  * Stages:
  *  - 'facts'    (engine draft): V1–V8; prose, if any, is checked for references and values.
- *  - 'analysis' (after the Claude pass, and always at publish): V1–V8 and A1–A21.
+ *  - 'analysis' (after the Claude pass, and always at publish): V1–V8 and A1–A23.
  *
  * Fact-reference values (schema 1.1.0): a number equals the fact exactly after `transform`; seconds are
  * cited at full millisecond precision, never rounded, and carry `display` = the GUI rendering
@@ -289,6 +289,12 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
         return;
       }
       const fvv = r.transform === "abs" ? Math.abs(fv) : r.transform === "neg" ? -fv : fv;
+      // A signed difference cited as a size: the word after it must give the right direction.
+      if (analysis && r.transform === "abs" && fv !== 0 && /deltaToCycleMeanS$/.test(r.field)) {
+        const w = sentence.match(new RegExp(`\\{${i}\\}\\s+(?:\\S+\\s+)?(more|less|slower|quicker|faster)\\b`, "i"))?.[1]?.toLowerCase();
+        const says = w === "more" || w === "slower" ? 1 : w ? -1 : 0;
+        if (says && says !== Math.sign(fv)) err("A23", `${where} ref ${i} says "${w}" but ${r.factId}.${r.field} is ${fv}`);
+      }
       if (secs) {
         // Seconds: full millisecond precision, never rounded (coordinator decision 4; design F1).
         if (roundTo(v, 3) !== v || Math.abs(v - roundTo(fvv, 3)) > 0.0005 + 1e-9) err(analysis ? "A4" : "V4", `${where} ref ${i} value ${v} != fact ${r.factId}.${r.field} = ${fv} (seconds are cited at full ms precision)`);
@@ -444,6 +450,9 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
       if (miss.length) err("A14", `${sid} keyFactIds must include ${miss.join(", ")}`);
       if (res && !cites(prs, (r) => r.factId === res.id)) err("A14", `${sid} never cites ${res.id}`);
       if (!provisionalOk(prs)) err("A12", `${sid} cites finishing positions but never says "provisional"`);
+      // A car that retired may still be classified (SRO lists such cars as Classified): write both,
+      // "retired after lap N" and "classified P in class", never that it finished.
+      if (ev.retirements.some((r) => r.car === car) && prs.some((p) => /\bfinish(?:ed|es|ing)?\b/i.test(p.text))) err("A22", `${sid} car retired (ret:${car}): say it retired and how the results classify it, not that it finished`);
     }
     const judged = new Set((st.lowConfidenceJudgements ?? []).map((j) => j.factId));
     for (const x of lowCited.filter((y) => y.where.startsWith(sid + "."))) {

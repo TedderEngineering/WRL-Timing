@@ -740,6 +740,13 @@ export function parsePenalties(ctx: Ctx): { penalties: PenaltyDraft[]; served: S
         ctx.issues.push({ severity: "warning", code: "RC-CAR-AMBIGUOUS", message: `Race-control message '${text}' names car '${pm[1]}', which ${ambiguous ? "matches more than one entry" : "is not an entry"}; it is attached to no car.`, files: [m.fileId] });
         continue;
       }
+      // The same message repeated within a minute is one penalty (race control re-sent it).
+      const prev = [...penalties].reverse().find((x) => x.car === car && !x.postRace);
+      if (prev && prev.rawText === text && prev.t !== null && m.tS !== null && m.tS - prev.t <= 60) {
+        prev.refs.push(`${m.fileId}:L${m.row}`);
+        ctx.issues.push({ severity: "note", code: "RC-PENALTY-REPEATED", message: `Race control sent '${text}' twice (${prev.refs.join(", ")}); it is read as one penalty.`, factIds: [prev.id], files: [m.fileId] });
+        continue;
+      }
       const { type, amount } = penaltyType(pm[3]);
       penalties.push({
         id: nextId(car),
@@ -826,7 +833,33 @@ export function isPitLaneStart(p: Passage, laps: Ctx["laps"]): boolean {
 
 /* ------------------------------------------------------------------ M9 + M10 (Alkamel kinds and penalty links) */
 
-export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraft[], transit: Transit, garageS: number, serveWindowS: number): void {
+/**
+ * Green-flag seconds between race times a and b: the time minus caution and red-flag periods, when
+ * the pit lane is closed or the race neutralised and a penalty can't be served.
+ */
+export function greenSecondsBetween(periods: { start: number; end: number }[], a: number, b: number): number {
+  if (b <= a) return 0;
+  const spans = periods
+    .map((x) => [Math.max(a, x.start), Math.min(b, x.end)] as [number, number])
+    .filter(([lo, hi]) => hi > lo)
+    .sort((x, y) => x[0] - y[0]);
+  let neutral = 0;
+  let upTo = a;
+  for (const [lo, hi] of spans) {
+    const from = Math.max(lo, upTo);
+    if (hi > from) neutral += hi - from;
+    upTo = Math.max(upTo, hi);
+  }
+  return b - a - neutral;
+}
+
+/**
+ * A drive-through served just before race control's message appears (the team is told on the
+ * radio first): linked only when nothing else explains the short visit (D-PENALTY).
+ */
+export const SERVED_BEFORE_MESSAGE_S = 120;
+
+export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraft[], transit: Transit, garageS: number, serveWindowS: number, periods: { start: number; end: number }[] = []): void {
   const T = transit.valueS;
   const holds = redHolds(ctx.race.flagRecords, ctx.raceEndT);
   const sorted = [...passages].sort((a, b) => a.sortT - b.sortT || carOrder(a.car, b.car));
@@ -858,13 +891,25 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       p.notes.push("The car's last crossing (the chequered flag) was made in the pit lane.");
       continue;
     }
+    // The serve window counts green-flag time only: the pit lane is closed under caution.
     const cand = pens
-      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && pin <= x.t + serveWindowS)
+      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(periods, x.t, pin) <= serveWindowS)
       .sort((a, b) => a.t! - b.t!);
+    const short = pl !== null && T !== null && pl <= 1.15 * T;
+    // A short visit with no penalty before it, and a drive-through announced just after it.
+    const early =
+      !cand.length && short && p.pitType !== "PENALTY"
+        ? pens.find((x) => x.car === p.car && !x.servedBy && x.ptype === "drive_through" && x.t !== null && x.t > pin && x.t - pin <= SERVED_BEFORE_MESSAGE_S)
+        : undefined;
+    if (early) {
+      cand.push(early);
+      early.confidence = "medium";
+      early.confNotes.push("served_before_message");
+      p.confNotes.push("served_before_message");
+    }
     const dt = cand.find((x) => x.ptype === "drive_through");
     const sg = cand.find((x) => x.ptype === "stop_and_go");
     const sp = cand.find((x) => x.ptype === "stop_plus");
-    const short = pl !== null && T !== null && pl <= 1.15 * T;
     const link = (x: PenaltyDraft) => {
       x.servedBy = p;
       p.penaltiesServed.push(x.id);
@@ -898,12 +943,15 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
   }
 }
 
-/** time_at_stop penalties: served by the car's next `stop` after issue (kind stays `stop`). */
-export function linkTimeAtStop(passages: Passage[], pens: PenaltyDraft[], serveWindowS: number): void {
+/**
+ * time_at_stop penalties ("to be served at next eligible stop"): served by the car's next `stop`
+ * after issue, however long the stint (kind stays `stop`).
+ */
+export function linkTimeAtStop(passages: Passage[], pens: PenaltyDraft[]): void {
   for (const x of pens) {
     if (x.ptype !== "time_at_stop" || x.t === null || x.servedBy) continue;
     const p = passages
-      .filter((q) => q.car === x.car && q.kind === "stop" && q.outcome === "rejoined" && (q.pinT ?? q.sortT) >= x.t! && (q.pinT ?? q.sortT) <= x.t! + Math.max(serveWindowS, 3600))
+      .filter((q) => q.car === x.car && q.kind === "stop" && q.outcome === "rejoined" && (q.pinT ?? q.sortT) >= x.t!)
       .sort((a, b) => a.sortT - b.sortT)[0];
     if (p) {
       x.servedBy = p;
