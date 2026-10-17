@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { gapClock, gapRows, leaderGaps, nextEvent, paceOf } from "../live-gaps";
+import { gapBehind, gapClock, gapRows, latestCrossing, leaderGaps, nextEvent, paceOf } from "../live-gaps";
 
 /** A car with `n` laps of `lt` seconds (lap 1 offset by `start`), in position `pos`. */
 function car(num: number, n: number, lt: number, pos: number, opts: { start?: number; pitLap?: number; cls?: string } = {}) {
@@ -114,9 +114,15 @@ describe("leaderGaps", () => {
     expect(g.cls?.laps).toBeCloseTo(40 / 102, 6);
     expect(g.clsName).toBe("GTU");
   });
-  it("counts whole laps when the leader is laps ahead", () => {
-    const d = race([car(1, 22, 100, 1), car(2, 20, 100, 2)]);
-    expect(leaderGaps(d, 2).overall?.laps).toBeCloseTo(2, 6);
+  it("counts laps and the part of a lap when the leader is laps ahead", () => {
+    // Leader: 22 laps of 100 s (2200 s). Focus: 20 laps of 105 s (2100 s), 100 s into lap 21.
+    const d = race([car(1, 22, 100, 1), car(2, 20, 105, 2)]);
+    expect(leaderGaps(d, 2).overall?.laps).toBeCloseTo(22 - (20 + 100 / 105), 6);
+  });
+  it("holds a car in the pits where it stopped, so the leader's gap grows", () => {
+    // Focus #2's last crossing was 4 laps of pace before the leader's: it is stopped.
+    const d = race([car(1, 10, 100, 1), car(2, 6, 100, 2)]);
+    expect(leaderGaps(d, 2).overall?.laps).toBeCloseTo(10 - 6.999, 6);
   });
   it("is empty for the leader itself", () => {
     const d = race([car(1, 20, 100, 1), car(2, 20, 101, 2)]);
@@ -126,5 +132,32 @@ describe("leaderGaps", () => {
     expect(gapClock(56.24)).toBe("56.2 s");
     expect(gapClock(211)).toBe("3:31");
     expect(gapClock(3725)).toBe("1:02:05");
+  });
+});
+
+describe("between updates (extrapolation)", () => {
+  // Focus #2 laps in 99 s, 10 s behind #1 (100 s laps), both just completed lap 10.
+  const d = race([car(1, 10, 100, 1), car(2, 10, 99, 2, { start: 20 })]);
+  const at0 = latestCrossing(d); // 1010: #2's crossing
+
+  it("is the last crossings' gap with no time passed", () => {
+    expect(gapRows(d, 2, [1], at0).find((r) => r.num === 1)!.gapSec).toBeCloseTo(-10, 6);
+  });
+
+  it("closes the gap by the pace difference as time passes", () => {
+    // 49.5 s later (half a focus lap): 0.5 s closed.
+    const r = gapRows(d, 2, [1], at0 + 49.5).find((x) => x.num === 1)!;
+    expect(r.gapSec).toBeCloseTo(-9.5, 6);
+    expect(r.next?.laps).toBeLessThan(gapRows(d, 2, [1]).find((x) => x.num === 1)!.next!.laps);
+  });
+
+  it("moves the gap to the leader on too", () => {
+    const before = gapBehind(d, 2, 1, at0)!.laps;
+    const after = gapBehind(d, 2, 1, at0 + 49.5)!.laps;
+    expect(after).toBeLessThan(before);
+  });
+
+  it("finds the moment the data describes", () => {
+    expect(latestCrossing(d)).toBeCloseTo(20 + 990, 6);
   });
 });
