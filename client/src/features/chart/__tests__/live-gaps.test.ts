@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { gapBehind, gapClock, gapRows, lapsAndSeconds, leaderGaps, nextEvent, paceOf } from "../live-gaps";
+import { gapBehind, gapClock, gapRows, lapsAndSeconds, leaderGaps, nextEvent, paceOf, splitLaps } from "../live-gaps";
+import { averageCleanPace } from "../gap-math";
 
 /** A car with `n` laps of `lt` seconds (lap 1 offset by `start`), in position `pos`. */
 function car(num: number, n: number, lt: number, pos: number, opts: { start?: number; pitLap?: number; cls?: string } = {}) {
@@ -195,5 +196,20 @@ describe("lapsAndSeconds", () => {
   });
   it("falls back to laps without a pace", () => {
     expect(lapsAndSeconds(1.28, null)).toBe("1.3 L");
+  });
+});
+
+
+describe("Gap evolution headline: laps + seconds", () => {
+  it("splits 246.8 s at a 141.0 s average lap into a lap and 105.8 s", () => {
+    const s = splitLaps(246.8 / 141, 141)!;
+    expect(s.whole).toBe(1);
+    expect(s.rest).toBeCloseTo(105.8, 6);
+  });
+  it("averages a car's last five clean laps up to a lap", () => {
+    const d = race([car(1, 12, 100, 1, { pitLap: 11 })]);
+    d.cars["1"].laps = d.cars["1"].laps.map((l) => ({ ...l, ltSec: l.pit ? l.ltSec : 100 + l.l }));
+    // 11 is the pit lap and 12 the out-lap: laps 10, 9, 8, 7, 6.
+    expect(averageCleanPace(d, 1, 12, 5)).toBeCloseTo((110 + 109 + 108 + 107 + 106) / 5, 6);
   });
 });

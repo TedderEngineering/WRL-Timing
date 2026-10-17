@@ -20,7 +20,9 @@ import {
   secondsText,
   lapTimeText,
   windowStart,
+  averageCleanPace,
 } from "./gap-math";
+import { splitLaps } from "./live-gaps";
 import { ChevronIcon, Eyebrow, PANEL, SearchIcon, Section, Segmented, driversOf } from "./panel-ui";
 
 interface GapEvolutionPanelProps {
@@ -137,7 +139,17 @@ export function GapEvolutionPanel({ data, focusNum, activeLap, compSet }: GapEvo
         </div>
       ) : (
         <>
-          <Headline data={data} target={target} single={single} lap={last.lap} gap={last.gap!} rate={rate} fmt={fmt} unit={unit} />
+          <Headline
+            data={data}
+            target={target}
+            single={single}
+            lap={last.lap}
+            gap={last.gap!}
+            rate={rate}
+            fmt={fmt}
+            unit={unit}
+            pace={averageCleanPace(data, focusNum, last.lap, 5)}
+          />
           <Section id="gap.chart" title="Chart" summary={<Sparkline rows={rows} />}>
             <div className="px-4 pb-2">
               <GapChart data={data} rows={rows} single={single} />
@@ -389,6 +401,7 @@ function Headline({
   rate,
   fmt,
   unit,
+  pace,
 }: {
   data: RaceChartData;
   target: GapTarget;
@@ -398,8 +411,12 @@ function Headline({
   rate: { rate: number; laps: number } | null;
   fmt: (s: number) => string;
   unit: Unit;
+  /** The focus car's average lap (last 5 clean laps): a gap of a lap or more reads as laps + seconds. */
+  pace: number | null;
 }) {
   const who = single !== null ? `#${carNo(data, single)}` : `the ${target.name.toLowerCase()}`;
+  // A lap or more: the rest in seconds plus whole laps at the focus car's average lap ("105.8 s (+1L)").
+  const split = unit === "s" && pace !== null && Math.abs(gap) >= pace ? splitLaps(gap / pace, pace) : null;
   const w = rate ? rateWords(rate.rate) : null;
   return (
     <div className="flex items-end justify-between gap-3 border-b px-4 py-2.5" style={{ borderColor: PANEL.line }}>
@@ -408,8 +425,19 @@ function Headline({
           {gap >= 0 ? "Behind" : "Ahead of"} {who} at lap {lap}
         </div>
         <div className="text-[30px] font-extrabold leading-none tracking-tight tabular-nums">
-          {fmt(gap)}
+          {split && split.whole > 0 ? split.rest.toFixed(1) : fmt(gap)}
           {unit === "s" && <span className="text-base font-semibold" style={{ color: PANEL.muted }}> s</span>}
+          {split && split.whole > 0 && (
+            <span
+              className="text-base font-semibold"
+              style={{ color: PANEL.muted }}
+              title={`${secondsText(gap)} s in all: ${split.whole} lap${split.whole === 1 ? "" : "s"} at your average lap of ${secondsText(pace!, 1)} s (last 5 clean laps), and ${split.rest.toFixed(1)} s`}
+            >
+              {" "}
+              ({gap >= 0 ? "+" : "−"}
+              {split.whole}L)
+            </span>
+          )}
         </div>
       </div>
       <div className="shrink-0 text-right">

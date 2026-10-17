@@ -96,8 +96,15 @@ export function paceOf(laps: Lap[], data: RaceChartData, fcy = fcyLapSet(data)):
  * Without a pace, laps to a tenth ("1.3 L").
  */
 export function lapsAndSeconds(laps: number, pace: number | null): string {
+  const split = splitLaps(laps, pace);
+  if (!split) return `${Math.abs(laps).toFixed(1)} L`;
+  return split.whole > 0 ? `${split.rest.toFixed(1)} (+${split.whole}L)` : split.rest.toFixed(1);
+}
+
+/** A gap of `laps` at `pace` as whole laps and the rest in seconds (null without a pace). */
+export function splitLaps(laps: number, pace: number | null): { whole: number; rest: number } | null {
   const a = Math.abs(laps);
-  if (pace === null || !(pace > 0)) return `${a.toFixed(1)} L`;
+  if (pace === null || !(pace > 0)) return null;
   let whole = Math.floor(a + 1e-9);
   let rest = (a - whole) * pace;
   // A rest that rounds up to a full lap is the next lap.
@@ -105,7 +112,7 @@ export function lapsAndSeconds(laps: number, pace: number | null): string {
     whole += 1;
     rest = 0;
   }
-  return whole > 0 ? `${rest.toFixed(1)} (+${whole}L)` : rest.toFixed(1);
+  return { whole, rest };
 }
 
 /** Cumulative time at each completed lap (index = lap count). */

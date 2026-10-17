@@ -349,6 +349,20 @@ export function recentPace(data: RaceChartData, num: number, lap: number, n = 10
   return k ? s / k : null;
 }
 
+/** Average of a car's last `n` clean laps up to `lap` (null when it has fewer than 3). */
+export function averageCleanPace(data: RaceChartData, num: number, lap: number, n = 5): number | null {
+  const car = data.cars[String(num)];
+  let s = 0;
+  let k = 0;
+  for (let l = lap; l >= 1 && k < n; l--) {
+    if (isCleanLap(data, car, l)) {
+      s += lapOf(car, l)!.ltSec;
+      k++;
+    }
+  }
+  return k >= 3 ? s / k : null;
+}
+
 // ---- Formatting ----
 
 /** 92.61 → "1:32.61". */
