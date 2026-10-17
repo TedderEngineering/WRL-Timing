@@ -34,12 +34,23 @@ export function carDriverNames(car: { team?: string; drivers?: string[] } | unde
  * says who drove when, and a Follow button. Signed out, Follow asks for an account first and the
  * follow is done on the way back.
  */
-export function CarDrivers(props: { data: RaceChartData; focusNum: number; annotations: AnnotationData | null }) {
+export function CarDrivers(props: { data: RaceChartData; focusNum: number; annotations: AnnotationData | null; heading?: string }) {
   // Only inside the app (auth and router): the chart panels also render on their own.
   return useOptionalAuth() ? <CarDriversInApp {...props} /> : null;
 }
 
-function CarDriversInApp({ data, focusNum, annotations }: { data: RaceChartData; focusNum: number; annotations: AnnotationData | null }) {
+function CarDriversInApp({
+  data,
+  focusNum,
+  annotations,
+  heading,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  annotations: AnnotationData | null;
+  /** A label over the list, for where the car's name is not right above it. */
+  heading?: string;
+}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const mine = useMyDrivers(user?.id);
@@ -100,6 +111,11 @@ function CarDriversInApp({ data, focusNum, annotations }: { data: RaceChartData;
 
   return (
     <section aria-label="Drivers" className="mt-1 flex flex-col">
+      {heading && (
+        <div className="pb-1 text-[11px] uppercase tracking-[0.06em]" style={{ color: T.muted }}>
+          {heading}
+        </div>
+      )}
       {names.map((n) => {
         const drive = driveOf(car.laps, stints, n);
         const f = followedAs(mine, n);

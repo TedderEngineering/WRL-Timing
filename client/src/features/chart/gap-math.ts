@@ -94,7 +94,11 @@ export function isCleanLap(data: RaceChartData, car: CarData | undefined, lap: n
   const l = lapOf(car, lap);
   if (!l || !(l.ltSec > 1) || !isGreenFlag(l.flag) || l.pit) return false;
   if (data.greenPaceCutoff > 0 && l.ltSec >= data.greenPaceCutoff) return false;
-  return !lapOf(car, lap - 1)?.pit;
+  // Not an out-lap: after a pit lap, or after a lap far over green pace (a stop in the garage the
+  // timing does not always mark as a pit lap).
+  const prev = lapOf(car, lap - 1);
+  if (prev?.pit) return false;
+  return !(prev && data.greenPaceCutoff > 0 && prev.ltSec >= data.greenPaceCutoff);
 }
 
 // ---- What to measure against ----

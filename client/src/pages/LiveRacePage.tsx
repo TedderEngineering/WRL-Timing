@@ -368,7 +368,9 @@ export function LiveRacePage() {
             activeLap={activeLap}
             setActiveLap={setActiveLap}
             view={traceView}
-            defaultAxis={chartDefaults.axis}
+            // Race time: every running car's trace reaches now. By lap, the leader's runs furthest
+            // and each car's stops at its own lap count.
+            defaultAxis="hours"
             live
           />
         </div>

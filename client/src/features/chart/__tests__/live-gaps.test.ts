@@ -45,6 +45,17 @@ describe("paceOf", () => {
     const d = race([car(1, 2, 100, 1)]);
     expect(paceOf(d.cars["1"].laps, d)).toBeNull();
   });
+  it("leaves out the out-lap after a stop in the garage the timing did not mark as a pit lap", () => {
+    // Lap 7 is 1:40:00 in the garage with no pit mark; lap 8 starts from rest (150 s).
+    const d = race([car(1, 8, 100, 1)]);
+    const laps = d.cars["1"].laps.map((l) => (l.l === 7 ? { ...l, ltSec: 6000 } : l.l === 8 ? { ...l, ltSec: 150 } : l));
+    expect(paceOf(laps, d)).toBe(100);
+  });
+  it("leaves out the out-lap after a pit lap", () => {
+    const d = race([car(1, 10, 100, 1, { pitLap: 9 })]);
+    const laps = d.cars["1"].laps.map((l) => (l.l === 10 ? { ...l, ltSec: 130 } : l));
+    expect(paceOf(laps, d)).toBe(100);
+  });
 });
 
 describe("nextEvent", () => {
@@ -169,6 +180,14 @@ describe("between updates (extrapolation)", () => {
   });
 });
 
+describe("a running focus car", () => {
+  it("is not called stopped because one car's lap times add up past the race clock", () => {
+    // #3's summed lap times run 300 s past everyone else's (an overlapping pit lap).
+    const d = race([car(1, 10, 100, 1), car(2, 10, 100, 2, { start: 5 }), car(3, 10, 100, 3, { start: 300 }), car(4, 10, 100, 4, { start: 10 })]);
+    expect(gapRows(d, 4, [1, 2, 3]).find((x) => x.isFocus)!.stopped).toBe(false);
+  });
+});
+
 describe("a stopped focus car", () => {
   it("still has gaps to the others, but no projections", () => {
     // Focus #2 stopped after lap 6 (its last crossing 4 laps of pace ago).
@@ -211,5 +230,10 @@ describe("Gap evolution headline: laps + seconds", () => {
     d.cars["1"].laps = d.cars["1"].laps.map((l) => ({ ...l, ltSec: l.pit ? l.ltSec : 100 + l.l }));
     // 11 is the pit lap and 12 the out-lap: laps 10, 9, 8, 7, 6.
     expect(averageCleanPace(d, 1, 12, 5)).toBeCloseTo((110 + 109 + 108 + 107 + 106) / 5, 6);
+  });
+  it("leaves out the out-lap after a garage stop with no pit mark", () => {
+    const d = race([car(1, 10, 100, 1)]);
+    d.cars["1"].laps = d.cars["1"].laps.map((l) => (l.l === 9 ? { ...l, ltSec: 6000 } : l.l === 10 ? { ...l, ltSec: 150 } : l));
+    expect(averageCleanPace(d, 1, 10, 5)).toBe(100);
   });
 });
