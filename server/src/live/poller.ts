@@ -35,6 +35,7 @@ import {
   type FeedLap,
   type FeedSession,
 } from "./feed.js";
+import type { SessionKind } from "./schedule.js";
 import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
 import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 
@@ -84,7 +85,23 @@ export interface LiveSessionListing {
   eventName: string;
   sessionName: string;
   track: string;
+  /** When the session's timing opened (ISO, UTC). */
   startedAt: string | null;
+  /** When it ended on the timing feed (ISO, UTC); null while it runs. */
+  endedAt: string | null;
+  kind: SessionKind;
+}
+
+/** The feed's session times are UTC with no zone suffix ("2026-10-17T11:18:13.345"). */
+export function feedUtc(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t}Z`);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+/** Practice and qualifying sessions are marked by the feed; anything else is a race. */
+export function sessionKind(s: { pq?: boolean; n?: string }): SessionKind {
+  return s.pq ? (/qual/i.test(s.n ?? "") ? "qualify" : "practice") : "race";
 }
 
 /** A live session with the timing feed's ids behind its slug (server side only). */
@@ -105,7 +122,7 @@ export function liveSlug(eventName: string, sessionName: string): string {
 }
 
 export function publicListing(r: LiveSessionRef): LiveSessionListing {
-  return { slug: r.slug, eventName: r.eventName, sessionName: r.sessionName, track: r.track, startedAt: r.startedAt };
+  return { slug: r.slug, eventName: r.eventName, sessionName: r.sessionName, track: r.track, startedAt: r.startedAt, endedAt: r.endedAt, kind: r.kind };
 }
 
 /** Every slug handed out since start-up → its feed session, so a page keeps working after its session leaves the live list. */
@@ -448,35 +465,71 @@ function pollerFor(eventId: number, sessionId: number, slug: string): Poller {
   return p;
 }
 
-let listCache: { at: number; sessions: LiveSessionRef[] } | null = null;
+let listCache: { at: number; sessions: LiveSessionRef[]; recent: LiveSessionRef[] } | null = null;
 
-/** WRL sessions the timing feed marks live right now (with the feed's ids: server side only). */
-export async function listLiveSessions(): Promise<LiveSessionRef[]> {
-  if (listCache && Date.now() - listCache.at < LIST_MS) return listCache.sessions;
+/** Sessions that ended this recently are listed as just finished (the banner's "See how it ended"). */
+export const RECENT_MS = 2 * 3600_000;
+/** Events this recent keep their sessions' addresses working (after a restart too). */
+const INDEX_DAYS = 3;
+
+/**
+ * WRL sessions on the timing feed: the ones it marks live, and the ones of its recent events that
+ * ended within RECENT_MS. Every session of a recent event gets its slug indexed, so a live page's
+ * address keeps working after the session ends or the server restarts.
+ */
+async function scanSessions(): Promise<{ sessions: LiveSessionRef[]; recent: LiveSessionRef[] }> {
+  if (listCache && Date.now() - listCache.at < LIST_MS) return listCache;
   const h = http();
-  const events = eventsFromResponse(await h.getJson(feedUrls.liveAndRecent())).filter((e) => isWrlEvent(e) && e.l === true);
-  const out: LiveSessionRef[] = [];
+  const now = Date.now();
+  const since = new Date(now - INDEX_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const events = eventsFromResponse(await h.getJson(feedUrls.liveAndRecent())).filter(
+    (e) => isWrlEvent(e) && (e.l === true || (typeof e.ed === "string" && e.ed.slice(0, 10) >= since))
+  );
+  const live: LiveSessionRef[] = [];
+  const recent: LiveSessionRef[] = [];
   for (const e of events.slice(0, 5)) {
     const sessions = (await h.getJson<FeedSession[]>(feedUrls.sessions(e.eid))) ?? [];
-    for (const s of Array.isArray(sessions) ? sessions : []) {
-      if (!s.il) continue;
+    // Oldest first, so a re-run session with the same name is the one that gets "-2".
+    const ordered = (Array.isArray(sessions) ? sessions : []).slice().sort((a, b) => String(a.st ?? "").localeCompare(String(b.st ?? "")));
+    for (const s of ordered) {
       const eventName = eventDisplayName(e.en, e.eid);
       const sessionName = (s.n ?? `Session ${s.sid}`).trim();
       const ids = { eventId: e.eid, sessionId: Number(s.sid) };
       // The same name twice (a rare re-run session) gets "-2", never the ids.
-      let slug = liveSlug(eventName, sessionName);
+      let slug = [...slugIndex.entries()].find(([, v]) => sameIds(v, ids))?.[0] ?? liveSlug(eventName, sessionName);
       for (let k = 2; slugIndex.has(slug) && !sameIds(slugIndex.get(slug)!, ids); k++) slug = `${liveSlug(eventName, sessionName)}-${k}`;
       slugIndex.set(slug, ids);
-      out.push({
+      const endedAt = s.il ? null : feedUtc(s.et);
+      const ref: LiveSessionRef = {
         slug,
         ...ids,
         eventName,
         sessionName,
         track: KNOWN_EVENTS.find((k) => k.eventId === e.eid)?.track ?? e.t ?? "",
-        startedAt: s.st ?? null,
-      });
+        startedAt: feedUtc(s.st),
+        endedAt,
+        kind: sessionKind(s),
+      };
+      if (s.il && e.l === true) live.push(ref);
+      else if (endedAt && now - Date.parse(endedAt) <= RECENT_MS) recent.push(ref);
     }
   }
-  listCache = { at: Date.now(), sessions: out };
-  return out;
+  listCache = { at: Date.now(), sessions: live, recent };
+  return listCache;
+}
+
+/** WRL sessions the timing feed marks live right now (with the feed's ids: server side only). */
+export async function listLiveSessions(): Promise<LiveSessionRef[]> {
+  return (await scanSessions()).sessions;
+}
+
+/** WRL sessions that ended within RECENT_MS. */
+export async function listRecentSessions(): Promise<LiveSessionRef[]> {
+  return (await scanSessions()).recent;
+}
+
+/** A running poller's view of its session (no extra feed reads): leader's lap and flag. */
+export function liveStatusOf(eventId: number, sessionId: number): { leaderLap: number; flag: string | null } | null {
+  const st = pollers.get(`${eventId}/${sessionId}`)?.snap.chart?.status;
+  return st ? { leaderLap: st.leaderLap, flag: st.flag } : null;
 }

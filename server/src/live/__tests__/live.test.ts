@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { fakeHttp } from "../../intake/__tests__/fake-http.js";
 import { feedUrls, type FeedLap } from "../feed.js";
 import { buildLiveChart, closeOpenFlags, LiveNoLapsError, resultsFromState, trackLocalNow, type LiveSessionMeta } from "../build.js";
-import { getLiveSnapshot, listLiveSessions, liveSlug, liveUrls, setLiveHttp } from "../poller.js";
+import { getLiveSnapshot, listLiveSessions, listRecentSessions, liveSlug, liveUrls, resolveLiveSlug, setLiveHttp } from "../poller.js";
 import { liveRouter } from "../../routes/live.js";
 
 const json = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf-8"));
@@ -158,7 +158,29 @@ describe("live poller and routes", () => {
   it("lists only live WRL sessions", async () => {
     setLiveHttp(fakeHttp(routes([])));
     const xs = await listLiveSessions();
-    expect(xs).toEqual([{ slug: "synthetic-park-2026-saturday-8-hour", eventId: 9001, sessionId: 7, eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", track: "Synthetic Park", startedAt: "2026-05-02T23:40:00" }]);
+    expect(xs).toEqual([
+      { slug: "synthetic-park-2026-saturday-8-hour", eventId: 9001, sessionId: 7, eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", track: "Synthetic Park", startedAt: "2026-05-02T23:40:00.000Z", endedAt: null, kind: "race" },
+    ]);
+  });
+
+  it("lists sessions that ended within two hours, and keeps their addresses working", async () => {
+    const ended = new Date(Date.now() - 3600_000).toISOString().replace("Z", "");
+    const old = new Date(Date.now() - 5 * 3600_000).toISOString().replace("Z", "");
+    const today = new Date().toISOString().slice(0, 10);
+    setLiveHttp(
+      fakeHttp({
+        [feedUrls.liveAndRecent()]: JSON.stringify([{ eid: 9003, oid: 1, en: "World Racing League - Synthetic Park 2026", t: "Synthetic Park", l: false, ed: today }]),
+        [feedUrls.sessions(9003)]: JSON.stringify([
+          { sid: 4, eid: 9003, n: "GTO/GTU Qualifying", st: old, et: old, tz: -4, il: false, pq: true },
+          { sid: 5, eid: 9003, n: "Saturday 8 Hour", st: old, et: ended, tz: -4, il: false, pq: false },
+        ]),
+      })
+    );
+    expect(await listLiveSessions()).toEqual([]);
+    const recent = await listRecentSessions();
+    expect(recent.map((r) => [r.slug, r.kind, r.endedAt])).toEqual([["synthetic-park-2026-saturday-8-hour", "race", `${ended}Z`]]);
+    // An older session of the event is no longer "just finished", but its page still resolves.
+    expect(await resolveLiveSlug("synthetic-park-2026-gto-gtu-qualifying")).toEqual({ eventId: 9003, sessionId: 4 });
   });
 
   it("GET /api/live/:slug returns chart-data shape, gzip and 304", async () => {
@@ -170,7 +192,11 @@ describe("live poller and routes", () => {
       const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live`;
       // The list names sessions by slug only.
       const list = await (await fetch(base)).json();
-      expect(list).toEqual({ sessions: [{ slug: "synthetic-park-2026-saturday-8-hour", eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", track: "Synthetic Park", startedAt: "2026-05-02T23:40:00" }] });
+      expect(list.sessions).toEqual([
+        { slug: "synthetic-park-2026-saturday-8-hour", eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", track: "Synthetic Park", startedAt: "2026-05-02T23:40:00.000Z", endedAt: null, kind: "race", status: null },
+      ]);
+      expect(Array.isArray(list.upcoming)).toBe(true);
+      expect(list.recent).toEqual([]);
       const r = await fetch(`${base}/synthetic-park-2026-saturday-8-hour`, { headers: { "accept-encoding": "gzip" } });
       expect(r.status).toBe(200);
       const text = await r.clone().text();

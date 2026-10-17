@@ -27,7 +27,8 @@
  */
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
-import { getLiveSnapshot, listLiveSessions, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { getLiveSnapshot, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 
 export const liveRouter = Router();
@@ -243,11 +244,20 @@ const fullCache = new Map<string, { v: number; json: string }>();
 /** Recent deltas per session ("base>v" → JSON), so viewers on the same version share one. */
 const deltaCache = new Map<string, Map<string, string>>();
 
+/**
+ * What is on now, coming up and just finished: the site banner (every page, every minute) and
+ * /live. Sessions live on the timing feed (with the running poller's lap and flag), sessions from
+ * the published schedule starting within a day and a half, and sessions that ended in the last two
+ * hours. Cached at the edge like the rest of /api/live.
+ */
 liveRouter.get("/", async (_req, res, next) => {
   try {
-    const sessions = (await listLiveSessions()).map(publicListing);
+    const [live, recent] = await Promise.all([listLiveSessions(), listRecentSessions()]);
+    const sessions = live.map((r) => ({ ...publicListing(r), status: liveStatusOf(r.eventId, r.sessionId) }));
+    const upcoming = upcomingSessions(Date.now(), [...live, ...recent]);
     res.set("Cache-Control", "public, max-age=30");
-    res.json({ sessions });
+    res.set("CDN-Cache-Control", "max-age=30");
+    res.json({ sessions, upcoming, recent: recent.map(publicListing) });
   } catch (e) {
     next(e);
   }

@@ -16,7 +16,8 @@ import { carKey, carNo } from "../features/chart/car-number";
 import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
-import { fetchLiveSessions, useLiveChartData, type LiveSessionListing } from "../hooks/useLiveChartData";
+import { fetchLiveSessions, useLiveChartData, type LiveListing, type LiveSessionListing } from "../hooks/useLiveChartData";
+import { whenText } from "../features/live/banner";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
@@ -133,18 +134,32 @@ function LiveDot() {
 // ─── /live ────────────────────────────────────────────────────────────────────
 
 export function LiveListPage() {
-  const [sessions, setSessions] = useState<LiveSessionListing[] | null>(null);
+  const [list, setList] = useState<LiveListing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const now = useNow();
   useEffect(() => {
-    fetchLiveSessions()
-      .then((r) => setSessions(r.sessions))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load live sessions"));
+    let alive = true;
+    const load = () =>
+      fetchLiveSessions()
+        .then((r) => alive && setList(r))
+        .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load live sessions"));
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
+  const sessions = list?.sessions ?? null;
+  const upcoming = list?.upcoming ?? [];
+  const recent = list?.recent ?? [];
 
-  if (sessions && sessions.length === 1) {
+  if (sessions && sessions.length === 1 && upcoming.length === 0) {
     const s = sessions[0];
     return <Navigate to={`/live/${s.slug}`} replace />;
   }
+  const kindLabel = (k: LiveSessionListing["kind"]) => (k === "qualify" ? "Qualifying" : k === "practice" ? "Practice" : "Race");
+  const card = "flex items-center justify-between gap-3 rounded-lg border px-4 py-3";
   return (
     <div className="min-h-full px-4 py-10 sm:px-8" style={{ background: "#0b0b18", color: RT.text }}>
       <div className="mx-auto max-w-2xl">
@@ -152,32 +167,59 @@ export function LiveListPage() {
           <LiveDot /> RaceTrace Live
         </h1>
         <p className="mt-1 text-sm" style={{ color: RT.muted }}>
-          WRL races that are running right now, lap by lap from the timing.
+          WRL sessions lap by lap from the timing: races, qualifying and practice.
         </p>
         {error && <p className="mt-6 text-sm" style={{ color: RT.soft }}>{error}</p>}
-        {!sessions && !error && <p className="mt-6 text-sm" style={{ color: RT.muted }}>Looking for live races…</p>}
-        {sessions && sessions.length === 0 && (
+        {!list && !error && <p className="mt-6 text-sm" style={{ color: RT.muted }}>Looking for live sessions…</p>}
+        {list && sessions?.length === 0 && upcoming.length === 0 && (
           <p className="mt-6 text-sm" style={{ color: RT.soft }}>
-            No WRL race is running right now. <Link to="/races" className="underline" style={{ color: RT.accent }}>Browse finished races</Link>.
+            Nothing is running right now. <Link to="/races" className="underline" style={{ color: RT.accent }}>Browse finished races</Link>.
           </p>
         )}
         <ul className="mt-6 space-y-2">
           {(sessions ?? []).map((s) => (
             <li key={s.slug}>
-              <Link
-                to={`/live/${s.slug}`}
-                className="flex items-center justify-between rounded-lg border px-4 py-3 hover:brightness-125"
-                style={{ background: RT.card, borderColor: RT.border }}
-              >
+              <Link to={`/live/${s.slug}`} className={`${card} hover:brightness-125`} style={{ background: RT.card, borderColor: RT.border }}>
                 <span>
                   <span className="block font-medium">{s.sessionName}</span>
                   <span className="block text-sm" style={{ color: RT.muted }}>
-                    {s.eventName}
-                    {s.track ? ` · ${s.track}` : ""}
+                    {kindLabel(s.kind)} · {s.eventName}
+                    {s.status?.leaderLap ? ` · Lap ${s.status.leaderLap}` : ""}
                   </span>
                 </span>
                 <span className="flex items-center gap-2 text-xs font-semibold tracking-wider" style={{ color: RT.live }}>
                   <LiveDot /> LIVE
+                </span>
+              </Link>
+            </li>
+          ))}
+          {upcoming.map((u) => (
+            <li key={u.id} className={card} style={{ background: RT.card, borderColor: RT.border }}>
+              <span>
+                <span className="block font-medium">{u.sessionName}</span>
+                <span className="block text-sm" style={{ color: RT.muted }}>
+                  {u.series} · {u.eventName} · {new Date(u.startsAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
+                </span>
+                <span className="mt-1 block text-xs" style={{ color: RT.muted }}>
+                  Live timing opens here when the session starts.
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-semibold tracking-wider" style={{ color: RT.accent }}>
+                {whenText(u.startsAt, now)}
+              </span>
+            </li>
+          ))}
+          {recent.map((s) => (
+            <li key={s.slug}>
+              <Link to={`/live/${s.slug}`} className={`${card} hover:brightness-125`} style={{ background: RT.card, borderColor: RT.border }}>
+                <span>
+                  <span className="block font-medium">{s.sessionName}</span>
+                  <span className="block text-sm" style={{ color: RT.muted }}>
+                    {kindLabel(s.kind)} · {s.eventName}
+                  </span>
+                </span>
+                <span className="text-xs font-semibold tracking-wider" style={{ color: RT.muted }}>
+                  FINISHED
                 </span>
               </Link>
             </li>

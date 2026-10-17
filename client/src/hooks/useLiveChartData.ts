@@ -1,3 +1,4 @@
+import type { LiveListing } from "../features/live/banner";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { AnnotationData, RaceChartData } from "@shared/types";
@@ -363,14 +364,13 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
   return { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver: saver && !streaming, streaming, refresh: () => void load() };
 }
 
-export interface LiveSessionListing {
-  slug: string;
-  eventName: string;
-  sessionName: string;
-  track: string;
-  startedAt: string | null;
+export type { LiveListed as LiveSessionListing, LiveListing, UpcomingListed } from "../features/live/banner";
+
+/** What is live, coming up and just finished: through the edge, without the login (every page asks). */
+export async function fetchLiveListing(): Promise<LiveListing> {
+  return (await getPublic<LiveListing>("/live")).body;
 }
 
 export function fetchLiveSessions() {
-  return api.get<{ sessions: LiveSessionListing[] }>("/live");
+  return fetchLiveListing();
 }
