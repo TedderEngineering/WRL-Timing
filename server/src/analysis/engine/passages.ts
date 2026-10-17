@@ -918,15 +918,30 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       p.notes.push("The car's last crossing (the chequered flag) was made in the pit lane.");
       continue;
     }
-    // The serve window counts green-flag time only: the pit lane is closed under caution.
+    // The serve window counts green-flag time on track only: the pit lane is closed under caution,
+    // and a car in the garage can't serve (its own earlier visits are taken out too).
+    const ownVisits = passages
+      .filter((q) => q.car === p.car && q !== p && q.pinT !== null && q.poutT !== null && q.poutT <= pin)
+      .map((q) => ({ start: q.pinT!, end: q.poutT! }));
+    const neutral = [...periods, ...ownVisits];
     const cand = pens
-      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(periods, x.t, pin) <= serveWindowS)
+      .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(neutral, x.t, pin) <= serveWindowS)
       .sort((a, b) => a.t! - b.t!);
     const short = pl !== null && T !== null && pl <= 1.15 * T;
-    // A short visit with no penalty before it, and a drive-through announced just after it.
+    // A visit with no penalty before it, and a penalty of its kind announced just after it (the
+    // team is told before the message appears): a drive-through for a short visit, a stop penalty
+    // for a longer one.
     const early =
-      !cand.length && short && p.pitType !== "PENALTY"
-        ? pens.find((x) => x.car === p.car && !x.servedBy && x.ptype === "drive_through" && x.t !== null && x.t > pin && x.t - pin <= SERVED_BEFORE_MESSAGE_S)
+      !cand.length && p.pitType !== "PENALTY"
+        ? pens.find(
+            (x) =>
+              x.car === p.car &&
+              !x.servedBy &&
+              x.t !== null &&
+              x.t > pin &&
+              x.t - pin <= SERVED_BEFORE_MESSAGE_S &&
+              ((x.ptype === "drive_through" && short) || ((x.ptype === "stop_plus" || x.ptype === "stop_and_go") && pl !== null && !short))
+          )
         : undefined;
     if (early) {
       cand.push(early);
