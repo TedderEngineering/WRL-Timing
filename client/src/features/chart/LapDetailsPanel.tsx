@@ -13,6 +13,7 @@ import { formatLapTime, type LapInfoData } from "./chart-renderer";
 import { TRACE } from "./constants";
 import { carNo } from "./car-number";
 import { CarDrivers } from "../my-drivers/CarDrivers";
+import { longStopNotes, longStops } from "./long-stops";
 
 const T = { card: "#12122a", line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", good: "#4ade80", bad: "#e66767", warn: "#fab219" };
 
@@ -99,6 +100,8 @@ export function CarSummary({
   const live = useContext(LiveRaceContext);
   if (!car || !f) return null;
   const marks = classBenchmarks(data, annotations, focusNum);
+  // RaceTrace Live: a long stop is why a car is laps down, so it is said next to the benchmarks.
+  const stops = live ? longStopNotes(longStops(data, focusNum)) : [];
   const finish =
     f.pos !== null
       ? `${live ? "Running" : "Finished"} P${f.posClass ?? "?"} in ${car.cls} · P${f.pos} overall`
@@ -132,6 +135,19 @@ export function CarSummary({
               style={{ borderColor: "rgba(74,222,128,0.35)", color: T.soft, background: "rgba(74,222,128,0.06)" }}
             >
               {m.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {stops.length > 0 && (
+        <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0" aria-label="Long stops">
+          {stops.map((st) => (
+            <li
+              key={st}
+              className="rounded-md border px-2 py-0.5 text-[12px]"
+              style={{ borderColor: "rgba(230,103,103,0.45)", color: T.soft, background: "rgba(230,103,103,0.08)" }}
+            >
+              {st}
             </li>
           ))}
         </ul>
