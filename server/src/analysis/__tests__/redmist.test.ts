@@ -7,7 +7,7 @@ import { buildFacts } from "../buildFacts.js";
 import { adaptRedmist, parseUtcLabel, renumberedVisitS, rmLineFlag } from "../adapters/redmist.js";
 import { detectRole } from "../adapters/index.js";
 import { buildLaps, type LapRow } from "../engine/context.js";
-import { redmistFlagVisits } from "../engine/passages.js";
+import { penaltyType, redmistFlagVisits } from "../engine/passages.js";
 import { validatePackage } from "../validate-package.js";
 import type { BuildOptions, SourceFileInfo } from "../types.js";
 import { crossing, RM_CAR1_ENTRY, RM_CAR1_PIT, RM_CARS, RM_GARAGE_EXTRA_S, redmistFiles } from "./redmist-synth.js";
@@ -241,6 +241,16 @@ describe("RedMist pit passages (with the Flagtronics pit report)", () => {
 
   it("is deterministic", () => {
     expect(JSON.stringify(build())).toEqual(JSON.stringify(pkg));
+  });
+});
+
+describe("penalty types", () => {
+  it("a black flag calls the car in; only the word disqualification is a disqualification", () => {
+    expect(penaltyType("TEAM REQUEST BLACK FLAG").type).toBe("other");
+    expect(penaltyType("BLACK FLAG").type).toBe("other");
+    expect(penaltyType("Disqualified").type).toBe("disqualification");
+    expect(penaltyType("DSQ").type).toBe("disqualification");
+    expect(penaltyType("DRIVE THROUGH").type).toBe("drive_through");
   });
 });
 

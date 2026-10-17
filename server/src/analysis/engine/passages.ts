@@ -701,7 +701,10 @@ export function penaltyType(decision: string): { type: PenaltyType; amount: numb
   if (/stop\s*(\+|plus)\s*\d+/i.test(d)) return { type: "stop_plus", amount: num(/stop\s*(?:\+|plus)\s*([0-9.]+)/i) };
   if (/stop\s+and\s+hold/i.test(d)) return { type: "stop_plus", amount: num(/([0-9.]+)/) };
   if (/time penalty.*(next eligible|stop)/i.test(d)) return { type: "time_at_stop", amount: num(/([0-9.]+)\s*sec/i) };
-  if (/disqualif|\bdsq\b|black flag/i.test(d)) return { type: "disqualification", amount: null };
+  // A black flag calls the car in (WRL: "TEAM REQUEST BLACK FLAG" is the team asking for it); only
+  // the word disqualification makes it one.
+  if (/disqualif|\bdsq\b/i.test(d)) return { type: "disqualification", amount: null };
+  if (/black flag/i.test(d)) return { type: "other", amount: null };
   if (/grid/i.test(d)) return { type: "grid", amount: null };
   if (/position/i.test(d)) return { type: "position", amount: null };
   if (/\blaps?\b/i.test(d) && !/lap time/i.test(d)) return { type: "lap", amount: null };
