@@ -433,4 +433,11 @@ describe("penalties without pit-lane times, and a post-race penalty printed twic
     expect(ps[0].status).toBe("applied_post_race");
     expect(ps[0].source.refs!.length).toBe(2);
   });
+
+  it("reads 'moved to the back of the field' and 'post race time penalty' lines from the results", () => {
+    const back = f.events.penalties.find((x) => x.car === "72")!;
+    expect(back).toMatchObject({ penaltyType: "position", status: "applied_post_race", amountS: null });
+    expect(back.reason).toMatch(/^Moved to the back of the field/);
+    expect(f.events.penalties.find((x) => x.car === "73")).toMatchObject({ penaltyType: "post_race_time", amountS: 5, status: "applied_post_race" });
+  });
 });

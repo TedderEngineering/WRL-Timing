@@ -229,10 +229,14 @@ export function finalisePenalties(ctx: Ctx, allPens: PenaltyDraft[], entries: En
     let conf = x.confidence;
     if (x.ptype === "warning") status = "warning_only";
     else if (x.servedBy) status = "served";
-    else if (x.postRace) {
+    else if (x.postRace && x.ptype === "position") {
+      // Moved down the order by the stewards: the results already show it; no time to measure.
+      status = "applied_post_race";
+      appliedInResults = true;
+    } else if (x.postRace) {
       status = "applied_post_race";
       const total = e?.result?.postRacePenaltyS ?? null;
-      const siblings = pens.filter((q) => q.car === x.car && q.postRace);
+      const siblings = pens.filter((q) => q.car === x.car && q.postRace && q.ptype !== "position");
       const sum = siblings.reduce((a, q) => a + (q.amountS ?? 0), 0);
       // Several post-race decisions for one car: each carries its own amount when they add up to the results effect.
       const eff = total !== null && siblings.length > 1 && Math.abs(sum - total) <= 0.0015 ? x.amountS : total;

@@ -683,7 +683,9 @@ function redmistPassages(ctx: Ctx): Passage[] {
 
 const PEN_RE = /^Car\s+#?(\w+):\s*Penalty\s*-\s*(.+?)\s+-\s+(.+)$/i;
 const SERVED_RE = /^Car\s+#?(\w+):\s*Penalty(\s*#\d+)?\s+Served$/i;
-const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+time\s+penalty\s+for\s+(.+)$/i;
+const POST_RE = /^Car\s+#?(\w+)\s*-\s*([0-9.]+)\s*second[s]?\s+(?:post[- ]race\s+)?time\s+penalty\s+for\s+(.+)$/i;
+/** "Car #45 - Moved to the back of the field as per Penalty …": a post-race position penalty. */
+const BACK_RE = /^Car\s+#?(\w+)\s*-\s*(moved to the (?:back|rear) of the (?:field|class)\b.*)$/i;
 
 export function penaltyType(decision: string): { type: PenaltyType; amount: number | null } {
   const d = decision.trim();
@@ -776,6 +778,31 @@ export function parsePenalties(ctx: Ctx): { penalties: PenaltyDraft[]; served: S
   }
   // Post-race decisions printed in the results (IMSA session.report_message).
   for (const line of ctx.race.results?.postRaceLines ?? []) {
+    const back = line.text.match(BACK_RE);
+    if (back) {
+      const { car } = matchCar(back[1], ctx.cars);
+      if (car) {
+        penalties.push({
+          id: nextId(car),
+          car,
+          t: null,
+          reason: back[2].trim(),
+          ptype: "position",
+          amountS: null,
+          rawText: line.text,
+          files: [line.fileId],
+          refs: [`${line.fileId}:session.report_message`],
+          servedBy: null,
+          servedMsgT: null,
+          servedMsgRef: null,
+          status: "applied_post_race",
+          postRace: true,
+          confidence: "high",
+          confNotes: [],
+        });
+      }
+      continue;
+    }
     const m = line.text.match(POST_RE);
     if (!m) continue;
     const { car } = matchCar(m[1], ctx.cars);
