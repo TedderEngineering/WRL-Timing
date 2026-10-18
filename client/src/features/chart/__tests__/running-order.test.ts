@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CarData, PitMarker, RaceChartData } from "@shared/types";
-import { classBestStat, classBests, classColor, lapStat, lapText, lapTimes, nextLapStat, pitDetail, runningOrder, spanText } from "../RunningOrder";
+import { classBestStat, classBests, classColor, lapStat, lapText, lapTimes, nextLapStat, nextPitStat, pitDetail, pitStat, pitStatText, runningOrder, spanText } from "../RunningOrder";
 import { overallLeader, pitVisitsNow } from "../TrackMap";
 import { CLASS_COLORS } from "../constants";
 
@@ -170,5 +170,46 @@ describe("Best column cycle: best, 10-lap, stint and race averages", () => {
     const both = chart([a, b]);
     expect(classBestStat(both, "best").get("GTO")).toBe(120);
     expect(classBestStat(both, "race").get("GTO")).toBe(123);
+  });
+});
+
+describe("Pits column cycle: stops, last stop, total, time and laps since", () => {
+  it("cycles stops → last stop → total → since pit → laps since → stops", () => {
+    expect(nextPitStat("stops")).toBe("last");
+    expect(nextPitStat("last")).toBe("total");
+    expect(nextPitStat("total")).toBe("since");
+    expect(nextPitStat("since")).toBe("laps");
+    expect(nextPitStat("laps")).toBe("stops");
+  });
+
+  const c = car(119, "GTO", 1, 1);
+  c.laps = Array.from({ length: 40 }, (_, i) => lap(i + 1, 140, i + 1 === 12 || i + 1 === 33 ? 1 : 0));
+  const stop = (l: number, lost: number | null): PitMarker => ({ ...marker(l), pitTiming: lost === null ? undefined : ({ totalPitLoss: lost } as PitMarker["pitTiming"]) });
+  const pits = [stop(33, 126.6), stop(12, 125.2)];
+
+  it("counts stops and the time they cost (the last, and all)", () => {
+    expect(pitStat(c, pits, "stops")).toBe(2);
+    expect(pitStat(c, pits, "last")).toBeCloseTo(126.6, 6);
+    expect(pitStat(c, pits, "total")).toBeCloseTo(251.8, 6);
+  });
+
+  it("counts time and laps since the last stop's in-lap", () => {
+    expect(pitStat(c, pits, "laps")).toBe(7); // laps 34-40
+    expect(pitStat(c, pits, "since")).toBe(7 * 140);
+  });
+
+  it("counts from the start before a first stop, and shows nothing it cannot know", () => {
+    expect(pitStat(c, [], "laps")).toBe(40);
+    expect(pitStat(c, undefined, "stops")).toBe(0);
+    expect(pitStat(c, [], "last")).toBeNull();
+    expect(pitStat(c, [stop(12, null)], "total")).toBeNull();
+    expect(pitStat(car(5, "GTO", 2, 2), [], "since")).toBeNull();
+  });
+
+  it("shows counts as numbers and times as M:SS or H:MM:SS", () => {
+    expect(pitStatText(2, "stops")).toBe("2");
+    expect(pitStatText(126.6, "last")).toBe("2:06");
+    expect(pitStatText(4000, "since")).toBe("1:06:40");
+    expect(pitStatText(null, "total")).toBe("–");
   });
 });
