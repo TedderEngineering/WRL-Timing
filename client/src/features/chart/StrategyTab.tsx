@@ -60,7 +60,7 @@ const COLUMNS: Column[] = [
   { key: "yellowPitPct", label: "Yellow Pits", getValue: (m) => m.yellowPitPct, fmt: (m) => m.yellowPitPct.toFixed(0) + "%", type: "num", defaultDir: "desc", width: "76px" },
   { key: "avgStintLen", label: "Avg Stint", getValue: (m) => m.avgStintLen, fmt: (m) => m.avgStintLen.toFixed(1) + "L", type: "num", defaultDir: "desc", width: "68px" },
   { key: "maxStintLen", label: "Max Stint", getValue: (m) => m.maxStintLen, fmt: (m) => m.maxStintLen + "L", type: "num", defaultDir: "desc", width: "68px" },
-  { key: "strategyScore", label: "Strategy Score", getValue: (m) => m.strategyScore, fmt: (m) => m.strategyScore.toFixed(1), type: "num", defaultDir: "desc", width: "130px" },
+  { key: "strategyScore", label: "Strategy Score", getValue: (m) => m.strategyScore, fmt: (m) => (m.strategyScore < 0 ? "–" : m.strategyScore.toFixed(1)), type: "num", defaultDir: "desc", width: "130px" },
 ];
 
 // ─── Inline style constants (matching reference design) ─────────────────────
@@ -425,7 +425,7 @@ export function StrategyTab({
                     // Strategy score column with bar
                     if (col.key === "strategyScore") {
                       return (
-                        <td key={col.key} style={{
+                        <td key={col.key} title={m.strategyScore < 0 ? "Not scored: ran less than three quarters of its class's laps" : undefined} style={{
                           padding: "8px 12px",
                           borderBottom: `1px solid ${S.bdr}`,
                           whiteSpace: "nowrap",
