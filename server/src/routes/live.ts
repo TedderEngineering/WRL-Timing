@@ -27,7 +27,7 @@
  */
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
-import { getLiveSnapshot, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
 import { upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 
@@ -152,6 +152,47 @@ liveRouter.get("/:slug/head", async (req, res, next) => {
     res.set("Cache-Control", "public, max-age=2");
     res.set("CDN-Cache-Control", "max-age=4");
     sendJson(req, res, JSON.stringify(headOf(s.slug, snap)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** The track outline (no coordinates): drawn once by the track map. 404 until the feed has learned it. */
+liveRouter.get("/:slug/track", async (req, res, next) => {
+  try {
+    const s = await sessionFor(req, res);
+    if (!s) return;
+    const { track } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
+    if (!track) {
+      noStore(res);
+      res.status(404).json({ error: "No track map yet", code: "LIVE_NO_TRACK" });
+      return;
+    }
+    res.set("Cache-Control", "public, max-age=300");
+    res.set("CDN-Cache-Control", "max-age=600");
+    sendJson(req, res, JSON.stringify(track));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Every car's latest place on the track (metres past the line, mph, pit / no-GPS / stale flags),
+ * from the state read every 5 s. Only the track map asks for it; the edge keeps it 2 s.
+ */
+liveRouter.get("/:slug/pos", async (req, res, next) => {
+  try {
+    const s = await sessionFor(req, res);
+    if (!s) return;
+    const { positions } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
+    if (!positions) {
+      noStore(res);
+      res.status(404).json({ error: "No positions yet", code: "LIVE_NO_POSITIONS" });
+      return;
+    }
+    res.set("Cache-Control", "public, max-age=1");
+    res.set("CDN-Cache-Control", "max-age=2");
+    sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars }));
   } catch (e) {
     next(e);
   }

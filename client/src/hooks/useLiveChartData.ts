@@ -31,7 +31,7 @@ interface LiveHead {
 export const LIVE_API_BASE: string = import.meta.env.VITE_LIVE_API_URL || "/api";
 
 /** A public request without the login, so every phone asks the same question and the CDN can answer. */
-async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
+export async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
   const res = await fetch(`${LIVE_API_BASE}${path}`, { credentials: "omit" });
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   // A copy the edge has held adds its Age (seconds) to how old the race clock is.

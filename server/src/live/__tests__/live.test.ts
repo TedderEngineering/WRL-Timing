@@ -30,7 +30,7 @@ const META: LiveSessionMeta = {
 };
 
 /** A msgpack SessionState array (decode-functions.ts field order) with only the fields the chart reads. */
-function stateArray(o: { sessionId?: number; tod?: string; run?: string; ttg?: string; flag?: number; entries?: string[][]; positions?: { n: string; c: string; llp: number; ovp: number; clp: number }[] }) {
+function stateArray(o: { sessionId?: number; tod?: string; run?: string; ttg?: string; flag?: number; entries?: string[][]; positions?: { n: string; c: string; llp: number; ovp: number; clp: number; lat?: number; lon?: number; mph?: number }[] }) {
   const a: unknown[] = new Array(36).fill(null);
   a[0] = 9001;
   a[2] = o.sessionId ?? 7;
@@ -45,6 +45,12 @@ function stateArray(o: { sessionId?: number; tod?: string; run?: string; ttg?: s
     x[15] = p.llp;
     x[20] = p.ovp;
     x[21] = p.clp;
+    if (p.lat !== undefined) {
+      x.length = 70;
+      x[47] = p.lat;
+      x[48] = p.lon ?? null;
+      x[54] = p.mph ?? null;
+    }
     return x;
   });
   a[15] = o.flag ?? 1;
@@ -199,6 +205,39 @@ describe("live poller and routes", () => {
     expect(recent.map((r) => [r.slug, r.kind, r.endedAt])).toEqual([["synthetic-park-2026-saturday-8-hour", "race", `${ended}Z`]]);
     // An older session of the event is no longer "just finished", but its page still resolves.
     expect(await resolveLiveSlug("synthetic-park-2026-gto-gtu-qualifying")).toEqual({ eventId: 9003, sessionId: 4 });
+  });
+
+  it("serves the track outline and every car's place on it, without coordinates or ids", async () => {
+    const sebring = readFileSync(new URL("./fixtures/sebring-track.json", import.meta.url), "utf8");
+    const p0 = (JSON.parse(sebring) as { pts: { lat: number; lon: number }[] }).pts[10];
+    const r = routes(upTo(3));
+    r[liveUrls.state(9001)] = Buffer.from(encode(stateArray({ entries: [["11", "Synthetic Racing", "", "GTO"]], positions: [{ n: "11", c: "GTO", llp: 2, ovp: 1, clp: 1, lat: p0.lat, lon: p0.lon, mph: 98 }] })));
+    r[liveUrls.trackMap(9001)] = sebring;
+    setLiveHttp(fakeHttp(r));
+    const app = express();
+    app.use("/api/live", liveRouter);
+    const server = app.listen(0);
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live/synthetic-park-2026-saturday-8-hour`;
+      const tr = await fetch(`${base}/track`);
+      expect(tr.status).toBe(200);
+      const track = (await tr.json()) as { len: number; pts: number[][] };
+      expect(track.len).toBeCloseTo(5734.4, 1);
+      expect(track.pts.length).toBe(93);
+      const pr = await fetch(`${base}/pos`);
+      expect(pr.status).toBe(200);
+      const text = await pr.text();
+      expect(text).not.toMatch(/27\.45|-81\.3|\b9001\b|lat|lon/);
+      const pos = JSON.parse(text) as { ageMs: number; cars: [string, number | null, number | null, number][] };
+      expect(pos.cars).toHaveLength(1);
+      expect(pos.cars[0][0]).toBe("11");
+      expect(pos.cars[0][1]).toBeGreaterThan(400);
+      expect(pos.cars[0][1]).toBeLessThan(600);
+      expect(pos.cars[0][2]).toBe(98);
+      expect(pr.headers.get("cdn-cache-control")).toBe("max-age=2");
+    } finally {
+      server.close();
+    }
   });
 
   it("GET /api/live/:slug returns chart-data shape, gzip and 304", async () => {
