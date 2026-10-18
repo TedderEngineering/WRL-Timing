@@ -86,6 +86,38 @@ export interface NextSession {
  * The next session of a round from the live schedule: same series (the schedule's series is the
  * calendar series' short label), a track the round names, and not over at `nowMs`.
  */
+/** The live schedule's sessions of a round: same series (its short label), a track the round names, a day of the round. */
+export function sessionsOfRound<T extends { series: string; track: string; startsAt: string }>(
+  shortLabel: string,
+  round: Pick<CalendarRound, "tracks" | "start" | "end">,
+  schedule: T[]
+): T[] {
+  return schedule
+    .filter((x) => x.series.toLowerCase() === shortLabel.toLowerCase())
+    .filter((x) => {
+      const d = dayNumber(x.startsAt.slice(0, 10));
+      return d >= dayNumber(round.start) && d <= dayNumber(round.end);
+    })
+    .filter((x) => {
+      const t = normalizeTrack(x.track);
+      return round.tracks.some((alias) => {
+        const a = normalizeTrack(alias);
+        return a.length > 0 && (t.includes(a) || a.includes(t));
+      });
+    });
+}
+
+/** True when the schedule lists sessions for the round and every one has ended by `nowMs`. */
+export function roundScheduleOver(
+  shortLabel: string,
+  round: Pick<CalendarRound, "tracks" | "start" | "end">,
+  nowMs: number,
+  schedule: { series: string; track: string; startsAt: string; endsAt: string }[]
+): boolean {
+  const xs = sessionsOfRound(shortLabel, round, schedule);
+  return xs.length > 0 && xs.every((x) => Date.parse(x.endsAt) <= nowMs);
+}
+
 export function nextSessionFor(
   shortLabel: string,
   round: Pick<CalendarRound, "tracks" | "start" | "end">,
@@ -153,7 +185,16 @@ export function raceInRound(race: SeasonRace, r: CalendarRound): boolean {
   });
 }
 
-export function buildSeason(cal: Calendar, races: SeasonRace[], today: Date | string): SeasonSeries[] {
+/**
+ * `scheduleOver(shortLabel, round)`: true when the live schedule lists the round's sessions and all
+ * of them are over (routes/dashboard.ts passes it; see sessionsOfRound).
+ */
+export function buildSeason(
+  cal: Calendar,
+  races: SeasonRace[],
+  today: Date | string,
+  scheduleOver: (shortLabel: string, round: CalendarRound) => boolean = () => false
+): SeasonSeries[] {
   const now = dayNumber(today);
   return cal.series.map((s) => {
     const mine = races.filter((r) => raceInSeries(r, s));
@@ -186,9 +227,15 @@ export function buildSeason(cal: Calendar, races: SeasonRace[], today: Date | st
         })),
       };
     });
-    // The next round is the first one not over yet: a weekend stays "next" until its last day, even
-    // once its first race is on the site (Saturday's race in, Sunday's still to run).
-    const next = rounds.find((r) => dayNumber(r.end) >= now) ?? null;
+    // The next round is the first one not over yet: a weekend stays "next" while it runs, even once
+    // its first race is on the site (Saturday's race in, Sunday's still to run). It is over after its
+    // last day, or as soon as its last day's race is on the site, or every session the live schedule
+    // lists for it has ended: then the following round is next the same evening.
+    const done = (r: SeasonRound, i: number): boolean =>
+      dayNumber(r.end) < now ||
+      r.races.some((x) => dayNumber(x.date) >= dayNumber(r.end)) ||
+      scheduleOver(s.shortLabel, s.rounds[i]);
+    const next = rounds.find((r, i) => !done(r, i)) ?? null;
     if (next) next.isNext = true;
     const run = rounds.filter((r) => dayNumber(r.end) < now).length;
     const onSite = rounds.filter((r) => r.status === "on_site").length;
