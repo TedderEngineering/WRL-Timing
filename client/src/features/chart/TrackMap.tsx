@@ -5,7 +5,7 @@ import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, OFF_TRACK, STALE, isFrozen, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
+import { IN_PIT, NO_GPS, OFF_TRACK, STALE, isFrozen, isStopped, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -34,6 +34,8 @@ const C = {
   leaderDot: "#d4d4e2",
   /** The dashed ring round a car off the track. */
   offTrack: "#f97316",
+  /** The ring round a stopped car. */
+  stopped: "#ef4444",
 };
 
 /**
@@ -123,7 +125,8 @@ export function TrackMap({
         .map((l) => l.ltSec)
         .sort((a, b) => a - b);
       const pace = xs.length ? Math.max(0.6 * typicalSpeed, Math.min(1.4 * typicalSpeed, track.len / xs[Math.floor(xs.length / 2)])) : null;
-      out.set(carNo(data, Number(k)), { pace, laps: c.laps.length ? c.laps[c.laps.length - 1].l : 0 });
+      const last = c.laps[c.laps.length - 1];
+      out.set(carNo(data, Number(k)), { pace, laps: last ? last.l : 0, lastLapS: last && last.ltSec > 0 ? last.ltSec : null });
     }
     return out;
   }, [data, track, typicalSpeed]);
@@ -267,6 +270,14 @@ export function TrackMap({
         ctx.lineWidth = 2.5;
         ctx.stroke();
       }
+      if (!offTrack && isStopped(d.m, t, track.len)) {
+        // Stopped (frozen fix, next lap overdue): a solid red ring at its last real fix.
+        ctx.strokeStyle = C.stopped;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (offTrack) {
         // Off the track: a dashed orange ring round the dot.
         ctx.setLineDash([3, 2.5]);
@@ -371,6 +382,8 @@ export function TrackMap({
   const keys = (nums: string[]) => nums.map((n) => carKey(data, n)).filter((k): k is number => k !== null && !!data.cars[String(k)]);
   const leader = overallLeader(data);
   const leaderInPits = leader !== null && keys(pits).includes(leader) ? leader : null;
+  // Cars stopped now (frozen fix, next lap overdue), refreshed with the clock every second.
+  const stopped = track ? [...motions.current.values()].filter((m) => isStopped(m, now, track.len)).map((m) => m.num) : [];
   const label = (nums: string[]) =>
     keys(nums)
       .map((k) => `#${carNo(data, k)}`)
@@ -402,6 +415,12 @@ export function TrackMap({
           </span>
         )}
         {label(unplaced) && <span>No position: {label(unplaced)}</span>}
+        {label(stopped) && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px]" style={{ borderColor: C.stopped }} />
+            Stopped: {label(stopped)}
+          </span>
+        )}
         {label(offTrack) && (
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-dashed" style={{ borderColor: C.offTrack }} />
