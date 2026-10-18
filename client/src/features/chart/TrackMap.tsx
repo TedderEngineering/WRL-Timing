@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RaceChartData } from "@shared/types";
+import type { AnnotationData, RaceChartData } from "@shared/types";
 import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
-import { RunningOrder } from "./RunningOrder";
+import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
 import { IN_PIT, NO_GPS, STALE, pointAt, signedGap, step, takeReading, type CarMotion, type CarPlace } from "./track-motion";
 
@@ -38,6 +38,7 @@ export function TrackMap({
   compSet,
   classView,
   flag = null,
+  annotations = null,
 }: {
   slug: string;
   data: RaceChartData;
@@ -47,12 +48,19 @@ export function TrackMap({
   classView: string;
   /** The session's flag now ("Yellow", "Code 35"…): under a caution the safety car is shown. */
   flag?: string | null;
+  /** The race's notes (its pit stops), for the running order. */
+  annotations?: AnnotationData | null;
 }) {
   const [track, setTrack] = useState<TrackOutline | null>(null);
   const [trackMissing, setTrackMissing] = useState(false);
   const [readingAt, setReadingAt] = useState<number | null>(null);
   const [pits, setPits] = useState<string[]>([]);
   const [unplaced, setUnplaced] = useState<string[]>([]);
+  const [pitVisits, setPitVisits] = useState<Map<number, PitVisit>>(() => new Map());
+  /** Whether a reading has come yet (a car in the pits at the first one went in before the page saw it). */
+  const seenReading = useRef(false);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [now, setNow] = useState(() => Date.now());
   const motions = useRef(new Map<string, CarMotion>());
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,7 +110,12 @@ export function TrackMap({
           const onTrack = body.cars.filter((c) => !(c[3] & IN_PIT));
           motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed);
           setReadingAt(t - age);
-          setPits(body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]));
+          const inPit = body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]);
+          setPits(inPit);
+          // When a car new to the pit lane went in: unknown at the first reading (it was there already).
+          const wentIn = seenReading.current ? t - age : null;
+          seenReading.current = true;
+          setPitVisits((prev) => pitVisitsNow(prev, inPit, dataRef.current, wentIn));
           setUnplaced(body.cars.filter((c) => !(c[3] & IN_PIT) && c[1] === null).map((c) => c[0]));
         })
         .catch(() => undefined);
@@ -304,7 +317,7 @@ export function TrackMap({
             </p>
           )}
         </div>
-        <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} inPit={new Set(keys(pits))} />
+        <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} annotations={annotations} pits={pitVisits} now={now} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
         {pits.length > 0 && (
@@ -328,6 +341,21 @@ export function TrackMap({
       </div>
     </div>
   );
+}
+
+/**
+ * The cars in the pit lane after a reading: one already there keeps its visit; one new to it went
+ * in at `at` (null when unknown: already there at the page's first reading), after its laps so far.
+ */
+export function pitVisitsNow(prev: Map<number, PitVisit>, inPit: string[], data: RaceChartData, at: number | null): Map<number, PitVisit> {
+  const out = new Map<number, PitVisit>();
+  for (const n of inPit) {
+    const key = carKey(data, n);
+    if (key === null || !data.cars[String(key)]) continue;
+    const laps = data.cars[String(key)].laps;
+    out.set(key, prev.get(key) ?? { since: at, afterLap: laps.length ? laps[laps.length - 1].l : 0 });
+  }
+  return out;
 }
 
 /** Flags that bring out the safety car (a full-course caution). */
