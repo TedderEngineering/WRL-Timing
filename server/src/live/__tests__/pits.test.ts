@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PitLearner, lapMedian, pitForAt, pitLearnerFor, pitSinceNow } from "../pits.js";
+import { PitLearner, lapMedian, pitLearnerFor } from "../pits.js";
 import { IN_PIT, type CarPlace } from "../track.js";
 
 const LEN = 5734;
@@ -37,23 +37,5 @@ describe("where the pit lane is, from the pit flags", () => {
 
   it("is shared by a track's sessions", () => {
     expect(pitLearnerFor("Sebring International Raceway")).toBe(pitLearnerFor(" sebring international raceway "));
-  });
-});
-
-describe("how long each car has been in the pits", () => {
-  const at = (t: number, cars: CarPlace[]) => ({ t, cars });
-  it("times a car from the read its flag came on, while it stays in", () => {
-    const seen = new Set<string>();
-    let since = pitSinceNow(new Map(), seen, at(1000, [["48", 5600, 80, 0]]));
-    since = pitSinceNow(since, seen, at(6000, [["48", 5700, 35, IN_PIT]]));
-    since = pitSinceNow(since, seen, at(50_000, [["48", 20, 0, IN_PIT]]));
-    expect(pitForAt(since, 50_000)).toEqual({ "48": 44_000 });
-  });
-  it("leaves out a car already in the pits when first seen (in before the server was watching), and drops a car once out", () => {
-    const seen = new Set<string>();
-    let since = pitSinceNow(new Map(), seen, at(1000, [["97", 20, 0, IN_PIT], ["48", 20, 0, IN_PIT]]));
-    expect(pitForAt(since, 9000)).toEqual({});
-    since = pitSinceNow(since, seen, at(6000, [["97", 20, 0, IN_PIT], ["48", 900, 80, 0]]));
-    expect([...since.keys()]).toEqual(["97"]);
   });
 });

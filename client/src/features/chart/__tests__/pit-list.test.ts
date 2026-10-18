@@ -1,40 +1,40 @@
 import { describe, expect, it } from "vitest";
 import type { CarData, RaceChartData } from "@shared/types";
-import { LONG_STAY_MS, pitRows } from "../PitList";
-import { spanText } from "../RunningOrder";
-import { pitVisitsNow } from "../TrackMap";
+import { OUT_AFTER_S, outCars } from "../RunningOrder";
 
-describe("the cars in the pits, with running timers", () => {
-  const now = 10_000_000;
-  const visit = (msIn: number | null) => ({ since: msIn === null ? null : now - msIn, afterLap: 100 });
+const lapsOf = (n: number, sec: number) => Array.from({ length: n }, (_, i) => ({ l: i + 1, p: 1, cp: 1, lt: "", ltSec: sec, flag: "GF", pit: 0 }));
+const car = (num: number, laps: CarData["laps"]): CarData => ({ num, team: "T", cls: "GTO", finishPos: num, finishPosClass: num, laps });
+const chart = (cars: CarData[]): RaceChartData => ({
+  maxLap: 0,
+  totalCars: cars.length,
+  greenPaceCutoff: 0,
+  cars: Object.fromEntries(cars.map((c) => [String(c.num), c])),
+  fcy: [],
+  classGroups: {},
+  classCarCounts: {},
+});
 
-  it("lists cars making a stop first (shortest in first), then long stays, then those with no known entry", () => {
-    const pits = new Map([
-      [97, visit(2 * 3600_000)], // in the garage for two hours
-      [48, visit(42_000)],
-      [127, visit(null)],
-      [282, visit(95_000)],
+describe("cars not running (OUT)", () => {
+  it("is a car whose last lap ended over 15 minutes before the latest lap anyone completed", () => {
+    const data = chart([
+      car(119, lapsOf(160, 140)), // the leader: its last lap ended at 22,400 s
+      car(62, lapsOf(150, 147)), // 22,050 s: 6 minutes behind, running
+      car(282, lapsOf(112, 140)), // 15,680 s: 112 minutes behind, out (in the garage)
+      car(2, lapsOf(4, 150)), // retired on lap 4
+      car(9, []), // never started
     ]);
-    expect(pitRows(pits, now).map((r) => [r.key, r.ms, r.long])).toEqual([
-      [48, 42_000, false],
-      [282, 95_000, false],
-      [97, 2 * 3600_000, true],
-      [127, null, false],
-    ]);
-    expect(LONG_STAY_MS).toBe(600_000);
+    expect([...outCars(data)].sort((a, b) => a - b)).toEqual([2, 9, 282]);
+    expect(OUT_AFTER_S).toBe(900);
   });
 
-  it("writes times in the pits as M:SS, and H:MM:SS from an hour", () => {
-    expect(spanText(42_000)).toBe("0:42");
-    expect(spanText(12 * 60_000 + 5_000)).toBe("12:05");
-    expect(spanText(2 * 3600_000 + 3 * 60_000 + 9_000)).toBe("2:03:09");
+  it("is nobody when nobody has lapped for a while (a red flag), or before the race", () => {
+    expect(outCars(chart([car(119, lapsOf(100, 140)), car(120, lapsOf(100, 141))])).size).toBe(0);
+    expect(outCars(chart([car(1, []), car(2, [])])).size).toBe(0);
   });
 
-  it("takes the server's pit timer over what the page saw (it watched every car go in)", () => {
-    const car: CarData = { num: 48, team: "T", cls: "GP1", finishPos: 13, finishPosClass: 4, laps: [{ l: 130, p: 13, cp: 4, lt: "", ltSec: 150, flag: "GF", pit: 0 }] };
-    const data = { maxLap: 130, totalCars: 1, greenPaceCutoff: 0, cars: { "48": car }, fcy: [], classGroups: {}, classCarCounts: {} } as RaceChartData;
-    // Already in when the page opened: unknown to the page, known to the server.
-    expect(pitVisitsNow(new Map(), ["48"], data, null).get(48)?.since).toBeNull();
-    expect(pitVisitsNow(new Map(), ["48"], data, null, () => 5_000).get(48)).toEqual({ since: 5_000, afterLap: 130 });
+  it("is not a car making a long stop of under 15 minutes", () => {
+    const data = chart([car(119, lapsOf(160, 140)), car(48, [...lapsOf(155, 140), { l: 156, p: 1, cp: 1, lt: "", ltSec: 0, flag: "GF", pit: 1 }])]);
+    // #48 last crossed at 21,700 s, 700 s (under 15 minutes) before the leader's latest lap.
+    expect(outCars(data).has(48)).toBe(false);
   });
 });

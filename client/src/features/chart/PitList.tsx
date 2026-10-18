@@ -1,77 +1,80 @@
 import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
-import { classColor, spanText, type PitVisit } from "./RunningOrder";
+import { classColor, type PitVisit } from "./RunningOrder";
 
-/** In the pits longer than this: in the garage or retired, listed after the cars making a stop, dimmed. */
-export const LONG_STAY_MS = 10 * 60_000;
+const C = { line: "#1e1e38", text: "#e0e0e8", muted: "#9a9ab4", chip: "#2a2a48", pit: "#2563eb", out: "#6b7280", focus: "#F48C34" };
 
-export interface PitRow {
-  key: number;
-  /** Time in the pits now (ms), or null when it went in before anyone was watching. */
-  ms: number | null;
-  long: boolean;
-}
-
-/** The cars in the pits: those making a stop first (shortest in first), then long stays, then unknown. */
-export function pitRows(pits: Map<number, PitVisit>, now: number): PitRow[] {
-  return [...pits]
-    .map(([key, v]) => {
-      const ms = v.since === null ? null : Math.max(0, now - v.since);
-      return { key, ms, long: ms !== null && ms >= LONG_STAY_MS };
-    })
-    .sort((a, b) => (a.ms === null ? 1 : 0) - (b.ms === null ? 1 : 0) || (a.ms ?? 0) - (b.ms ?? 0));
+/** Chart keys in running order (position now, then car number). */
+function inOrder(data: RaceChartData, keys: Iterable<number>): number[] {
+  return [...keys].sort(
+    (a, b) =>
+      (data.cars[String(a)]?.finishPos || 1e6) - (data.cars[String(b)]?.finishPos || 1e6) ||
+      carNo(data, a).localeCompare(carNo(data, b), undefined, { numeric: true })
+  );
 }
 
 /**
- * RaceTrace Live, under the track map: every car in the pits with a running timer (time since
- * its pit flag came on), in its class colour. Tapping one makes it the focus car.
+ * RaceTrace Live, under the track map: the cars in the pits making a stop, and the cars not
+ * running (OUT: in the garage, retired, parked), each in its class colour. Tapping one makes it
+ * the focus car.
  */
 export function PitList({
   data,
   pits,
-  now,
+  out,
   focusNum,
   setFocusNum,
 }: {
   data: RaceChartData;
   pits: Map<number, PitVisit>;
-  now: number;
+  out: Set<number>;
   focusNum: number;
   setFocusNum: (n: number) => void;
 }) {
-  const rows = pitRows(pits, now);
-  if (!rows.length) return null;
+  const stopping = inOrder(data, [...pits.keys()].filter((k) => !out.has(k)));
+  const notRunning = inOrder(data, out);
+  if (!stopping.length && !notRunning.length) return null;
+  const chip = (key: number, dim: boolean) => {
+    const focus = key === focusNum;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => setFocusNum(key)}
+        className="rounded-md border px-1.5 py-0.5 font-bold tabular-nums hover:bg-white/5"
+        style={{
+          borderColor: focus ? C.focus : C.chip,
+          borderLeft: `4px solid ${classColor(data.cars[String(key)]?.cls ?? "")}`,
+          color: focus ? C.focus : dim ? C.muted : C.text,
+        }}
+      >
+        #{carNo(data, key)}
+      </button>
+    );
+  };
+  const tag = (text: string, bg: string) => (
+    <span className="rounded px-1 text-[10px] font-bold text-white" style={{ background: bg }}>
+      {text}
+    </span>
+  );
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: "#9a9ab4" }}>
-      <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: "#e0e0e8" }}>
-        <span className="rounded px-1 text-[10px] font-bold text-white" style={{ background: "#2563eb" }}>
-          PIT
-        </span>
-        In the pits ({rows.length})
-      </span>
-      {rows.map((r) => {
-        const cls = data.cars[String(r.key)]?.cls ?? "";
-        const focus = r.key === focusNum;
-        return (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => setFocusNum(r.key)}
-            title={r.long ? "In the pits over 10 minutes (garage or retired)" : r.ms === null ? "In the pits since before the timing was watched" : "Time in the pits"}
-            className="flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 tabular-nums hover:bg-white/5"
-            style={{
-              borderColor: focus ? "#F48C34" : "#2a2a48",
-              borderLeft: `4px solid ${classColor(cls)}`,
-              opacity: r.long || r.ms === null ? 0.55 : 1,
-            }}
-          >
-            <span className="font-bold" style={{ color: focus ? "#F48C34" : "#e0e0e8" }}>
-              #{carNo(data, r.key)}
-            </span>
-            <span style={{ color: r.long || r.ms === null ? "#9a9ab4" : "#93b4ff" }}>{r.ms === null ? "–" : spanText(r.ms)}</span>
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: C.line, color: C.muted }}>
+      {stopping.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
+            {tag("PIT", C.pit)} In the pits ({stopping.length})
+          </span>
+          {stopping.map((k) => chip(k, false))}
+        </div>
+      )}
+      {notRunning.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" title="Not running: no lap for over 15 minutes (retired, in the garage, parked)">
+          <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
+            {tag("OUT", C.out)} Not running ({notRunning.length})
+          </span>
+          {notRunning.map((k) => chip(k, true))}
+        </div>
+      )}
     </div>
   );
 }

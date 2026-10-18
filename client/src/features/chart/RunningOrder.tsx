@@ -14,6 +14,8 @@ const C = {
   muted: "#9a9ab4",
   pit: "#2563eb",
   pitText: "#93b4ff",
+  /** Not running. */
+  out: "#6b7280",
   personal: "#4ade80",
   classBest: "#e879f9",
 };
@@ -25,10 +27,23 @@ export function classColor(cls: string): string {
 
 /** A car's visit to the pit lane now, as the map saw it. */
 export interface PitVisit {
-  /** When it went in (ms, client clock): by the server's pit timer, else when the map saw it go in; null when unknown. */
-  since: number | null;
   /** The car's completed laps when it went in. */
   afterLap: number;
+}
+
+/** A car whose last lap ended this long (s) before the latest lap anyone completed is not running: OUT. */
+export const OUT_AFTER_S = 15 * 60;
+
+/**
+ * The cars not running (retired, in the garage, parked): their last lap ended over OUT_AFTER_S
+ * before the latest lap any car completed (a car's laps added up give the race time it last crossed
+ * the line). Against the latest lap, not the clock: under a red flag nobody laps, nobody is OUT.
+ */
+export function outCars(data: RaceChartData): Set<number> {
+  const crossed = new Map<number, number>();
+  for (const [k, c] of Object.entries(data.cars)) crossed.set(Number(k), c.laps.reduce((t, l) => t + (l.ltSec > 0 ? l.ltSec : 0), 0));
+  const latest = Math.max(0, ...crossed.values());
+  return new Set([...crossed].filter(([, t]) => latest - t > OUT_AFTER_S).map(([k]) => k));
 }
 
 export interface OrderRow {
@@ -156,10 +171,10 @@ export function spanText(ms: number): string {
 
 /**
  * What to say about a car in the pit lane now: which stop this is (the timing may already have
- * recorded it from the in-lap; otherwise it is the next one), the lap it came in after, the stint
- * it ends, and how long it has been in the lane (when the map saw it go in).
+ * recorded it from the in-lap; otherwise it is the next one), the lap it came in after and the
+ * stint it ends.
  */
-export function pitDetail(pits: PitMarker[] | undefined, visit: PitVisit, now: number): string {
+export function pitDetail(pits: PitMarker[] | undefined, visit: PitVisit): string {
   const stops = [...(pits ?? [])].sort((a, b) => a.l - b.l);
   const recorded = stops.findIndex((m) => m.l >= visit.afterLap);
   const stopNo = recorded >= 0 ? recorded + 1 : stops.length + 1;
@@ -167,7 +182,6 @@ export function pitDetail(pits: PitMarker[] | undefined, visit: PitVisit, now: n
   const stint = visit.afterLap - (before.length ? before[before.length - 1].l : 0);
   return [
     `Stop ${stopNo}`,
-    visit.since !== null ? `${spanText(now - visit.since)} in the lane` : null,
     visit.afterLap > 0 ? `in after lap ${visit.afterLap}` : null,
     stint > 0 ? `${stint}-lap stint` : null,
   ]
@@ -178,7 +192,8 @@ export function pitDetail(pits: PitMarker[] | undefined, visit: PitVisit, now: n
 /**
  * RaceTrace Live, beside the track map: the running order now. Position, number, class and place
  * in class, last and best lap (its title cycles best → 10-lap, stint and race averages), and stops, each row marked in its class colour. A car in the pit
- * lane carries a P and a line on its stop. Tapping a row makes it the focus car.
+ * lane carries a P and a line on its stop; a car not running (outCars) an OUT, its row dimmed.
+ * Tapping a row makes it the focus car.
  */
 export function RunningOrder({
   data,
@@ -188,7 +203,7 @@ export function RunningOrder({
   compSet,
   classView,
   pits,
-  now,
+  out,
 }: {
   data: RaceChartData;
   annotations: AnnotationData | null;
@@ -198,7 +213,8 @@ export function RunningOrder({
   classView: string;
   /** The cars in the pit lane now, by chart key. */
   pits: Map<number, PitVisit>;
-  now: number;
+  /** The cars not running (outCars). */
+  out: Set<number>;
 }) {
   const rows = runningOrder(data);
   const [stat, setStat] = useState<LapStat>(loadStat);
@@ -249,14 +265,16 @@ export function RunningOrder({
               const compared = !focus && compSet.has(r.key);
               const other = !!classView && r.cls !== classView && !focus;
               const color = classColor(r.cls);
-              const visit = pits.get(r.key);
+              const isOut = out.has(r.key);
+              // A car not running gets OUT, not a pit stop.
+              const visit = isOut ? undefined : pits.get(r.key);
               const carPits = annotations?.[String(r.key)]?.pits;
               const { last, best } = lapTimes(data.cars[String(r.key)]);
               const shown = stat === "best" ? best : lapStat(data, data.cars[String(r.key)], stat);
               const classBest = shown !== null && shown === bests.get(r.cls);
               const rowStyle = {
                 borderColor: C.line,
-                opacity: other ? 0.35 : 1,
+                opacity: other ? 0.35 : isOut ? 0.55 : 1,
                 background: focus ? "rgba(244,140,52,0.16)" : `${color}26`,
               };
               const cells = [
@@ -268,14 +286,16 @@ export function RunningOrder({
                   aria-current={focus ? "true" : undefined}
                 >
                   <td className="px-1 py-1 text-center" style={{ borderLeft: `5px solid ${color}` }}>
-                    {visit && (
-                      <span
-                        className="inline-block rounded px-1 text-[10px] font-bold text-white"
-                        style={{ background: C.pit }}
-                        title="In the pits"
-                      >
-                        P
+                    {isOut ? (
+                      <span className="inline-block rounded px-1 text-[9px] font-bold text-white" style={{ background: C.out }} title="Not running (no lap for over 15 minutes)">
+                        OUT
                       </span>
+                    ) : (
+                      visit && (
+                        <span className="inline-block rounded px-1 text-[10px] font-bold text-white" style={{ background: C.pit }} title="In the pits">
+                          P
+                        </span>
+                      )
                     )}
                   </td>
                   <td className="px-1.5 py-1 text-right font-semibold">{r.pos ?? "–"}</td>
@@ -323,7 +343,7 @@ export function RunningOrder({
                   >
                     <td className="p-0" style={{ borderLeft: `5px solid ${color}` }} />
                     <td colSpan={8} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
-                      {pitDetail(carPits, visit, now)}
+                      {pitDetail(carPits, visit)}
                     </td>
                   </tr>
                 );
