@@ -8,7 +8,7 @@
  * pit-in place and the limiter speed to see a car pitting before its flag, and the pit-out place to
  * bring it back. Learned per track, so a race starts with what its practice sessions showed.
  */
-import type { CarPlace, Positions } from "./track.js";
+import type { CarPlace } from "./track.js";
 import { IN_PIT } from "./track.js";
 
 /** The pit lane on the lap: where the pit flag comes on and clears (m past the line), the limiter speed. */
@@ -72,23 +72,3 @@ export function pitLearnerFor(key: string): PitLearner {
   return l;
 }
 
-/**
- * When each car now in the pits went in (ms): the read its pit flag came on; null when it was in
- * the pits the first time it was seen (it went in before this server was watching). Cars out of
- * the pits drop out; `seen` collects every car read so far (updated).
- */
-export function pitSinceNow(prev: Map<string, number | null>, seen: Set<string>, pos: Positions): Map<string, number | null> {
-  const out = new Map<string, number | null>();
-  for (const [num, , , flags] of pos.cars) {
-    if (flags & IN_PIT) out.set(num, prev.has(num) ? prev.get(num)! : seen.has(num) ? pos.t : null);
-    seen.add(num);
-  }
-  return out;
-}
-
-/** How long each car has been in the pits at `t` (ms), for those whose entry was seen. */
-export function pitForAt(since: Map<string, number | null>, t: number): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [num, at] of since) if (at !== null) out[num] = Math.max(0, t - at);
-  return out;
-}

@@ -83,19 +83,16 @@ describe("lap times", () => {
 });
 
 describe("pitDetail", () => {
-  const now = 1_000_000;
   it("calls it the next stop when the timing has not recorded it yet", () => {
-    expect(pitDetail([marker(20), marker(44)], { since: now - 48_000, afterLap: 70 }, now)).toBe(
-      "Stop 3 · 0:48 in the lane · in after lap 70 · 26-lap stint"
-    );
+    expect(pitDetail([marker(20), marker(44)], { afterLap: 70 })).toBe("Stop 3 · in after lap 70 · 26-lap stint");
   });
 
   it("uses the stop the in-lap already recorded", () => {
-    expect(pitDetail([marker(20), marker(70)], { since: null, afterLap: 70 }, now)).toBe("Stop 2 · in after lap 70 · 50-lap stint");
+    expect(pitDetail([marker(20), marker(70)], { afterLap: 70 })).toBe("Stop 2 · in after lap 70 · 50-lap stint");
   });
 
   it("counts the first stint from the start", () => {
-    expect(pitDetail(undefined, { since: now, afterLap: 31 }, now)).toBe("Stop 1 · 0:00 in the lane · in after lap 31 · 31-lap stint");
+    expect(pitDetail(undefined, { afterLap: 31 })).toBe("Stop 1 · in after lap 31 · 31-lap stint");
   });
 });
 
@@ -104,17 +101,17 @@ describe("pitVisitsNow", () => {
   c.laps = [lap(1, 125), lap(2, 124)];
   const data = chart([c, car(5, "GTO", 1, 1)]);
 
-  it("times a car from when it goes in, and keeps that while it stays", () => {
-    const first = pitVisitsNow(new Map(), ["282"], data, 5_000);
-    expect(first.get(282)).toEqual({ since: 5_000, afterLap: 2 });
-    expect(pitVisitsNow(first, ["282"], data, 10_000).get(282)).toEqual({ since: 5_000, afterLap: 2 });
+  it("keeps the lap a car went in after while it stays in", () => {
+    const first = pitVisitsNow(new Map(), ["282"], data);
+    expect(first.get(282)).toEqual({ afterLap: 2 });
+    const later = { ...data, cars: { ...data.cars, "282": { ...c, laps: [...c.laps, lap(3, 300, 1)] } } };
+    expect(pitVisitsNow(first, ["282"], later).get(282)).toEqual({ afterLap: 2 });
   });
 
-  it("does not time a car already in the pits at the first reading, and drops a car once out", () => {
-    const first = pitVisitsNow(new Map(), ["282", "999"], data, null);
+  it("leaves out a car the race does not have, and drops a car once out", () => {
+    const first = pitVisitsNow(new Map(), ["282", "999"], data);
     expect([...first.keys()]).toEqual([282]);
-    expect(first.get(282)?.since).toBeNull();
-    expect(pitVisitsNow(first, [], data, 10_000).size).toBe(0);
+    expect(pitVisitsNow(first, [], data).size).toBe(0);
   });
 });
 
