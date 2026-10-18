@@ -1,66 +1,131 @@
 import { describe, expect, it } from "vitest";
-import { IN_PIT, MAX_COAST_MS, pointAt, signedGap, step, takeReading, targetOf, type CarMotion } from "../track-motion";
+import {
+  FAR_M,
+  FROZEN_MS,
+  IN_PIT,
+  MAX_COAST_MS,
+  MAX_K,
+  MIN_K,
+  coastLimit,
+  isFrozen,
+  paceFromFixes,
+  pointAt,
+  signedGap,
+  step,
+  takeReading,
+  targetOf,
+  type CarLaps,
+  type CarMotion,
+  type CarPlace,
+} from "../track-motion";
 
 const LEN = 5734.36;
+const PACE = 40;
+const laps = (n = 10): ((num: string) => CarLaps) => () => ({ pace: PACE, laps: n });
+const read = (m: Map<string, CarMotion>, cars: CarPlace[], now: number, lapsOf = laps()) => takeReading(m, cars, now, 0, LEN, 38, lapsOf);
+/** Run frames of 16 ms from `from` to `to`, returning each frame's move (m). */
+const frames = (m: Map<string, CarMotion>, from: number, to: number, num = "1") => {
+  const moves: number[] = [];
+  for (let t = from + 16; t <= to; t += 16) {
+    const before = m.get(num)!.shown;
+    step(m, t, 16, LEN);
+    moves.push(signedGap(before, m.get(num)!.shown, LEN));
+  }
+  return moves;
+};
 
-describe("motion between readings", () => {
-  it("carries a car on at the pace between its last two readings", () => {
-    let m = takeReading(new Map(), [["119", 1000, 100, 0]], 0, 0, LEN, 40);
-    m = takeReading(m, [["119", 1200, 100, 0]], 5000, 0, LEN, 40);
-    const car = m.get("119")!;
-    expect(car.v).toBeCloseTo(40, 6); // 200 m in 5 s
-    expect(targetOf(car, 7500, LEN)).toBeCloseTo(1300, 6);
+describe("a car's pace", () => {
+  it("is its lap pace until its fixes span 15 s", () => {
+    const m = read(new Map(), [["1", 1000, 100, 0]], 0);
+    expect(m.get("1")!.v).toBe(PACE);
+    expect(read(m, [["1", 1300, 100, 0]], 5000).get("1")!.v).toBe(PACE); // 60 m/s over 5 s: not trusted
   });
-  it("uses the timing's speed, then a typical pace, before it has two readings", () => {
-    expect(takeReading(new Map(), [["1", 10, 100, 0]], 0, 0, LEN, 40).get("1")!.v).toBeCloseTo(44.704, 3);
+  it("then the average over its recent fixes, so a caution slows it", () => {
+    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 250, at: 10_000 }, { d: 500, at: 20_000 }], LEN, PACE)).toBeCloseTo(25, 6);
+  });
+  it("within bounds of its lap pace, unless it is crawling", () => {
+    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 1500, at: 20_000 }], LEN, PACE)).toBeCloseTo(52, 6); // 75 m/s capped at 130%
+    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 20, at: 20_000 }], LEN, PACE)).toBeCloseTo(1, 6); // a stoppage: trusted
+  });
+  it("counts across the line: 5,700 m to 60 m is 94 m covered", () => {
+    expect(paceFromFixes([{ d: 5700, at: 0 }, { d: 60, at: 20_000 }], LEN, 4)).toBeCloseTo((LEN - 5700 + 60) / 20, 3);
+  });
+  it("is the typical pace for a car without laps, and slow in the pit lane", () => {
     expect(takeReading(new Map(), [["1", 10, null, 0]], 0, 0, LEN, 38).get("1")!.v).toBe(38);
-  });
-  it("counts the reading's age, so a car read 2 s ago is already 2 s further on", () => {
-    const m = takeReading(new Map(), [["1", 100, null, 0]], 10_000, 2_000, LEN, 40);
-    expect(targetOf(m.get("1")!, 10_000, LEN)).toBeCloseTo(180, 6);
-  });
-  it("crosses the line: 5,700 m to 60 m is 94 m covered, not a lap backwards", () => {
-    let m = takeReading(new Map(), [["1", 5700, null, 0]], 0, 0, LEN, 40);
-    m = takeReading(m, [["1", 60, null, 0]], 2500, 0, LEN, 40);
-    expect(m.get("1")!.v).toBeCloseTo((LEN - 5700 + 60) / 2.5, 3);
-  });
-  it("holds after coasting too long without a reading", () => {
-    const m = takeReading(new Map(), [["1", 0, null, 0]], 0, 0, LEN, 40);
-    expect(targetOf(m.get("1")!, 60_000, LEN)).toBeCloseTo((40 * MAX_COAST_MS) / 1000, 6);
-  });
-  it("slows a car in the pit lane", () => {
-    expect(takeReading(new Map(), [["1", 0, 120, IN_PIT]], 0, 0, LEN, 40).get("1")!.v).toBeLessThan(14);
-  });
-  it("leaves out a car with no place", () => {
-    expect(takeReading(new Map(), [["1", null, null, 2]], 0, 0, LEN, 40).size).toBe(0);
+    expect(read(new Map(), [["1", 0, 120, IN_PIT]], 0).get("1")!.v).toBeLessThan(14);
   });
 });
 
-describe("easing", () => {
-  const car = (shown: number, d: number): Map<string, CarMotion> => new Map([["1", { num: "1", d, at: 0, flags: 0, mph: null, v: 0, shown }]]);
-  it("glides towards a reading ahead", () => {
-    const m = car(1000, 1100);
-    step(m, 0, 600, LEN);
-    expect(m.get("1")!.shown).toBeGreaterThan(1060);
-    expect(m.get("1")!.shown).toBeLessThan(1100);
+describe("motion between fixes", () => {
+  it("counts the reading's age, so a car read 2 s ago is already 2 s further on", () => {
+    const m = takeReading(new Map(), [["1", 100, null, 0]], 10_000, 2_000, LEN, 38, laps());
+    expect(targetOf(m.get("1")!, 10_000, LEN)).toBeCloseTo(180, 6);
   });
-  it("never rolls back for a small correction", () => {
-    const m = car(1100, 1080);
-    step(m, 0, 600, LEN);
-    expect(m.get("1")!.shown).toBe(1100);
+  it("places a new car straight at its place", () => {
+    const m = read(new Map(), [["1", 1000, null, 0]], 0);
+    step(m, 16, 16, LEN);
+    expect(m.get("1")!.shown).toBeCloseTo(1000 + PACE * 0.016, 6);
   });
-  it("moves straight to a large correction", () => {
-    const m = car(1000, 2000);
-    step(m, 0, 16, LEN);
-    expect(m.get("1")!.shown).toBe(2000);
+  it("keeps running through a repeated fix, at its own pace", () => {
+    let m = read(new Map(), [["1", 1000, null, 0]], 0);
+    step(m, 0, 0, LEN);
+    for (let t = 5000; t <= 20_000; t += 5000) m = read(m, [["1", 1000, null, 0]], t); // the same fix for 20 s
+    const moves = frames(m, 0, 20_000);
+    expect(Math.min(...moves)).toBeGreaterThan(PACE * 0.016 * 0.99);
+    expect(Math.abs(m.get("1")!.shown - (1000 + PACE * 20))).toBeLessThan(2);
   });
+  it("closes a gap to a new fix by easing its pace, never stopping or going backwards", () => {
+    let m = read(new Map(), [["1", 1000, null, 0]], 0);
+    frames(m, 0, 5000);
+    m = read(m, [["1", 1000 + PACE * 5 - 150, null, 0]], 5000); // the fix says it is 150 m behind
+    const moves = frames(m, 5000, 25_000);
+    expect(Math.min(...moves)).toBeGreaterThanOrEqual(PACE * 0.016 * MIN_K * 0.99);
+    expect(Math.abs(signedGap(m.get("1")!.shown, targetOf(m.get("1")!, 25_000, LEN), LEN))).toBeLessThan(15);
+  });
+  it("catches up to a fix ahead no faster than its pace allows", () => {
+    let m = read(new Map(), [["1", 1000, null, 0]], 0);
+    frames(m, 0, 5000);
+    m = read(m, [["1", 1000 + PACE * 5 + 150, null, 0]], 5000);
+    expect(Math.max(...frames(m, 5000, 6000))).toBeLessThanOrEqual(PACE * 0.016 * MAX_K * 1.01);
+  });
+  it("waits for a second fix to agree before moving a car placed far off", () => {
+    let m = read(new Map(), [["1", 1000, null, 0]], 0);
+    frames(m, 0, 5000);
+    const far = (1000 + PACE * 5 + FAR_M + 500) % LEN;
+    m = read(m, [["1", far, null, 0]], 5000);
+    expect(m.get("1")!.far).toBe(1);
+    expect(Math.max(...frames(m, 5000, 10_000))).toBeLessThan(5); // ignored: no jump
+    m = read(m, [["1", (far + PACE * 5) % LEN, null, 0]], 10_000);
+    step(m, 10_016, 16, LEN);
+    expect(Math.abs(signedGap(m.get("1")!.shown, (far + PACE * 5) % LEN, LEN))).toBeLessThan(5);
+  });
+});
+
+describe("a frozen fix", () => {
+  it("is frozen after 25 s without a new one, and drawn as a faint signal", () => {
+    const m = read(new Map(), [["1", 1000, null, 0]], 0).get("1")!;
+    expect(isFrozen(m, FROZEN_MS - 1)).toBe(false);
+    expect(isFrozen(m, FROZEN_MS)).toBe(true);
+  });
+  it("runs on while the car keeps completing laps", () => {
+    let m = read(new Map(), [["1", 1000, null, 0]], 0, laps(10));
+    const lapMs = (LEN / PACE) * 1000;
+    m = read(m, [["1", 1000, null, 0]], lapMs, laps(11)); // a new lap, the same fix
+    expect(coastLimit(m.get("1")!, LEN)).toBeCloseTo(lapMs * 2.5, -1);
+    expect(targetOf(m.get("1")!, lapMs * 2, LEN)).toBeCloseTo((1000 + PACE * (lapMs * 2) / 1000) % LEN, 3);
+  });
+  it("stops after MAX_COAST_MS once it has gone 1.5 laps without a new one", () => {
+    const m = read(new Map(), [["1", 1000, null, 0]], 0, laps(10)).get("1")!;
+    // Its last fix 300 s after its last new lap (2.1 of its laps).
+    expect(coastLimit({ ...m, at: 300_000 }, LEN)).toBe(MAX_COAST_MS);
+  });
+});
+
+describe("gaps and the outline", () => {
   it("measures gaps the short way round the lap", () => {
     expect(signedGap(5700, 30, LEN)).toBeCloseTo(64.36, 2);
     expect(signedGap(30, 5700, LEN)).toBeCloseTo(-64.36, 2);
   });
-});
-
-describe("pointAt", () => {
   const pts: [number, number][] = [[0, 0], [100, 0], [100, 100], [0, 100]];
   const ds = [0, 100, 200, 300];
   it("interpolates along the outline and closes the lap", () => {
@@ -71,6 +136,6 @@ describe("pointAt", () => {
   });
   it("handles an outline whose first point is past the line", () => {
     const ds2 = [20, 120, 220, 320];
-    expect(pointAt(pts, ds2, 400, 10)).toEqual([0, 10]); // 90% along the closing segment from [0, 100] to [0, 0]
+    expect(pointAt(pts, ds2, 400, 10)).toEqual([0, 10]);
   });
 });
