@@ -132,6 +132,9 @@ export function TrackMap({
   }, [data, track, typicalSpeed]);
   const lapPaceRef = useRef(lapPace);
   lapPaceRef.current = lapPace;
+  // Under a caution cars really do slow: the motion allows their pace to fall further.
+  const cautionRef = useRef(isCaution(flag));
+  cautionRef.current = isCaution(flag);
 
   // Positions every 5 s while the page is visible.
   useEffect(() => {
@@ -145,7 +148,7 @@ export function TrackMap({
           const t = Date.now();
           const age = body.ageMs + edgeAgeMs;
           const onTrack = body.cars.filter((c) => !(c[3] & IN_PIT));
-          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null);
+          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null, cautionRef.current);
           setReadingAt(t - age);
           const inPit = body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]);
           setPits(inPit);
