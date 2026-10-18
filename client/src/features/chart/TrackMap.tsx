@@ -302,9 +302,6 @@ export function TrackMap({
         <span>
           {age === null ? "Waiting for positions…" : age > OLD_MS ? `Positions ${Math.round(age / 1000)} s old` : "Positions every 5 s; cars move at their own pace in between"}
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
-        </span>
         {isCaution(flag) && (
           <span className="flex items-center gap-1.5" style={{ color: "#fab219" }}>
             <span className="rounded px-1 text-[10px] font-bold" style={{ background: "#fab219", color: "#0b0b18" }}>
