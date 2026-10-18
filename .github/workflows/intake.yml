@@ -26,6 +26,8 @@
 #                     matching race replaces that race's data (same id, URL, name and
 #                     status); sessions with several possible matches are still held.
 #
+# On race weekends it runs hourly (Fri-Sun afternoons and evenings, US time), importing sessions of
+# the last 3 days; and the server starts it for one WRL race about 20 min after that race ends.
 # Every Monday it also runs on its own (schedule below): mode = import for IMSA, SRO and WRL,
 # the current season, sessions from the last 21 days. New races arrive as drafts, provisional
 # results that turned official are updated in place, and possible duplicates of races already
@@ -45,6 +47,11 @@ on:
   # weekend's races. Off the hour, when GitHub's scheduler is less busy.
   schedule:
     - cron: "17 14 * * 1"
+    # Race weekends (US afternoons and evenings, Friday to Sunday): hourly, so a race is in a
+    # couple of hours after the flag. WRL races also start an import from the server when they end
+    # (live/after-race.ts); this is the safety net, and the way in for IMSA and SRO.
+    - cron: "23 15-23 * * 5,6,0"
+    - cron: "23 0-4 * * 6,0,1"
   workflow_dispatch:
     inputs:
       series:
@@ -74,6 +81,10 @@ on:
         default: ""
       approve:
         description: "reimport only: race ids of 'unsure' pairs the owner approves, comma-separated"
+        required: false
+        default: ""
+      redmist:
+        description: "import/discover: only this RedMist session (event/session, e.g. 485/20); set by the server after a WRL race"
         required: false
         default: ""
       replace_matched:
@@ -116,11 +127,24 @@ jobs:
           IN_SEASON: ${{ inputs.season }}
           IN_SINCE: ${{ inputs.since }}
           IN_REPLACE: ${{ inputs.replace_matched }}
+          IN_REDMIST: ${{ inputs.redmist }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           # Work folder on the runner's temp disk (the runner context is not available in job-level env).
           echo "INTAKE_WORK_DIR=$RUNNER_TEMP/intake-work" >> "$GITHUB_ENV"
           # A scheduled run has no inputs: the weekly import's settings stand in for them.
-          if [ "$EVENT" = "schedule" ]; then
+          if [ "$EVENT" = "schedule" ] && [ "$SCHEDULE" != "17 14 * * 1" ]; then
+            # Race-weekend hourly run: the last 3 days only.
+            {
+              echo "INTAKE_MODE=import"
+              echo "INTAKE_SERIES=imsa-*,sro-*,wrl"
+              echo "INTAKE_SEASON=$(date -u +%Y)"
+              echo "INTAKE_SINCE=$(date -u -d '3 days ago' +%F)"
+              echo "INTAKE_REPLACE=false"
+              echo "INTAKE_REDMIST="
+            } >> "$GITHUB_ENV"
+            echo "Race-weekend import: IMSA, SRO and WRL, sessions since $(date -u -d '3 days ago' +%F)." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$EVENT" = "schedule" ]; then
             {
               echo "INTAKE_MODE=import"
               echo "INTAKE_SERIES=imsa-*,sro-*,wrl"
@@ -136,6 +160,7 @@ jobs:
               echo "INTAKE_SEASON=$IN_SEASON"
               echo "INTAKE_SINCE=$IN_SINCE"
               echo "INTAKE_REPLACE=$IN_REPLACE"
+              echo "INTAKE_REDMIST=$IN_REDMIST"
             } >> "$GITHUB_ENV"
           fi
           if [ -z "$RACETRACE_API_URL" ] || [ -z "$RACETRACE_API_TOKEN" ]; then
@@ -296,9 +321,11 @@ jobs:
           SERIES: ${{ env.INTAKE_SERIES }}
           SEASON: ${{ env.INTAKE_SEASON }}
           SINCE: ${{ env.INTAKE_SINCE }}
+          REDMIST: ${{ env.INTAKE_REDMIST }}
         run: |
           args=(--series "$SERIES" --season "$SEASON" --save "$INTAKE_WORK_DIR/discover.json")
           if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+          if [ -n "$REDMIST" ]; then args+=(--redmist "$REDMIST"); fi
           npx tsx scripts/intake.ts discover "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/discover.txt"
           # Also as an annotation: readable through the checks API and on the run page without signing in.
           node -e 'const t=require("fs").readFileSync(process.argv[1],"utf8").slice(-60000);console.log("::notice title=Discover::"+t.replace(/%/g,"%25").replace(/\r/g,"%0D").replace(/\n/g,"%0A"))' "$RUNNER_TEMP/discover.txt"
