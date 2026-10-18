@@ -21,7 +21,18 @@ const POLL_MS = 5_000;
 /** Older than this, the map says how old its positions are. */
 const OLD_MS = 20_000;
 
-const C = { bg: "#0b0b18", track: "#23233f", trackIn: "#2e2e54", line: "#e0e0e8", muted: "#9a9ab4", dim: "#6b6b88", text: "#e0e0e8" };
+const C = {
+  bg: "#0b0b18",
+  track: "#23233f",
+  trackIn: "#2e2e54",
+  line: "#e0e0e8",
+  muted: "#9a9ab4",
+  dim: "#6b6b88",
+  text: "#e0e0e8",
+  /** The overall leader's ring and tag, and its dot when it is not a compare car. */
+  leader: "#fbbf24",
+  leaderDot: "#d4d4e2",
+};
 
 /**
  * RaceTrace Live: the circuit with every car as a numbered dot moving round it ("marching ants").
@@ -206,31 +217,36 @@ export function TrackMap({
     ctx.lineTo(sx + Math.cos(ang) * 11, sy + Math.sin(ang) * 11);
     ctx.stroke();
 
-    // The cars: the rest, then compare cars, then the focus car on top.
+    // The cars: the rest, then compare cars, the overall leader, then the focus car on top.
     const t = Date.now();
     const dt = Math.min(100, t - lastFrame.current);
     step(motions.current, t, dt, track.len);
     lastFrame.current = t;
     const inClass = classView ? new Set(data.classGroups[classView] ?? []) : null;
+    const leaderKey = overallLeader(data);
     const dots = [...motions.current.values()]
       .map((m) => {
         const key = carKey(data, m.num);
         if (key === null || !data.cars[String(key)]) return null;
         const focus = key === focusNum;
         const compared = !focus && compSet.has(key);
-        const other = inClass !== null && !inClass.has(key) && !focus;
-        return { m, key, focus, compared, other, rank: focus ? 2 : compared ? 1 : 0 };
+        const leader = key === leaderKey;
+        const other = inClass !== null && !inClass.has(key) && !focus && !leader;
+        return { m, key, focus, compared, leader, other, rank: focus ? 3 : leader ? 2 : compared ? 1 : 0 };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => a.rank - b.rank || (b.other ? 1 : 0) - (a.other ? 1 : 0));
     const many = compSet.size > 8;
     hits.current = [];
+    let leaderAt: { x: number; y: number; r: number } | null = null;
     for (const d of dots) {
       const [x, y] = px(pointAt(track.pts, track.ds, track.len, d.m.shown));
-      const r = d.focus ? 12 : d.compared ? (many ? 8 : 9) : 5;
-      const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : C.dim;
+      // The leader is always drawn full size with its number, even when not a compare car.
+      const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
+      const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : d.leader ? C.leaderDot : C.dim;
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
-      ctx.globalAlpha = d.other ? 0.3 : d.compared || d.focus ? 1 : 0.7;
+      if (d.leader) leaderAt = { x, y, r };
+      ctx.globalAlpha = d.other ? 0.3 : d.compared || d.focus || d.leader ? 1 : 0.7;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       if (hollow) {
@@ -246,9 +262,9 @@ export function TrackMap({
         ctx.lineWidth = 2.5;
         ctx.stroke();
       }
-      if (d.focus || d.compared) {
+      if (d.focus || d.compared || d.leader) {
         const label = carNo(data, d.key);
-        ctx.fillStyle = hollow ? color : d.focus ? "#0b0b18" : "#ffffff";
+        ctx.fillStyle = hollow ? color : d.focus || (d.leader && !d.compared) ? "#0b0b18" : "#ffffff";
         ctx.font = `${d.focus ? 700 : 600} ${label.length > 2 ? (d.focus ? 9 : 7) : d.focus ? 11 : 8.5}px system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -256,6 +272,29 @@ export function TrackMap({
       }
       ctx.globalAlpha = 1;
       hits.current.push({ key: d.key, x, y, r: Math.max(r, 10) });
+    }
+
+    // The overall leader: a gold ring round its dot and a P1 tag above it, on top of everything.
+    if (leaderAt) {
+      const { x, y, r } = leaderAt;
+      ctx.strokeStyle = C.leader;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+      const ty = y - r - 13;
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = C.leader;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x - 11, ty - 7, 22, 14, 7);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#0b0b18";
+      ctx.font = "800 9.5px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("P1", x, ty + 0.5);
     }
 
     // The safety car under a caution: where the timing places it when it sends one; otherwise an
@@ -315,6 +354,8 @@ export function TrackMap({
 
   const age = readingAt !== null ? now - readingAt : null;
   const keys = (nums: string[]) => nums.map((n) => carKey(data, n)).filter((k): k is number => k !== null && !!data.cars[String(k)]);
+  const leader = overallLeader(data);
+  const leaderInPits = leader !== null && keys(pits).includes(leader) ? leader : null;
   const label = (nums: string[]) =>
     keys(nums)
       .map((k) => `#${carNo(data, k)}`)
@@ -340,13 +381,19 @@ export function TrackMap({
         <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} annotations={annotations} pits={pitVisits} now={now} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
-        {pits.length > 0 && (
+        {label(pits) && (
           <span>
             <span style={{ color: C.text }}>In the pits:</span> {label(pits)}
           </span>
         )}
-        {unplaced.length > 0 && <span>No position: {label(unplaced)}</span>}
+        {label(unplaced) && <span>No position: {label(unplaced)}</span>}
         {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
+        <span className="flex items-center gap-1.5">
+          <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
+            P1
+          </span>
+          {leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
         </span>
@@ -376,6 +423,12 @@ export function pitVisitsNow(prev: Map<number, PitVisit>, inPit: string[], data:
     out.set(key, prev.get(key) ?? { since: at, afterLap: laps.length ? laps[laps.length - 1].l : 0 });
   }
   return out;
+}
+
+/** The overall leader now (the timing's running order), if it has one. */
+export function overallLeader(data: RaceChartData): number | null {
+  for (const [k, c] of Object.entries(data.cars)) if (c.finishPos === 1) return Number(k);
+  return null;
 }
 
 /** Flags that bring out the safety car (a full-course caution). */

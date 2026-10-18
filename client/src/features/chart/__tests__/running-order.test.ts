@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CarData, PitMarker, RaceChartData } from "@shared/types";
 import { classBests, classColor, lapText, lapTimes, pitDetail, runningOrder, spanText } from "../RunningOrder";
-import { pitVisitsNow } from "../TrackMap";
+import { overallLeader, pitVisitsNow } from "../TrackMap";
 import { CLASS_COLORS } from "../constants";
 
 const car = (num: number, cls: string, finishPos: number, finishPosClass: number, label?: string): CarData => ({
@@ -115,5 +115,14 @@ describe("pitVisitsNow", () => {
     expect([...first.keys()]).toEqual([282]);
     expect(first.get(282)?.since).toBeNull();
     expect(pitVisitsNow(first, [], data, 10_000).size).toBe(0);
+  });
+});
+
+describe("overallLeader", () => {
+  it("is the car the timing has first now", () => {
+    expect(overallLeader(chart([car(282, "GTO", 2, 1), car(776, "GTO", 1, 1)]))).toBe(776);
+  });
+  it("is none before the timing gives positions", () => {
+    expect(overallLeader(chart([car(282, "GTO", 0, 0)]))).toBeNull();
   });
 });
