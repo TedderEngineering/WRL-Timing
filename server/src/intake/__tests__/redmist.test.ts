@@ -278,7 +278,7 @@ describe("RedMist discovery and download", () => {
     const r = await download(http, s, dir, { now: () => new Date("2026-10-14T12:00:00Z") });
     expect(r.failed).toEqual([]);
     const m = readManifest(dir)!;
-    expect(m.metadata).toMatchObject({ name: "WRL Synthetic Park 2026 — Saturday 8 Hour", series: "WRL", raceDate: "2026-05-02", season: 2026 });
+    expect(m.metadata).toMatchObject({ name: "WRL Saturday 8 Hour — Synthetic Park", series: "WRL", raceDate: "2026-05-02", season: 2026 });
     const byKey = Object.fromEntries(m.files.map((f) => [f.key, f]));
     expect(Object.keys(byKey).sort()).toEqual(
       ["controlLogCsv", "flagsCsv", "lapsCsv", "redmistControlJson", "redmistFlagsJson", "redmistLapsJson", "redmistPitsJson", "redmistResultsJson", "summaryCsv"].sort()

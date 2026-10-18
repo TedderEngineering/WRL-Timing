@@ -14,6 +14,7 @@ import { encodePath } from "./http.js";
 import type { HttpClient } from "./http.js";
 import { safeFileName, sha256, slugForSourceKey } from "./names.js";
 import { seriesById } from "./series.js";
+import { standardRaceName } from "./standard-name.js";
 import type {
   DownloadOptions,
   DownloadReport,
@@ -54,11 +55,23 @@ export function metadataFor(s: RaceSession): IntakeMetadata {
     s.site === "speedhive" || s.site === "redmist"
       ? `${/\bwrl\b|world racing league/i.test(s.event) ? "" : "WRL "}${s.event} — ${s.sessionName}`
       : `${prefix} ${s.sessionName} — ${s.event}`;
+  const series = def?.raceSeries ?? (s.site === "imsa" ? "IMSA" : s.site === "sro" ? "SRO" : "WRL");
+  // The standard name from the start ("WRL Sunday 7 Hour — Sebring International Raceway"), the one
+  // `intake names` gives; the site's raw event name ("Sebring International Raceway 2026") is not it.
+  let standard = name;
+  try {
+    standard = standardRaceName(
+      { site: s.site, championship: s.championship ?? "", sessionName: s.sessionName, track: s.track, raceDate: s.raceDate, season: s.season },
+      { name, series, track: s.track, sourceKey: s.sourceKey }
+    );
+  } catch {
+    // keep the raw name
+  }
   return {
-    name: name.replace(/\s+/g, " ").trim().slice(0, 200),
+    name: (standard || name).replace(/\s+/g, " ").trim().slice(0, 200),
     raceDate: s.raceDate,
     track: s.track,
-    series: def?.raceSeries ?? (s.site === "imsa" ? "IMSA" : s.site === "sro" ? "SRO" : "WRL"),
+    series,
     ...(def?.subSeries ? { subSeries: def.subSeries } : s.seriesId.endsWith("-other") ? { subSeries: s.seriesLabel } : {}),
     season: s.season,
     event: s.event,

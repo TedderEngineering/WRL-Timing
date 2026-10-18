@@ -56,7 +56,7 @@ describe("Alkamel download: manifest and idempotency", () => {
     expect(r.downloaded.sort()).toEqual(["03_Results_Race 1_Official.CSV", "20_Pit Stops Time Cards_Race 1.PDF", "23_AnalysisEnduranceWithSections_Race 1.CSV", "26_Weather_Race 1.CSV"]);
     const m = readManifest(dir)!;
     expect(m.resultsStatus).toBe("official");
-    expect(m.metadata).toMatchObject({ name: "Pirelli GT4 Race 1 — Indianapolis Motor Speedway RC", series: "SRO", season: 2026, raceDate: "2026-10-10" });
+    expect(m.metadata).toMatchObject({ name: "GT4 America Race 1 — Indianapolis Motor Speedway", series: "SRO", season: 2026, raceDate: "2026-10-10" });
     const pdf = m.files.find((f) => f.key === "pitStopPdf")!;
     expect(pdf).toMatchObject({ name: "20_Pit Stops Time Cards_Race 1.PDF", bytes: PDF.length, sha256: sha256(PDF), fetchedAt: "2026-10-13T12:00:00.000Z", parserSlot: true, etag: '"34"' });
     expect(pdf.url).toContain("%20");
@@ -153,7 +153,7 @@ describe("Speedhive download", () => {
     ]);
     expect(m.missing.map((x) => x.role)).toEqual(["flags", "control_log"]);
     expect(m.warnings.join(" ")).toMatch(/1 participant\(s\) have no lap data/);
-    expect(m.metadata).toMatchObject({ name: "WRL @ Barber #87 — Saturday 8 Hour", series: "WRL", raceDate: "2026-02-28", track: "Barber Motorsports Park" });
+    expect(m.metadata).toMatchObject({ name: "WRL Saturday 8 Hour — Barber Motorsports Park", series: "WRL", raceDate: "2026-02-28", track: "Barber Motorsports Park" });
   });
 
   it("an unchanged event is not downloaded again; a Redmist export dropped in by hand is picked up", async () => {
