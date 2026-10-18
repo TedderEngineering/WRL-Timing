@@ -58,6 +58,7 @@ export interface StrategyMetrics {
   avgPitDuration: number;
   yellowPitPct: number;
   greenLapCount: number;
+  /** 0-100 within the class; -1 when the car ran too little of the race to be scored (see SCORE_MIN_DISTANCE). */
   strategyScore: number;
   lapsCompleted: number;
   pitPct: number;        // pit time as % of total race time
@@ -92,6 +93,9 @@ function fmtTime(s: number): string {
   const sec = s - m * 60;
   return m + ":" + sec.toFixed(3).padStart(6, "0");
 }
+
+/** A car is scored only with at least this share of its class's most laps. */
+export const SCORE_MIN_DISTANCE = 0.75;
 
 function normalize(val: number, all: number[], invert: boolean): number {
   if (all.length <= 1) return 50;
@@ -386,6 +390,8 @@ export function computeStrategyMetrics(
   }
 
   // ── Strategy score: normalize per class ───────────────────────
+  // Only cars that ran most of the race are scored, and only against each other: a car out after
+  // 44 laps of 175 has few stops, little pit time and fresh-car pace, which would make it "best".
   const byClass = new Map<string, StrategyMetrics[]>();
   for (const m of raw) {
     let arr = byClass.get(m.cls);
@@ -393,10 +399,15 @@ export function computeStrategyMetrics(
     arr.push(m);
   }
 
-  for (const classCars of byClass.values()) {
+  for (const all of byClass.values()) {
+    if (all.length === 0) continue;
+    const most = Math.max(...all.map((c) => c.lapsCompleted));
+    const classCars = all.filter((c) => c.lapsCompleted >= most * SCORE_MIN_DISTANCE);
+    for (const c of all) if (!classCars.includes(c)) c.strategyScore = -1;
     if (classCars.length === 0) continue;
     const paces = classCars.filter((c) => c.avgGreenPace > 0).map((c) => c.avgGreenPace);
-    const pitTimes = classCars.map((c) => c.totalPitTime);
+    // Pit time as a share of the car's race time, so a car is not rewarded for a shorter race.
+    const pitShares = classCars.map((c) => c.pitPct);
     const yellowPcts = classCars.map((c) => c.yellowPitPct);
     const stddevs = new Map<number, number>();
     for (const m of classCars) {
@@ -419,7 +430,7 @@ export function computeStrategyMetrics(
     for (const m of classCars) {
       const paceScore = m.avgGreenPace > 0 ? normalize(m.avgGreenPace, paces, true) : 0;
       const yellowScore = normalize(m.yellowPitPct, yellowPcts, false);
-      const pitScore = normalize(m.totalPitTime, pitTimes, true);
+      const pitScore = normalize(m.pitPct, pitShares, true);
       const sd = stddevs.get(m.carNum) ?? 0;
       const consistScore = normalize(sd, allStddevs, true);
       m.strategyScore = parseFloat(
