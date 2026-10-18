@@ -86,6 +86,29 @@ describe("RedMist helpers", () => {
   });
 });
 
+describe("RedMist pit flags stuck on after the car rejoined", () => {
+  it("ends the visit at the out-lap and ignores flags on later laps at racing pace", () => {
+    // Laps 1-3 racing (152 s); 4 in-lap (in pit at the line); 5 out-lap with the stop (270 s);
+    // 6-9 racing but still flagged; 10 in-lap again, 11 out-lap (217 s), 12-13 racing, flagged.
+    const t = [152, 151, 153, 162, 270, 153, 152, 151, 152, 163, 217, 153, 152];
+    const flagged = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    const rows = t.map((v, i) => ({ idx: i, lap: i + 1, lapTimeS: v, inPit: flagged.has(i + 1), crossedInPit: flagged.has(i + 1) }) as unknown as LapRow);
+    const v = redmistFlagVisits(rows);
+    expect(v.map((x) => [rows[x.i0].lap, x.i1 === null ? null : rows[x.i1].lap])).toEqual([
+      [4, 5],
+      [10, 11],
+    ]);
+    expect(v.every((x) => x.stuckFlags)).toBe(true);
+  });
+
+  it("keeps a real multi-lap stay in the pit lane (slow laps)", () => {
+    const t = [152, 151, 160, 400, 380, 260, 152];
+    const flagged = new Set([3, 4, 5]);
+    const rows = t.map((v, i) => ({ idx: i, lap: i + 1, lapTimeS: v, inPit: flagged.has(i + 1), crossedInPit: flagged.has(i + 1) }) as unknown as LapRow);
+    expect(redmistFlagVisits(rows).map((x) => [rows[x.i0].lap, x.i1 === null ? null : rows[x.i1].lap])).toEqual([[3, 6]]);
+  });
+});
+
 describe("RedMist adapter", () => {
   const { race, issues } = adaptRedmist(withIds());
 
