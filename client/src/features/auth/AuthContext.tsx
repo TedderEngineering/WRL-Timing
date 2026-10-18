@@ -1,3 +1,4 @@
+import { setSignedOutNotice } from "../../lib/signedOutNotice";
 import {
   createContext,
   useContext,
@@ -106,12 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setState({ user: null, isLoading: false, isAuthenticated: false });
 
           if (err.code === "SESSION_DISPLACED") {
-            // Delay slightly so state clears before alert blocks the thread
-            setTimeout(() => {
-              alert(
-                "You were signed out because your account logged in from another location.\n\nIf this wasn't you, change your password immediately."
-              );
-            }, 100);
+            // Shown quietly on the sign-in page (no blocking pop-up).
+            setSignedOutNotice(
+              err.message ||
+                "You were signed out here because your account signed in on another device. If this wasn't you, change your password."
+            );
           }
         } else {
           // Transient error (network, 500, etc.)

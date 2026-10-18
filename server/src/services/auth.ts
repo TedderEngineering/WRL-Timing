@@ -14,7 +14,7 @@ import {
 } from "../utils/tokens.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email.js";
 import type { Site } from "./site.js";
-import { getSessionLimit } from "../config/sessionLimits.js";
+import { deviceClassOf, deviceWord, sessionLimitApplies, sessionsToDisplace } from "../config/sessionLimits.js";
 
 export interface AuthResult {
   accessToken: string;
@@ -191,28 +191,25 @@ export async function startSession(
     data: { lastLoginAt: new Date() },
   });
 
-  // Enforce session limits — revoke oldest sessions if over the limit
-  const plan = user.subscription?.plan ?? "FREE";
-  const limit = getSessionLimit(plan);
-
-  const activeSessions = await prisma.refreshToken.findMany({
-    where: {
-      userId: user.id,
-      revokedAt: null,
-      rotatedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  // limit - 1 because we're about to create a new session
-  const excess = activeSessions.length - (limit - 1);
-  if (excess > 0) {
-    const toRevoke = activeSessions.slice(0, excess).map((s) => s.id);
-    await prisma.refreshToken.updateMany({
-      where: { id: { in: toRevoke } },
-      data: { revokedAt: new Date() },
+  // Device limit (config/sessionLimits.ts): one phone and one tablet or computer; a new sign-in
+  // displaces the earlier session of the same kind. Admin accounts have no limit.
+  if (sessionLimitApplies(user.role)) {
+    const activeSessions = await prisma.refreshToken.findMany({
+      where: {
+        userId: user.id,
+        revokedAt: null,
+        rotatedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "asc" },
     });
+    const toRevoke = sessionsToDisplace(activeSessions, deviceClassOf(meta.userAgent));
+    if (toRevoke.length) {
+      await prisma.refreshToken.updateMany({
+        where: { id: { in: toRevoke } },
+        data: { revokedAt: new Date() },
+      });
+    }
   }
 
   const { accessToken, refreshToken } = await createTokenPair(
@@ -251,7 +248,8 @@ export const ROTATION_GRACE_MS = 30 * 1000;
 
 export async function refresh(
   oldRefreshToken: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  meta: SessionMeta = {}
 ): Promise<Omit<AuthResult, "refreshToken"> & { refreshToken: string | null }> {
   let payload;
   try {
@@ -268,8 +266,8 @@ export async function refresh(
     },
   });
 
-  if (!storedToken || isReplayAfterGrace(storedToken, now)) {
-    // Token reuse outside the grace window — invalidate all tokens for this user
+  if (!storedToken) {
+    // A token we never issued or already removed: treat as stolen and sign out everywhere.
     await prisma.refreshToken.deleteMany({ where: { userId: payload.userId } });
     throw new AppError(401, "Refresh token has been revoked", "TOKEN_REVOKED");
   }
@@ -280,24 +278,31 @@ export async function refresh(
     // deleting it here would make a second, concurrent request from the same
     // displaced browser find no row and take the token-theft path, which signs
     // out every device, including the one that just signed in.
-    throw new AppError(
-      401,
-      "Your account was signed in from another location. If this wasn't you, change your password immediately.",
-      "SESSION_DISPLACED"
-    );
+    throw displacedError(storedToken.userAgent);
   }
 
   // Rotation: mark the old token used rather than deleting it, so a request
   // that raced this one can still be answered during the grace window. The
   // conditional update means only one concurrent request rotates it.
-  const rotated =
-    storedToken.rotatedAt === null &&
-    (
-      await prisma.refreshToken.updateMany({
-        where: { id: storedToken.id, rotatedAt: null },
-        data: { rotatedAt: now },
-      })
-    ).count === 1;
+  let rotated = false;
+  if (storedToken.rotatedAt === null) {
+    rotated =
+      (
+        await prisma.refreshToken.updateMany({
+          where: { id: storedToken.id, rotatedAt: null },
+          data: { rotatedAt: now },
+        })
+      ).count === 1;
+  } else if (isReplayAfterGrace(storedToken, now)) {
+    const r = await recoverLostReply(storedToken, now, meta);
+    if (r === "theft") {
+      // Its replacement was already used somewhere: a copied token. Sign out everywhere.
+      await prisma.refreshToken.deleteMany({ where: { userId: payload.userId } });
+      throw new AppError(401, "Refresh token has been revoked", "TOKEN_REVOKED");
+    }
+    if (r === "displaced") throw displacedError(storedToken.userAgent);
+    rotated = r === "recovered";
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
@@ -309,8 +314,12 @@ export async function refresh(
 
   // Lost the race: the winner has already set the new cookie in this browser.
   // Hand back an access token only and leave the cookie alone.
+  // The new session keeps the device it was signed in on (the device limit reads it).
   const { accessToken, refreshToken } = rotated
-    ? await createTokenPair(user.id, user.email, user.role)
+    ? await createTokenPair(user.id, user.email, user.role, {
+        ipAddress: meta.ipAddress ?? storedToken.ipAddress ?? null,
+        userAgent: storedToken.userAgent ?? meta.userAgent ?? null,
+      })
     : {
         accessToken: generateAccessToken({
           userId: user.id,
@@ -335,6 +344,70 @@ export async function refresh(
       subscription: formatSubscription(user.subscription),
     },
   };
+}
+
+function displacedError(userAgent: string | null): AppError {
+  const word = deviceWord(deviceClassOf(userAgent));
+  return new AppError(
+    401,
+    `You were signed out here because your account signed in on another ${word}. If this wasn't you, change your password.`,
+    "SESSION_DISPLACED"
+  );
+}
+
+/**
+ * How long after a rotation a lost reply can still be recovered. A phone that lost signal just as
+ * its session renewed keeps the old token; it comes back at the next renewal, or when the app is
+ * opened again days later.
+ */
+export const LOST_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** Where the replacement row is looked for, around the old token's rotation time. */
+const SUCCESSOR_BEFORE_MS = 5_000;
+const SUCCESSOR_AFTER_MS = 60_000;
+
+/**
+ * A rotated token presented after the grace window. If its replacement was never used, the browser
+ * never received the reply that carried it (a dropped connection): the replacement is dropped and
+ * the browser gets a new session ("recovered"). If the replacement was used, the old token is a
+ * copy ("theft"). If another request recovered it a moment ago, answer like the grace window
+ * ("raced"). Too old, or from another browser: "theft".
+ */
+export async function recoverLostReply(
+  stored: { id: string; userId: string; rotatedAt: Date | null; userAgent: string | null },
+  now: Date,
+  meta: SessionMeta
+): Promise<"recovered" | "raced" | "theft" | "displaced"> {
+  if (!stored.rotatedAt) return "theft";
+  if (now.getTime() - stored.rotatedAt.getTime() > LOST_REPLY_WINDOW_MS) return "theft";
+  if (stored.userAgent && meta.userAgent && stored.userAgent !== meta.userAgent) return "theft";
+
+  const successor = await prisma.refreshToken.findFirst({
+    where: {
+      userId: stored.userId,
+      id: { not: stored.id },
+      ...(stored.userAgent ? { userAgent: stored.userAgent } : {}),
+      createdAt: {
+        gte: new Date(stored.rotatedAt.getTime() - SUCCESSOR_BEFORE_MS),
+        lte: new Date(stored.rotatedAt.getTime() + SUCCESSOR_AFTER_MS),
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!successor) return "theft";
+  if (successor.revokedAt) return "displaced";
+  if (successor.rotatedAt) return "theft";
+
+  // Claim the old token for this request only; a request that raced this one finds it claimed.
+  const claimed =
+    (
+      await prisma.refreshToken.updateMany({
+        where: { id: stored.id, rotatedAt: stored.rotatedAt },
+        data: { rotatedAt: now },
+      })
+    ).count === 1;
+  if (!claimed) return "raced";
+  await prisma.refreshToken.deleteMany({ where: { id: successor.id, rotatedAt: null } });
+  return "recovered";
 }
 
 /** A token that was already rotated, presented again after the grace window. */
@@ -581,17 +654,35 @@ async function createTokenPair(
   // browser must find its row to be told SESSION_DISPLACED. If the row were
   // gone, its next refresh would look like token theft and sign the user out
   // of every device, including the one that just signed in.
-  prisma.refreshToken
-    .deleteMany({
-      where: {
-        userId,
-        OR: [
-          { expiresAt: { lt: new Date() } },
-          { rotatedAt: { lt: new Date(Date.now() - ROTATION_GRACE_MS) } },
-        ],
-      },
-    })
-    .catch(() => {});
+  // The newest used-up tokens per browser are kept for LOST_REPLY_WINDOW_MS, so a
+  // renewal whose reply was lost can be recovered (recoverLostReply).
+  pruneTokens(userId).catch(() => {});
 
   return { accessToken, refreshToken };
+}
+
+/** Used-up tokens kept per browser for lost-reply recovery. */
+const KEEP_ROTATED_PER_BROWSER = 2;
+
+export async function pruneTokens(userId: string, now: Date = new Date()): Promise<void> {
+  await prisma.refreshToken.deleteMany({ where: { userId, expiresAt: { lt: now } } });
+  const used = await prisma.refreshToken.findMany({
+    where: { userId, rotatedAt: { not: null } },
+    orderBy: { rotatedAt: "desc" },
+    select: { id: true, rotatedAt: true, userAgent: true },
+  });
+  const kept = new Map<string, number>();
+  const drop: string[] = [];
+  for (const t of used) {
+    const age = now.getTime() - (t.rotatedAt as Date).getTime();
+    if (age <= ROTATION_GRACE_MS) continue;
+    const key = t.userAgent ?? "";
+    const n = kept.get(key) ?? 0;
+    if (age <= LOST_REPLY_WINDOW_MS && n < KEEP_ROTATED_PER_BROWSER) {
+      kept.set(key, n + 1);
+      continue;
+    }
+    drop.push(t.id);
+  }
+  if (drop.length) await prisma.refreshToken.deleteMany({ where: { id: { in: drop } } });
 }
