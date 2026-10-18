@@ -5,7 +5,7 @@ import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, STALE, pointAt, signedGap, step, takeReading, type CarMotion, type CarPlace } from "./track-motion";
+import { IN_PIT, NO_GPS, STALE, isFrozen, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -96,6 +96,26 @@ export function TrackMap({
     return xs.length ? track.len / xs[Math.floor(xs.length / 2)] : 40;
   }, [data, track]);
 
+  // Each car's own pace (m/s) from its laps: the median of its last five laps out of the pits,
+  // within 60-140% of the typical pace; and its completed laps. Read through a ref so the readings
+  // always use the latest.
+  const lapPace = useMemo(() => {
+    const out = new Map<string, CarLaps>();
+    if (!track) return out;
+    for (const [k, c] of Object.entries(data.cars)) {
+      const xs = c.laps
+        .filter((l) => l.ltSec > 30 && !l.pit)
+        .slice(-5)
+        .map((l) => l.ltSec)
+        .sort((a, b) => a - b);
+      const pace = xs.length ? Math.max(0.6 * typicalSpeed, Math.min(1.4 * typicalSpeed, track.len / xs[Math.floor(xs.length / 2)])) : null;
+      out.set(carNo(data, Number(k)), { pace, laps: c.laps.length ? c.laps[c.laps.length - 1].l : 0 });
+    }
+    return out;
+  }, [data, track, typicalSpeed]);
+  const lapPaceRef = useRef(lapPace);
+  lapPaceRef.current = lapPace;
+
   // Positions every 5 s while the page is visible.
   useEffect(() => {
     if (!track) return;
@@ -108,7 +128,7 @@ export function TrackMap({
           const t = Date.now();
           const age = body.ageMs + edgeAgeMs;
           const onTrack = body.cars.filter((c) => !(c[3] & IN_PIT));
-          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed);
+          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null);
           setReadingAt(t - age);
           const inPit = body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]);
           setPits(inPit);
@@ -209,7 +229,7 @@ export function TrackMap({
       const [x, y] = px(pointAt(track.pts, track.ds, track.len, d.m.shown));
       const r = d.focus ? 12 : d.compared ? (many ? 8 : 9) : 5;
       const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : C.dim;
-      const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0;
+      const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
       ctx.globalAlpha = d.other ? 0.3 : d.compared || d.focus ? 1 : 0.7;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
