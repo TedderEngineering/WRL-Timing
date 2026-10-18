@@ -541,6 +541,24 @@ export function LiveRacePage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
   const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
+  // A race of this event running now on another page (this one is an earlier session, or open
+  // track time): said at the top, with a link to it. Checked on opening, then every 5 minutes.
+  const [otherLive, setOtherLive] = useState<LiveSessionListing | null>(null);
+  const eventNameNow = live?.eventName ?? null;
+  useEffect(() => {
+    if (!eventNameNow) return;
+    let alive = true;
+    const load = () =>
+      fetchLiveSessions()
+        .then((r) => alive && setOtherLive(r.sessions.find((x) => x.kind === "race" && x.slug !== slug && x.eventName === eventNameNow) ?? null))
+        .catch(() => undefined);
+    load();
+    const t = setInterval(load, 5 * 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [slug, eventNameNow]);
   const now = useNow();
   const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes">("position");
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
@@ -684,6 +702,18 @@ export function LiveRacePage() {
     <LiveRaceContext.Provider value={!live?.ended}>
     <LiveClockContext.Provider value={drift}>
       <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
+        {otherLive && (
+          <Link
+            to={`/live/${otherLive.slug}`}
+            className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-3 py-2 text-sm hover:brightness-125 sm:px-6"
+            style={{ background: "rgba(239,68,68,0.12)", borderColor: RT.line, color: RT.text }}
+          >
+            <LiveDot /> <b>{otherLive.sessionName}</b> is live now.
+            <span className="font-semibold" style={{ color: RT.accent }}>
+              Go to the live race ›
+            </span>
+          </Link>
+        )}
         {/* One line: series, race, event, then the live status (wraps on a phone). */}
         <section
           className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-3 pb-1.5 pt-2.5 text-sm sm:px-6 sm:pt-3"
