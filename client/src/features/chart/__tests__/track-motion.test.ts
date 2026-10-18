@@ -6,6 +6,8 @@ import {
   MAX_COAST_MS,
   MAX_K,
   MIN_K,
+  OFF_EASE_MS,
+  OFF_TRACK,
   coastLimit,
   isFrozen,
   paceFromFixes,
@@ -137,5 +139,38 @@ describe("gaps and the outline", () => {
   it("handles an outline whose first point is past the line", () => {
     const ds2 = [20, 120, 220, 320];
     expect(pointAt(pts, ds2, 400, 10)).toEqual([0, 10]);
+  });
+});
+
+describe("cars off the track", () => {
+  it("is drawn at its own point and does not run on at a pace", () => {
+    let m = read(new Map(), [["555", 1000, null, 0]], 0);
+    m = read(m, [["555", 1100, null, OFF_TRACK, [400, 300]]], 5_000);
+    const c = m.get("555")!;
+    expect(c.off).toEqual([400, 300]);
+    expect(c.offShown).toEqual([400, 300]);
+    expect(c.v).toBe(0);
+    const before = c.shown;
+    step(m, 10_000, 5_000, LEN);
+    expect(m.get("555")!.shown).toBe(before);
+  });
+
+  it("eases between off-track fixes (a tow across the infield)", () => {
+    let m = read(new Map(), [["555", 1100, null, OFF_TRACK, [400, 300]]], 0);
+    m = read(m, [["555", 1150, null, OFF_TRACK, [500, 300]]], 5_000);
+    expect(m.get("555")!.offShown).toEqual([400, 300]);
+    step(m, 5_000 + OFF_EASE_MS / 2, OFF_EASE_MS / 2, LEN);
+    expect(m.get("555")!.offShown![0]).toBeCloseTo(450, 5);
+    step(m, 5_000 + OFF_EASE_MS * 2, OFF_EASE_MS, LEN);
+    expect(m.get("555")!.offShown).toEqual([500, 300]);
+  });
+
+  it("back on the track, it is placed where its fix says and runs on again", () => {
+    let m = read(new Map(), [["555", 1100, null, OFF_TRACK, [400, 300]]], 0);
+    m = read(m, [["555", 2000, null, 0]], 5_000);
+    const c = m.get("555")!;
+    expect(c.off ?? null).toBeNull();
+    expect(c.shown).toBe(2000);
+    expect(c.v).toBe(PACE);
   });
 });

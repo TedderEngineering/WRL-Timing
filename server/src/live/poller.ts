@@ -210,6 +210,8 @@ class Poller {
   entries: EventEntry[] = [];
   private trackAt = 0;
   private lastPlace = new Map<string, number>();
+  /** Cars off the track at the last reading (track.ts BACK_ON_M). */
+  private offTrack = new Set<string>();
   private laps: FeedLap[] = [];
   private flags: FeedFlag[] | null = null;
   private control: FeedControlEntry[] | null = null;
@@ -300,7 +302,7 @@ class Poller {
 
   /** Every car's place on the track from this state read. */
   private place(raw: unknown) {
-    const pos = positionsFromState(raw, this.track!, Date.now(), this.lastPlace);
+    const pos = positionsFromState(raw, this.track!, Date.now(), this.lastPlace, this.offTrack);
     if (!pos) return;
     this.positions = pos;
     for (const [num, d] of pos.cars) if (d !== null) this.lastPlace.set(num, d);

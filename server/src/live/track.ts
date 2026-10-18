@@ -5,7 +5,9 @@
  * with distances along it, and the start/finish line located on it). Here it becomes:
  *   - an outline to draw: points in metres (x east, y down), no coordinates or feed ids;
  *   - a way to place a car: its GPS point projected onto the nearest stretch of the centreline,
- *     as metres past the start/finish line (0 … length).
+ *     as metres past the start/finish line (0 … length);
+ *   - for a car off the track (a gravel trap, the grass, parked off, towed across the infield): its
+ *     own point in the outline's metres as well, so the map draws it where it is.
  * Each state read (every 5 s) gives every car's GPS position, speed, and pit and stale flags.
  */
 
@@ -112,16 +114,30 @@ const CP = { number: 2, inPit: 34, enteredPit: 31, stale: 37, lat: 47, lon: 48, 
 /** The state's car records. */
 const SS_CARS = 14;
 
-/** One car's place: [car number, metres past the line (null: no position), mph (null), flags]. */
-export type CarPlace = [string, number | null, number | null, number];
+/**
+ * One car's place: [car number, metres past the line (null: no position), mph (null), flags], and
+ * for a car off the track (flag OFF_TRACK) its point [x, y] in the outline's metres.
+ */
+export type CarPlace = [string, number | null, number | null, number] | [string, number | null, number | null, number, [number, number]];
 /** Flags: in the pit lane. */
 export const IN_PIT = 1;
 /** Flags: no usable GPS (placed from the timing's lap share instead, or not at all). */
 export const NO_GPS = 2;
 /** Flags: the timing marks the car's data stale. */
 export const STALE = 4;
+/** Flags: off the track; its own point is sent too. */
+export const OFF_TRACK = 8;
 
-/** Further than this from the centreline, a GPS point is not on track (the paddock, the pit lane's far side). */
+/**
+ * Off the track: further than OFF_LINE_M from the centreline (a car on the edge of a wide corner is
+ * about 8 m off it, plus a few metres of GPS error). Once off, a car is back on only within
+ * BACK_ON_M, so it does not flicker on the edge. Off by more than this beyond the outline's box
+ * (GPS garbage, or the car taken away): no point of its own, as before.
+ */
+export const OFF_LINE_M = 25;
+export const BACK_ON_M = 15;
+export const OFF_MAP_M = 250;
+/** Further than this from the centreline, its nearest place on the lap is not a position on it. */
 export const OFF_TRACK_M = 60;
 
 export interface Positions {
@@ -130,8 +146,17 @@ export interface Positions {
   cars: CarPlace[];
 }
 
-/** Every car's place from a decoded state, using each car's last distance to settle close stretches. */
-export function positionsFromState(raw: unknown, g: TrackGeometry, t: number, prev?: Map<string, number>): Positions | null {
+/**
+ * Every car's place from a decoded state, using each car's last distance to settle close stretches.
+ * `wasOff` holds the cars off the track at the last reading (for BACK_ON_M); it is updated.
+ */
+export function positionsFromState(
+  raw: unknown,
+  g: TrackGeometry,
+  t: number,
+  prev?: Map<string, number>,
+  wasOff?: Set<string>
+): Positions | null {
   if (!Array.isArray(raw) || !Array.isArray(raw[SS_CARS])) return null;
   const cars: CarPlace[] = [];
   for (const c of raw[SS_CARS] as unknown[]) {
@@ -145,16 +170,27 @@ export function positionsFromState(raw: unknown, g: TrackGeometry, t: number, pr
     const lat = c[CP.lat];
     const lon = c[CP.lon];
     let d: number | null = null;
+    let xy: [number, number] | null = null;
     if (typeof lat === "number" && typeof lon === "number" && lat !== 0 && lon !== 0) {
       const p = placeOnTrack(g, lat, lon, prev?.get(num));
-      if (p.off <= OFF_TRACK_M) d = Math.round(p.d);
+      const limit = wasOff?.has(num) ? BACK_ON_M : OFF_LINE_M;
+      const { x, y } = toXY(g.frame, lat, lon);
+      const onMap = x >= -OFF_MAP_M && y >= -OFF_MAP_M && x <= g.w + OFF_MAP_M && y <= g.h + OFF_MAP_M;
+      // Off the track, not in the pit lane (drawn in the pit list) and not a stale fix: its own point.
+      if (p.off > limit && onMap && !(flags & (IN_PIT | STALE))) {
+        flags |= OFF_TRACK;
+        xy = [Math.round(x), Math.round(y)];
+        d = Math.round(p.d);
+      } else if (p.off <= OFF_TRACK_M) d = Math.round(p.d);
     }
+    if (flags & OFF_TRACK) wasOff?.add(num);
+    else wasOff?.delete(num);
     if (d === null) {
       flags |= NO_GPS;
       const pct = c[CP.lapPct];
       if (typeof pct === "number" && pct >= 0 && pct <= 100) d = Math.round((pct / 100) * g.len);
     }
-    cars.push([num, d, mph, flags]);
+    cars.push(xy ? [num, d, mph, flags, xy] : [num, d, mph, flags]);
   }
   return { t, cars };
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { IN_PIT, NO_GPS, placeOnTrack, positionsFromState, publicTrack, trackFromFeed } from "../track.js";
+import { IN_PIT, NO_GPS, OFF_TRACK, placeOnTrack, positionsFromState, publicTrack, toXY, trackFromFeed } from "../track.js";
 
 const feedMap = JSON.parse(readFileSync(new URL("./fixtures/sebring-track.json", import.meta.url), "utf8"));
 const g = trackFromFeed(feedMap)!;
@@ -69,11 +69,12 @@ describe("track geometry (Sebring, as the timing feed learned it)", () => {
 });
 
 /** A state array with car records at the feed's field positions. */
-function state(cars: { n: string; lat?: number; lon?: number; mph?: number; pit?: boolean; pct?: number }[]) {
+function state(cars: { n: string; lat?: number; lon?: number; mph?: number; pit?: boolean; pct?: number; stale?: boolean }[]) {
   const recs = cars.map((c) => {
     const r: unknown[] = new Array(70).fill(null);
     r[2] = c.n;
     r[34] = !!c.pit;
+    r[37] = !!c.stale;
     r[47] = c.lat ?? null;
     r[48] = c.lon ?? null;
     r[54] = c.mph ?? null;
@@ -110,5 +111,67 @@ describe("positionsFromState", () => {
   });
   it("is null for anything that is not a state", () => {
     expect(positionsFromState({}, g, 0)).toBeNull();
+  });
+});
+
+/** A GPS point `m` metres to the side of the centreline, halfway between points i and i + 1. */
+function beside(i: number, m: number): { lat: number; lon: number } {
+  const a = toXY(g.frame, pt(i).lat, pt(i).lon);
+  const b = toXY(g.frame, pt(i + 1).lat, pt(i + 1).lon);
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const x = (a.x + b.x) / 2 + (-(b.y - a.y) / len) * m;
+  const y = (a.y + b.y) / 2 + ((b.x - a.x) / len) * m;
+  return { lat: g.frame.lat0 - y / g.frame.mLat, lon: g.frame.lon0 + x / g.frame.mLon };
+}
+
+describe("cars off the track", () => {
+  it("sends a car well off the centreline with its own point, and its nearest place on the lap", () => {
+    const off = beside(40, 45);
+    const pos = positionsFromState(state([{ n: "555", ...off }, { n: "87", ...beside(40, 6) }]), g, 0)!;
+    const by = Object.fromEntries(pos.cars.map((c) => [c[0], c]));
+    expect(by["555"][3] & OFF_TRACK).toBe(OFF_TRACK);
+    const xy = toXY(g.frame, off.lat, off.lon);
+    expect(by["555"][4]).toEqual([Math.round(xy.x), Math.round(xy.y)]);
+    expect(by["555"][1]).not.toBeNull();
+    // A car on the edge of the track stays on it.
+    expect(by["87"][3] & OFF_TRACK).toBe(0);
+    expect(by["87"]).toHaveLength(4);
+  });
+
+  it("now places a car towed across the infield (over 60 m off) where it is, not by the lap share", () => {
+    const pos = positionsFromState(state([{ n: "555", ...beside(40, 150), pct: 90 }]), g, 0)!;
+    expect(pos.cars[0][3] & (OFF_TRACK | NO_GPS)).toBe(OFF_TRACK);
+    expect(pos.cars[0][4]).toBeDefined();
+  });
+
+  it("does not flicker on the edge: once off, back on only within 15 m", () => {
+    const wasOff = new Set<string>();
+    const at = (m: number) => positionsFromState(state([{ n: "5", ...beside(40, m) }]), g, 0, undefined, wasOff)!.cars[0][3] & OFF_TRACK;
+    expect(at(20)).toBe(0);
+    expect(at(30)).toBe(OFF_TRACK);
+    expect(at(20)).toBe(OFF_TRACK);
+    expect(at(10)).toBe(0);
+    expect(at(20)).toBe(0);
+  });
+
+  it("leaves pit-lane cars and stale fixes as they were", () => {
+    const pos = positionsFromState(
+      state([
+        { n: "1", ...beside(40, 45), pit: true },
+        { n: "2", ...beside(40, 45), stale: true },
+      ]),
+      g,
+      0
+    )!;
+    for (const c of pos.cars) {
+      expect(c[3] & OFF_TRACK).toBe(0);
+      expect(c).toHaveLength(4);
+    }
+  });
+
+  it("gives no point for a fix far beyond the map (GPS garbage)", () => {
+    const pos = positionsFromState(state([{ n: "9", lat: g.frame.lat0 + 0.05, lon: g.frame.lon0 - 0.05 }]), g, 0)!;
+    expect(pos.cars[0][3] & OFF_TRACK).toBe(0);
+    expect(pos.cars[0][1]).toBeNull();
   });
 });
