@@ -10,6 +10,7 @@ import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 import { TrackMap } from "../features/chart/TrackMap";
+import { LiveGapsPanel } from "../features/chart/LiveGapsPanel";
 import { TraceControls } from "../features/chart/TraceControls";
 import { pitAnalysisFromChart } from "../features/chart/live-pit-analysis";
 import { useTraceView } from "../features/chart/trace-view";
@@ -148,7 +149,8 @@ function entriesChart(entries: Entry[]): RaceChartData {
     let key = parseInt(e.car, 10);
     if (!Number.isFinite(key) || key <= 0 || used.has(key) || String(key) !== e.car) key = 100_000 + i;
     used.add(key);
-    cars[String(key)] = { num: key, team: e.team, cls: e.cls, finishPos: 0, finishPosClass: 0, laps: [], ...(String(key) !== e.car ? { label: e.car } : {}) } as RaceChartData["cars"][string];
+    // No positions before the race (not "P0").
+    cars[String(key)] = { num: key, team: e.team, cls: e.cls, laps: [], ...(String(key) !== e.car ? { label: e.car } : {}) } as unknown as RaceChartData["cars"][string];
     (classGroups[e.cls] ??= []).push(key);
   });
   return {
@@ -201,6 +203,7 @@ function PreRaceLayout({
   const [focusNum, setFocusNumRaw] = useState(0);
   const [compSet, setCompSet] = useState<Set<number>>(new Set());
   const [classView, setClassView] = useState("");
+  const [sideTab, setSideTab] = useState<"details" | "gaps">("details");
   const setFocusNum = useCallback(
     (n: number) => {
       setFocusNumRaw(n);
@@ -302,14 +305,29 @@ function PreRaceLayout({
             </figure>
           </div>
           <aside className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:border-l md:border-t-0 lg:w-[400px]" style={{ borderColor: RT.line }}>
-            <div className="flex gap-4 border-b px-4 text-sm" style={{ borderColor: RT.line }}>
-              <span className="border-b-2 py-2 font-semibold" style={{ borderColor: RT.accent }}>
-                Lap details
-              </span>
-              <span className="py-2" style={{ color: RT.muted }}>
-                Gaps
-              </span>
+            <div className="flex gap-4 border-b px-4 text-sm" style={{ borderColor: RT.line }} role="tablist">
+              {(["details", "gaps"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={sideTab === t}
+                  onClick={() => setSideTab(t)}
+                  className="border-b-2 py-2"
+                  style={{ borderColor: sideTab === t ? RT.accent : "transparent", color: sideTab === t ? RT.text : RT.muted, fontWeight: sideTab === t ? 600 : 400 }}
+                >
+                  {t === "details" ? "Lap details" : "Gaps"}
+                </button>
+              ))}
             </div>
+            {sideTab === "gaps" ? (
+              <div className="flex flex-col gap-2 p-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
+                <p className="m-0 px-2 pt-1 text-xs" style={{ color: RT.muted }}>
+                  Last and best laps, gaps and who is gaining fill in from the first completed lap.
+                </p>
+                <LiveGapsPanel data={data} focusNum={focusNum} compSet={compSet} fieldCars={traceView.fieldCars} />
+              </div>
+            ) : (
             <div className="flex flex-col gap-3 p-4">
               {focus && (
                 <div>
@@ -328,6 +346,7 @@ function PreRaceLayout({
                 Lap details, the gaps to the cars around you and the gap to the leader fill in from the first completed lap.
               </div>
             </div>
+            )}
           </aside>
         </div>
       )}
