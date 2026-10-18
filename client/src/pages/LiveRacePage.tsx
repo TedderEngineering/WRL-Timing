@@ -9,6 +9,8 @@ import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+import { TrackMap } from "../features/chart/TrackMap";
+import { TraceControls } from "../features/chart/TraceControls";
 import { pitAnalysisFromChart } from "../features/chart/live-pit-analysis";
 import { useTraceView } from "../features/chart/trace-view";
 import { useChartDefaults } from "../features/chart/chart-defaults";
@@ -238,7 +240,7 @@ export function LiveRacePage() {
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
   const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
   const now = useNow();
-  const [tab, setTab] = useState<"position" | "pitanalysis" | "laptimes">("position");
+  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes">("position");
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
@@ -329,6 +331,7 @@ export function LiveRacePage() {
   const isTeam = hasTeamAccess(user);
   const tabs = [
     { id: "position" as const, label: "Position Trace", locked: false },
+    { id: "map" as const, label: "Track Map", locked: false },
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
   ];
@@ -431,6 +434,12 @@ export function LiveRacePage() {
             headSlot={tab === "position" ? headSlot : null}
           />
         </div>
+        {tab === "map" && (
+          <div className="flex flex-col md:min-h-0 md:flex-1">
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+            <TrackMap slug={slug} data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} />
+          </div>
+        )}
         {tab === "pitanalysis" && (
           <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
             <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} />

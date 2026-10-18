@@ -38,6 +38,7 @@ import {
 import type { SessionKind } from "./schedule.js";
 import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
 import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
+import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -62,7 +63,11 @@ const MAX_POLLERS = 4;
 export const liveUrls = {
   sessionLaps: (eventId: number, sessionId: number) => `${FEED_API}/v1/Events/LoadSessionLaps?eventId=${eventId}&sessionId=${sessionId}`,
   state: (eventId: number) => `${FEED_API}/v2/Events/GetCurrentSessionState?eventId=${eventId}`,
+  trackMap: (eventId: number) => `${FEED_API}/v2/Events/LoadTrackMap?eventId=${eventId}`,
 };
+
+/** How often to ask again for a track map the feed has not learned yet (it learns from clean laps). */
+const TRACK_RETRY_MS = 5 * 60_000;
 
 export interface LiveSnapshot {
   chart: LiveChart | null;
@@ -160,7 +165,7 @@ export function setLiveHttp(h: HttpClient | null) {
  */
 export const feedStates = new EventEmitter();
 
-async function loadState(h: HttpClient, eventId: number, sessionId: number): Promise<LiveState | null> {
+async function loadState(h: HttpClient, eventId: number, sessionId: number): Promise<{ s: LiveState; raw: unknown } | null> {
   try {
     const res = await h.get(liveUrls.state(eventId), { headers: { Accept: "application/x-msgpack" } });
     const raw = decode(res.body);
@@ -168,7 +173,7 @@ async function loadState(h: HttpClient, eventId: number, sessionId: number): Pro
     // The state is the event's current session: ignore it when another session is running.
     if (!s || (s.sessionId !== null && s.sessionId !== sessionId)) return null;
     feedStates.emit("state", eventId, sessionId, raw);
-    return s;
+    return { s, raw };
   } catch {
     return null;
   }
@@ -193,6 +198,12 @@ class Poller {
    */
   readonly epoch = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   lastView = Date.now();
+  /** The track map (null until the feed has learned it) and every car's latest place on it. */
+  track: TrackGeometry | null = null;
+  trackPublic: PublicTrack | null = null;
+  positions: Positions | null = null;
+  private trackAt = 0;
+  private lastPlace = new Map<string, number>();
   private laps: FeedLap[] = [];
   private flags: FeedFlag[] | null = null;
   private control: FeedControlEntry[] | null = null;
@@ -267,11 +278,36 @@ class Poller {
     this.snap.ended = !!s.et && s.il === false;
   }
 
+  /** The feed's track map, once it has learned one (404 until then: asked again later). */
+  private async loadTrack(h: HttpClient) {
+    this.trackAt = Date.now();
+    try {
+      const g = trackFromFeed(await h.getJson<unknown>(liveUrls.trackMap(this.eventId)));
+      if (g) {
+        this.track = g;
+        this.trackPublic = publicTrack(g);
+      }
+    } catch {
+      // no map yet: the cars are simply not placed
+    }
+  }
+
+  /** Every car's place on the track from this state read. */
+  private place(raw: unknown) {
+    const pos = positionsFromState(raw, this.track!, Date.now(), this.lastPlace);
+    if (!pos) return;
+    this.positions = pos;
+    for (const [num, d] of pos.cars) if (d !== null) this.lastPlace.set(num, d);
+  }
+
   private async tick(): Promise<void> {
     const h = http();
     try {
       if (!this.meta || Date.now() - this.lastSlow >= SLOW_MS) await this.loadMeta(h);
-      const state = await loadState(h, this.eventId, this.sessionId);
+      const read = await loadState(h, this.eventId, this.sessionId);
+      const state = read?.s ?? null;
+      if (!this.track && Date.now() - this.trackAt >= TRACK_RETRY_MS) await this.loadTrack(h);
+      if (read && this.track) this.place(read.raw);
       let lapsChanged = false;
       if (this.laps.length === 0 || this.needFull || Date.now() - this.lastLaps >= LAPS_MS) {
         const laps = await h.getJson<FeedLap[]>(liveUrls.sessionLaps(this.eventId, this.sessionId));
@@ -540,6 +576,14 @@ export async function listLiveSessions(): Promise<LiveSessionRef[]> {
 /** WRL sessions that ended within RECENT_MS. */
 export async function listRecentSessions(): Promise<LiveSessionRef[]> {
   return (await scanSessions()).recent;
+}
+
+/** The track outline and the cars' latest places for a session (starting its poller if needed). */
+export async function getLiveTrack(eventId: number, sessionId: number, slug: string): Promise<{ track: PublicTrack | null; positions: Positions | null }> {
+  const p = pollerFor(eventId, sessionId, slug);
+  p.lastView = Date.now();
+  await p.ready();
+  return { track: p.trackPublic, positions: p.positions };
 }
 
 /** A running poller's view of its session (no extra feed reads): leader's lap and flag. */
