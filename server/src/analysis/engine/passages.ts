@@ -594,7 +594,8 @@ function redmistPassages(ctx: Ctx): Passage[] {
       if (outIdx < inIdx) outIdx = inIdx;
       let lastIdx: number | undefined;
       // (a) the car was already in the pit lane at the previous crossing: the visit began a lap earlier.
-      while (inIdx - 1 > prevEnd && rows[inIdx - 1].crossedInPit) inIdx--;
+      // Not across laps at racing pace: those flags are stuck (see d).
+      while (inIdx - 1 > prevEnd && rows[inIdx - 1].crossedInPit && !racing(inIdx - 1)) inIdx--;
       // (b) the reported out-lap was itself crossed in the pit lane: the car rejoined later, or never.
       if (rows[outIdx].crossedInPit) {
         let j = outIdx;

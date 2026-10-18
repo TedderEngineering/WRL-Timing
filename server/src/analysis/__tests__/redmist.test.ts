@@ -114,7 +114,8 @@ describe("RedMist pit report stop with the pit flags stuck on", () => {
     const pkg = buildFacts({ format: "redmist", files: redmistFiles({ stuckFlags: true }), options: OPTS });
     const p = pkg.events.pitPassages.find((e: any) => e.car === "2" && e.inLap === 12) as any;
     expect(p.outLap).toBe(13);
-    expect(pkg.events.pitPassages.filter((e: any) => e.car === "2" && e.kind !== "pit_lane_start")).toHaveLength(1);
+    // Its next reported stop stays on lap 18: not moved back across the laps at racing pace.
+    expect(pkg.events.pitPassages.filter((e: any) => e.car === "2" && e.kind !== "pit_lane_start").map((e: any) => e.inLap)).toEqual([12, 18]);
     expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
   });
 });

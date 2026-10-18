@@ -125,6 +125,10 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: b
       { carNumber: "2", stopNumber: 1, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 88000, pitDuration: "1:28.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
       { carNumber: "4", stopNumber: 1, startLap: 10, endLap: 10, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Eve Egan", driverAfter: "Eve Egan", driverChanged: false },
       { carNumber: "5", stopNumber: 1, startLap: 1, endLap: 1, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 1500000, pitDuration: "25:00.000", driverBefore: "", driverAfter: "Fay Fox", driverChanged: false },
+      // { stuckFlags: true }: car 2's next reported stop, laps 18-19, inside its stuck flags.
+      ...(opts.stuckFlags
+        ? [{ carNumber: "2", stopNumber: 2, startLap: 18, endLap: 19, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false }]
+        : []),
       // { phantom: true }: a 5-s report row for car 1 on lap 15, with no lap pit flag.
       ...(opts.phantom
         ? [{ carNumber: "1", stopNumber: 2, startLap: 15, endLap: 15, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 5000, pitDuration: "0:05.000", driverBefore: "Bob Baker", driverAfter: "Bob Baker", driverChanged: false }]
