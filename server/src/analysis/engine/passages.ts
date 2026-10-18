@@ -432,6 +432,9 @@ export interface FlagVisit {
  */
 export const RACING_PACE = 1.05;
 
+/** A pit-report row with no lap pit flag and under this many seconds in the pit lane is not a stop. */
+export const PHANTOM_STOP_S = 10;
+
 function racingPace(rows: LapRow[]): (i: number) => boolean {
   const xs = rows
     .map((r) => r.lapTimeS)
@@ -514,6 +517,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
   for (const r of ctx.race.pitRecords) if (r.source === "pit_json") byCar.set(r.car, [...(byCar.get(r.car) ?? []), r]);
   const corrected: string[] = [];
   const noFlags: string[] = [];
+  const phantom: string[] = [];
   const extra: string[] = [];
   const clockOff: string[] = [];
   const staging: string[] = [];
@@ -642,7 +646,15 @@ function redmistPassages(ctx: Ctx): Passage[] {
         corrected.push(`${car} L${r.inLap}-${r.outLap} → L${p.inLap}-${p.outLap ?? "none"}`);
       }
       const range = lapRange(p)!;
-      if (!rows.slice(range[0], range[1] + 1).some((x) => x.inPit || x.crossedInPit)) noFlags.push(`${car} L${p.inLap}`);
+      if (!rows.slice(range[0], range[1] + 1).some((x) => x.inPit || x.crossedInPit)) {
+        // No lap pit flag and only a few seconds in the pit lane: not a visit (no car passes through a
+        // pit lane that fast). The report repeats such rows (Sebring 2026: #120 laps 8, 9, 17, 22, 5 s).
+        if (r.pitTimeS !== null && r.pitTimeS < PHANTOM_STOP_S) {
+          phantom.push(`${car} L${p.inLap} (${rd(r.pitTimeS, 0)} s)`);
+          return;
+        }
+        noFlags.push(`${car} L${p.inLap}`);
+      }
       // Pit-report clocks against the lap axis (in-lap must contain pit-in; pit-out before the out-lap ends).
       if (p.pinT !== null) {
         const a = rows[range[0]].startT;
@@ -717,6 +729,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
     ctx.issues.push({ severity: "note", code: "REDMIST-NO-PIT-REPORT", message: "No RedMist pit report (no Flagtronics pit data): passages come from the lap pit flags only, with no pit-in/pit-out and no official pit-lane time; time lost is still measured over the in-lap and out-lap." });
   }
   if (corrected.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-LAPS-CORRECTED", message: `${corrected.length} pit-report stop(s) re-anchored on the lap pit flags: ${list(corrected)}.`, files });
+  if (phantom.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-PHANTOM", message: `${phantom.length} pit-report row(s) with no lap pit flag and under ${PHANTOM_STOP_S} s in the pit lane are not counted as stops: ${list(phantom)}.`, files });
   if (noFlags.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-NO-LAP-FLAG", message: `${noFlags.length} pit-report stop(s) have no lap pit flag on their laps: ${list(noFlags)}.`, files });
   if (extra.length) ctx.issues.push({ severity: "warning", code: "PASSAGE-NOT-IN-PIT-REPORT", message: `${extra.length} pit visit(s) seen in the lap pit flags are missing from the pit report (no pit-lane time): ${list(extra)}.`, files });
   if (clockOff.length) ctx.issues.push({ severity: "warning", code: "PIT-CLOCK-LAP-MISMATCH", message: `${clockOff.length} pit-report clock(s) do not fit the passage laps by more than 30 s: ${list(clockOff)}.`, files });

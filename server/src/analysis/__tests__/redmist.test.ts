@@ -119,6 +119,15 @@ describe("RedMist pit report stop with the pit flags stuck on", () => {
   });
 });
 
+describe("RedMist pit report rows that are not stops", () => {
+  it("drops a row with no lap pit flag and a few seconds in the pit lane, and says so", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ phantom: true }), options: OPTS });
+    expect(pkg.events.pitPassages.filter((e: any) => e.car === "1").map((e: any) => e.inLap)).toEqual([6]);
+    expect(pkg.dataQuality.some((q: any) => q.code === "PIT-REPORT-PHANTOM" && /1 L15/.test(q.message))).toBe(true);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+});
+
 describe("RedMist adapter", () => {
   const { race, issues } = adaptRedmist(withIds());
 
