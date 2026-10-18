@@ -71,9 +71,12 @@ export function crossing(c: CarSpec, lap: number): number {
 /** Car 3's extra out-lap time with { garage: true }. */
 export const RM_GARAGE_EXTRA_S = 1300;
 
-export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean } = {}): InputFile[] {
+export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean } = {}): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
-  const cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
+  let cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
+  // { stuckFlags: true }: car 2's "in pit lane at the line" flag stays set from its stop (lap 12) to
+  // lap 18 while it laps at racing pace again (Sebring Sunday 2026, #48).
+  if (opts.stuckFlags) cars = cars.map((c) => (c.car === "2" ? { ...c, ip: [12, 13, 14, 15, 16, 17, 18], lip: [12, 13, 14, 15, 16, 17, 18] } : c));
   const laps: Record<string, unknown>[] = [];
   for (const c of cars) {
     for (let lap = 1; lap <= 20; lap++) {
@@ -122,6 +125,10 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: b
       { carNumber: "2", stopNumber: 1, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 88000, pitDuration: "1:28.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
       { carNumber: "4", stopNumber: 1, startLap: 10, endLap: 10, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Eve Egan", driverAfter: "Eve Egan", driverChanged: false },
       { carNumber: "5", stopNumber: 1, startLap: 1, endLap: 1, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 1500000, pitDuration: "25:00.000", driverBefore: "", driverAfter: "Fay Fox", driverChanged: false },
+      // { phantom: true }: a 5-s report row for car 1 on lap 15, with no lap pit flag.
+      ...(opts.phantom
+        ? [{ carNumber: "1", stopNumber: 2, startLap: 15, endLap: 15, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 5000, pitDuration: "0:05.000", driverBefore: "Bob Baker", driverAfter: "Bob Baker", driverChanged: false }]
+        : []),
       ...(opts.garage
         ? [{ carNumber: "3", stopNumber: 1, startLap: 15, endLap: 16, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Dan Drew", driverAfter: "Dan Drew", driverChanged: false }]
         : []),

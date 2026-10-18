@@ -109,6 +109,25 @@ describe("RedMist pit flags stuck on after the car rejoined", () => {
   });
 });
 
+describe("RedMist pit report stop with the pit flags stuck on", () => {
+  it("ends the stop at its out-lap, not where the stuck flags end", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ stuckFlags: true }), options: OPTS });
+    const p = pkg.events.pitPassages.find((e: any) => e.car === "2" && e.inLap === 12) as any;
+    expect(p.outLap).toBe(13);
+    expect(pkg.events.pitPassages.filter((e: any) => e.car === "2" && e.kind !== "pit_lane_start")).toHaveLength(1);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+});
+
+describe("RedMist pit report rows that are not stops", () => {
+  it("drops a row with no lap pit flag and a few seconds in the pit lane, and says so", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ phantom: true }), options: OPTS });
+    expect(pkg.events.pitPassages.filter((e: any) => e.car === "1").map((e: any) => e.inLap)).toEqual([6]);
+    expect(pkg.dataQuality.some((q: any) => q.code === "PIT-REPORT-PHANTOM" && /1 L15/.test(q.message))).toBe(true);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+});
+
 describe("RedMist adapter", () => {
   const { race, issues } = adaptRedmist(withIds());
 
