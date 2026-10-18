@@ -65,7 +65,7 @@ export type RoundStatus = "on_site" | "missing" | "live" | "upcoming";
 
 export interface SeasonRound {
   /** The round's next scheduled session (live schedule), while one is known and not over. */
-  session?: { name: string; kind: string; startsAt: string };
+  session?: { id?: string; name: string; kind: string; startsAt: string };
   round: number;
   name: string;
   track: string;

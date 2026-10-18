@@ -160,6 +160,15 @@ describe("SeasonPanel", () => {
     expect(t).toMatch(/Next up · tomorrow \d{1,2}:00/);
   });
 
+  it("a session on the live schedule opens its live page, saying it is not live yet", () => {
+    const n = { ...wrl.rounds.find((r) => r.name === "Sebring")!, seriesId: "wrl", seriesLabel: "WRL", status: "on_site" as const, session: { id: "wrl-2026-sebring-race-2", name: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T12:00:00Z" } };
+    const before = html(<NextUp next={n} today="2026-10-17" now={Date.parse("2026-10-17T20:00:00Z")} />);
+    expect(before).toContain('href="/live/next/wrl-2026-sebring-race-2"');
+    expect(text(before)).toContain("Not live yet · Open live timing →");
+    expect(text(before)).not.toContain("Results and recaps");
+    expect(text(html(<NextUp next={n} today="2026-10-18" now={Date.parse("2026-10-18T12:30:00Z")} />))).toContain("Live timing · Open live timing →");
+  });
+
   it("collapsed, it lists the rounds around the next one even when `next` is a copy", () => {
     expect(out).toContain("R6Road Atlanta");
     expect(out).toContain("R10COTA");

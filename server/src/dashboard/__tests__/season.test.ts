@@ -107,6 +107,8 @@ describe("season view against the live 2026 races", () => {
     expect(nextSessionFor("WRL", sebring, Date.parse("2026-10-18T01:00:00Z"), sched)).toEqual({ name: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T08:00:00-04:00" });
     expect(nextSessionFor("WRL", sebring, Date.parse("2026-10-18T20:00:00Z"), sched)).toBeNull();
     expect(nextSessionFor("WRL", cota, Date.parse("2026-10-18T01:00:00Z"), sched)).toBeNull();
+    // With the schedule's id, so the card can open the session's live page.
+    expect(nextSessionFor("WRL", sebring, Date.parse("2026-10-18T01:00:00Z"), [{ ...sched[0], id: "wrl-2026-sebring-race-2" }])?.id).toBe("wrl-2026-sebring-race-2");
   });
 
   it("a round in progress is live, and before it starts it is upcoming", () => {

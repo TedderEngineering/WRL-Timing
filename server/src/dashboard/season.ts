@@ -75,6 +75,8 @@ export interface SeasonSeries {
 }
 
 export interface NextSession {
+  /** The live schedule's id: its pre-race page is /live/next/<id>. */
+  id?: string;
   name: string;
   kind: string;
   startsAt: string;
@@ -88,7 +90,7 @@ export function nextSessionFor(
   shortLabel: string,
   round: Pick<CalendarRound, "tracks" | "start" | "end">,
   nowMs: number,
-  schedule: { series: string; track: string; sessionName: string; kind: string; startsAt: string; endsAt: string }[]
+  schedule: { id?: string; series: string; track: string; sessionName: string; kind: string; startsAt: string; endsAt: string }[]
 ): NextSession | null {
   const hit = schedule
     .filter((x) => x.series.toLowerCase() === shortLabel.toLowerCase())
@@ -105,7 +107,7 @@ export function nextSessionFor(
       });
     })
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
-  return hit ? { name: hit.sessionName, kind: hit.kind, startsAt: hit.startsAt } : null;
+  return hit ? { ...(hit.id ? { id: hit.id } : {}), name: hit.sessionName, kind: hit.kind, startsAt: hit.startsAt } : null;
 }
 
 const CALENDARS: Record<number, Calendar> = { 2026: cal2026 as Calendar };

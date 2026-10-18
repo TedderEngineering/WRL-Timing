@@ -27,8 +27,8 @@
  */
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
-import { getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
-import { upcomingSessions } from "../live/schedule.js";
+import { eventEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 
 export const liveRouter = Router();
@@ -299,6 +299,29 @@ liveRouter.get("/", async (_req, res, next) => {
     res.set("Cache-Control", "public, max-age=30");
     res.set("CDN-Cache-Control", "max-age=30");
     res.json({ sessions, upcoming, recent: recent.map(publicListing) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * A scheduled session before its timing opens (its pre-race page): the session, and the event's
+ * entry list so a viewer can pick their car ahead of the start. Cached at the edge 5 min.
+ */
+liveRouter.get("/next/:id", async (req, res, next) => {
+  try {
+    const id = String(req.params.id);
+    const s = LIVE_SCHEDULE.find((x) => x.id === id);
+    if (!s) {
+      noStore(res);
+      res.status(404).json({ error: "No such scheduled session", code: "LIVE_NO_SCHEDULE" });
+      return;
+    }
+    const { source: _source, ...session } = s;
+    const entries = await eventEntries(s.eventName);
+    res.set("Cache-Control", "public, max-age=120");
+    res.set("CDN-Cache-Control", "max-age=300");
+    res.json({ session, entries });
   } catch (e) {
     next(e);
   }

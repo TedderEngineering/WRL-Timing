@@ -18,8 +18,9 @@ import { carKey, carNo } from "../features/chart/car-number";
 import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
-import { fetchLiveSessions, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
+import { fetchLiveSessions, getPublic, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
 import { countdownText, goesLiveText, sessionFor } from "../features/live/banner";
+import { readLiveCar, saveLiveCar } from "../features/live/my-car";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
@@ -147,6 +148,27 @@ export function UpcomingRacePage() {
   const [error, setError] = useState<string | null>(null);
   const known = useRef<UpcomingListed | null>(null);
   const now = useNow(1000);
+  const [entries, setEntries] = useState<{ car: string; team: string; cls: string }[]>([]);
+  const [eventName, setEventName] = useState<string | null>(null);
+  const [myCar, setMyCar] = useState<string | null>(null);
+  const myCarRef = useRef<string | null>(null);
+  myCarRef.current = myCar;
+  // The session and the event's entry list (to pick a car before the start).
+  useEffect(() => {
+    let alive = true;
+    getPublic<{ session: UpcomingListed; entries: { car: string; team: string; cls: string }[] }>(`/live/next/${encodeURIComponent(id)}`)
+      .then(({ body }) => {
+        if (!alive) return;
+        known.current ??= body.session;
+        setEntries(body.entries);
+        setEventName(body.session.eventName);
+        setMyCar(readLiveCar(body.session.eventName));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
   useEffect(() => {
     let alive = true;
     const load = () =>
@@ -158,7 +180,7 @@ export function UpcomingRacePage() {
           const u = (r.upcoming ?? []).find((x) => x.id === id);
           if (u) known.current = u;
           const live = known.current ? sessionFor(known.current, r) : null;
-          if (live) navigate(`/live/${live.slug}`, { replace: true });
+          if (live) navigate(`/live/${live.slug}${myCarRef.current ? `?car=${encodeURIComponent(myCarRef.current)}` : ""}`, { replace: true });
         })
         .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not check the timing"));
     load();
@@ -185,7 +207,12 @@ export function UpcomingRacePage() {
         )}
         {u && (
           <>
-            <h1 className="mt-3 text-3xl font-semibold">{u.sessionName}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="m-0 text-3xl font-semibold">{u.sessionName}</h1>
+              <span className="rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider" style={{ borderColor: RT.accent, color: RT.accent }}>
+                Not live yet
+              </span>
+            </div>
             <p className="mt-1" style={{ color: RT.soft }}>
               {u.series} · {u.eventName}
             </p>
@@ -200,6 +227,40 @@ export function UpcomingRacePage() {
                 {countdownText(u.startsAt, now)}
               </div>
             </div>
+            {entries.length > 0 && (
+              <div className="mt-6 rounded-lg border p-5" style={{ background: RT.card, borderColor: RT.border }}>
+                <label htmlFor="my-car" className="text-xs uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
+                  Your car
+                </label>
+                <select
+                  id="my-car"
+                  value={myCar ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setMyCar(v);
+                    saveLiveCar(eventName, v);
+                  }}
+                  className="mt-2 block w-full rounded-md border px-3 py-2 text-base"
+                  style={{ background: "#0b0b18", borderColor: RT.border, color: RT.text }}
+                >
+                  <option value="">The race leader</option>
+                  {[...new Set(entries.map((e) => e.cls))].map((cls) => (
+                    <optgroup key={cls} label={cls || "Other"}>
+                      {entries
+                        .filter((e) => e.cls === cls)
+                        .map((e) => (
+                          <option key={e.car} value={e.car}>
+                            #{e.car} {e.team}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs" style={{ color: RT.muted }}>
+                  {myCar ? `Live timing will open on #${myCar}: its position trace, gaps and pit stops, highlighted on the track map.` : "Pick your car and live timing will open on it."}
+                </p>
+              </div>
+            )}
             <p className="mt-6 text-sm leading-relaxed" style={{ color: RT.soft }}>
               This page turns into live timing as soon as the session opens on the timing, usually an hour or two before the start:
               the position trace lap by lap, the track map with every car moving round the circuit, gaps to the cars around you,
@@ -344,6 +405,8 @@ export function LiveRacePage() {
   const [activeLap, setActiveLap] = useState<number | null>(null);
   /** The first chart sets focus and compare; later updates keep the viewer's choices. */
   const initialised = useRef(false);
+  /** The car the page opened on (the leader, ?car= or the saved car). */
+  const openedOn = useRef(0);
 
   useEffect(() => {
     if (!data) return;
@@ -354,10 +417,11 @@ export function LiveRacePage() {
       let lead = 0;
       for (const [n, c] of Object.entries(data.cars)) if (c.finishPos === 1) lead = Number(n);
       lead = lead || nums[0] || 0;
-      const param = new URLSearchParams(window.location.search).get("car");
+      const param = new URLSearchParams(window.location.search).get("car") ?? readLiveCar(live?.eventName);
       const named = param ? carKey(data, param) : null;
       if (named !== null && named > 0 && data.cars[String(named)]) lead = named;
       setFocusNum(lead);
+      openedOn.current = lead;
       setClassView(chartDefaults.classView === "focus_class" ? (data.cars[String(lead)]?.cls ?? "") : "");
       setCompSet(new Set(nums.filter((n) => n !== lead)));
       return;
@@ -366,6 +430,12 @@ export function LiveRacePage() {
     if (focusNum && !data.cars[String(focusNum)]) setFocusNum(nums[0] ?? 0);
     // Compare keeps the viewer's picks; "All cars" (trace-view) takes in cars that appear mid-race.
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The car the viewer follows at this event, for the next visit (and its next race's pre-race
+  // page): only a car they chose, not the leader the page opened on.
+  useEffect(() => {
+    if (initialised.current && focusNum && focusNum !== openedOn.current && data?.cars[String(focusNum)]) saveLiveCar(live?.eventName, carNo(data, focusNum));
+  }, [focusNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFocusChange = useCallback((num: number) => {
     setFocusNum(num);
