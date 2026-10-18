@@ -6,11 +6,13 @@
  * uneven delay, so the distance between two readings says little about pace (on Sunday's race, from
  * half to one and a half times the car's real pace). So a car is never moved by its readings
  * directly. It runs on at its own steady pace: from its laps, or, once it has run 15 s of fixes,
- * the average over its last 45 s of them (so a caution slows it). A repeated fix is not news. A new
- * fix only nudges its pace (at most 40% slower or 50% faster; for a gap over 250 m, 70% slower or
- * twice as fast) until it is back where the fix says; it never stops or rolls backwards for a
- * correction. Only a gap over 800 m (a car placed on the wrong stretch) moves it straight there,
- * and only once the next fix agrees.
+ * the average over its last 45 s of them, kept within 85-115% of its lap pace under green and
+ * 35-130% under a caution (so a caution slows it). Fixes often arrive late together: with a lower
+ * bound, and a correction allowed to slow a car to 30%, whole groups crawled ("false stopped cars").
+ * A repeated fix is not news. A new fix only nudges its pace (at most 25% slower under green, 50%
+ * under a caution; 50% faster, twice as fast for a gap over 250 m) until it is back where the fix
+ * says; it never stops or rolls backwards for a correction. Only a gap over 800 m (a car placed on
+ * the wrong stretch) moves it straight there, and only once the next fix agrees.
  *
  * No new fix for over 25 s means its fix is frozen, not that the car has parked (a parked car's
  * GPS still wanders a few metres): on Sunday #77 kept one fix for three and a half minutes while
@@ -21,8 +23,11 @@
  * A stopped car with a frozen fix (the usual case: the timing repeats its last fix) is caught by its
  * laps, which come from the timing loop and stay true when the GPS does not: frozen for 25 s and
  * overdue at the line (its lap time plus 10 %, plus the delay before laps reach the page), it is
- * stopped. It goes back to its last real fix and waits there, drawn as stopped, until a new fix
- * comes. A frozen car that keeps crossing the line on time (#77) keeps running on.
+ * stopped. Sooner, with no lap since its fix froze: reading 0 mph for 25 s (#282 parked by the
+ * paddock), or marked stale by the timing with its speed unchanged too for 60 s (#77 retired: one
+ * fix and 54 mph for minutes; stale alone is not enough, #119 was stale for 22 s at 94-122 mph).
+ * It goes back to its last real fix and waits there, drawn as stopped, until a new fix comes. A
+ * frozen car that keeps crossing the line on time keeps running on.
  *
  * A car off the track (OFF_TRACK: a gravel trap, the grass, parked off, towed across the infield)
  * comes with its own point and is drawn there, eased between fixes; it does not run on at a pace.
@@ -41,13 +46,14 @@ export const OFF_EASE_MS = 1_500;
 /** A car runs on at its pace at least this long after its last new fix (longer while it completes laps). */
 export const MAX_COAST_MS = 30_000;
 /** A gap to where the fix says is closed over about this long, by easing the car's pace. */
-export const CATCH_S = 8;
+export const CATCH_S = 12;
 /** The pace a correction may give a car: at most this much slower / faster than its own. */
-export const MIN_K = 0.6;
+export const MIN_K = 0.75;
 export const MAX_K = 1.5;
-/** For a gap over LARGE_M, at most this much slower / faster. */
+/** Under a caution (cars really do slow), at most this much slower. */
+export const MIN_K_CAUTION = 0.5;
+/** For a gap ahead over LARGE_M, at most this much faster. */
 export const LARGE_M = 250;
-const MIN_K_LARGE = 0.3;
 const MAX_K_LARGE = 2;
 /** A new fix this far (m) from where the car is drawn waits for the next to agree, then moves it there. */
 export const FAR_M = 800;
@@ -56,14 +62,18 @@ export const FROZEN_MS = 25_000;
 /** Overdue at the line: its lap time × this, plus OVERDUE_SLACK_MS (laps reach the page a few seconds late). */
 export const OVERDUE_FACTOR = 1.1;
 export const OVERDUE_SLACK_MS = 10_000;
+/** Marked stale with fix and speed unchanged this long: stopped. */
+export const STALE_STOPPED_MS = 60_000;
 /** Fixes saying under this share of its lap pace: the car really is crawling or stopped. */
 const CRAWL = 0.2;
 /** Pace from fixes: over at least this span, from the fixes of the last HISTORY_MS. */
 const PACE_SPAN_MS = 15_000;
 const HISTORY_MS = 45_000;
 /** Pace from fixes is kept within this share of the car's lap pace. */
-const PACE_MIN = 0.35;
-const PACE_MAX = 1.3;
+const PACE_MIN = 0.85;
+const PACE_MAX = 1.15;
+const PACE_MIN_CAUTION = 0.35;
+const PACE_MAX_CAUTION = 1.3;
 /** The pit lane (m/s, about 30 mph). */
 const PIT_SPEED = 13.4;
 /** Faster than this (m/s, about 210 mph) is a misreading, not a pace. */
@@ -96,6 +106,11 @@ export interface CarMotion {
   lapAt: number;
   /** Its last lap time (s), when known. */
   lastLapS?: number | null;
+  /** Its completed laps and its speed at its last new fix. */
+  fixLaps?: number;
+  fixMph?: number | null;
+  /** Read under a caution. */
+  caution?: boolean;
   /** Off the track: where its fix says it is (outline metres), and where it is drawn now. */
   off?: [number, number] | null;
   offShown?: [number, number] | null;
@@ -119,7 +134,7 @@ export const signedGap = (a: number, b: number, len: number) => {
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
 /** A car's pace from its recent fixes, within bounds of its lap pace; its lap pace until they span 15 s. */
-export function paceFromFixes(fixes: { d: number; at: number }[], len: number, base: number): number {
+export function paceFromFixes(fixes: { d: number; at: number }[], len: number, base: number, caution = false): number {
   if (fixes.length < 2) return base;
   const span = fixes[fixes.length - 1].at - fixes[0].at;
   if (span < PACE_SPAN_MS) return base;
@@ -127,13 +142,14 @@ export function paceFromFixes(fixes: { d: number; at: number }[], len: number, b
   for (let i = 1; i < fixes.length; i++) dist += ahead(fixes[i - 1].d, fixes[i].d, len) < len / 2 ? ahead(fixes[i - 1].d, fixes[i].d, len) : 0;
   const pace = dist / (span / 1000);
   // Crawling or stopped (a spin, a stoppage): trust it. Otherwise within bounds of its lap pace.
-  return pace < base * CRAWL ? pace : clamp(pace, base * PACE_MIN, base * PACE_MAX);
+  if (pace < base * CRAWL) return pace;
+  return caution ? clamp(pace, base * PACE_MIN_CAUTION, base * PACE_MAX_CAUTION) : clamp(pace, base * PACE_MIN, base * PACE_MAX);
 }
 
 /**
  * Take a reading (cars as the server sent them, read `ageMs` before `now`) into the motion state.
  * `lapsOf` gives a car's pace from its laps (m/s) and its completed laps; `typicalSpeed` stands in
- * for a pace without one.
+ * for a pace without one. `caution`: the session is under a caution.
  */
 export function takeReading(
   motions: Map<string, CarMotion>,
@@ -142,7 +158,8 @@ export function takeReading(
   ageMs: number,
   len: number,
   typicalSpeed: number,
-  lapsOf: (num: string) => CarLaps | null = () => null
+  lapsOf: (num: string) => CarLaps | null = () => null,
+  caution = false
 ): Map<string, CarMotion> {
   const at = now - Math.max(0, ageMs);
   const next = new Map<string, CarMotion>();
@@ -174,7 +191,7 @@ export function takeReading(
     const capped = (v: number) => (pit ? Math.min(v, PIT_SPEED) : v);
     if (!prev || prev.off || ((prev.flags ^ flags) & IN_PIT) !== 0) {
       // New on the map, or into or out of the pit lane: placed where it is.
-      const m: CarMotion = { num, d, at, flags, mph, v: capped(base), shown: d, raw: d, rawSince: at, base, fixes: [{ d, at }], far: 0, snap: true, laps, lapAt };
+      const m: CarMotion = { num, d, at, flags, mph, v: capped(base), shown: d, raw: d, rawSince: at, base, fixes: [{ d, at }], far: 0, snap: true, laps, lapAt, fixLaps: laps, fixMph: mph };
       next.set(num, m);
       continue;
     }
@@ -184,7 +201,7 @@ export function takeReading(
       continue;
     }
     // A new fix.
-    const v = capped(paceFromFixes([...prev.fixes, { d, at }].filter((f) => at - f.at <= HISTORY_MS), len, base));
+    const v = capped(paceFromFixes([...prev.fixes, { d, at }].filter((f) => at - f.at <= HISTORY_MS), len, base, caution));
     const gap = signedGap(prev.shown, (d + (v * Math.max(0, now - at)) / 1000) % len, len);
     const far = Math.abs(gap) > FAR_M ? prev.far + 1 : 0;
     if (far === 1) {
@@ -195,9 +212,12 @@ export function takeReading(
     // After a frozen spell its pace starts afresh from this fix.
     const thawed = at - prev.at >= FROZEN_MS;
     const fixes = thawed ? [{ d, at }] : [...prev.fixes, { d, at }].filter((f) => at - f.at <= HISTORY_MS);
-    next.set(num, { ...prev, d, at, flags, mph, v: thawed ? capped(base) : v, base, laps, lapAt, raw: d, rawSince: at, fixes, far: 0, snap: far >= 2 });
+    next.set(num, { ...prev, d, at, flags, mph, v: thawed ? capped(base) : v, base, laps, lapAt, fixLaps: laps, fixMph: mph, raw: d, rawSince: at, fixes, far: 0, snap: far >= 2 });
   }
-  for (const [num, m] of next) m.lastLapS = lapsOf(num)?.lastLapS ?? null;
+  for (const [num, m] of next) {
+    m.lastLapS = lapsOf(num)?.lastLapS ?? null;
+    m.caution = caution;
+  }
   return next;
 }
 
@@ -210,9 +230,16 @@ export function overdueAt(m: CarMotion, len: number): number {
   return m.lapAt + lapMs * OVERDUE_FACTOR + OVERDUE_SLACK_MS;
 }
 
-/** Stopped: its fix frozen and its next lap overdue. Off-track cars are drawn where they are instead. */
+/**
+ * Stopped: its fix frozen and its next lap overdue; or sooner, with no lap since its fix froze,
+ * reading 0 mph, or marked stale with its speed unchanged for STALE_STOPPED_MS. Off-track cars
+ * are drawn where they are instead.
+ */
 export function isStopped(m: CarMotion, now: number, len: number): boolean {
-  return !m.off && isFrozen(m, now) && now > overdueAt(m, len);
+  if (m.off || !isFrozen(m, now)) return false;
+  if (now > overdueAt(m, len)) return true;
+  if (m.laps > (m.fixLaps ?? m.laps)) return false;
+  return m.mph === 0 || ((m.flags & STALE) !== 0 && m.mph === m.fixMph && now - m.at >= STALE_STOPPED_MS);
 }
 
 /**
@@ -262,7 +289,7 @@ export function step(motions: Map<string, CarMotion>, now: number, dtMs: number,
     const moving = m.v > m.base * CRAWL && now - m.at < coastLimit(m, len);
     // A car stopped (or its fixes stopped coming) eases to its place and waits there.
     const v = moving ? m.v : Math.max(m.v, m.base);
-    const lo = gap < -LARGE_M ? MIN_K_LARGE : MIN_K;
+    const lo = m.caution ? MIN_K_CAUTION : MIN_K;
     const hi = gap > LARGE_M ? MAX_K_LARGE : MAX_K;
     const k = moving ? clamp(1 + gap / (v * CATCH_S), lo, hi) : clamp(gap / (v * CATCH_S), 0, hi);
     m.shown = (m.shown + v * k * dt) % len;
