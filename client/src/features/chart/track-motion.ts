@@ -17,13 +17,20 @@
  * lapping. The car runs on at its pace, drawn as a faint signal, for as long as the timing shows it
  * completing laps. A car stops only when its fixes say it is barely moving, or when it has neither
  * a new fix nor a new lap for a while.
+ *
+ * A car off the track (OFF_TRACK: a gravel trap, the grass, parked off, towed across the infield)
+ * comes with its own point and is drawn there, eased between fixes; it does not run on at a pace.
+ * Back on the track it is placed where its fix says, as a car new to the map.
  */
 
-/** [car, metres past the line (null: unplaced), mph (null), flags] as the server sends them. */
-export type CarPlace = [string, number | null, number | null, number];
+/** [car, metres past the line (null: unplaced), mph (null), flags, its point [x, y] when off the track] as the server sends them. */
+export type CarPlace = [string, number | null, number | null, number] | [string, number | null, number | null, number, [number, number]];
 export const IN_PIT = 1;
 export const NO_GPS = 2;
 export const STALE = 4;
+export const OFF_TRACK = 8;
+/** An off-track car eases to its next point over about this long. */
+export const OFF_EASE_MS = 1_500;
 
 /** A car runs on at its pace at least this long after its last new fix (longer while it completes laps). */
 export const MAX_COAST_MS = 30_000;
@@ -80,6 +87,9 @@ export interface CarMotion {
   /** Its completed laps, and when (client clock) that last went up. */
   laps: number;
   lapAt: number;
+  /** Off the track: where its fix says it is (outline metres), and where it is drawn now. */
+  off?: [number, number] | null;
+  offShown?: [number, number] | null;
 }
 
 /** What the race says of a car: its pace from its laps (m/s) and its completed laps. */
@@ -125,11 +135,24 @@ export function takeReading(
 ): Map<string, CarMotion> {
   const at = now - Math.max(0, ageMs);
   const next = new Map<string, CarMotion>();
-  for (const [num, d, mph, flags] of cars) {
+  for (const place of cars) {
+    const [num, d, mph, flags] = place;
+    const xy = place[4] ?? null;
     const prev = motions.get(num);
     const info = lapsOf(num);
     const laps = info?.laps ?? 0;
     const lapAt = prev && laps <= prev.laps ? prev.lapAt : at;
+    if (xy && flags & OFF_TRACK) {
+      // Off the track: drawn at its own point (eased from where it was drawn off the track), still.
+      const base0 = clamp(info?.pace ?? typicalSpeed, 1, MAX_SPEED);
+      const wasOff = !!prev?.off;
+      const shown = d ?? prev?.shown ?? 0;
+      next.set(num, {
+        num, d: shown, at, flags, mph, v: 0, shown, raw: shown, rawSince: at, base: base0, fixes: [], far: 0, snap: false, laps, lapAt,
+        off: xy, offShown: wasOff ? prev!.offShown ?? xy : xy,
+      });
+      continue;
+    }
     if (d === null) {
       // No place this time: it carries on from its last.
       if (prev) next.set(num, { ...prev, flags, mph, laps, lapAt });
@@ -138,7 +161,7 @@ export function takeReading(
     const base = clamp(info?.pace ?? typicalSpeed, 1, MAX_SPEED);
     const pit = (flags & IN_PIT) !== 0;
     const capped = (v: number) => (pit ? Math.min(v, PIT_SPEED) : v);
-    if (!prev || ((prev.flags ^ flags) & IN_PIT) !== 0) {
+    if (!prev || prev.off || ((prev.flags ^ flags) & IN_PIT) !== 0) {
       // New on the map, or into or out of the pit lane: placed where it is.
       const m: CarMotion = { num, d, at, flags, mph, v: capped(base), shown: d, raw: d, rawSince: at, base, fixes: [{ d, at }], far: 0, snap: true, laps, lapAt };
       next.set(num, m);
@@ -191,6 +214,13 @@ export function targetOf(m: CarMotion, now: number, len: number): number {
 export function step(motions: Map<string, CarMotion>, now: number, dtMs: number, len: number) {
   const dt = Math.max(0, dtMs) / 1000;
   for (const m of motions.values()) {
+    if (m.off) {
+      // Off the track: eased towards its point, nothing else.
+      const k = Math.min(1, Math.max(0, dtMs) / OFF_EASE_MS);
+      const [x0, y0] = m.offShown ?? m.off;
+      m.offShown = [x0 + (m.off[0] - x0) * k, y0 + (m.off[1] - y0) * k];
+      continue;
+    }
     const target = targetOf(m, now, len);
     if (m.snap) {
       m.shown = target;

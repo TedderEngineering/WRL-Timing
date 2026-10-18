@@ -5,7 +5,7 @@ import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, STALE, isFrozen, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
+import { IN_PIT, NO_GPS, OFF_TRACK, STALE, isFrozen, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -32,6 +32,8 @@ const C = {
   /** The overall leader's ring and tag, and its dot when it is not a compare car. */
   leader: "#fbbf24",
   leaderDot: "#d4d4e2",
+  /** The dashed ring round a car off the track. */
+  offTrack: "#f97316",
 };
 
 /**
@@ -67,6 +69,7 @@ export function TrackMap({
   const [readingAt, setReadingAt] = useState<number | null>(null);
   const [pits, setPits] = useState<string[]>([]);
   const [unplaced, setUnplaced] = useState<string[]>([]);
+  const [offTrack, setOffTrack] = useState<string[]>([]);
   const [pitVisits, setPitVisits] = useState<Map<number, PitVisit>>(() => new Map());
   /** Whether a reading has come yet (a car in the pits at the first one went in before the page saw it). */
   const seenReading = useRef(false);
@@ -148,6 +151,7 @@ export function TrackMap({
           seenReading.current = true;
           setPitVisits((prev) => pitVisitsNow(prev, inPit, dataRef.current, wentIn));
           setUnplaced(body.cars.filter((c) => !(c[3] & IN_PIT) && c[1] === null).map((c) => c[0]));
+          setOffTrack(body.cars.filter((c) => !(c[3] & IN_PIT) && c[3] & OFF_TRACK).map((c) => c[0]));
         })
         .catch(() => undefined);
     };
@@ -240,7 +244,8 @@ export function TrackMap({
     hits.current = [];
     let leaderAt: { x: number; y: number; r: number } | null = null;
     for (const d of dots) {
-      const [x, y] = px(pointAt(track.pts, track.ds, track.len, d.m.shown));
+      const offTrack = !!d.m.off;
+      const [x, y] = offTrack ? px(d.m.offShown ?? d.m.off!) : px(pointAt(track.pts, track.ds, track.len, d.m.shown));
       // The leader is always drawn full size with its number, even when not a compare car.
       const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
       const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : d.leader ? C.leaderDot : C.dim;
@@ -261,6 +266,16 @@ export function TrackMap({
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2.5;
         ctx.stroke();
+      }
+      if (offTrack) {
+        // Off the track: a dashed orange ring round the dot.
+        ctx.setLineDash([3, 2.5]);
+        ctx.strokeStyle = C.offTrack;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
       if (d.focus || d.compared || d.leader) {
         const label = carNo(data, d.key);
@@ -387,6 +402,12 @@ export function TrackMap({
           </span>
         )}
         {label(unplaced) && <span>No position: {label(unplaced)}</span>}
+        {label(offTrack) && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-dashed" style={{ borderColor: C.offTrack }} />
+            Off track: {label(offTrack)}
+          </span>
+        )}
         {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
         <span className="flex items-center gap-1.5">
           <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
@@ -468,7 +489,7 @@ export function scTarget(motions: Map<string, CarMotion>, data: RaceChartData, l
     .sort((a, b) => a[1].finishPos - b[1].finishPos);
   for (const [k] of order) {
     const m = motions.get(carNo(data, Number(k))) ?? motions.get(k);
-    if (m && !(m.flags & IN_PIT)) return (m.shown + SC_AHEAD_M) % len;
+    if (m && !(m.flags & (IN_PIT | OFF_TRACK))) return (m.shown + SC_AHEAD_M) % len;
   }
   return null;
 }
