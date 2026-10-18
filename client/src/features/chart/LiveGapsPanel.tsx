@@ -99,7 +99,7 @@ export function LiveGapsPanel({ data, focusNum, compSet, fieldCars }: { data: Ra
               >
                 <td
                   className="overflow-hidden text-ellipsis whitespace-nowrap px-[3px] py-1.5"
-                  title={`${r.team} · P${r.posClass ?? "?"} in ${r.cls}${r.pos ? ` · P${r.pos} overall` : ""}${r.stopped ? " · in the pits or the garage (has not crossed the line for longer than its pace)" : ""}`}
+                  title={`${r.team} · ${r.posClass != null ? `P${r.posClass} in ` : ""}${r.cls}${r.pos ? ` · P${r.pos} overall` : ""}${r.stopped ? " · in the pits or the garage (has not crossed the line for longer than its pace)" : ""}`}
                 >
                   <span className="font-mono font-semibold" style={{ color: r.isFocus ? TRACE.focus : T.soft }}>
                     #{carNo(data, r.num)}
@@ -108,9 +108,9 @@ export function LiveGapsPanel({ data, focusNum, compSet, fieldCars }: { data: Ra
                     <span className="text-[10px] font-semibold uppercase" style={{ color: "#fab219" }}>
                       pit
                     </span>
-                  ) : (
-                    <span style={{ color: T.muted }}>P{r.posClass ?? "?"}</span>
-                  )}
+                  ) : r.posClass != null ? (
+                    <span style={{ color: T.muted }}>P{r.posClass}</span>
+                  ) : null}
                 </td>
                 <td className={cell}>{r.last !== null ? lapText(r.last) : ""}</td>
                 <td className={cell} style={{ color: T.soft }}>

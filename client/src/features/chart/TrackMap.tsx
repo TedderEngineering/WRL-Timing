@@ -35,6 +35,7 @@ export function TrackMap({
   setFocusNum,
   compSet,
   classView,
+  flag = null,
 }: {
   slug: string;
   data: RaceChartData;
@@ -42,6 +43,8 @@ export function TrackMap({
   setFocusNum: (n: number) => void;
   compSet: Set<number>;
   classView: string;
+  /** The session's flag now ("Yellow", "Code 35"…): under a caution the safety car is shown. */
+  flag?: string | null;
 }) {
   const [track, setTrack] = useState<TrackOutline | null>(null);
   const [trackMissing, setTrackMissing] = useState(false);
@@ -216,6 +219,33 @@ export function TrackMap({
       ctx.globalAlpha = 1;
       hits.current.push({ key: d.key, x, y, r: Math.max(r, 10) });
     }
+
+    // The safety car under a caution: where the timing places it when it sends one; otherwise an
+    // estimate just ahead of the overall leader, drawn dashed (the timing does not track it).
+    const sc = safetyCarAt(motions.current, data, flag, track.len);
+    if (sc) {
+      const [x, y] = px(pointAt(track.pts, track.ds, track.len, sc.d));
+      ctx.fillStyle = "#fab219";
+      ctx.strokeStyle = "#0b0b18";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x - 13, y - 8, 26, 16, 4);
+      ctx.fill();
+      ctx.stroke();
+      if (sc.estimated) {
+        ctx.setLineDash([3, 2]);
+        ctx.strokeStyle = "#fab219";
+        ctx.beginPath();
+        ctx.roundRect(x - 16, y - 11, 32, 22, 6);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle = "#0b0b18";
+      ctx.font = "700 10px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("SC", x, y + 0.5);
+    }
   };
   useEffect(() => {
     if (!track) return;
@@ -238,6 +268,7 @@ export function TrackMap({
   };
 
   const age = readingAt !== null ? now - readingAt : null;
+  const scEstimated = !findSafetyCar(motions.current);
   const label = (nums: string[]) =>
     nums
       .map((n) => carKey(data, n))
@@ -274,7 +305,51 @@ export function TrackMap({
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
         </span>
+        {isCaution(flag) && (
+          <span className="flex items-center gap-1.5" style={{ color: "#fab219" }}>
+            <span className="rounded px-1 text-[10px] font-bold" style={{ background: "#fab219", color: "#0b0b18" }}>
+              SC
+            </span>
+            {scEstimated ? "safety car, estimated just ahead of the leader (the timing does not track it)" : "safety car"}
+          </span>
+        )}
       </div>
     </div>
   );
+}
+
+/** Flags that bring out the safety car (a full-course caution). */
+const CAUTION_FLAGS = new Set(["Yellow", "Code 35", "Code 60", "FCY"]);
+export function isCaution(flag: string | null | undefined): boolean {
+  return !!flag && CAUTION_FLAGS.has(flag);
+}
+
+/** A safety car the timing sends as a car of its own ("SC", "PC1"…), if any. */
+export function findSafetyCar(motions: Map<string, CarMotion>): CarMotion | null {
+  for (const m of motions.values()) if (/^(SC|PC)\d*$/i.test(m.num.trim())) return m;
+  return null;
+}
+
+/** How far ahead of the leader the safety car is drawn when it has to be estimated (m). */
+export const SC_AHEAD_M = 120;
+
+/**
+ * Where to draw the safety car: under a caution only; the timing's own placement when it sends the
+ * car, else just ahead of the overall leader (the safety car picks up the leader), marked estimated.
+ */
+export function safetyCarAt(
+  motions: Map<string, CarMotion>,
+  data: RaceChartData,
+  flag: string | null | undefined,
+  len: number
+): { d: number; estimated: boolean } | null {
+  if (!isCaution(flag)) return null;
+  const own = findSafetyCar(motions);
+  if (own) return { d: own.shown, estimated: false };
+  const leader = Object.entries(data.cars).find(([, c]) => c.finishPos === 1)?.[0];
+  if (!leader) return null;
+  const label = carNo(data, Number(leader));
+  const m = motions.get(label) ?? motions.get(leader);
+  if (!m || m.flags & IN_PIT) return null;
+  return { d: (m.shown + SC_AHEAD_M) % len, estimated: true };
 }

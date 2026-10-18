@@ -178,7 +178,7 @@ function CarMenu({
                   </span>
                 )}
                 <span className="font-mono text-xs" style={{ color: T.muted }}>
-                  {c.dns ? "DNS" : c.classified ? `P${c.pos}` : c.official}
+                  {c.dns ? "DNS" : c.classified ? `P${c.pos}` : data.maxLap > 0 ? c.official : ""}
                 </span>
               </button>
             ))}
