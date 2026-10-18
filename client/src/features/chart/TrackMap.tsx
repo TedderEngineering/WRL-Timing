@@ -3,6 +3,7 @@ import type { RaceChartData } from "@shared/types";
 import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
+import { RunningOrder } from "./RunningOrder";
 import { TRACE } from "./constants";
 import { IN_PIT, NO_GPS, STALE, pointAt, signedGap, step, takeReading, type CarMotion, type CarPlace } from "./track-motion";
 
@@ -25,8 +26,9 @@ const C = { bg: "#0b0b18", track: "#23233f", trackIn: "#2e2e54", line: "#e0e0e8"
 /**
  * RaceTrace Live: the circuit with every car as a numbered dot moving round it ("marching ants").
  * The focus car is the biggest and brightest, compare cars are in their trace colours, the rest
- * small and dim; another class is dimmer still. Cars in the pit lane are listed beside the map.
- * Tapping a dot makes it the focus car.
+ * small and dim; another class is dimmer still. Beside it, the running order (position, number,
+ * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a dot
+ * or a row makes it the focus car.
  */
 export function TrackMap({
   slug,
@@ -279,29 +281,30 @@ export function TrackMap({
   };
 
   const age = readingAt !== null ? now - readingAt : null;
-  const scEstimated = !findSafetyCar(motions.current);
+  const keys = (nums: string[]) => nums.map((n) => carKey(data, n)).filter((k): k is number => k !== null && !!data.cars[String(k)]);
   const label = (nums: string[]) =>
-    nums
-      .map((n) => carKey(data, n))
-      .filter((k): k is number => k !== null && !!data.cars[String(k)])
+    keys(nums)
       .map((k) => `#${carNo(data, k)}`)
       .join(", ");
 
   return (
     <div className="flex flex-col md:min-h-0 md:flex-1">
-      <div ref={wrapRef} className="relative h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:flex-1" style={{ background: C.bg }}>
-        <canvas
-          ref={canvasRef}
-          onClick={onClick}
-          role="img"
-          aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to focus it.`}
-          className="absolute inset-0 cursor-pointer"
-        />
-        {!track && (
-          <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
-            {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
-          </p>
-        )}
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div ref={wrapRef} className="relative h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1" style={{ background: C.bg }}>
+          <canvas
+            ref={canvasRef}
+            onClick={onClick}
+            role="img"
+            aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to focus it.`}
+            className="absolute inset-0 cursor-pointer"
+          />
+          {!track && (
+            <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
+              {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
+            </p>
+          )}
+        </div>
+        <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} inPit={new Set(keys(pits))} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
         {pits.length > 0 && (
@@ -319,7 +322,7 @@ export function TrackMap({
             <span className="rounded px-1 text-[10px] font-bold" style={{ background: "#fab219", color: "#0b0b18" }}>
               SC
             </span>
-            {scEstimated ? "safety car, estimated just ahead of the leader (the timing does not track it)" : "safety car"}
+            safety car
           </span>
         )}
       </div>
