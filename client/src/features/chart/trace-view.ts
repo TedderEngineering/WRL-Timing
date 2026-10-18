@@ -54,7 +54,8 @@ export function useTraceView(args: {
   }, [classView, makeFilter, race]);
   useEffect(() => {
     if (!compareAll || !data) return;
-    setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && (data.cars[String(n)]?.laps.length ?? 0) > 0)));
+    // Every car in view with laps; before the race (no laps anywhere) every entry.
+    setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && ((data.cars[String(n)]?.laps.length ?? 0) > 0 || data.maxLap === 0))));
   }, [compareAll, fieldCars, focusNum, data, setCompSet]);
 
   const toggleComp = useCallback(
