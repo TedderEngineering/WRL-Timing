@@ -8,6 +8,9 @@ import {
   MIN_K,
   coastLimit,
   isFrozen,
+  isParked,
+  MIN_K_CAUTION,
+  STALE,
   paceFromFixes,
   pointAt,
   signedGap,
@@ -40,15 +43,19 @@ describe("a car's pace", () => {
     expect(m.get("1")!.v).toBe(PACE);
     expect(read(m, [["1", 1300, 100, 0]], 5000).get("1")!.v).toBe(PACE); // 60 m/s over 5 s: not trusted
   });
-  it("then the average over its recent fixes, so a caution slows it", () => {
-    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 250, at: 10_000 }, { d: 500, at: 20_000 }], LEN, PACE)).toBeCloseTo(25, 6);
+  const fixes25 = [{ d: 0, at: 0 }, { d: 250, at: 10_000 }, { d: 500, at: 20_000 }]; // 25 m/s
+  it("then the average over its recent fixes: under a caution, as slow as they say", () => {
+    expect(paceFromFixes(fixes25, LEN, PACE, true)).toBeCloseTo(25, 6);
   });
-  it("within bounds of its lap pace, unless it is crawling", () => {
-    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 1500, at: 20_000 }], LEN, PACE)).toBeCloseTo(52, 6); // 75 m/s capped at 130%
-    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 20, at: 20_000 }], LEN, PACE)).toBeCloseTo(1, 6); // a stoppage: trusted
+  it("under green, within 85-115% of its lap pace (late fixes must not make a car crawl)", () => {
+    expect(paceFromFixes(fixes25, LEN, PACE)).toBeCloseTo(34, 6);
+    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 1500, at: 20_000 }], LEN, PACE)).toBeCloseTo(46, 6); // 75 m/s capped at 115%
+  });
+  it("trusts fixes saying it is crawling or stopped", () => {
+    expect(paceFromFixes([{ d: 0, at: 0 }, { d: 20, at: 20_000 }], LEN, PACE)).toBeCloseTo(1, 6);
   });
   it("counts across the line: 5,700 m to 60 m is 94 m covered", () => {
-    expect(paceFromFixes([{ d: 5700, at: 0 }, { d: 60, at: 20_000 }], LEN, 4)).toBeCloseTo((LEN - 5700 + 60) / 20, 3);
+    expect(paceFromFixes([{ d: 5700, at: 0 }, { d: 60, at: 20_000 }], LEN, 4, true)).toBeCloseTo((LEN - 5700 + 60) / 20, 3);
   });
   it("is the typical pace for a car without laps, and slow in the pit lane", () => {
     expect(takeReading(new Map(), [["1", 10, null, 0]], 0, 0, LEN, 38).get("1")!.v).toBe(38);
@@ -78,9 +85,17 @@ describe("motion between fixes", () => {
     let m = read(new Map(), [["1", 1000, null, 0]], 0);
     frames(m, 0, 5000);
     m = read(m, [["1", 1000 + PACE * 5 - 150, null, 0]], 5000); // the fix says it is 150 m behind
-    const moves = frames(m, 5000, 25_000);
+    const moves = frames(m, 5000, 35_000);
     expect(Math.min(...moves)).toBeGreaterThanOrEqual(PACE * 0.016 * MIN_K * 0.99);
-    expect(Math.abs(signedGap(m.get("1")!.shown, targetOf(m.get("1")!, 25_000, LEN), LEN))).toBeLessThan(15);
+    expect(Math.abs(signedGap(m.get("1")!.shown, targetOf(m.get("1")!, 35_000, LEN), LEN))).toBeLessThan(15);
+  });
+  it("under a caution may slow further to close a gap", () => {
+    let m = takeReading(new Map(), [["1", 1000, null, 0]], 0, 0, LEN, 38, laps(), true);
+    frames(m, 0, 5000);
+    m = takeReading(m, [["1", 1000 + PACE * 5 - 300, null, 0]], 5000, 0, LEN, 38, laps(), true);
+    const moves = frames(m, 5000, 6000);
+    expect(Math.min(...moves)).toBeLessThan(PACE * 0.016 * MIN_K * 0.99);
+    expect(Math.min(...moves)).toBeGreaterThanOrEqual(PACE * 0.016 * MIN_K_CAUTION * 0.99);
   });
   it("catches up to a fix ahead no faster than its pace allows", () => {
     let m = read(new Map(), [["1", 1000, null, 0]], 0);
@@ -118,6 +133,29 @@ describe("a frozen fix", () => {
     const m = read(new Map(), [["1", 1000, null, 0]], 0, laps(10)).get("1")!;
     // Its last fix 300 s after its last new lap (2.1 of its laps).
     expect(coastLimit({ ...m, at: 300_000 }, LEN)).toBe(MAX_COAST_MS);
+  });
+});
+
+describe("a parked car", () => {
+  const still = (flags: number, mph: number | null, at: number, lapsNow = 10, mphNow = mph) => {
+    let m = read(new Map(), [["1", 1000, mph, 0]], 0, laps(10));
+    m = read(m, [["1", 1000, mphNow, flags]], at, laps(lapsNow));
+    return m.get("1")!;
+  };
+  it("is one at 0 mph with its fix frozen for 25 s", () => {
+    expect(isParked(still(0, 0, 30_000), 30_000, LEN)).toBe(true);
+    expect(isParked(still(0, 0, 20_000), 20_000, LEN)).toBe(false);
+  });
+  it("is one marked stale with fix and speed unchanged for 60 s (#77 on Sunday)", () => {
+    expect(isParked(still(STALE, 54, 30_000), 30_000, LEN)).toBe(false);
+    expect(isParked(still(STALE, 54, 60_000), 60_000, LEN)).toBe(true);
+  });
+  it("is not one marked stale whose speed still changes (#119 on Sunday)", () => {
+    expect(isParked(still(STALE, 94, 60_000, 10, 122), 60_000, LEN)).toBe(false);
+  });
+  it("is not one whose fix is only frozen (it runs on), or that has completed a lap since", () => {
+    expect(isParked(still(0, 54, 30_000), 30_000, LEN)).toBe(false);
+    expect(isParked(still(0, 0, 30_000, 11), 30_000, LEN)).toBe(false);
   });
 });
 

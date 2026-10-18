@@ -4,7 +4,7 @@ import { SC_AHEAD_M, SC_RESET_M, findSafetyCar, isCaution, scSpeed, scTarget, st
 import { IN_PIT, type CarMotion } from "../track-motion";
 
 const LEN = 5734.36;
-const m = (num: string, shown: number, flags = 0, mph: number | null = null): CarMotion => ({ num, d: shown, at: 0, flags, mph, v: 40, shown, raw: shown, rawSince: 0, base: 40, fixes: [], far: 0, snap: false, laps: 0, lapAt: 0 });
+const m = (num: string, shown: number, flags = 0, mph: number | null = null): CarMotion => ({ num, d: shown, at: 0, flags, mph, v: 40, shown, raw: shown, rawSince: 0, base: 40, fixes: [], far: 0, snap: false, laps: 0, lapAt: 0, fixLaps: 0, fixMph: null, caution: false });
 const data = {
   maxLap: 10,
   cars: {

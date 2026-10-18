@@ -5,7 +5,7 @@ import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, STALE, isFrozen, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
+import { IN_PIT, NO_GPS, STALE, isFrozen, isParked, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -67,6 +67,10 @@ export function TrackMap({
   const [readingAt, setReadingAt] = useState<number | null>(null);
   const [pits, setPits] = useState<string[]>([]);
   const [unplaced, setUnplaced] = useState<string[]>([]);
+  /** Cars parked (by the paddock, in the garage): not drawn on the track. */
+  const [parked, setParked] = useState<string[]>([]);
+  const cautionRef = useRef(isCaution(flag));
+  cautionRef.current = isCaution(flag);
   const [pitVisits, setPitVisits] = useState<Map<number, PitVisit>>(() => new Map());
   /** Whether a reading has come yet (a car in the pits at the first one went in before the page saw it). */
   const seenReading = useRef(false);
@@ -139,7 +143,8 @@ export function TrackMap({
           const t = Date.now();
           const age = body.ageMs + edgeAgeMs;
           const onTrack = body.cars.filter((c) => !(c[3] & IN_PIT));
-          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null);
+          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null, cautionRef.current);
+          setParked([...motions.current.values()].filter((m) => isParked(m, t, track.len)).map((m) => m.num));
           setReadingAt(t - age);
           const inPit = body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]);
           setPits(inPit);
@@ -224,7 +229,8 @@ export function TrackMap({
     lastFrame.current = t;
     const inClass = classView ? new Set(data.classGroups[classView] ?? []) : null;
     const leaderKey = overallLeader(data);
-    const dots = [...motions.current.values()]
+    const running = new Map([...motions.current].filter(([, m]) => !isParked(m, t, track.len)));
+    const dots = [...running.values()]
       .map((m) => {
         const key = carKey(data, m.num);
         if (key === null || !data.cars[String(key)]) return null;
@@ -305,7 +311,7 @@ export function TrackMap({
     if (!isCaution(flag)) scState.current = { d: 0, active: false };
     else if (own) sc = { d: own.shown, estimated: false };
     else {
-      scState.current = stepSafetyCar(scState.current, scTarget(motions.current, data, track.len), scSpeed(motions.current), dt, track.len);
+      scState.current = stepSafetyCar(scState.current, scTarget(running, data, track.len), scSpeed(running), dt, track.len);
       if (scState.current.active) sc = { d: scState.current.d, estimated: true };
     }
     if (sc) {
@@ -387,6 +393,7 @@ export function TrackMap({
           </span>
         )}
         {label(unplaced) && <span>No position: {label(unplaced)}</span>}
+        {label(parked) && <span title="Not moving for a while (retired, or parked by the paddock or garage): not drawn on the track">Stopped: {label(parked)}</span>}
         {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
         <span className="flex items-center gap-1.5">
           <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
