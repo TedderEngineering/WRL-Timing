@@ -27,7 +27,8 @@ export interface PitFacts {
   engineVersion: string;
   /** Leader-lap ranges of the caution periods. */
   fcy: [number, number][];
-  entries: Record<string, { cls: string; team: string }>;
+  /** Class, team, and driver names by driver number (1-based; the package's entries[].drivers). */
+  entries: Record<string, { cls: string; team: string; drivers?: Record<number, string> }>;
   laps: Record<string, { lap: number[]; lapTimeS: (number | null)[]; pos: number[]; cpos: number[]; fcy: number[]; pit: number[] }>;
   passages: {
     id: string;
@@ -44,6 +45,9 @@ export interface PitFacts {
     groupId: string | null;
     cycleId: string | null;
     driverChange: boolean | null;
+    /** Driver numbers on the in-lap and after the stop (entries[car].drivers). */
+    driverIn: number | null;
+    driverOut: number | null;
   }[];
   groups: Record<string, { timeLostS: number | null; lossMethod: string; refLapS: number | null; passageIds: string[] }>;
   cycles: Record<string, { cls: string; ordinal: number; members: string[]; passageIds: string[] }>;
@@ -70,7 +74,13 @@ const num = (v: unknown): number | null => (typeof v === "number" && Number.isFi
 /** Cut what the chart needs from a package (any schema-1.x package). */
 export function extractPitFacts(pkg: any): PitFacts {
   const entries: PitFacts["entries"] = {};
-  for (const e of pkg.entries ?? []) entries[String(e.car)] = { cls: String(e.class ?? ""), team: String(e.team ?? "") };
+  for (const e of pkg.entries ?? []) {
+    const drivers: Record<number, string> = {};
+    for (const d of Array.isArray(e.drivers) ? e.drivers : []) {
+      if (typeof d?.number === "number" && typeof d?.name === "string" && d.name.trim()) drivers[d.number] = d.name.trim();
+    }
+    entries[String(e.car)] = { cls: String(e.class ?? ""), team: String(e.team ?? ""), ...(Object.keys(drivers).length ? { drivers } : {}) };
+  }
 
   const laps: PitFacts["laps"] = {};
   for (const [car, c] of Object.entries<any>(pkg.laps?.cars ?? {})) {
@@ -107,6 +117,8 @@ export function extractPitFacts(pkg: any): PitFacts {
     groupId: p.groupId ?? p.timeLost?.groupId ?? null,
     cycleId: p.cycleId ?? null,
     driverChange: typeof p.driverChange === "boolean" ? p.driverChange : null,
+    driverIn: num(p.driverIn),
+    driverOut: num(p.driverOut),
   }));
 
   const groups: PitFacts["groups"] = {};
@@ -316,6 +328,16 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
         ...(p.kind === "garage" ? { isGarage: true } : {}),
       };
       for (const f of ["outDriver", "inDriver", "driverChanged", "stintNumber"]) if (prev && prev[f] !== undefined) marker[f] = prev[f];
+      // The import named nobody (WRL, Speedhive-format charts): the drivers from the facts, by number
+      // (inDriver on the in-lap, outDriver after the stop; my-drivers/stints.ts builds stints from them).
+      if (marker.inDriver === undefined && marker.outDriver === undefined) {
+        const names = facts.entries[car]?.drivers ?? {};
+        const dIn = p.driverIn !== null ? names[p.driverIn] : undefined;
+        const dOut = p.driverOut !== null ? names[p.driverOut] : undefined;
+        if (dIn) marker.inDriver = dIn;
+        if (dOut) marker.outDriver = dOut;
+        if (dIn && dOut) marker.driverChanged = p.driverIn !== p.driverOut;
+      }
       if (p.kind !== "retirement") {
         marker.pitTiming = {
           pitInTime: null,

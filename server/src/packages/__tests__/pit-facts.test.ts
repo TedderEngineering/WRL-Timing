@@ -127,6 +127,19 @@ describe("pit facts from the analysis package", () => {
     expect(f.benchmarks.filter((b) => b.startsWith("Pit loss"))).toEqual([]);
   });
 
+  it("names the drivers from the facts when the import named nobody (WRL from RedMist)", () => {
+    const k = pkg();
+    k.entries[1] = { ...k.entries[1], drivers: [{ number: 1, name: "Alana Carter" }, { number: 2, name: "Michele Abbate" }] } as any;
+    (k.events.pitPassages[1] as any).driverIn = 1;
+    (k.events.pitPassages[1] as any).driverOut = 2;
+    const out = applyPitFacts(chart() as any, annotations() as any, extractPitFacts(k));
+    expect(out.annotations["2"].pits[0]).toMatchObject({ l: 3, inDriver: "Alana Carter", outDriver: "Michele Abbate", driverChanged: true });
+    // The import's own names still win where its marker on the stop had them.
+    const a = annotations() as any;
+    a["2"] = { pits: [{ l: 3, lb: "Pit 1 · LEE", c: "#fbbf24", yo: 0, da: 0, inDriver: "Kim", outDriver: "Lee", driverChanged: true }] };
+    expect(applyPitFacts(chart() as any, a, extractPitFacts(k)).annotations["2"].pits[0]).toMatchObject({ inDriver: "Kim", outDriver: "Lee" });
+  });
+
   it("does not touch the inputs", () => {
     const c = chart();
     const a = annotations();

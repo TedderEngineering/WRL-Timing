@@ -246,7 +246,7 @@ export function LapDetailsPanel({
                 </span>
                 <span className="font-semibold">
                   {pit.pitLabel}
-                  {pit.driverChanged && pit.outDriver && pit.inDriver ? ` · ${pit.outDriver} → ${pit.inDriver}` : ""}
+                  {pit.driverChanged && pit.outDriver && pit.inDriver ? ` · ${pit.inDriver} → ${pit.outDriver}` : ""}
                 </span>
               </div>
               {t && (
