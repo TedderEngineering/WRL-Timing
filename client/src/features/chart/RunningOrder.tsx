@@ -99,6 +99,13 @@ export const LAP_STAT_LABEL: Record<LapStat, string> = {
   stint: "Stint Avg",
   race: "Race Avg",
 };
+/** The column's title on a phone. */
+export const LAP_STAT_SHORT: Record<LapStat, string> = {
+  best: "Best",
+  avg10: "10-Lap",
+  stint: "Stint",
+  race: "Race",
+};
 const LAP_STAT_TITLE: Record<LapStat, string> = {
   best: "Best lap. Tap for the 10-lap average",
   avg10: "Average of the last 10 green laps (no pit, caution or out-laps). Tap for the stint average",
@@ -146,6 +153,14 @@ export const PIT_STAT_LABEL: Record<PitStat, string> = {
   total: "Pit Total",
   since: "Since Pit",
   laps: "Laps Since",
+};
+/** The column's title on a phone. */
+export const PIT_STAT_SHORT: Record<PitStat, string> = {
+  stops: "Pits",
+  last: "Last",
+  total: "Total",
+  since: "Since",
+  laps: "Laps",
 };
 const PIT_STAT_TITLE: Record<PitStat, string> = {
   stops: "Pit stops. Tap for the last stop's time",
@@ -294,17 +309,18 @@ export function RunningOrder({
     setPStat(n);
     savePitStat(n);
   };
-  const th = "px-1.5 py-2 font-semibold";
+  // Tighter cells on a phone, so every column fits (sm and up as before).
+  const th = "px-1 py-2 font-semibold sm:px-1.5";
   return (
-    <div className="flex flex-col px-3 pb-3 pt-1 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
+    <div className="flex flex-col px-2 pb-3 pt-1 sm:px-3 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
       <div
-        className="custom-scroll overflow-hidden rounded-lg border text-xs md:min-h-0 md:flex-1 md:overflow-y-auto"
+        className="custom-scroll overflow-x-auto rounded-lg border text-xs md:min-h-0 md:flex-1 md:overflow-y-auto"
         style={{ background: C.card, borderColor: C.line, color: C.text }}
       >
         <table className="w-full border-collapse tabular-nums">
           <thead className="sticky top-0 z-10" style={{ background: C.head, color: C.muted }}>
             <tr className="text-left">
-              <th className={`${th} w-6 text-center`} aria-label="In the pits" />
+              <th className="w-5 p-0 sm:w-6" aria-label="In the pits" />
               <th className={`${th} text-right`}>P</th>
               <th className={th}>#</th>
               <th className={th}>Class</th>
@@ -320,7 +336,8 @@ export function RunningOrder({
                   aria-label={`${LAP_STAT_LABEL[stat]}. ${LAP_STAT_TITLE[stat]}`}
                   className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
                 >
-                  {LAP_STAT_LABEL[stat]}
+                  <span className="sm:hidden">{LAP_STAT_SHORT[stat]}</span>
+                  <span className="hidden sm:inline">{LAP_STAT_LABEL[stat]}</span>
                 </button>
               </th>
               <th className={`${th} text-right`}>
@@ -331,7 +348,8 @@ export function RunningOrder({
                   aria-label={`${PIT_STAT_LABEL[pStat]}. ${PIT_STAT_TITLE[pStat]}`}
                   className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
                 >
-                  {PIT_STAT_LABEL[pStat]}
+                  <span className="sm:hidden">{PIT_STAT_SHORT[pStat]}</span>
+                  <span className="hidden sm:inline">{PIT_STAT_LABEL[pStat]}</span>
                 </button>
               </th>
               <th className={`${th} hidden w-full sm:table-cell`}>Team</th>
@@ -363,9 +381,9 @@ export function RunningOrder({
                   style={rowStyle}
                   aria-current={focus ? "true" : undefined}
                 >
-                  <td className="px-1 py-1 text-center" style={{ borderLeft: `5px solid ${color}` }}>
+                  <td className="px-0.5 py-1 text-center sm:px-1" style={{ borderLeft: `5px solid ${color}` }}>
                     {isOut ? (
-                      <span className="inline-block rounded px-1 text-[9px] font-bold text-white" style={{ background: C.out }} title="Not running (no lap for over 15 minutes)">
+                      <span className="inline-block rounded px-0.5 text-[8px] font-bold text-white sm:px-1 sm:text-[9px]" style={{ background: C.out }} title="Not running (no lap for over 15 minutes)">
                         OUT
                       </span>
                     ) : (
@@ -376,36 +394,37 @@ export function RunningOrder({
                       )
                     )}
                   </td>
-                  <td className="px-1.5 py-1 text-right font-semibold">{r.pos ?? "–"}</td>
+                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold">{r.pos ?? "–"}</td>
                   <td
-                    className="px-1.5 py-1 font-bold"
+                    className="px-1 py-1 sm:px-1.5 font-bold"
                     style={{ color: focus ? TRACE.focus : compared ? getCompColor(compSet, focusNum, r.key) : C.text }}
                   >
                     {carNo(data, r.key)}
                   </td>
-                  <td className="px-1.5 py-1">
+                  <td className="px-1 py-1 sm:px-1.5">
                     <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: C.bg }}>
                       {r.cls || "–"}
                     </span>
                   </td>
-                  <td className="px-1.5 py-1 text-right font-semibold" style={{ color }}>
+                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold" style={{ color }}>
                     {r.posClass ?? "–"}
                   </td>
                   <td
-                    className="px-1.5 py-1 text-right"
+                    className="px-1 py-1 sm:px-1.5 text-right"
                     style={{ color: last !== null && last === best ? C.personal : C.text }}
                     title={last !== null && last === best ? "Its best lap" : undefined}
                   >
                     {lapText(last)}
                   </td>
                   <td
-                    className="px-1.5 py-1 text-right"
+                    className="px-1 py-1 sm:px-1.5 text-right"
                     style={{ color: classBest ? C.classBest : C.muted }}
                     title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat]} in class`) : undefined}
                   >
                     {lapText(shown)}
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-1 text-right">{pitStatText(pitStat(data.cars[String(r.key)], carPits, pStat), pStat)}</td>
+                  <td className="whitespace-nowrap px-1 py-1 text-right sm:px-1.5">{/* Not running: time and laps since its last stop mean nothing. */}
+                    {isOut && (pStat === "since" || pStat === "laps") ? "–" : pitStatText(pitStat(data.cars[String(r.key)], carPits, pStat), pStat)}</td>
                   <td className="hidden max-w-0 truncate px-1.5 py-1 sm:table-cell" style={{ color: C.muted }} title={r.team}>
                     {r.team}
                   </td>
