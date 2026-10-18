@@ -80,9 +80,9 @@ export type LapStat = "best" | "avg10" | "stint" | "race";
 export const LAP_STATS: LapStat[] = ["best", "avg10", "stint", "race"];
 export const LAP_STAT_LABEL: Record<LapStat, string> = {
   best: "Best",
-  avg10: "10-lap avg",
-  stint: "Stint avg",
-  race: "Race avg",
+  avg10: "10-Lap Avg",
+  stint: "Stint Avg",
+  race: "Race Avg",
 };
 const LAP_STAT_TITLE: Record<LapStat, string> = {
   best: "Best lap. Tap for the 10-lap average",
@@ -301,7 +301,7 @@ export function RunningOrder({
                   <td
                     className="px-1.5 py-1 text-right"
                     style={{ color: classBest ? C.classBest : C.muted }}
-                    title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat].toLowerCase()} in class`) : undefined}
+                    title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat]} in class`) : undefined}
                   >
                     {lapText(shown)}
                   </td>
