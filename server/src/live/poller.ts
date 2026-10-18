@@ -143,6 +143,8 @@ export function publicListing(r: LiveSessionRef): LiveSessionListing {
 
 /** Every slug handed out since start-up → its feed session, so a page keeps working after its session leaves the live list. */
 const slugIndex = new Map<string, { eventId: number; sessionId: number }>();
+/** WRL events seen on the feed, by RaceTrace's name for them (a scheduled session finds its event). */
+const eventIndex = new Map<string, number>();
 
 let sharedHttp: HttpClient | null = null;
 function http(): HttpClient {
@@ -157,6 +159,8 @@ export function setLiveHttp(h: HttpClient | null) {
   pollers.clear();
   listCache = null;
   slugIndex.clear();
+  eventIndex.clear();
+  entriesCache.clear();
 }
 
 /**
@@ -538,6 +542,7 @@ async function scanSessions(): Promise<{ sessions: LiveSessionRef[]; recent: Liv
     const sessions = (await h.getJson<FeedSession[]>(feedUrls.sessions(e.eid))) ?? [];
     // Oldest first, so a re-run session with the same name is the one that gets "-2".
     const ordered = (Array.isArray(sessions) ? sessions : []).slice().sort((a, b) => String(a.st ?? "").localeCompare(String(b.st ?? "")));
+    eventIndex.set(eventDisplayName(e.en, e.eid), e.eid);
     for (const s of ordered) {
       const eventName = eventDisplayName(e.en, e.eid);
       const sessionName = (s.n ?? `Session ${s.sid}`).trim();
@@ -584,6 +589,43 @@ export async function getLiveTrack(eventId: number, sessionId: number, slug: str
   p.lastView = Date.now();
   await p.ready();
   return { track: p.trackPublic, positions: p.positions };
+}
+
+/** An entry on the event's list: car number as published, team, class. */
+export interface EventEntry {
+  car: string;
+  team: string;
+  cls: string;
+}
+
+const ENTRIES_MS = 10 * 60_000;
+const entriesCache = new Map<number, { at: number; entries: EventEntry[] }>();
+
+/**
+ * The entry list of an event, by its name (a scheduled session's event): from the event's current
+ * session state on the feed (one read, kept ENTRIES_MS). Empty when the event is not on the feed.
+ */
+export async function eventEntries(eventName: string): Promise<EventEntry[]> {
+  await scanSessions();
+  const eventId = eventIndex.get(eventName);
+  if (eventId === undefined) return [];
+  const hit = entriesCache.get(eventId);
+  if (hit && Date.now() - hit.at < ENTRIES_MS) return hit.entries;
+  let entries: EventEntry[] = hit?.entries ?? [];
+  try {
+    const res = await http().get(liveUrls.state(eventId), { headers: { Accept: "application/x-msgpack" } });
+    const st = resultsFromState(decode(res.body));
+    if (st) {
+      entries = (st.results.eventEntries ?? [])
+        .map((e) => ({ car: String(e.no ?? "").trim(), team: String(e.t || e.nm || "").trim(), cls: String(e.c ?? "").trim() }))
+        .filter((e) => e.car)
+        .sort((a, b) => a.cls.localeCompare(b.cls) || (parseInt(a.car, 10) || 0) - (parseInt(b.car, 10) || 0) || a.car.localeCompare(b.car));
+    }
+  } catch {
+    // keep what we had
+  }
+  entriesCache.set(eventId, { at: Date.now(), entries });
+  return entries;
 }
 
 /** A running poller's view of its session (no extra feed reads): leader's lap and flag. */

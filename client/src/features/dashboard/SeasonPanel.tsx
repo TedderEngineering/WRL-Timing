@@ -212,11 +212,14 @@ export function NextUp({ next, today, now = Date.now() }: { next: NextRound; tod
   const s = next.session;
   const sw = s ? whenText(s.startsAt, now) : "";
   const when = s ? (sw === "Starting now" ? "starting now" : `${sw.charAt(0).toLowerCase()}${sw.slice(1)}`) : whenLabel(next.start, next.end, today);
-  return (
-    <div
-      className="rounded-xl border px-4 py-3.5 text-left"
-      style={{ borderColor: "var(--rt-accent)", background: "var(--rt-accent-soft)" }}
-    >
+  // A session on the live schedule opens its live page (before the start it says so, and turns
+  // into live timing when the session opens); the card's last line says which.
+  const liveTo = s?.id ? `/live/next/${encodeURIComponent(s.id)}` : null;
+  const started = s ? Date.parse(s.startsAt) <= now : false;
+  const box = "block rounded-xl border px-4 py-3.5 text-left";
+  const style = { borderColor: "var(--rt-accent)", background: "var(--rt-accent-soft)" };
+  const content = (
+    <>
       <div className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--rt-accent)]">
         Next up{when ? ` · ${when}` : ""}
       </div>
@@ -227,9 +230,25 @@ export function NextUp({ next, today, now = Date.now() }: { next: NextRound; tod
       <div className="text-[13px] text-[var(--rt-text-secondary)]">
         {next.track} · {formatDayRange(next.start, next.end, false)}
       </div>
-      <div className="mt-1.5 text-xs text-[var(--rt-text-muted)]">
-        Results and recaps appear here after the race.
-      </div>
+      {liveTo ? (
+        <div className="mt-1.5 text-xs">
+          <span className="text-[var(--rt-text-muted)]">{started ? "Live timing" : "Not live yet"} · </span>
+          <span className="font-semibold text-[var(--rt-accent)]">Open live timing →</span>
+        </div>
+      ) : (
+        <div className="mt-1.5 text-xs text-[var(--rt-text-muted)]">
+          Results and recaps appear here after the race.
+        </div>
+      )}
+    </>
+  );
+  return liveTo ? (
+    <Link to={liveTo} className={`${box} hover:brightness-110`} style={style}>
+      {content}
+    </Link>
+  ) : (
+    <div className={box} style={style}>
+      {content}
     </div>
   );
 }

@@ -187,6 +187,34 @@ describe("live poller and routes", () => {
     expect(await resolveLiveSlug("synthetic-park-2026-max-track-time")).toEqual({ eventId: 9004, sessionId: 95 });
   });
 
+  it("GET /api/live/next/:id gives the scheduled session and its event's entry list", async () => {
+    const r = routes([]);
+    r[feedUrls.liveAndRecent()] = JSON.stringify([{ eid: 9001, oid: 1, en: "World Racing League - Sebring International Raceway 2026", t: "Sebring International Raceway", l: true }]);
+    r[liveUrls.state(9001)] = Buffer.from(
+      encode(stateArray({ entries: [["119", "AE Victory Racing", "AE Victory Racing", "GTO"], ["38", "Palomar Racing", "", "GP1"], ["2", "ACP - TANGERINE", "ACP - TANGERINE", "GTO"]] }))
+    );
+    setLiveHttp(fakeHttp(r));
+    const app = express();
+    app.use("/api/live", liveRouter);
+    const server = app.listen(0);
+    try {
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/live/next`;
+      const ok = await fetch(`${base}/wrl-2026-sebring-race-2`);
+      expect(ok.status).toBe(200);
+      const body = (await ok.json()) as { session: { sessionName: string; source?: string }; entries: { car: string; team: string; cls: string }[] };
+      expect(body.session.sessionName).toBe("Race 2 · 7 Hour");
+      expect(body.session).not.toHaveProperty("source");
+      expect(body.entries).toEqual([
+        { car: "38", team: "Palomar Racing", cls: "GP1" },
+        { car: "2", team: "ACP - TANGERINE", cls: "GTO" },
+        { car: "119", team: "AE Victory Racing", cls: "GTO" },
+      ]);
+      expect((await fetch(`${base}/no-such-race`)).status).toBe(404);
+    } finally {
+      server.close();
+    }
+  });
+
   it("lists sessions that ended within two hours, and keeps their addresses working", async () => {
     const ended = new Date(Date.now() - 3600_000).toISOString().replace("Z", "");
     const old = new Date(Date.now() - 5 * 3600_000).toISOString().replace("Z", "");
