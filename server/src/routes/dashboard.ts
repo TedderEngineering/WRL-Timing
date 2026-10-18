@@ -20,10 +20,11 @@ import { carFacts, chartKeyFor, extractCarStory, type CarStory } from "../dashbo
 import { driverFacts } from "../dashboard/my-driver.js";
 import { coDrivers, listDrivers, racesForDriver, type DriverRaceRow } from "../services/my-drivers.js";
 import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
+import { LIVE_SCHEDULE } from "../live/schedule.js";
 import { carMatchesEntry, entryForCar, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
-import { availableSeasons, buildSeason, calendarFor, locateRace, type SeasonRace } from "../dashboard/season.js";
+import { availableSeasons, buildSeason, calendarFor, locateRace, nextSessionFor, type SeasonRace } from "../dashboard/season.js";
 
 export const dashboardRouter = Router();
 
@@ -219,9 +220,14 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
       .sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9))
       .map((s) => s.id);
 
+    const calRounds = new Map(cal.series.map((s) => [s.id, s.rounds]));
     const nexts = series
       .filter((s) => s.next)
-      .map((s) => ({ seriesId: s.id, seriesLabel: s.shortLabel, ...s.next! }))
+      .map((s) => {
+        const r = (calRounds.get(s.id) ?? []).find((x) => x.round === s.next!.round);
+        const session = r ? nextSessionFor(s.shortLabel, r, today.getTime(), LIVE_SCHEDULE) : null;
+        return { seriesId: s.id, seriesLabel: s.shortLabel, ...s.next!, ...(session ? { session } : {}) };
+      })
       .sort((a, b) => a.start.localeCompare(b.start));
 
     res.json({ season: cal.season, seasons, today: today.toISOString().slice(0, 10), series, suggested, next: nexts[0] ?? null, upcoming: nexts });

@@ -48,6 +48,8 @@ export interface SeasonRace {
 export type RoundStatus = "on_site" | "missing" | "live" | "upcoming";
 
 export interface SeasonRound {
+  /** The round's next scheduled session (live schedule), when one is known and not over. */
+  session?: NextSession;
   round: number;
   name: string;
   track: string;
@@ -70,6 +72,40 @@ export interface SeasonSeries {
   complete: boolean;
   latestOnSite: SeasonRound | null;
   next: SeasonRound | null;
+}
+
+export interface NextSession {
+  name: string;
+  kind: string;
+  startsAt: string;
+}
+
+/**
+ * The next session of a round from the live schedule: same series (the schedule's series is the
+ * calendar series' short label), a track the round names, and not over at `nowMs`.
+ */
+export function nextSessionFor(
+  shortLabel: string,
+  round: Pick<CalendarRound, "tracks" | "start" | "end">,
+  nowMs: number,
+  schedule: { series: string; track: string; sessionName: string; kind: string; startsAt: string; endsAt: string }[]
+): NextSession | null {
+  const hit = schedule
+    .filter((x) => x.series.toLowerCase() === shortLabel.toLowerCase())
+    .filter((x) => Date.parse(x.endsAt) > nowMs)
+    .filter((x) => {
+      const d = dayNumber(x.startsAt.slice(0, 10));
+      return d >= dayNumber(round.start) && d <= dayNumber(round.end);
+    })
+    .filter((x) => {
+      const t = normalizeTrack(x.track);
+      return round.tracks.some((alias) => {
+        const a = normalizeTrack(alias);
+        return a.length > 0 && (t.includes(a) || a.includes(t));
+      });
+    })
+    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
+  return hit ? { name: hit.sessionName, kind: hit.kind, startsAt: hit.startsAt } : null;
 }
 
 const CALENDARS: Record<number, Calendar> = { 2026: cal2026 as Calendar };
@@ -148,7 +184,9 @@ export function buildSeason(cal: Calendar, races: SeasonRace[], today: Date | st
         })),
       };
     });
-    const next = rounds.find((r) => dayNumber(r.end) >= now && r.status !== "on_site") ?? null;
+    // The next round is the first one not over yet: a weekend stays "next" until its last day, even
+    // once its first race is on the site (Saturday's race in, Sunday's still to run).
+    const next = rounds.find((r) => dayNumber(r.end) >= now) ?? null;
     if (next) next.isNext = true;
     const run = rounds.filter((r) => dayNumber(r.end) < now).length;
     const onSite = rounds.filter((r) => r.status === "on_site").length;
