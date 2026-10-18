@@ -4,6 +4,7 @@ import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
+import { PitList } from "./PitList";
 import { TRACE } from "./constants";
 import {
   IN_PIT,
@@ -162,7 +163,7 @@ export function TrackMap({
     let alive = true;
     const load = () => {
       if (document.visibilityState !== "visible") return;
-      getPublic<{ ageMs: number; cars: CarPlace[]; pit?: PitLane | null }>(`/live/${encodeURIComponent(slug)}/pos`)
+      getPublic<{ ageMs: number; cars: CarPlace[]; pit?: PitLane | null; pitFor?: Record<string, number> }>(`/live/${encodeURIComponent(slug)}/pos`)
         .then(({ body, edgeAgeMs }) => {
           if (!alive) return;
           const t = Date.now();
@@ -186,7 +187,10 @@ export function TrackMap({
           // When a car new to the pit lane went in: unknown at the first reading (it was there already).
           const wentIn = seenReading.current ? t - age : null;
           seenReading.current = true;
-          setPitVisits((prev) => pitVisitsNow(prev, inPit, dataRef.current, wentIn));
+          // The server's pit timer (it saw each car go in) wins over what this page saw.
+          const pitFor = body.pitFor ?? {};
+          const serverSince = (n: string) => (typeof pitFor[n] === "number" ? t - age - pitFor[n] : null);
+          setPitVisits((prev) => pitVisitsNow(prev, inPit, dataRef.current, wentIn, serverSince));
           setUnplaced(body.cars.filter((c) => !(c[3] & IN_PIT) && c[1] === null).map((c) => c[0]));
           setOffTrack(body.cars.filter((c) => !(c[3] & IN_PIT) && c[3] & OFF_TRACK).map((c) => c[0]));
         })
@@ -273,7 +277,7 @@ export function TrackMap({
       ctx.moveTo(ex + Math.cos(a) * 9, ey + Math.sin(a) * 9);
       ctx.lineTo(lx - Math.cos(a) * 7, ly - Math.sin(a) * 7);
       ctx.stroke();
-      const text = pits.length ? `PIT ${pits.length}` : "PIT";
+      const text = pitVisits.size ? `PIT ${pitVisits.size}` : "PIT";
       ctx.font = "700 9px system-ui, sans-serif";
       const w = ctx.measureText(text).width + 10;
       ctx.fillStyle = C.pit;
@@ -457,6 +461,7 @@ export function TrackMap({
   return (
     <div className="flex flex-col md:min-h-0 md:flex-1">
       <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div className="flex flex-col md:min-h-0 md:min-w-0 md:flex-1">
         <div ref={wrapRef} className="relative h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1" style={{ background: C.bg }}>
           <canvas
             ref={canvasRef}
@@ -471,14 +476,12 @@ export function TrackMap({
             </p>
           )}
         </div>
+        {/* Directly under the map (above the running order on a phone). */}
+        <PitList data={data} pits={pitVisits} now={now} focusNum={focusNum} setFocusNum={setFocusNum} />
+        </div>
         <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} annotations={annotations} pits={pitVisits} now={now} />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
-        {label(pits) && (
-          <span>
-            <span style={{ color: C.text }}>In the pits:</span> {label(pits)}
-          </span>
-        )}
         {label(unplaced) && <span>No position: {label(unplaced)}</span>}
         {label(stopped) && (
           <span className="flex items-center gap-1.5">
@@ -518,14 +521,23 @@ export function TrackMap({
 /**
  * The cars in the pit lane after a reading: one already there keeps its visit; one new to it went
  * in at `at` (null when unknown: already there at the page's first reading), after its laps so far.
+ * When the server timed its entry (`serverSince`, client clock), that wins.
  */
-export function pitVisitsNow(prev: Map<number, PitVisit>, inPit: string[], data: RaceChartData, at: number | null): Map<number, PitVisit> {
+export function pitVisitsNow(
+  prev: Map<number, PitVisit>,
+  inPit: string[],
+  data: RaceChartData,
+  at: number | null,
+  serverSince: (num: string) => number | null = () => null
+): Map<number, PitVisit> {
   const out = new Map<number, PitVisit>();
   for (const n of inPit) {
     const key = carKey(data, n);
     if (key === null || !data.cars[String(key)]) continue;
     const laps = data.cars[String(key)].laps;
-    out.set(key, prev.get(key) ?? { since: at, afterLap: laps.length ? laps[laps.length - 1].l : 0 });
+    const visit = prev.get(key) ?? { since: at, afterLap: laps.length ? laps[laps.length - 1].l : 0 };
+    const known = serverSince(n);
+    out.set(key, known !== null ? { ...visit, since: known } : visit);
   }
   return out;
 }

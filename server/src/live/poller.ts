@@ -39,7 +39,7 @@ import type { SessionKind } from "./schedule.js";
 import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
 import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
-import { pitLearnerFor, type PitLane } from "./pits.js";
+import { pitLearnerFor, pitSinceNow, type PitLane } from "./pits.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -209,6 +209,12 @@ class Poller {
   positions: Positions | null = null;
   /** The pit lane on the lap, learned from the pit flags (pits.ts); null before the first pit entry. */
   pitLane: PitLane | null = null;
+  /**
+   * When each car in the pits went in (ms): the read its pit flag came on; null when it was
+   * already in at this poller's first sight of it (a deploy mid-race).
+   */
+  pitSince = new Map<string, number | null>();
+  private seen = new Set<string>();
   /** The entry list from the latest state read (before the first lap the page shows it). */
   entries: EventEntry[] = [];
   private trackAt = 0;
@@ -313,6 +319,7 @@ class Poller {
     const learner = pitLearnerFor(this.meta?.track && this.meta.track !== "Unknown track" ? this.meta.track : `event ${this.eventId}`);
     learner.take(pos.cars);
     this.pitLane = learner.lane(this.track!.len);
+    this.pitSince = pitSinceNow(this.pitSince, this.seen, pos);
   }
 
   private async tick(): Promise<void> {
@@ -608,11 +615,11 @@ export async function getLiveTrack(
   eventId: number,
   sessionId: number,
   slug: string
-): Promise<{ track: PublicTrack | null; positions: Positions | null; pitLane: PitLane | null }> {
+): Promise<{ track: PublicTrack | null; positions: Positions | null; pitLane: PitLane | null; pitSince: Map<string, number | null> }> {
   const p = pollerFor(eventId, sessionId, slug);
   p.lastView = Date.now();
   await p.ready();
-  return { track: p.trackPublic, positions: p.positions, pitLane: p.pitLane };
+  return { track: p.trackPublic, positions: p.positions, pitLane: p.pitLane, pitSince: p.pitSince };
 }
 
 /** An entry on the event's list: car number as published, team, class. */
