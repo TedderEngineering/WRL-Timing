@@ -17,7 +17,7 @@ import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../feature
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
 import { fetchLiveSessions, useLiveChartData, type LiveListing, type LiveSessionListing } from "../hooks/useLiveChartData";
-import { whenText } from "../features/live/banner";
+import { goesLiveText } from "../features/live/banner";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
@@ -205,7 +205,7 @@ export function LiveListPage() {
                 </span>
               </span>
               <span className="shrink-0 text-xs font-semibold tracking-wider" style={{ color: RT.accent }}>
-                {whenText(u.startsAt, now)}
+                {goesLiveText(u.startsAt, now)}
               </span>
             </li>
           ))}

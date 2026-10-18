@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bannerFor, shortEvent, whenText, type LiveListed } from "../banner";
+import { bannerFor, goesLiveText, shortEvent, whenText, type LiveListed } from "../banner";
 
 const live = (over: Partial<LiveListed> = {}): LiveListed => ({
   slug: "sebring-international-raceway-2026-saturday-8-hour",
@@ -37,8 +37,15 @@ describe("bannerFor", () => {
   });
   it("announces tomorrow's race the evening before, in the viewer's time", () => {
     const b = bannerFor({ sessions: [], upcoming: [race2] }, Date.parse("2026-10-17T22:00:00Z"), NY)!;
-    expect(b).toMatchObject({ state: "upcoming", when: "Tomorrow 8:00 AM EDT", what: "WRL Sebring · Race 2 · 7 Hour", to: "/live" });
-    expect(bannerFor({ sessions: [], upcoming: [race2] }, Date.parse("2026-10-18T11:18:00Z"), NY)!.when).toBe("Starts in 42 min");
+    expect(b).toMatchObject({ state: "upcoming", when: "Live tomorrow 8:00 AM EDT", what: "WRL Sebring · Race 2 · 7 Hour", to: "/live", detail: null });
+    expect(bannerFor({ sessions: [], upcoming: [race2] }, Date.parse("2026-10-18T11:18:00Z"), NY)!.when).toBe("Live in 42 min");
+  });
+  it("names the next race ahead of practice running now, and says the practice is live", () => {
+    const b = bannerFor({ sessions: [live({ slug: "p", kind: "practice", sessionName: "Race Practice 4", status: null })], upcoming: [race2] }, Date.parse("2026-10-17T22:00:00Z"), NY)!;
+    expect(b).toMatchObject({ state: "upcoming", when: "Live tomorrow 8:00 AM EDT", what: "WRL Sebring · Race 2 · 7 Hour", detail: "Race Practice 4 live now", to: "/live" });
+  });
+  it("shows a live race rather than the next one", () => {
+    expect(bannerFor({ sessions: [live()], upcoming: [race2] }, Date.parse("2026-10-17T22:00:00Z"), NY)!.state).toBe("live");
   });
   it("points to a session that just finished", () => {
     const b = bannerFor({ sessions: [], recent: [live({ endedAt: "2026-10-17T21:10:00Z" })] }, Date.now(), NY)!;
@@ -59,5 +66,7 @@ describe("helpers", () => {
     expect(whenText("2026-10-18T19:00:00Z", now, NY)).toBe("Today 3:00 PM EDT");
     expect(whenText("2026-10-20T12:00:00Z", now, NY)).toBe("Tue 8:00 AM EDT");
     expect(whenText("2026-10-18T08:59:00Z", now, NY)).toBe("Starting now");
+    expect(goesLiveText("2026-10-18T09:42:00Z", now, NY)).toBe("Live in 42 min");
+    expect(goesLiveText("2026-10-18T19:00:00Z", now, NY)).toBe("Live today 3:00 PM EDT");
   });
 });
