@@ -264,7 +264,7 @@ export function UpcomingRacePage() {
             <p className="mt-6 text-sm leading-relaxed" style={{ color: RT.soft }}>
               This page turns into live timing as soon as the session opens on the timing, usually an hour or two before the start:
               the position trace lap by lap, the track map with every car moving round the circuit, gaps to the cars around you,
-              pit stops and lap times. Keep it open; it checks every 30 seconds.
+              pit stops and lap times.
             </p>
             {(list?.sessions.length ?? 0) > 0 && (
               <p className="mt-4 text-sm" style={{ color: RT.soft }}>
