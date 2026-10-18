@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { CarData, RaceChartData } from "@shared/types";
-import { classColor, runningOrder } from "../RunningOrder";
+import type { CarData, PitMarker, RaceChartData } from "@shared/types";
+import { classBests, classColor, lapText, lapTimes, pitDetail, runningOrder, spanText } from "../RunningOrder";
+import { pitVisitsNow } from "../TrackMap";
 import { CLASS_COLORS } from "../constants";
 
 const car = (num: number, cls: string, finishPos: number, finishPosClass: number, label?: string): CarData => ({
@@ -49,5 +50,70 @@ describe("classColor", () => {
   it("uses each class's own colour, grey for any other", () => {
     expect(classColor("GTO")).toBe(CLASS_COLORS.GTO);
     expect(classColor("XYZ")).toBe("#9a9ab4");
+  });
+});
+
+const lap = (l: number, ltSec: number, pit = 0) => ({ l, p: 1, cp: 1, lt: "", ltSec, flag: "GF", pit });
+const marker = (l: number): PitMarker => ({ l, lb: "", c: "", yo: 0, da: 0 });
+
+describe("lap times", () => {
+  it("gives the last completed lap and the best", () => {
+    const c = car(5, "GTO", 1, 1);
+    c.laps = [lap(1, 130.2), lap(2, 121.5), lap(3, 124.75)];
+    expect(lapTimes(c)).toEqual({ last: 124.75, best: 121.5 });
+    expect(lapTimes(car(6, "GTO", 2, 2))).toEqual({ last: null, best: null });
+  });
+
+  it("finds each class's best lap", () => {
+    const a = car(1, "GTO", 1, 1);
+    a.laps = [lap(1, 122)];
+    const b = car(2, "GTO", 2, 2);
+    b.laps = [lap(1, 121.4)];
+    const d = car(3, "GP1", 3, 1);
+    d.laps = [lap(1, 118)];
+    expect(Object.fromEntries(classBests(chart([a, b, d])))).toEqual({ GTO: 121.4, GP1: 118 });
+  });
+
+  it("writes lap times as M:SS.mmm and spans as M:SS", () => {
+    expect(lapText(121.5)).toBe("2:01.500");
+    expect(lapText(59.04)).toBe("0:59.040");
+    expect(lapText(null)).toBe("–");
+    expect(spanText(83_400)).toBe("1:23");
+  });
+});
+
+describe("pitDetail", () => {
+  const now = 1_000_000;
+  it("calls it the next stop when the timing has not recorded it yet", () => {
+    expect(pitDetail([marker(20), marker(44)], { since: now - 48_000, afterLap: 70 }, now)).toBe(
+      "Stop 3 · 0:48 in the lane · in after lap 70 · 26-lap stint"
+    );
+  });
+
+  it("uses the stop the in-lap already recorded", () => {
+    expect(pitDetail([marker(20), marker(70)], { since: null, afterLap: 70 }, now)).toBe("Stop 2 · in after lap 70 · 50-lap stint");
+  });
+
+  it("counts the first stint from the start", () => {
+    expect(pitDetail(undefined, { since: now, afterLap: 31 }, now)).toBe("Stop 1 · 0:00 in the lane · in after lap 31 · 31-lap stint");
+  });
+});
+
+describe("pitVisitsNow", () => {
+  const c = car(282, "GTO", 4, 3);
+  c.laps = [lap(1, 125), lap(2, 124)];
+  const data = chart([c, car(5, "GTO", 1, 1)]);
+
+  it("times a car from when it goes in, and keeps that while it stays", () => {
+    const first = pitVisitsNow(new Map(), ["282"], data, 5_000);
+    expect(first.get(282)).toEqual({ since: 5_000, afterLap: 2 });
+    expect(pitVisitsNow(first, ["282"], data, 10_000).get(282)).toEqual({ since: 5_000, afterLap: 2 });
+  });
+
+  it("does not time a car already in the pits at the first reading, and drops a car once out", () => {
+    const first = pitVisitsNow(new Map(), ["282", "999"], data, null);
+    expect([...first.keys()]).toEqual([282]);
+    expect(first.get(282)?.since).toBeNull();
+    expect(pitVisitsNow(first, [], data, 10_000).size).toBe(0);
   });
 });

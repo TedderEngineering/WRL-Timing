@@ -810,7 +810,7 @@ export function LiveRacePage() {
         {tab === "map" && (
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
-            <TrackMap slug={slug} data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} flag={flag} />
+            <TrackMap slug={slug} data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} flag={flag} annotations={annotations} />
           </div>
         )}
         {tab === "pitanalysis" && (
