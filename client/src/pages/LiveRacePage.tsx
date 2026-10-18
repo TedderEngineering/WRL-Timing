@@ -20,6 +20,7 @@ import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
 import { fetchLiveSessions, getPublic, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
 import { countdownText, goesLiveText, sessionFor } from "../features/live/banner";
+import type { RaceChartData } from "@shared/types";
 import { readLiveCar, saveLiveCar } from "../features/live/my-car";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
@@ -134,155 +135,282 @@ function LiveDot() {
   );
 }
 
-// ─── /live/next/:id ───────────────────────────────────────────────────────────
+// ─── Before the first lap ─────────────────────────────────────────────────────
+
+type Entry = { car: string; team: string; cls: string };
+
+/** A chart with every entry and no laps: the controls (focus, class, compare) work before the race. */
+function entriesChart(entries: Entry[]): RaceChartData {
+  const cars: RaceChartData["cars"] = {};
+  const classGroups: Record<string, number[]> = {};
+  const used = new Set<number>();
+  entries.forEach((e, i) => {
+    let key = parseInt(e.car, 10);
+    if (!Number.isFinite(key) || key <= 0 || used.has(key) || String(key) !== e.car) key = 100_000 + i;
+    used.add(key);
+    cars[String(key)] = { num: key, team: e.team, cls: e.cls, finishPos: 0, finishPosClass: 0, laps: [], ...(String(key) !== e.car ? { label: e.car } : {}) } as RaceChartData["cars"][string];
+    (classGroups[e.cls] ??= []).push(key);
+  });
+  return {
+    maxLap: 0,
+    totalCars: entries.length,
+    greenPaceCutoff: 0,
+    cars,
+    fcy: [],
+    classGroups,
+    classCarCounts: Object.fromEntries(Object.entries(classGroups).map(([k, v]) => [k, v.length])),
+  } as RaceChartData;
+}
+
+/** "Green flag 8:00 AM EDT · in 40 min" */
+function greenText(startsAt: string | null, now: number): string | null {
+  if (!startsAt) return null;
+  const t = new Date(startsAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+  const left = countdownText(startsAt, now);
+  return `Green flag ${t}${left === "Starting now" ? " · starting now" : ` · in ${left}`}`;
+}
 
 /**
- * A scheduled race before its timing opens: what it is, when it starts, a countdown, and what the
- * page will show. Checks every 30 s and turns into the live race page as soon as the timing has the
- * session (usually an hour or two before the start).
+ * The live page before its first lap: the whole layout, every control working. The header says the
+ * race is not live yet and when it starts; focus car, class and compare can be set now (the car is
+ * kept for the live page); the track map shows the circuit, and the cars once the timing places
+ * them; the trace, lap details, pit stops and lap times fill in from the first completed lap.
+ */
+function PreRaceLayout({
+  slug,
+  sessionName,
+  eventName,
+  track,
+  startsAt,
+  entries,
+  note,
+}: {
+  /** The live session once the timing has it (the track map uses it); null before. */
+  slug: string | null;
+  sessionName: string;
+  eventName: string;
+  track: string;
+  startsAt: string | null;
+  entries: Entry[];
+  note?: string | null;
+}) {
+  const now = useNow(1000);
+  const data = useMemo(() => entriesChart(entries), [entries]);
+  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes">("position");
+  const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
+  const [focusNum, setFocusNumRaw] = useState(0);
+  const [compSet, setCompSet] = useState<Set<number>>(new Set());
+  const [classView, setClassView] = useState("");
+  const setFocusNum = useCallback(
+    (n: number) => {
+      setFocusNumRaw(n);
+      saveLiveCar(eventName, n ? carNo(data, n) : null);
+    },
+    [data, eventName]
+  );
+  // Open on the car picked before (on this device), else the first entry.
+  useEffect(() => {
+    if (focusNum && data.cars[String(focusNum)]) return;
+    const saved = readLiveCar(eventName);
+    const key = saved ? carKey(data, saved) : null;
+    setFocusNumRaw(key !== null && data.cars[String(key)] ? key : Number(Object.keys(data.cars)[0] ?? 0));
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const traceView = useTraceView({ data, focusNum, setFocusNum, setCompSet, classView, setClassView, raceKey: `pre:${eventName}:${sessionName}` });
+  const focus = data.cars[String(focusNum)];
+  const green = greenText(startsAt, now);
+  const tabs = [
+    { id: "position" as const, label: "Position Trace" },
+    { id: "map" as const, label: "Track Map" },
+    { id: "pitanalysis" as const, label: "Pit Stops" },
+    { id: "laptimes" as const, label: "Lap Times" },
+  ];
+  const panel = "rounded-lg border p-4 text-sm";
+  const waitText = (what: string) => (
+    <div className="flex min-h-[260px] flex-1 items-center justify-center px-6 text-center md:min-h-0" style={{ color: RT.muted }}>
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: RT.accent }}>
+          Not live yet
+        </div>
+        <p className="mt-2 max-w-md">{what}</p>
+      </div>
+    </div>
+  );
+  return (
+    <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
+      <section className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-3 pb-1.5 pt-2.5 text-sm sm:px-6 sm:pt-3" role="status" aria-live="polite">
+        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <span className="self-center rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
+            WRL
+          </span>
+          <span className="text-lg font-semibold sm:text-xl">{sessionName}</span>
+          <span style={{ color: RT.soft }}>{[eventName, eventName.includes(track) ? null : track].filter(Boolean).join(" · ")}</span>
+        </span>
+        <span className="rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider" style={{ borderColor: RT.accent, color: RT.accent }}>
+          Not live yet
+        </span>
+        {green && <span>{green}</span>}
+        <span>{entries.length} cars</span>
+        {note && (
+          <span className="text-xs" style={{ color: RT.muted }}>
+            {note}
+          </span>
+        )}
+      </section>
+
+      <div className="mt-0.5 flex shrink-0 flex-wrap items-stretch gap-x-4 border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+        <nav aria-label="Race views" className="no-scrollbar flex min-w-0 items-end gap-1 overflow-x-auto">
+          {tabs.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => setTab(t.id)}
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm"
+                style={{ color: active ? RT.text : RT.muted, fontWeight: active ? 600 : 400, borderBottom: `2px solid ${active ? RT.accent : "transparent"}`, marginBottom: -1 }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div ref={setHeadSlot} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1.5 empty:hidden" />
+      </div>
+
+      {tab !== "pitanalysis" && entries.length > 0 && (
+        <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+      )}
+
+      {tab === "map" ? (
+        slug ? (
+          <TrackMap slug={slug} data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} />
+        ) : (
+          waitText("The track map shows the circuit and every car on it once the timing opens the session, about an hour before the start.")
+        )
+      ) : tab === "pitanalysis" ? (
+        waitText("Pit stops fill in from the first stop: time lost, the class pit cycles and the leaderboard.")
+      ) : (
+        <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
+            <figure className="m-0 flex flex-1 flex-col rounded-lg border" style={{ background: RT.card, borderColor: RT.line }}>
+              {waitText(
+                tab === "laptimes"
+                  ? "Lap times draw here from the first completed lap."
+                  : "The position trace draws here from the first completed lap: every car's position, lap by lap."
+              )}
+            </figure>
+          </div>
+          <aside className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:border-l md:border-t-0 lg:w-[400px]" style={{ borderColor: RT.line }}>
+            <div className="flex gap-4 border-b px-4 text-sm" style={{ borderColor: RT.line }}>
+              <span className="border-b-2 py-2 font-semibold" style={{ borderColor: RT.accent }}>
+                Lap details
+              </span>
+              <span className="py-2" style={{ color: RT.muted }}>
+                Gaps
+              </span>
+            </div>
+            <div className="flex flex-col gap-3 p-4">
+              {focus && (
+                <div>
+                  <div className="font-semibold">
+                    <span className="font-mono" style={{ color: RT.accent }}>
+                      #{carNo(data, focusNum)}
+                    </span>{" "}
+                    {focus.team} · {focus.cls}
+                  </div>
+                  <div className="text-[13px]" style={{ color: RT.muted }}>
+                    Your car: live timing opens on it.
+                  </div>
+                </div>
+              )}
+              <div className={panel} style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>
+                Lap details, the gaps to the cars around you and the gap to the leader fill in from the first completed lap.
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── /live/next/:id ───────────────────────────────────────────────────────────
+
+/** When to start asking whether the timing has opened the session: the timing opens about an hour before the start. */
+const OPENS_BEFORE_MS = 2 * 3600_000;
+const CHECK_MS = 60_000;
+
+/**
+ * A scheduled race before its timing opens: the whole live layout (not live yet), every control
+ * working. It asks whether the timing has the session only from two hours before the start (once a
+ * minute), then turns into the live race page on the viewer's car.
  */
 export function UpcomingRacePage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [list, setList] = useState<LiveListing | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const known = useRef<UpcomingListed | null>(null);
-  const now = useNow(1000);
-  const [entries, setEntries] = useState<{ car: string; team: string; cls: string }[]>([]);
-  const [eventName, setEventName] = useState<string | null>(null);
-  const [myCar, setMyCar] = useState<string | null>(null);
-  const myCarRef = useRef<string | null>(null);
-  myCarRef.current = myCar;
-  // The session and the event's entry list (to pick a car before the start).
+  const [session, setSession] = useState<UpcomingListed | null>(null);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [missing, setMissing] = useState(false);
   useEffect(() => {
     let alive = true;
-    getPublic<{ session: UpcomingListed; entries: { car: string; team: string; cls: string }[] }>(`/live/next/${encodeURIComponent(id)}`)
+    getPublic<{ session: UpcomingListed; entries: Entry[] }>(`/live/next/${encodeURIComponent(id)}`)
       .then(({ body }) => {
         if (!alive) return;
-        known.current ??= body.session;
+        setSession(body.session);
         setEntries(body.entries);
-        setEventName(body.session.eventName);
-        setMyCar(readLiveCar(body.session.eventName));
       })
-      .catch(() => undefined);
+      .catch(() => alive && setMissing(true));
     return () => {
       alive = false;
     };
   }, [id]);
+  // On the schedule: nothing until two hours before the start, then once a minute until it is live.
   useEffect(() => {
+    if (!session) return;
     let alive = true;
-    const load = () =>
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => {
       fetchLiveSessions()
         .then((r) => {
           if (!alive) return;
-          setList(r);
-          setError(null);
-          const u = (r.upcoming ?? []).find((x) => x.id === id);
-          if (u) known.current = u;
-          const live = known.current ? sessionFor(known.current, r) : null;
-          if (live) navigate(`/live/${live.slug}${myCarRef.current ? `?car=${encodeURIComponent(myCarRef.current)}` : ""}`, { replace: true });
+          const live = sessionFor(session, r);
+          if (live) {
+            const car = readLiveCar(session.eventName);
+            navigate(`/live/${live.slug}${car ? `?car=${encodeURIComponent(car)}` : ""}`, { replace: true });
+            return;
+          }
+          timer = setTimeout(check, CHECK_MS);
         })
-        .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not check the timing"));
-    load();
-    const t = setInterval(load, 30_000);
+        .catch(() => alive && (timer = setTimeout(check, CHECK_MS)));
+    };
+    const wait = Date.parse(session.startsAt) - OPENS_BEFORE_MS - Date.now();
+    timer = setTimeout(check, Math.max(0, wait));
     return () => {
       alive = false;
-      clearInterval(t);
+      if (timer) clearTimeout(timer);
     };
-  }, [id, navigate]);
+  }, [session, navigate]);
 
-  const u = known.current ?? (list?.upcoming ?? []).find((x) => x.id === id) ?? null;
-  return (
-    <div className="min-h-full overflow-y-auto px-4 py-10 sm:px-8" style={{ background: "#0b0b18", color: RT.text }}>
-      <div className="mx-auto max-w-2xl">
-        <p className="flex items-center gap-2 text-sm font-semibold tracking-wider" style={{ color: RT.accent }}>
-          <LiveDot /> RACETRACE LIVE
+  if (missing) {
+    return (
+      <Centered>
+        <p style={{ color: RT.soft }}>
+          This session is not on the schedule any more. <Link to="/live" className="underline" style={{ color: RT.accent }}>See what is live</Link>.
         </p>
-        {!list && !error && <p className="mt-6 text-sm" style={{ color: RT.muted }}>Checking the timing…</p>}
-        {error && <p className="mt-6 text-sm" style={{ color: RT.soft }}>{error}</p>}
-        {list && !u && (
-          <p className="mt-6 text-sm" style={{ color: RT.soft }}>
-            This session is not on the schedule any more. <Link to="/live" className="underline" style={{ color: RT.accent }}>See what is live</Link>.
-          </p>
-        )}
-        {u && (
-          <>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <h1 className="m-0 text-3xl font-semibold">{u.sessionName}</h1>
-              <span className="rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider" style={{ borderColor: RT.accent, color: RT.accent }}>
-                Not live yet
-              </span>
-            </div>
-            <p className="mt-1" style={{ color: RT.soft }}>
-              {u.series} · {u.eventName}
-            </p>
-            <div className="mt-6 rounded-lg border p-5" style={{ background: RT.card, borderColor: RT.border }}>
-              <div className="text-xs uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
-                Green flag
-              </div>
-              <div className="mt-1 text-xl font-semibold">
-                {new Date(u.startsAt).toLocaleString(undefined, { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
-              </div>
-              <div className="mt-3 text-3xl font-semibold tabular-nums" style={{ color: RT.accent }}>
-                {countdownText(u.startsAt, now)}
-              </div>
-            </div>
-            {entries.length > 0 && (
-              <div className="mt-6 rounded-lg border p-5" style={{ background: RT.card, borderColor: RT.border }}>
-                <label htmlFor="my-car" className="text-xs uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
-                  Your car
-                </label>
-                <select
-                  id="my-car"
-                  value={myCar ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value || null;
-                    setMyCar(v);
-                    saveLiveCar(eventName, v);
-                  }}
-                  className="mt-2 block w-full rounded-md border px-3 py-2 text-base"
-                  style={{ background: "#0b0b18", borderColor: RT.border, color: RT.text }}
-                >
-                  <option value="">The race leader</option>
-                  {[...new Set(entries.map((e) => e.cls))].map((cls) => (
-                    <optgroup key={cls} label={cls || "Other"}>
-                      {entries
-                        .filter((e) => e.cls === cls)
-                        .map((e) => (
-                          <option key={e.car} value={e.car}>
-                            #{e.car} {e.team}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs" style={{ color: RT.muted }}>
-                  {myCar ? `Live timing will open on #${myCar}: its position trace, gaps and pit stops, highlighted on the track map.` : "Pick your car and live timing will open on it."}
-                </p>
-              </div>
-            )}
-            <p className="mt-6 text-sm leading-relaxed" style={{ color: RT.soft }}>
-              This page turns into live timing as soon as the session opens on the timing, usually an hour or two before the start:
-              the position trace lap by lap, the track map with every car moving round the circuit, gaps to the cars around you,
-              pit stops and lap times.
-            </p>
-            {(list?.sessions.length ?? 0) > 0 && (
-              <p className="mt-4 text-sm" style={{ color: RT.soft }}>
-                On track now:{" "}
-                {list!.sessions.map((s, i) => (
-                  <span key={s.slug}>
-                    {i ? ", " : ""}
-                    <Link to={`/live/${s.slug}`} className="underline" style={{ color: RT.accent }}>
-                      {s.sessionName}
-                    </Link>
-                  </span>
-                ))}
-              </p>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      </Centered>
+    );
+  }
+  if (!session) return <Centered><p style={{ color: RT.muted }}>Loading…</p></Centered>;
+  return (
+    <PreRaceLayout
+      slug={null}
+      sessionName={session.sessionName}
+      eventName={session.eventName}
+      track={session.track}
+      startsAt={session.startsAt}
+      entries={entries}
+    />
   );
 }
 
@@ -463,6 +591,24 @@ export function LiveRacePage() {
 
   const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, raceKey: slug });
 
+  // Before the first lap: the entry list and the scheduled start, for the full layout.
+  const [preRace, setPreRace] = useState<{ entries: Entry[]; startsAt: string | null; sessionName: string | null } | null>(null);
+  const waiting = !data && !!live?.waiting;
+  useEffect(() => {
+    if (!waiting || !slug) return;
+    let alive = true;
+    const load = () =>
+      getPublic<{ entries: Entry[]; startsAt: string | null; sessionName: string | null }>(`/live/${encodeURIComponent(slug)}/entries`)
+        .then(({ body }) => alive && body.entries.length > 0 && setPreRace(body))
+        .catch(() => undefined);
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [waiting, slug]);
+
   if (!slug) return <Navigate to="/live" replace />;
 
   if (isLoading && !data) {
@@ -471,6 +617,20 @@ export function LiveRacePage() {
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-t-transparent" style={{ borderColor: RT.accent, borderTopColor: "transparent" }} />
         <p style={{ color: RT.muted }}>Connecting to the live timing…</p>
       </Centered>
+    );
+  }
+
+  if ((!data || !annotations || !race) && !error && live && !live.ended && preRace) {
+    return (
+      <PreRaceLayout
+        slug={slug}
+        sessionName={preRace.sessionName ?? live.sessionName ?? "Live race"}
+        eventName={live.eventName ?? ""}
+        track={live.track ?? ""}
+        startsAt={preRace.startsAt}
+        entries={preRace.entries}
+        note={live.waiting}
+      />
     );
   }
 

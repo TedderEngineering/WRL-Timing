@@ -113,7 +113,8 @@ function CarMenu({
         official: finishInfo(data, n)?.official ?? "",
         classified: finishInfo(data, n)?.pos != null,
         make: c.make,
-        dns: c.laps.length === 0,
+        // Before the race (no laps anywhere: the live page's pre-race layout) every entry can be picked.
+        dns: c.laps.length === 0 && data.maxLap > 0,
         // The driver the search found, shown under the team.
         driver: needle ? (c.drivers ?? []).find((d) => textMatches(d, needle)) : undefined,
       });
@@ -403,7 +404,7 @@ export function TraceControls(p: TraceControlsProps) {
             const isFocus = n === focusNum;
             const col = on ? getCompColor(compSet, focusNum, n) : undefined;
             const car = data.cars[String(n)];
-            const noLaps = !car || car.laps.length === 0;
+            const noLaps = !car || (car.laps.length === 0 && data.maxLap > 0);
             return (
               <button
                 key={n}

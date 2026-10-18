@@ -27,7 +27,7 @@
  */
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
-import { eventEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { eventEntries, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
 import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 
@@ -152,6 +152,24 @@ liveRouter.get("/:slug/head", async (req, res, next) => {
     res.set("Cache-Control", "public, max-age=2");
     res.set("CDN-Cache-Control", "max-age=4");
     sendJson(req, res, JSON.stringify(headOf(s.slug, snap)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Before the first lap: the entry list (from the state the poller reads anyway) and the scheduled
+ * start, so the page can lay itself out (focus car, class, compare) ahead of the race.
+ */
+liveRouter.get("/:slug/entries", async (req, res, next) => {
+  try {
+    const s = await sessionFor(req, res);
+    if (!s) return;
+    const { entries, eventName, sessionName } = await getLiveEntries(s.eventId, s.sessionId, s.slug);
+    const sched = LIVE_SCHEDULE.find((x) => x.eventName === eventName && Date.parse(x.endsAt) > Date.now() - 12 * 3600_000);
+    res.set("Cache-Control", "public, max-age=30");
+    res.set("CDN-Cache-Control", "max-age=60");
+    res.json({ entries, startsAt: sched?.startsAt ?? null, sessionName });
   } catch (e) {
     next(e);
   }

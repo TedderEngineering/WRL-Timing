@@ -206,6 +206,8 @@ class Poller {
   track: TrackGeometry | null = null;
   trackPublic: PublicTrack | null = null;
   positions: Positions | null = null;
+  /** The entry list from the latest state read (before the first lap the page shows it). */
+  entries: EventEntry[] = [];
   private trackAt = 0;
   private lastPlace = new Map<string, number>();
   private laps: FeedLap[] = [];
@@ -312,6 +314,7 @@ class Poller {
       const state = read?.s ?? null;
       if (!this.track && Date.now() - this.trackAt >= TRACK_RETRY_MS) await this.loadTrack(h);
       if (read && this.track) this.place(read.raw);
+      if (read) this.entries = entriesOf(read.s.results.eventEntries);
       let lapsChanged = false;
       if (this.laps.length === 0 || this.needFull || Date.now() - this.lastLaps >= LAPS_MS) {
         const laps = await h.getJson<FeedLap[]>(liveUrls.sessionLaps(this.eventId, this.sessionId));
@@ -583,6 +586,14 @@ export async function listRecentSessions(): Promise<LiveSessionRef[]> {
   return (await scanSessions()).recent;
 }
 
+/** A session's entry list from its latest state read (starting its poller if needed). */
+export async function getLiveEntries(eventId: number, sessionId: number, slug: string): Promise<{ entries: EventEntry[]; eventName: string | null; sessionName: string | null }> {
+  const p = pollerFor(eventId, sessionId, slug);
+  p.lastView = Date.now();
+  await p.ready();
+  return { entries: p.entries, eventName: p.meta?.eventName ?? null, sessionName: p.meta?.sessionName ?? null };
+}
+
 /** The track outline and the cars' latest places for a session (starting its poller if needed). */
 export async function getLiveTrack(eventId: number, sessionId: number, slug: string): Promise<{ track: PublicTrack | null; positions: Positions | null }> {
   const p = pollerFor(eventId, sessionId, slug);
@@ -596,6 +607,14 @@ export interface EventEntry {
   car: string;
   team: string;
   cls: string;
+}
+
+/** The feed's entry list → class, then car number order. */
+export function entriesOf(list: { no?: string; nm?: string; t?: string; c?: string }[] | undefined): EventEntry[] {
+  return (list ?? [])
+    .map((e) => ({ car: String(e.no ?? "").trim(), team: String(e.t || e.nm || "").trim(), cls: String(e.c ?? "").trim() }))
+    .filter((e) => e.car)
+    .sort((a, b) => a.cls.localeCompare(b.cls) || (parseInt(a.car, 10) || 0) - (parseInt(b.car, 10) || 0) || a.car.localeCompare(b.car));
 }
 
 const ENTRIES_MS = 10 * 60_000;
@@ -615,12 +634,7 @@ export async function eventEntries(eventName: string): Promise<EventEntry[]> {
   try {
     const res = await http().get(liveUrls.state(eventId), { headers: { Accept: "application/x-msgpack" } });
     const st = resultsFromState(decode(res.body));
-    if (st) {
-      entries = (st.results.eventEntries ?? [])
-        .map((e) => ({ car: String(e.no ?? "").trim(), team: String(e.t || e.nm || "").trim(), cls: String(e.c ?? "").trim() }))
-        .filter((e) => e.car)
-        .sort((a, b) => a.cls.localeCompare(b.cls) || (parseInt(a.car, 10) || 0) - (parseInt(b.car, 10) || 0) || a.car.localeCompare(b.car));
-    }
+    if (st) entries = entriesOf(st.results.eventEntries);
   } catch {
     // keep what we had
   }
