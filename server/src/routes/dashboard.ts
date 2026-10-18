@@ -24,7 +24,7 @@ import { LIVE_SCHEDULE } from "../live/schedule.js";
 import { carMatchesEntry, entryForCar, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
-import { availableSeasons, buildSeason, calendarFor, locateRace, nextSessionFor, type SeasonRace } from "../dashboard/season.js";
+import { availableSeasons, buildSeason, calendarFor, locateRace, nextSessionFor, roundScheduleOver, type SeasonRace } from "../dashboard/season.js";
 
 export const dashboardRouter = Router();
 
@@ -202,7 +202,7 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
       select: { id: true, name: true, date: true, track: true, series: true, subSeries: true },
     });
     const today = new Date();
-    const series = buildSeason(cal, races, today);
+    const series = buildSeason(cal, races, today, (short, round) => roundScheduleOver(short, round, today.getTime(), LIVE_SCHEDULE));
 
     // The user's own series first: those of the races they viewed most recently.
     const recent = await prisma.userRaceView.findMany({

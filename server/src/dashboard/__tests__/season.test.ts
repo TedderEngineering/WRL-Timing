@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeason, calendarFor, locateRace, nextSessionFor, raceInSeries, type SeasonRace } from "../season.js";
+import { buildSeason, calendarFor, locateRace, nextSessionFor, raceInSeries, roundScheduleOver, type SeasonRace } from "../season.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../latest.js";
 
 // The published 2026 races on racetrace.tedderengineering.com on 2026-10-13 (date|series|track|name).
@@ -95,6 +95,23 @@ describe("season view against the live 2026 races", () => {
     expect(wrlOn("2026-10-17").next?.name).toBe("Sebring");
     expect(wrlOn("2026-10-18").next?.name).toBe("Sebring");
     expect(wrlOn("2026-10-19").next?.name).toBe("COTA");
+  });
+
+  it("rolls on to the next round as soon as the weekend's last-day race is on the site", () => {
+    const sat: SeasonRace = { id: "sat", name: "WRL Saturday 8 Hour — Sebring International Raceway", date: "2026-10-17", track: "Sebring International Raceway", series: "WRL" };
+    const sun: SeasonRace = { id: "sun", name: "WRL Sunday 7 Hour — Sebring International Raceway", date: "2026-10-18", track: "Sebring International Raceway", series: "WRL" };
+    const wrl = (races: SeasonRace[], today: string) => buildSeason(cal, [...LIVE_2026, ...races], today).find((s) => s.id === "wrl")!;
+    expect(wrl([sat], "2026-10-18").next?.name).toBe("Sebring");
+    expect(wrl([sat, sun], "2026-10-18").next?.name).toBe("COTA");
+  });
+
+  it("rolls on once every scheduled session of the weekend has ended, even before its race is imported", () => {
+    const sched = [{ series: "WRL", track: "Sebring International Raceway", sessionName: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T08:00:00-04:00", endsAt: "2026-10-18T15:00:00-04:00" }];
+    const at = (iso: string) => buildSeason(cal, LIVE_2026, "2026-10-18", (short, r) => roundScheduleOver(short, r, Date.parse(iso), sched)).find((s) => s.id === "wrl")!;
+    expect(at("2026-10-18T13:00:00-04:00").next?.name).toBe("Sebring");
+    expect(at("2026-10-18T15:30:00-04:00").next?.name).toBe("COTA");
+    // A round with no scheduled sessions is never "over" by the schedule.
+    expect(roundScheduleOver("WRL", cal.series[0].rounds[9], Date.parse("2026-12-31T00:00:00Z"), sched)).toBe(false);
   });
 
   it("names the round's next scheduled session from the live schedule, until it is over", () => {
