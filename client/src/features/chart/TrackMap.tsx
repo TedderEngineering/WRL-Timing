@@ -299,8 +299,9 @@ export function TrackMap({
           </span>
         )}
         {unplaced.length > 0 && <span>No position: {label(unplaced)}</span>}
-        <span>
-          {age === null ? "Waiting for positions…" : age > OLD_MS ? `Positions ${Math.round(age / 1000)} s old` : "Positions every 5 s; cars move at their own pace in between"}
+        {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
         </span>
         {isCaution(flag) && (
           <span className="flex items-center gap-1.5" style={{ color: "#fab219" }}>
