@@ -137,6 +137,70 @@ export function classBestStat(data: RaceChartData, stat: LapStat): Map<string, n
   return out;
 }
 
+/** What the Pits column shows; tapping its title cycles through them, as the Best column does. */
+export type PitStat = "stops" | "last" | "total" | "since" | "laps";
+export const PIT_STATS: PitStat[] = ["stops", "last", "total", "since", "laps"];
+export const PIT_STAT_LABEL: Record<PitStat, string> = {
+  stops: "Pits",
+  last: "Last Stop",
+  total: "Pit Total",
+  since: "Since Pit",
+  laps: "Laps Since",
+};
+const PIT_STAT_TITLE: Record<PitStat, string> = {
+  stops: "Pit stops. Tap for the last stop's time",
+  last: "Time the last stop cost against green-flag pace (in-lap, pit lane and out-lap). Tap for the total",
+  total: "Time all its stops cost against green-flag pace. Tap for the time since its last stop",
+  since: "Time since its last stop ended (or since the start). Tap for laps since its last stop",
+  laps: "Laps since its last stop (or since the start). Tap for the number of stops",
+};
+
+export function nextPitStat(s: PitStat): PitStat {
+  return PIT_STATS[(PIT_STATS.indexOf(s) + 1) % PIT_STATS.length];
+}
+
+/**
+ * A car's value for the Pits column, or null when it has none: its stops; the time its last stop,
+ * or all of them, cost against green-flag pace (s: the pit markers' time lost, as the Pit Stops
+ * tab); the time (s) and laps since its last stop's in-lap ended, or since the start.
+ */
+export function pitStat(car: CarData | undefined, pits: PitMarker[] | undefined, stat: PitStat): number | null {
+  const stops = [...(pits ?? [])].sort((a, b) => a.l - b.l);
+  if (stat === "stops") return stops.length;
+  const lost = stops.map((m) => m.pitTiming?.totalPitLoss).filter((v): v is number => typeof v === "number");
+  if (stat === "last") return stops.length ? stops[stops.length - 1].pitTiming?.totalPitLoss ?? null : null;
+  if (stat === "total") return lost.length ? lost.reduce((a, b) => a + b, 0) : null;
+  const laps = car?.laps ?? [];
+  if (!laps.length) return null;
+  const lastPit = stops.length ? stops[stops.length - 1].l : 0;
+  const after = laps.filter((l) => l.l > lastPit);
+  if (stat === "laps") return after.length;
+  return after.reduce((t, l) => t + (l.ltSec > 0 ? l.ltSec : 0), 0);
+}
+
+/** A Pits column value as shown: a count, or a time. */
+export function pitStatText(v: number | null, stat: PitStat): string {
+  if (v === null) return "–";
+  return stat === "stops" || stat === "laps" ? String(v) : spanText(v * 1000);
+}
+
+const PIT_STAT_KEY = "rt_live_pit_stat";
+function loadPitStat(): PitStat {
+  try {
+    const v = localStorage.getItem(PIT_STAT_KEY) as PitStat | null;
+    return v && PIT_STATS.includes(v) ? v : "stops";
+  } catch {
+    return "stops";
+  }
+}
+function savePitStat(v: PitStat): void {
+  try {
+    localStorage.setItem(PIT_STAT_KEY, v);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const STAT_KEY = "rt_live_lap_stat";
 function loadStat(): LapStat {
   try {
@@ -224,6 +288,12 @@ export function RunningOrder({
     saveStat(n);
   };
   const bests = classBestStat(data, stat);
+  const [pStat, setPStat] = useState<PitStat>(loadPitStat);
+  const cyclePitStat = () => {
+    const n = nextPitStat(pStat);
+    setPStat(n);
+    savePitStat(n);
+  };
   const th = "px-1.5 py-2 font-semibold";
   return (
     <div className="flex flex-col px-3 pb-3 pt-1 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
@@ -253,8 +323,16 @@ export function RunningOrder({
                   {LAP_STAT_LABEL[stat]}
                 </button>
               </th>
-              <th className={`${th} text-right`} title="Pit stops">
-                Pits
+              <th className={`${th} text-right`}>
+                <button
+                  type="button"
+                  onClick={cyclePitStat}
+                  title={PIT_STAT_TITLE[pStat]}
+                  aria-label={`${PIT_STAT_LABEL[pStat]}. ${PIT_STAT_TITLE[pStat]}`}
+                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                >
+                  {PIT_STAT_LABEL[pStat]}
+                </button>
               </th>
               <th className={`${th} hidden w-full sm:table-cell`}>Team</th>
             </tr>
@@ -327,7 +405,7 @@ export function RunningOrder({
                   >
                     {lapText(shown)}
                   </td>
-                  <td className="px-1.5 py-1 text-right">{carPits?.length ?? 0}</td>
+                  <td className="whitespace-nowrap px-1.5 py-1 text-right">{pitStatText(pitStat(data.cars[String(r.key)], carPits, pStat), pStat)}</td>
                   <td className="hidden max-w-0 truncate px-1.5 py-1 sm:table-cell" style={{ color: C.muted }} title={r.team}>
                     {r.team}
                   </td>
