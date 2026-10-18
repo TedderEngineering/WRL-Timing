@@ -28,6 +28,7 @@
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
 import { eventEntries, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { pitForAt } from "../live/pits.js";
 import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 
@@ -203,7 +204,7 @@ liveRouter.get("/:slug/pos", async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
-    const { positions, pitLane } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
+    const { positions, pitLane, pitSince } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
     if (!positions) {
       noStore(res);
       res.status(404).json({ error: "No positions yet", code: "LIVE_NO_POSITIONS" });
@@ -212,7 +213,8 @@ liveRouter.get("/:slug/pos", async (req, res, next) => {
     res.set("Cache-Control", "public, max-age=1");
     res.set("CDN-Cache-Control", "max-age=2");
     // pit: the pit lane on the lap (where the pit flag comes on and clears, the limiter speed), once learned.
-    sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars, pit: pitLane }));
+    // pitFor: how long each car in the pits has been in at the read (ms), where its entry was seen.
+    sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars, pit: pitLane, pitFor: pitForAt(pitSince, positions.t) }));
   } catch (e) {
     next(e);
   }

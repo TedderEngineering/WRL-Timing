@@ -25,7 +25,7 @@ export function classColor(cls: string): string {
 
 /** A car's visit to the pit lane now, as the map saw it. */
 export interface PitVisit {
-  /** When the map saw it go in (ms); null when it was already in the pits at the first reading. */
+  /** When it went in (ms, client clock): by the server's pit timer, else when the map saw it go in; null when unknown. */
   since: number | null;
   /** The car's completed laps when it went in. */
   afterLap: number;
@@ -146,10 +146,12 @@ export function lapText(sec: number | null): string {
   return formatLapTime(`${m}:${(sec - m * 60).toFixed(3)}`);
 }
 
-/** How long, as M:SS. */
+/** How long, as M:SS (H:MM:SS from an hour). */
 export function spanText(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const ss = String(s % 60).padStart(2, "0");
+  if (s < 3600) return `${Math.floor(s / 60)}:${ss}`;
+  return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${ss}`;
 }
 
 /**
