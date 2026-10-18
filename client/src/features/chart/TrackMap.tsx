@@ -4,7 +4,7 @@ import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, STALE, pointAt, step, takeReading, type CarMotion, type CarPlace } from "./track-motion";
+import { IN_PIT, NO_GPS, STALE, pointAt, signedGap, step, takeReading, type CarMotion, type CarPlace } from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -117,6 +117,8 @@ export function TrackMap({
 
   // Drawing: every frame, each car eased towards where it should be.
   const lastFrame = useRef(Date.now());
+  /** The estimated safety car's own place, moving on at its pace between frames. */
+  const scState = useRef<SafetyCarState>({ d: 0, active: false });
   const draw = useRef<() => void>(() => undefined);
   draw.current = () => {
     const canvas = canvasRef.current;
@@ -171,7 +173,8 @@ export function TrackMap({
 
     // The cars: the rest, then compare cars, then the focus car on top.
     const t = Date.now();
-    step(motions.current, t, Math.min(100, t - lastFrame.current), track.len);
+    const dt = Math.min(100, t - lastFrame.current);
+    step(motions.current, t, dt, track.len);
     lastFrame.current = t;
     const inClass = classView ? new Set(data.classGroups[classView] ?? []) : null;
     const dots = [...motions.current.values()]
@@ -221,8 +224,16 @@ export function TrackMap({
     }
 
     // The safety car under a caution: where the timing places it when it sends one; otherwise an
-    // estimate just ahead of the overall leader, drawn dashed (the timing does not track it).
-    const sc = safetyCarAt(motions.current, data, flag, track.len);
+    // estimate moving steadily at safety car pace just ahead of the field, drawn dashed (the
+    // timing does not track it).
+    let sc: { d: number; estimated: boolean } | null = null;
+    const own = isCaution(flag) ? findSafetyCar(motions.current) : null;
+    if (!isCaution(flag)) scState.current = { d: 0, active: false };
+    else if (own) sc = { d: own.shown, estimated: false };
+    else {
+      scState.current = stepSafetyCar(scState.current, scTarget(motions.current, data, track.len), scSpeed(motions.current), dt, track.len);
+      if (scState.current.active) sc = { d: scState.current.d, estimated: true };
+    }
     if (sc) {
       const [x, y] = px(pointAt(track.pts, track.ds, track.len, sc.d));
       ctx.fillStyle = "#fab219";
@@ -328,26 +339,56 @@ export function findSafetyCar(motions: Map<string, CarMotion>): CarMotion | null
   return null;
 }
 
-/** How far ahead of the leader the safety car is drawn when it has to be estimated (m). */
+/** How far ahead of the first car on track the estimated safety car runs (m). */
 export const SC_AHEAD_M = 120;
+/** Safety car pace when the field's speed is not known, and the bounds of its pace (mph). */
+export const SC_DEFAULT_MPH = 65;
+const SC_MIN_MPH = 40;
+const SC_MAX_MPH = 90;
+/** The estimate's pace is nudged by at most this share towards the head of the field. */
+const SC_NUDGE = 0.25;
+/** Further than this from the head of the field (m), the estimate is placed there again. */
+export const SC_RESET_M = 800;
+
+export interface SafetyCarState {
+  /** Metres past the line. */
+  d: number;
+  /** Placed (under a caution, once there was a car to place it ahead of). */
+  active: boolean;
+}
+
+/** Where the safety car should be: just ahead of the first car in the running order still on track. */
+export function scTarget(motions: Map<string, CarMotion>, data: RaceChartData, len: number): number | null {
+  const order = Object.entries(data.cars)
+    .filter(([, c]) => (c.finishPos ?? 0) > 0)
+    .sort((a, b) => a[1].finishPos - b[1].finishPos);
+  for (const [k] of order) {
+    const m = motions.get(carNo(data, Number(k))) ?? motions.get(k);
+    if (m && !(m.flags & IN_PIT)) return (m.shown + SC_AHEAD_M) % len;
+  }
+  return null;
+}
+
+/** Safety car pace (m/s): the median speed of the cars on track (under a caution they run at its pace), within 40-90 mph. */
+export function scSpeed(motions: Map<string, CarMotion>): number {
+  const xs = [...motions.values()]
+    .filter((m) => !(m.flags & IN_PIT) && m.mph !== null && m.mph > 0)
+    .map((m) => m.mph as number)
+    .sort((a, b) => a - b);
+  const mph = xs.length ? xs[Math.floor(xs.length / 2)] : SC_DEFAULT_MPH;
+  return Math.min(SC_MAX_MPH, Math.max(SC_MIN_MPH, mph)) * 0.44704;
+}
 
 /**
- * Where to draw the safety car: under a caution only; the timing's own placement when it sends the
- * car, else just ahead of the overall leader (the safety car picks up the leader), marked estimated.
+ * The estimated safety car `dtMs` on: it keeps moving at safety car pace, its pace nudged (at most
+ * ±25%) towards just ahead of the field, never backwards; placed there on the first frame of a
+ * caution, and again only if it ends up over 800 m away. With no car to follow it keeps going.
  */
-export function safetyCarAt(
-  motions: Map<string, CarMotion>,
-  data: RaceChartData,
-  flag: string | null | undefined,
-  len: number
-): { d: number; estimated: boolean } | null {
-  if (!isCaution(flag)) return null;
-  const own = findSafetyCar(motions);
-  if (own) return { d: own.shown, estimated: false };
-  const leader = Object.entries(data.cars).find(([, c]) => c.finishPos === 1)?.[0];
-  if (!leader) return null;
-  const label = carNo(data, Number(leader));
-  const m = motions.get(label) ?? motions.get(leader);
-  if (!m || m.flags & IN_PIT) return null;
-  return { d: (m.shown + SC_AHEAD_M) % len, estimated: true };
+export function stepSafetyCar(sc: SafetyCarState, target: number | null, v: number, dtMs: number, len: number): SafetyCarState {
+  const move = (k: number) => ((sc.d + (v * k * Math.max(0, dtMs)) / 1000) % len + len) % len;
+  if (target === null) return sc.active ? { d: move(1), active: true } : sc;
+  if (!sc.active) return { d: target, active: true };
+  const gap = signedGap(sc.d, target, len);
+  if (Math.abs(gap) > SC_RESET_M) return { d: target, active: true };
+  return { d: move(Math.max(1 - SC_NUDGE, Math.min(1 + SC_NUDGE, 1 + gap / 600))), active: true };
 }
