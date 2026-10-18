@@ -196,13 +196,14 @@ liveRouter.get("/:slug/track", async (req, res, next) => {
 
 /**
  * Every car's latest place on the track (metres past the line, mph, pit / no-GPS / stale flags),
- * from the state read every 5 s. Only the track map asks for it; the edge keeps it 2 s.
+ * from the state read every 5 s, and the pit lane once learned. Only the track map asks for it;
+ * the edge keeps it 2 s.
  */
 liveRouter.get("/:slug/pos", async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
-    const { positions } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
+    const { positions, pitLane } = await getLiveTrack(s.eventId, s.sessionId, s.slug);
     if (!positions) {
       noStore(res);
       res.status(404).json({ error: "No positions yet", code: "LIVE_NO_POSITIONS" });
@@ -210,7 +211,8 @@ liveRouter.get("/:slug/pos", async (req, res, next) => {
     }
     res.set("Cache-Control", "public, max-age=1");
     res.set("CDN-Cache-Control", "max-age=2");
-    sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars }));
+    // pit: the pit lane on the lap (where the pit flag comes on and clears, the limiter speed), once learned.
+    sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars, pit: pitLane }));
   } catch (e) {
     next(e);
   }

@@ -39,6 +39,7 @@ import type { SessionKind } from "./schedule.js";
 import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type LiveChart, type LiveSessionMeta, type LiveState } from "./build.js";
 import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
+import { pitLearnerFor, type PitLane } from "./pits.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -206,6 +207,8 @@ class Poller {
   track: TrackGeometry | null = null;
   trackPublic: PublicTrack | null = null;
   positions: Positions | null = null;
+  /** The pit lane on the lap, learned from the pit flags (pits.ts); null before the first pit entry. */
+  pitLane: PitLane | null = null;
   /** The entry list from the latest state read (before the first lap the page shows it). */
   entries: EventEntry[] = [];
   private trackAt = 0;
@@ -306,6 +309,10 @@ class Poller {
     if (!pos) return;
     this.positions = pos;
     for (const [num, d] of pos.cars) if (d !== null) this.lastPlace.set(num, d);
+    // Learned per track (its sessions share it); by event until the track's name is known.
+    const learner = pitLearnerFor(this.meta?.track && this.meta.track !== "Unknown track" ? this.meta.track : `event ${this.eventId}`);
+    learner.take(pos.cars);
+    this.pitLane = learner.lane(this.track!.len);
   }
 
   private async tick(): Promise<void> {
@@ -597,11 +604,15 @@ export async function getLiveEntries(eventId: number, sessionId: number, slug: s
 }
 
 /** The track outline and the cars' latest places for a session (starting its poller if needed). */
-export async function getLiveTrack(eventId: number, sessionId: number, slug: string): Promise<{ track: PublicTrack | null; positions: Positions | null }> {
+export async function getLiveTrack(
+  eventId: number,
+  sessionId: number,
+  slug: string
+): Promise<{ track: PublicTrack | null; positions: Positions | null; pitLane: PitLane | null }> {
   const p = pollerFor(eventId, sessionId, slug);
   p.lastView = Date.now();
   await p.ready();
-  return { track: p.trackPublic, positions: p.positions };
+  return { track: p.trackPublic, positions: p.positions, pitLane: p.pitLane };
 }
 
 /** An entry on the event's list: car number as published, team, class. */

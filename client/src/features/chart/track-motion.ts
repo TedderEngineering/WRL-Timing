@@ -29,6 +29,13 @@
  * It goes back to its last real fix and waits there, drawn as stopped, until a new fix comes. A
  * frozen car that keeps crossing the line on time keeps running on.
  *
+ * A car going into the pits is on the pit limiter for 10-15 s before the timing flags it (on
+ * Sunday #119 and #120 ran down Sebring's main straight at 35 mph with no flag yet), and running it
+ * on at race pace put it 200-350 m down the straight by the time the flag came. The server learns
+ * where the pit flag comes on and the limiter speed (server live/pits.ts). A car whose fix is in the
+ * last 600 m before that point reading limiter speed is pitting: it runs no faster than its
+ * reading, never past the pit-in point, and fades out there. A car new to the map fades in.
+ *
  * A car off the track (OFF_TRACK: a gravel trap, the grass, parked off, towed across the infield)
  * comes with its own point and is drawn there, eased between fixes; it does not run on at a pace.
  * Back on the track it is placed where its fix says, as a car new to the map.
@@ -62,6 +69,17 @@ export const FROZEN_MS = 25_000;
 /** Overdue at the line: its lap time × this, plus OVERDUE_SLACK_MS (laps reach the page a few seconds late). */
 export const OVERDUE_FACTOR = 1.1;
 export const OVERDUE_SLACK_MS = 10_000;
+/** A car this far (m) before the pit-in point at limiter speed is pitting (and up to PIT_PAST_M past it, before its flag). */
+export const PIT_APPROACH_M = 600;
+export const PIT_PAST_M = 100;
+/** Limiter speed: up to this much (mph) over the pit lane's learned speed; without one, PIT_MPH_DEFAULT. */
+export const PIT_MPH_MARGIN = 12;
+export const PIT_MPH_DEFAULT = 40;
+/** A car new to the map fades in over this long, and a pitting car fades out over the last PIT_FADE_M before the pit-in point. */
+export const FADE_IN_MS = 800;
+export const PIT_FADE_M = 80;
+/** Within this of the pit-in point a pitting car is gone (it eases there slowly). */
+export const PIT_GONE_M = 10;
 /** Marked stale with fix and speed unchanged this long: stopped. */
 export const STALE_STOPPED_MS = 60_000;
 /** Fixes saying under this share of its lap pace: the car really is crawling or stopped. */
@@ -111,9 +129,32 @@ export interface CarMotion {
   fixMph?: number | null;
   /** Read under a caution. */
   caution?: boolean;
+  /** Pitting before its flag: the pit-in point it runs to (m past the line). */
+  pitIn?: number | null;
+  /** When it came onto the map (client clock), for fading in. */
+  born?: number;
   /** Off the track: where its fix says it is (outline metres), and where it is drawn now. */
   off?: [number, number] | null;
   offShown?: [number, number] | null;
+}
+
+/** The pit lane on the lap, learned from the pit flags (server live/pits.ts). */
+export interface PitLane {
+  in: number;
+  out: number | null;
+  mph: number | null;
+  n: number;
+}
+
+/** m/s per mph. */
+const MPH = 0.44704;
+
+/** Pitting before its flag: its fix in the approach to the pit-in point, at limiter speed. */
+export function isPitting(d: number, mph: number | null, lane: PitLane | null, len: number): boolean {
+  if (!lane || mph === null || mph <= 0) return false;
+  const limit = lane.mph !== null ? lane.mph + PIT_MPH_MARGIN : PIT_MPH_DEFAULT + PIT_MPH_MARGIN;
+  const before = signedGap(d, lane.in, len); // > 0: the pit-in point is ahead
+  return mph <= limit && before <= PIT_APPROACH_M && before >= -PIT_PAST_M;
 }
 
 /** What the race says of a car: its pace from its laps (m/s) and its completed laps. */
@@ -149,7 +190,8 @@ export function paceFromFixes(fixes: { d: number; at: number }[], len: number, b
 /**
  * Take a reading (cars as the server sent them, read `ageMs` before `now`) into the motion state.
  * `lapsOf` gives a car's pace from its laps (m/s) and its completed laps; `typicalSpeed` stands in
- * for a pace without one. `caution`: the session is under a caution.
+ * for a pace without one. `caution`: the session is under a caution. `pit`: the pit lane, once
+ * learned.
  */
 export function takeReading(
   motions: Map<string, CarMotion>,
@@ -159,7 +201,8 @@ export function takeReading(
   len: number,
   typicalSpeed: number,
   lapsOf: (num: string) => CarLaps | null = () => null,
-  caution = false
+  caution = false,
+  pit: PitLane | null = null
 ): Map<string, CarMotion> {
   const at = now - Math.max(0, ageMs);
   const next = new Map<string, CarMotion>();
@@ -191,7 +234,7 @@ export function takeReading(
     const capped = (v: number) => (pit ? Math.min(v, PIT_SPEED) : v);
     if (!prev || prev.off || ((prev.flags ^ flags) & IN_PIT) !== 0) {
       // New on the map, or into or out of the pit lane: placed where it is.
-      const m: CarMotion = { num, d, at, flags, mph, v: capped(base), shown: d, raw: d, rawSince: at, base, fixes: [{ d, at }], far: 0, snap: true, laps, lapAt, fixLaps: laps, fixMph: mph };
+      const m: CarMotion = { num, d, at, flags, mph, v: capped(base), shown: d, raw: d, rawSince: at, base, fixes: [{ d, at }], far: 0, snap: true, laps, lapAt, fixLaps: laps, fixMph: mph, born: now };
       next.set(num, m);
       continue;
     }
@@ -217,6 +260,11 @@ export function takeReading(
   for (const [num, m] of next) {
     m.lastLapS = lapsOf(num)?.lastLapS ?? null;
     m.caution = caution;
+    // Pitting before its flag: no faster than its reading, and only as far as the pit-in point.
+    const pitting = !m.off && isPitting(m.raw, m.mph, pit, len);
+    if (pitting) m.v = Math.min(m.v, (m.mph as number) * MPH);
+    else if (m.pitIn != null) m.v = m.base; // it was not pitting after all: back to its pace
+    m.pitIn = pitting ? pit!.in : null;
   }
   return next;
 }
@@ -236,7 +284,7 @@ export function overdueAt(m: CarMotion, len: number): number {
  * are drawn where they are instead.
  */
 export function isStopped(m: CarMotion, now: number, len: number): boolean {
-  if (m.off || !isFrozen(m, now)) return false;
+  if (m.off || m.pitIn != null || !isFrozen(m, now)) return false;
   if (now > overdueAt(m, len)) return true;
   if (m.laps > (m.fixLaps ?? m.laps)) return false;
   return m.mph === 0 || ((m.flags & STALE) !== 0 && m.mph === m.fixMph && now - m.at >= STALE_STOPPED_MS);
@@ -254,7 +302,9 @@ export function coastLimit(m: CarMotion, len: number): number {
 export function targetOf(m: CarMotion, now: number, len: number): number {
   if (isStopped(m, now, len)) return m.d;
   const coast = Math.max(0, Math.min(now - m.at, coastLimit(m, len))) / 1000;
-  return (m.d + m.v * coast) % len;
+  // Pitting: no further than the pit-in point.
+  const run = m.pitIn != null ? Math.min(m.v * coast, Math.max(0, signedGap(m.d, m.pitIn, len))) : m.v * coast;
+  return (m.d + run) % len;
 }
 
 /**
@@ -286,14 +336,26 @@ export function step(motions: Map<string, CarMotion>, now: number, dtMs: number,
       else m.shown = (m.shown + m.base * clamp(gap / (m.base * CATCH_S), -MAX_K, MAX_K) * dt + len) % len;
       continue;
     }
-    const moving = m.v > m.base * CRAWL && now - m.at < coastLimit(m, len);
+    // Pitting and its place has reached the pit-in point: it eases there and waits for its flag.
+    const atPit = m.pitIn != null && Math.abs(signedGap(target, m.pitIn, len)) < 1;
+    const moving = m.v > m.base * CRAWL && now - m.at < coastLimit(m, len) && !atPit;
     // A car stopped (or its fixes stopped coming) eases to its place and waits there.
     const v = moving ? m.v : Math.max(m.v, m.base);
-    const lo = m.caution ? MIN_K_CAUTION : MIN_K;
+    const lo = m.caution || m.pitIn != null ? MIN_K_CAUTION : MIN_K;
     const hi = gap > LARGE_M ? MAX_K_LARGE : MAX_K;
     const k = moving ? clamp(1 + gap / (v * CATCH_S), lo, hi) : clamp(gap / (v * CATCH_S), 0, hi);
     m.shown = (m.shown + v * k * dt) % len;
   }
+}
+
+/**
+ * How visible a car is (0 … 1): fading in after it comes onto the map, and a pitting car fading
+ * out over PIT_FADE_M before the pit-in point (gone within PIT_GONE_M of it).
+ */
+export function visibility(m: CarMotion, now: number, len: number): number {
+  const born = m.born === undefined ? 1 : Math.min(1, Math.max(0, now - m.born) / FADE_IN_MS);
+  if (m.pitIn == null) return born;
+  return born * Math.min(1, Math.max(0, (signedGap(m.shown, m.pitIn, len) - PIT_GONE_M) / PIT_FADE_M));
 }
 
 /** A point at `d` metres past the line on the outline (points ordered from the line, closing back to the first). */
