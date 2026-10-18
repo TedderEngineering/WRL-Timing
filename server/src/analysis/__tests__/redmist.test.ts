@@ -109,6 +109,16 @@ describe("RedMist pit flags stuck on after the car rejoined", () => {
   });
 });
 
+describe("RedMist pit report stop with the pit flags stuck on", () => {
+  it("ends the stop at its out-lap, not where the stuck flags end", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ stuckFlags: true }), options: OPTS });
+    const p = pkg.events.pitPassages.find((e: any) => e.car === "2" && e.inLap === 12) as any;
+    expect(p.outLap).toBe(13);
+    expect(pkg.events.pitPassages.filter((e: any) => e.car === "2" && e.kind !== "pit_lane_start")).toHaveLength(1);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+});
+
 describe("RedMist adapter", () => {
   const { race, issues } = adaptRedmist(withIds());
 

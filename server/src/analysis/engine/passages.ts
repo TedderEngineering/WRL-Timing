@@ -519,6 +519,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
   const staging: string[] = [];
   for (const car of ctx.cars) {
     const rows = ctx.laps[car] ?? [];
+    const racing = racingPace(rows);
     const n = rows.length;
     const mine: Passage[] = [];
     const recs = [...(byCar.get(car) ?? [])].sort((a, b) => (a.inLap ?? 0) - (b.inLap ?? 0) || (a.nr ?? 0) - (b.nr ?? 0));
@@ -602,6 +603,19 @@ function redmistPassages(ctx: Ctx): Passage[] {
       // (c) a one-lap report stop whose next lap carries the pit flag: that lap is the out-lap. When the
       // next reported stop starts there (the equipment split one visit), the two form a pit group (D-PITGROUP).
       if (outIdx !== null && outIdx === inIdx && inIdx + 1 < n && rows[inIdx + 1].inPit) outIdx = inIdx + 1;
+      // (d) The pit flags, and the report's laps, can stay set after the car rejoined (Sebring Sunday
+      // 2026, #48: laps 87-138 at 2:32): no visit runs on past a lap followed by one at racing pace.
+      {
+        const end = outIdx ?? lastIdx ?? inIdx;
+        for (let j = inIdx + 1; j < end; j++) {
+          if (racing(j + 1)) {
+            outIdx = j;
+            lastIdx = undefined;
+            p.confNotes.push("pit_flags_stuck");
+            break;
+          }
+        }
+      }
       p.inIdx = inIdx;
       p.outIdx = outIdx;
       if (lastIdx !== undefined) p.lastIdx = lastIdx;

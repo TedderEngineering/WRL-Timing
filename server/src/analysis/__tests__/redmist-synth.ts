@@ -71,9 +71,12 @@ export function crossing(c: CarSpec, lap: number): number {
 /** Car 3's extra out-lap time with { garage: true }. */
 export const RM_GARAGE_EXTRA_S = 1300;
 
-export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean } = {}): InputFile[] {
+export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean } = {}): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
-  const cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
+  let cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
+  // { stuckFlags: true }: car 2's "in pit lane at the line" flag stays set from its stop (lap 12) to
+  // lap 18 while it laps at racing pace again (Sebring Sunday 2026, #48).
+  if (opts.stuckFlags) cars = cars.map((c) => (c.car === "2" ? { ...c, ip: [12, 13, 14, 15, 16, 17, 18], lip: [12, 13, 14, 15, 16, 17, 18] } : c));
   const laps: Record<string, unknown>[] = [];
   for (const c of cars) {
     for (let lap = 1; lap <= 20; lap++) {
