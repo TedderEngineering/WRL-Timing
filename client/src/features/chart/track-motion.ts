@@ -18,6 +18,12 @@
  * completing laps. A car stops only when its fixes say it is barely moving, or when it has neither
  * a new fix nor a new lap for a while.
  *
+ * A stopped car with a frozen fix (the usual case: the timing repeats its last fix) is caught by its
+ * laps, which come from the timing loop and stay true when the GPS does not: frozen for 25 s and
+ * overdue at the line (its lap time plus 10 %, plus the delay before laps reach the page), it is
+ * stopped. It goes back to its last real fix and waits there, drawn as stopped, until a new fix
+ * comes. A frozen car that keeps crossing the line on time (#77) keeps running on.
+ *
  * A car off the track (OFF_TRACK: a gravel trap, the grass, parked off, towed across the infield)
  * comes with its own point and is drawn there, eased between fixes; it does not run on at a pace.
  * Back on the track it is placed where its fix says, as a car new to the map.
@@ -47,8 +53,9 @@ const MAX_K_LARGE = 2;
 export const FAR_M = 800;
 /** No new fix for this long: its fix is frozen, and it runs on by its pace and laps. */
 export const FROZEN_MS = 25_000;
-/** A frozen car runs on until it has gone this many of its lap times without a new lap. */
-const LAPS_WITHOUT_LAP = 1.5;
+/** Overdue at the line: its lap time × this, plus OVERDUE_SLACK_MS (laps reach the page a few seconds late). */
+export const OVERDUE_FACTOR = 1.1;
+export const OVERDUE_SLACK_MS = 10_000;
 /** Fixes saying under this share of its lap pace: the car really is crawling or stopped. */
 const CRAWL = 0.2;
 /** Pace from fixes: over at least this span, from the fixes of the last HISTORY_MS. */
@@ -87,6 +94,8 @@ export interface CarMotion {
   /** Its completed laps, and when (client clock) that last went up. */
   laps: number;
   lapAt: number;
+  /** Its last lap time (s), when known. */
+  lastLapS?: number | null;
   /** Off the track: where its fix says it is (outline metres), and where it is drawn now. */
   off?: [number, number] | null;
   offShown?: [number, number] | null;
@@ -96,6 +105,8 @@ export interface CarMotion {
 export interface CarLaps {
   pace: number | null;
   laps: number;
+  /** Its last lap time (s), when known: a lap under a caution takes longer than its pace says. */
+  lastLapS?: number | null;
 }
 
 /** Forward distance from a to b round a lap of `len` (0 … len). */
@@ -186,30 +197,44 @@ export function takeReading(
     const fixes = thawed ? [{ d, at }] : [...prev.fixes, { d, at }].filter((f) => at - f.at <= HISTORY_MS);
     next.set(num, { ...prev, d, at, flags, mph, v: thawed ? capped(base) : v, base, laps, lapAt, raw: d, rawSince: at, fixes, far: 0, snap: far >= 2 });
   }
+  for (const [num, m] of next) m.lastLapS = lapsOf(num)?.lastLapS ?? null;
   return next;
 }
 
 /** Its fix is frozen: no new one for FROZEN_MS (drawn as a faint signal). */
 export const isFrozen = (m: CarMotion, now: number) => now - m.at >= FROZEN_MS;
 
-/**
- * How long after its last fix a car runs on: at least MAX_COAST_MS, and for as long as it keeps
- * completing laps (until LAPS_WITHOUT_LAP of its lap times pass without one).
- */
-export function coastLimit(m: CarMotion, len: number): number {
-  return Math.max(MAX_COAST_MS, m.lapAt + (LAPS_WITHOUT_LAP * len * 1000) / m.base - m.at);
+/** When its next lap is overdue (client clock): its lap time (the longer of its pace and its last lap) × 1.1, plus the slack. */
+export function overdueAt(m: CarMotion, len: number): number {
+  const lapMs = Math.max((len * 1000) / m.base, (m.lastLapS ?? 0) * 1000);
+  return m.lapAt + lapMs * OVERDUE_FACTOR + OVERDUE_SLACK_MS;
 }
 
-/** Where a car's last fix says it is at `now`, by its pace. */
+/** Stopped: its fix frozen and its next lap overdue. Off-track cars are drawn where they are instead. */
+export function isStopped(m: CarMotion, now: number, len: number): boolean {
+  return !m.off && isFrozen(m, now) && now > overdueAt(m, len);
+}
+
+/**
+ * How long after its last fix a car runs on: at least MAX_COAST_MS, and for as long as it keeps
+ * completing laps (until its next lap is overdue).
+ */
+export function coastLimit(m: CarMotion, len: number): number {
+  return Math.max(MAX_COAST_MS, overdueAt(m, len) - m.at);
+}
+
+/** Where a car's last fix says it is at `now`, by its pace; a stopped car, its last fix. */
 export function targetOf(m: CarMotion, now: number, len: number): number {
+  if (isStopped(m, now, len)) return m.d;
   const coast = Math.max(0, Math.min(now - m.at, coastLimit(m, len))) / 1000;
   return (m.d + m.v * coast) % len;
 }
 
 /**
  * Move every car on `dtMs` after the last frame: at its own pace, eased (MIN_K … MAX_K of it) to
- * close the gap to where its fix says over about CATCH_S. Never backwards. Past its coast limit, or
- * crawling by its fixes, it eases to where they say and waits there.
+ * close the gap to where its fix says over about CATCH_S. Never backwards, except a stopped car
+ * going back to its last fix. Past its coast limit, or crawling by its fixes, it eases to where
+ * they say and waits there.
  */
 export function step(motions: Map<string, CarMotion>, now: number, dtMs: number, len: number) {
   const dt = Math.max(0, dtMs) / 1000;
@@ -228,6 +253,12 @@ export function step(motions: Map<string, CarMotion>, now: number, dtMs: number,
       continue;
     }
     const gap = signedGap(m.shown, target, len);
+    if (isStopped(m, now, len)) {
+      // Stopped: back to its last real fix (it may have run on past it), straight there if far.
+      if (Math.abs(gap) > LARGE_M) m.shown = target;
+      else m.shown = (m.shown + m.base * clamp(gap / (m.base * CATCH_S), -MAX_K, MAX_K) * dt + len) % len;
+      continue;
+    }
     const moving = m.v > m.base * CRAWL && now - m.at < coastLimit(m, len);
     // A car stopped (or its fixes stopped coming) eases to its place and waits there.
     const v = moving ? m.v : Math.max(m.v, m.base);

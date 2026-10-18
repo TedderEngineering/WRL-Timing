@@ -8,6 +8,9 @@ import {
   MIN_K,
   OFF_EASE_MS,
   OFF_TRACK,
+  OVERDUE_FACTOR,
+  OVERDUE_SLACK_MS,
+  isStopped,
   coastLimit,
   isFrozen,
   paceFromFixes,
@@ -113,10 +116,10 @@ describe("a frozen fix", () => {
     let m = read(new Map(), [["1", 1000, null, 0]], 0, laps(10));
     const lapMs = (LEN / PACE) * 1000;
     m = read(m, [["1", 1000, null, 0]], lapMs, laps(11)); // a new lap, the same fix
-    expect(coastLimit(m.get("1")!, LEN)).toBeCloseTo(lapMs * 2.5, -1);
+    expect(coastLimit(m.get("1")!, LEN)).toBeCloseTo(lapMs + lapMs * OVERDUE_FACTOR + OVERDUE_SLACK_MS, -1);
     expect(targetOf(m.get("1")!, lapMs * 2, LEN)).toBeCloseTo((1000 + PACE * (lapMs * 2) / 1000) % LEN, 3);
   });
-  it("stops after MAX_COAST_MS once it has gone 1.5 laps without a new one", () => {
+  it("stops after MAX_COAST_MS once its next lap is long overdue", () => {
     const m = read(new Map(), [["1", 1000, null, 0]], 0, laps(10)).get("1")!;
     // Its last fix 300 s after its last new lap (2.1 of its laps).
     expect(coastLimit({ ...m, at: 300_000 }, LEN)).toBe(MAX_COAST_MS);
@@ -172,5 +175,47 @@ describe("cars off the track", () => {
     expect(c.off ?? null).toBeNull();
     expect(c.shown).toBe(2000);
     expect(c.v).toBe(PACE);
+  });
+});
+
+describe("a stopped car (frozen fix, next lap overdue)", () => {
+  const lapMs = (LEN / PACE) * 1000;
+  const due = lapMs * OVERDUE_FACTOR + OVERDUE_SLACK_MS;
+
+  it("is stopped once its fix is frozen and its next lap overdue, and goes back to its last fix", () => {
+    const m = read(new Map(), [["7", 2000, null, 0]], 0, laps(10));
+    // Frames up to just before it is overdue: it runs on past its fix.
+    let t = 0;
+    for (; t < due - 1000; t += 100) step(m, t + 100, 100, LEN);
+    expect(isStopped(m.get("7")!, due - 1000, LEN)).toBe(false);
+    expect(signedGap(2000, m.get("7")!.shown, LEN)).toBeGreaterThan(250);
+    // Overdue: stopped, and back at its last real fix.
+    for (; t < due + 2000; t += 100) step(m, t + 100, 100, LEN);
+    expect(isStopped(m.get("7")!, due + 2000, LEN)).toBe(true);
+    expect(m.get("7")!.shown).toBeCloseTo(2000, 0);
+  });
+
+  it("a frozen car that keeps crossing the line on time is not stopped (#77 at Sebring)", () => {
+    let m = read(new Map(), [["77", 1000, null, 0]], 0, laps(10));
+    m = read(m, [["77", 1000, null, 0]], lapMs, laps(11)); // a new lap, the same frozen fix
+    expect(isStopped(m.get("77")!, lapMs * 1.5, LEN)).toBe(false);
+  });
+
+  it("waits longer when its last lap was slow (a caution)", () => {
+    const slow = () => ({ pace: PACE, laps: 10, lastLapS: (LEN / PACE) * 2 });
+    const m = read(new Map(), [["9", 1000, null, 0]], 0, slow);
+    expect(isStopped(m.get("9")!, due + 1000, LEN)).toBe(false);
+    expect(isStopped(m.get("9")!, lapMs * 2 * OVERDUE_FACTOR + OVERDUE_SLACK_MS + 1000, LEN)).toBe(true);
+  });
+
+  it("moves again when a new fix comes", () => {
+    let m = read(new Map(), [["7", 2000, null, 0]], 0, laps(10));
+    m = read(m, [["7", 2050, null, 0]], due + 5000, laps(10));
+    expect(isStopped(m.get("7")!, due + 5000, LEN)).toBe(false);
+  });
+
+  it("an off-track car is never 'stopped' (it is drawn where it is)", () => {
+    const m = read(new Map(), [["5", 100, null, OFF_TRACK, [10, 10]]], 0, laps(10));
+    expect(isStopped(m.get("5")!, due * 3, LEN)).toBe(false);
   });
 });
