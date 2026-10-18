@@ -73,6 +73,24 @@ export function whenText(startsAt: string, now: number, timeZone?: string): stri
 
 const kindWord = (k: SessionKind) => (k === "qualify" ? "Qualifying" : k === "practice" ? "Practice" : "Race");
 
+/** Time left: "9 h 12 min", "42 min", "Starting now". */
+export function countdownText(startsAt: string, now: number): string {
+  const mins = Math.ceil((Date.parse(startsAt) - now) / 60_000);
+  if (mins <= 0) return "Starting now";
+  const h = Math.floor(mins / 60);
+  return h > 0 ? `${h} h ${mins % 60} min` : `${mins} min`;
+}
+
+/**
+ * The live session a scheduled one became: once the timing has it, it leaves `upcoming`; the race
+ * (or the session of its kind) live now, from the same event when there is one.
+ */
+export function sessionFor(u: UpcomingListed, list: LiveListing): LiveListed | null {
+  if ((list.upcoming ?? []).some((x) => x.id === u.id)) return null;
+  const same = (s: LiveListed) => s.kind === u.kind;
+  return list.sessions.find((s) => same(s) && s.eventName === u.eventName) ?? list.sessions.find(same) ?? null;
+}
+
 /** "Live tomorrow 8:00 AM EDT", "Live in 42 min", "Starting now". */
 export function goesLiveText(startsAt: string, now: number, timeZone?: string): string {
   const w = whenText(startsAt, now, timeZone);
@@ -93,7 +111,7 @@ export function bannerFor(list: LiveListing | null, now: number, timeZone?: stri
       what: `${next.series} ${shortEvent(next.eventName, next.track)} · ${next.sessionName}`,
       detail: also ? `${also.sessionName} live now` : null,
       action: "Live timing here",
-      to: "/live",
+      to: `/live/next/${encodeURIComponent(next.id)}`,
       more: 0,
     };
   }

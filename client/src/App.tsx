@@ -21,7 +21,7 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { RaceListPage } from "./pages/RaceListPage";
 import { RaceDetailPage, RaceDetailRedirect } from "./pages/RaceDetailPage";
-import { LiveListPage, LiveRacePage } from "./pages/LiveRacePage";
+import { LiveListPage, LiveRacePage, UpcomingRacePage } from "./pages/LiveRacePage";
 import { QualifyingListPage } from "./pages/QualifyingListPage";
 import { QualifyingDetailPage } from "./pages/QualifyingDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -195,6 +195,7 @@ export function App() {
         <Route path="/chart" element={<RaceDetailPage />} />
         {/* RaceTrace Live (public): WRL sessions still running, by RaceTrace slug */}
         <Route path="/live" element={<LiveListPage />} />
+        <Route path="/live/next/:id" element={<UpcomingRacePage />} />
         <Route path="/live/:slug" element={<LiveRacePage />} />
         {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
         <Route path="/races/:id" element={<RaceDetailRedirect />} />

@@ -4,7 +4,7 @@
  * complete. Public, no login. Nothing here is stored as a race.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
@@ -18,8 +18,8 @@ import { carKey, carNo } from "../features/chart/car-number";
 import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
-import { fetchLiveSessions, useLiveChartData, type LiveListing, type LiveSessionListing } from "../hooks/useLiveChartData";
-import { goesLiveText } from "../features/live/banner";
+import { fetchLiveSessions, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
+import { countdownText, goesLiveText, sessionFor } from "../features/live/banner";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
@@ -133,6 +133,98 @@ function LiveDot() {
   );
 }
 
+// ─── /live/next/:id ───────────────────────────────────────────────────────────
+
+/**
+ * A scheduled race before its timing opens: what it is, when it starts, a countdown, and what the
+ * page will show. Checks every 30 s and turns into the live race page as soon as the timing has the
+ * session (usually an hour or two before the start).
+ */
+export function UpcomingRacePage() {
+  const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [list, setList] = useState<LiveListing | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const known = useRef<UpcomingListed | null>(null);
+  const now = useNow(1000);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetchLiveSessions()
+        .then((r) => {
+          if (!alive) return;
+          setList(r);
+          setError(null);
+          const u = (r.upcoming ?? []).find((x) => x.id === id);
+          if (u) known.current = u;
+          const live = known.current ? sessionFor(known.current, r) : null;
+          if (live) navigate(`/live/${live.slug}`, { replace: true });
+        })
+        .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not check the timing"));
+    load();
+    const t = setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [id, navigate]);
+
+  const u = known.current ?? (list?.upcoming ?? []).find((x) => x.id === id) ?? null;
+  return (
+    <div className="min-h-full overflow-y-auto px-4 py-10 sm:px-8" style={{ background: "#0b0b18", color: RT.text }}>
+      <div className="mx-auto max-w-2xl">
+        <p className="flex items-center gap-2 text-sm font-semibold tracking-wider" style={{ color: RT.accent }}>
+          <LiveDot /> RACETRACE LIVE
+        </p>
+        {!list && !error && <p className="mt-6 text-sm" style={{ color: RT.muted }}>Checking the timing…</p>}
+        {error && <p className="mt-6 text-sm" style={{ color: RT.soft }}>{error}</p>}
+        {list && !u && (
+          <p className="mt-6 text-sm" style={{ color: RT.soft }}>
+            This session is not on the schedule any more. <Link to="/live" className="underline" style={{ color: RT.accent }}>See what is live</Link>.
+          </p>
+        )}
+        {u && (
+          <>
+            <h1 className="mt-3 text-3xl font-semibold">{u.sessionName}</h1>
+            <p className="mt-1" style={{ color: RT.soft }}>
+              {u.series} · {u.eventName}
+            </p>
+            <div className="mt-6 rounded-lg border p-5" style={{ background: RT.card, borderColor: RT.border }}>
+              <div className="text-xs uppercase tracking-[0.06em]" style={{ color: RT.muted }}>
+                Green flag
+              </div>
+              <div className="mt-1 text-xl font-semibold">
+                {new Date(u.startsAt).toLocaleString(undefined, { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
+              </div>
+              <div className="mt-3 text-3xl font-semibold tabular-nums" style={{ color: RT.accent }}>
+                {countdownText(u.startsAt, now)}
+              </div>
+            </div>
+            <p className="mt-6 text-sm leading-relaxed" style={{ color: RT.soft }}>
+              This page turns into live timing as soon as the session opens on the timing, usually an hour or two before the start:
+              the position trace lap by lap, the track map with every car moving round the circuit, gaps to the cars around you,
+              pit stops and lap times. Keep it open; it checks every 30 seconds.
+            </p>
+            {(list?.sessions.length ?? 0) > 0 && (
+              <p className="mt-4 text-sm" style={{ color: RT.soft }}>
+                On track now:{" "}
+                {list!.sessions.map((s, i) => (
+                  <span key={s.slug}>
+                    {i ? ", " : ""}
+                    <Link to={`/live/${s.slug}`} className="underline" style={{ color: RT.accent }}>
+                      {s.sessionName}
+                    </Link>
+                  </span>
+                ))}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── /live ────────────────────────────────────────────────────────────────────
 
 export function LiveListPage() {
@@ -196,19 +288,21 @@ export function LiveListPage() {
             </li>
           ))}
           {upcoming.map((u) => (
-            <li key={u.id} className={card} style={{ background: RT.card, borderColor: RT.border }}>
-              <span>
-                <span className="block font-medium">{u.sessionName}</span>
-                <span className="block text-sm" style={{ color: RT.muted }}>
-                  {u.series} · {u.eventName} · {new Date(u.startsAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
+            <li key={u.id}>
+              <Link to={`/live/next/${encodeURIComponent(u.id)}`} className={`${card} hover:brightness-125`} style={{ background: RT.card, borderColor: RT.border }}>
+                <span>
+                  <span className="block font-medium">{u.sessionName}</span>
+                  <span className="block text-sm" style={{ color: RT.muted }}>
+                    {u.series} · {u.eventName} · {new Date(u.startsAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
+                  </span>
+                  <span className="mt-1 block text-xs" style={{ color: RT.muted }}>
+                    Live timing opens here when the session starts.
+                  </span>
                 </span>
-                <span className="mt-1 block text-xs" style={{ color: RT.muted }}>
-                  Live timing opens here when the session starts.
+                <span className="shrink-0 text-xs font-semibold tracking-wider" style={{ color: RT.accent }}>
+                  {goesLiveText(u.startsAt, now)} ›
                 </span>
-              </span>
-              <span className="shrink-0 text-xs font-semibold tracking-wider" style={{ color: RT.accent }}>
-                {goesLiveText(u.startsAt, now)}
-              </span>
+              </Link>
             </li>
           ))}
           {recent.map((s) => (
