@@ -1,7 +1,9 @@
+import { useState } from "react";
 import type { AnnotationData, CarData, PitMarker, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { formatLapTime, getCompColor } from "./chart-renderer";
 import { CLASS_COLORS, TRACE } from "./constants";
+import { isCleanLap } from "./gap-math";
 
 const C = {
   bg: "#0b0b18",
@@ -73,6 +75,70 @@ export function classBests(data: RaceChartData): Map<string, number> {
   return out;
 }
 
+/** What the Best column shows; tapping its title cycles through them. */
+export type LapStat = "best" | "avg10" | "stint" | "race";
+export const LAP_STATS: LapStat[] = ["best", "avg10", "stint", "race"];
+export const LAP_STAT_LABEL: Record<LapStat, string> = {
+  best: "Best",
+  avg10: "10-lap avg",
+  stint: "Stint avg",
+  race: "Race avg",
+};
+const LAP_STAT_TITLE: Record<LapStat, string> = {
+  best: "Best lap. Tap for the 10-lap average",
+  avg10: "Average of the last 10 green laps (no pit, caution or out-laps). Tap for the stint average",
+  stint: "Average of the green laps since the last pit stop. Tap for the race average",
+  race: "Average of every green lap of the race. Tap for the best lap",
+};
+
+export function nextLapStat(s: LapStat): LapStat {
+  return LAP_STATS[(LAP_STATS.indexOf(s) + 1) % LAP_STATS.length];
+}
+
+const mean = (xs: number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+/**
+ * A car's value for the column (seconds), or null when it has none yet. Averages count green laps
+ * only (gap-math isCleanLap: no pit lap, no out-lap, no caution, nothing over the green-pace
+ * cutoff): the last 10 of them, those since the last pit lap, or all of them.
+ */
+export function lapStat(data: RaceChartData, car: CarData | undefined, stat: LapStat): number | null {
+  if (stat === "best") return lapTimes(car).best;
+  const laps = car?.laps ?? [];
+  const clean = laps.filter((l) => isCleanLap(data, car, l.l));
+  if (stat === "avg10") return mean(clean.slice(-10).map((l) => l.ltSec));
+  if (stat === "race") return mean(clean.map((l) => l.ltSec));
+  const lastPit = laps.reduce((m, l) => (l.pit ? Math.max(m, l.l) : m), 0);
+  return mean(clean.filter((l) => l.l > lastPit).map((l) => l.ltSec));
+}
+
+/** Each class's lowest value of the column. */
+export function classBestStat(data: RaceChartData, stat: LapStat): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const c of Object.values(data.cars)) {
+    const v = lapStat(data, c, stat);
+    if (v !== null && v < (out.get(c.cls) ?? Infinity)) out.set(c.cls, v);
+  }
+  return out;
+}
+
+const STAT_KEY = "rt_live_lap_stat";
+function loadStat(): LapStat {
+  try {
+    const v = localStorage.getItem(STAT_KEY) as LapStat | null;
+    return v && LAP_STATS.includes(v) ? v : "best";
+  } catch {
+    return "best";
+  }
+}
+function saveStat(v: LapStat): void {
+  try {
+    localStorage.setItem(STAT_KEY, v);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** A lap time (seconds) as M:SS.mmm. */
 export function lapText(sec: number | null): string {
   if (sec === null) return "–";
@@ -109,7 +175,7 @@ export function pitDetail(pits: PitMarker[] | undefined, visit: PitVisit, now: n
 
 /**
  * RaceTrace Live, beside the track map: the running order now. Position, number, class and place
- * in class, last and best lap, and stops, each row marked in its class colour. A car in the pit
+ * in class, last and best lap (its title cycles best → 10-lap, stint and race averages), and stops, each row marked in its class colour. A car in the pit
  * lane carries a P and a line on its stop. Tapping a row makes it the focus car.
  */
 export function RunningOrder({
@@ -133,7 +199,13 @@ export function RunningOrder({
   now: number;
 }) {
   const rows = runningOrder(data);
-  const bests = classBests(data);
+  const [stat, setStat] = useState<LapStat>(loadStat);
+  const cycleStat = () => {
+    const n = nextLapStat(stat);
+    setStat(n);
+    saveStat(n);
+  };
+  const bests = classBestStat(data, stat);
   const th = "px-1.5 py-2 font-semibold";
   return (
     <div className="flex flex-col px-3 pb-3 pt-1 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
@@ -152,7 +224,17 @@ export function RunningOrder({
                 PIC
               </th>
               <th className={`${th} text-right`}>Last</th>
-              <th className={`${th} text-right`}>Best</th>
+              <th className={`${th} text-right`}>
+                <button
+                  type="button"
+                  onClick={cycleStat}
+                  title={LAP_STAT_TITLE[stat]}
+                  aria-label={`${LAP_STAT_LABEL[stat]}. ${LAP_STAT_TITLE[stat]}`}
+                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                >
+                  {LAP_STAT_LABEL[stat]}
+                </button>
+              </th>
               <th className={`${th} text-right`} title="Pit stops">
                 Pits
               </th>
@@ -168,7 +250,8 @@ export function RunningOrder({
               const visit = pits.get(r.key);
               const carPits = annotations?.[String(r.key)]?.pits;
               const { last, best } = lapTimes(data.cars[String(r.key)]);
-              const classBest = best !== null && best === bests.get(r.cls);
+              const shown = stat === "best" ? best : lapStat(data, data.cars[String(r.key)], stat);
+              const classBest = shown !== null && shown === bests.get(r.cls);
               const rowStyle = {
                 borderColor: C.line,
                 opacity: other ? 0.35 : 1,
@@ -218,9 +301,9 @@ export function RunningOrder({
                   <td
                     className="px-1.5 py-1 text-right"
                     style={{ color: classBest ? C.classBest : C.muted }}
-                    title={classBest ? "Best lap in class" : undefined}
+                    title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat].toLowerCase()} in class`) : undefined}
                   >
-                    {lapText(best)}
+                    {lapText(shown)}
                   </td>
                   <td className="px-1.5 py-1 text-right">{carPits?.length ?? 0}</td>
                   <td className="hidden max-w-0 truncate px-1.5 py-1 sm:table-cell" style={{ color: C.muted }} title={r.team}>

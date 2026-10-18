@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CarData, PitMarker, RaceChartData } from "@shared/types";
-import { classBests, classColor, lapText, lapTimes, pitDetail, runningOrder, spanText } from "../RunningOrder";
+import { classBestStat, classBests, classColor, lapStat, lapText, lapTimes, nextLapStat, pitDetail, runningOrder, spanText } from "../RunningOrder";
 import { overallLeader, pitVisitsNow } from "../TrackMap";
 import { CLASS_COLORS } from "../constants";
 
@@ -124,5 +124,54 @@ describe("overallLeader", () => {
   });
   it("is none before the timing gives positions", () => {
     expect(overallLeader(chart([car(282, "GTO", 0, 0)]))).toBeNull();
+  });
+});
+
+describe("Best column cycle: best, 10-lap, stint and race averages", () => {
+  it("cycles best → 10-lap avg → stint avg → race avg → best", () => {
+    expect(nextLapStat("best")).toBe("avg10");
+    expect(nextLapStat("avg10")).toBe("stint");
+    expect(nextLapStat("stint")).toBe("race");
+    expect(nextLapStat("race")).toBe("best");
+  });
+
+  // Laps 1-12 green; lap 13 a pit lap, 14 the out-lap, 15-16 green; lap 17 under caution.
+  const c = car(5, "GTO", 1, 1);
+  c.laps = [
+    ...Array.from({ length: 12 }, (_, i) => lap(i + 1, 120 + i)),
+    lap(13, 200, 1),
+    lap(14, 150),
+    lap(15, 118),
+    lap(16, 122),
+    { ...lap(17, 170), flag: "FCY" },
+  ];
+  const data = chart([c]);
+
+  it("averages green laps only: no pit lap, out-lap or caution lap", () => {
+    // The last 10 green laps are laps 5-12 and 15-16.
+    const last10 = [124, 125, 126, 127, 128, 129, 130, 131, 118, 122];
+    expect(lapStat(data, c, "avg10")).toBeCloseTo(last10.reduce((a, b) => a + b) / 10, 6);
+    expect(lapStat(data, c, "stint")).toBeCloseTo(120, 6);
+    const all = [...Array.from({ length: 12 }, (_, i) => 120 + i), 118, 122];
+    expect(lapStat(data, c, "race")).toBeCloseTo(all.reduce((a, b) => a + b) / all.length, 6);
+    expect(lapStat(data, c, "best")).toBe(118);
+  });
+
+  it("has no stint average before a green lap after the stop, and nothing before any lap", () => {
+    const d = car(6, "GTO", 2, 2);
+    d.laps = [lap(1, 121), lap(2, 200, 1), lap(3, 150)];
+    expect(lapStat(chart([d]), d, "stint")).toBeNull();
+    expect(lapStat(chart([d]), d, "avg10")).toBe(121);
+    expect(lapStat(chart([car(7, "GTO", 3, 3)]), undefined, "race")).toBeNull();
+  });
+
+  it("marks each class's quickest value of the column", () => {
+    const a = car(1, "GTO", 1, 1);
+    a.laps = [lap(1, 121), lap(2, 125)];
+    const b = car(2, "GTO", 2, 2);
+    b.laps = [lap(1, 120), lap(2, 130)];
+    const both = chart([a, b]);
+    expect(classBestStat(both, "best").get("GTO")).toBe(120);
+    expect(classBestStat(both, "race").get("GTO")).toBe(123);
   });
 });
