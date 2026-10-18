@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDayRange, whenLabel } from "./format";
+import { whenText } from "../live/banner";
 import type { SeasonResponse, SeasonRound, SeasonSeries } from "./types";
 
 const STORE_KEY = "racetrace.dashboard.series";
@@ -205,8 +206,12 @@ export function nextFor(data: SeasonResponse | null): NextRound | null {
   return data.upcoming.find((n) => !ids.length || ids.includes(n.seriesId)) ?? null;
 }
 
-export function NextUp({ next, today }: { next: NextRound; today: string }) {
-  const when = whenLabel(next.start, next.end, today);
+export function NextUp({ next, today, now = Date.now() }: { next: NextRound; today: string; now?: number }) {
+  // A weekend under way names its next session ("Race 2 · 7 Hour", tomorrow 8:00 AM) in the
+  // viewer's time zone; otherwise the round's dates.
+  const s = next.session;
+  const sw = s ? whenText(s.startsAt, now) : "";
+  const when = s ? (sw === "Starting now" ? "starting now" : `${sw.charAt(0).toLowerCase()}${sw.slice(1)}`) : whenLabel(next.start, next.end, today);
   return (
     <div
       className="rounded-xl border px-4 py-3.5 text-left"
@@ -217,7 +222,7 @@ export function NextUp({ next, today }: { next: NextRound; today: string }) {
       </div>
       <div className="mt-1 text-[17px] font-semibold">
         {next.seriesLabel} {next.name}
-        {next.note ? ` · ${next.note}` : ""}
+        {s ? ` · ${s.name}` : next.note ? ` · ${next.note}` : ""}
       </div>
       <div className="text-[13px] text-[var(--rt-text-secondary)]">
         {next.track} · {formatDayRange(next.start, next.end, false)}

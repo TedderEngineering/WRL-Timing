@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { RecapCard } from "../RecapCard";
-import { SeasonPanel, shortRaceLabel } from "../SeasonPanel";
+import { NextUp, SeasonPanel, shortRaceLabel } from "../SeasonPanel";
 import { formatDayRange, whenLabel } from "../format";
 import type { LatestEvent, SeasonResponse } from "../types";
 
@@ -151,6 +151,13 @@ describe("SeasonPanel", () => {
   it("leads with the next round and when it is", () => {
     expect(out).toContain("Next up · in 3 days");
     expect(out).toContain("WRL Sebring · Eastern finale");
+  });
+
+  it("a weekend under way names its next session and when it starts", () => {
+    const n = { ...wrl.rounds.find((r) => r.name === "Sebring")!, seriesId: "wrl", seriesLabel: "WRL", status: "on_site" as const, session: { name: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T12:00:00Z" } };
+    const t = text(html(<NextUp next={n} today="2026-10-17" now={Date.parse("2026-10-17T20:00:00Z")} />));
+    expect(t).toContain("WRL Sebring · Race 2 · 7 Hour");
+    expect(t).toMatch(/Next up · tomorrow \d{1,2}:00/);
   });
 
   it("collapsed, it lists the rounds around the next one even when `next` is a copy", () => {

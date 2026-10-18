@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeason, calendarFor, locateRace, raceInSeries, type SeasonRace } from "../season.js";
+import { buildSeason, calendarFor, locateRace, nextSessionFor, raceInSeries, type SeasonRace } from "../season.js";
 import { groupIntoWeekends, headlineOrder, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../latest.js";
 
 // The published 2026 races on racetrace.tedderengineering.com on 2026-10-13 (date|series|track|name).
@@ -86,6 +86,27 @@ describe("season view against the live 2026 races", () => {
     const r: SeasonRace = { id: "x", name: "Fox Factory 120", date: "2026-10-02", track: "Road Atlanta", series: "IMSA", subSeries: "Pilot Challenge" };
     expect(locateRace(cal, r)).toMatchObject({ seriesId: "imsa-mpc", round: 10, of: 10 });
     expect(raceInSeries({ ...r, subSeries: "WeatherTech" }, cal.series[1])).toBe(false);
+  });
+
+  it("a weekend stays next until its last day, even once its first race is on the site", () => {
+    const sat: SeasonRace = { id: "sat", name: "WRL Sebring International Raceway 2026 — Saturday 8 Hour", date: "2026-10-17", track: "Sebring International Raceway", series: "WRL" };
+    const wrlOn = (today: string) => buildSeason(cal, [...LIVE_2026, sat], today).find((s) => s.id === "wrl")!;
+    expect(wrlOn("2026-10-17").rounds[8].status).toBe("on_site");
+    expect(wrlOn("2026-10-17").next?.name).toBe("Sebring");
+    expect(wrlOn("2026-10-18").next?.name).toBe("Sebring");
+    expect(wrlOn("2026-10-19").next?.name).toBe("COTA");
+  });
+
+  it("names the round's next scheduled session from the live schedule, until it is over", () => {
+    const sched = [
+      { series: "WRL", track: "Sebring International Raceway", sessionName: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T08:00:00-04:00", endsAt: "2026-10-18T15:00:00-04:00" },
+      { series: "IMSA", track: "Sebring International Raceway", sessionName: "Other", kind: "race", startsAt: "2026-10-18T09:00:00-04:00", endsAt: "2026-10-18T10:00:00-04:00" },
+    ];
+    const sebring = cal.series.find((s) => s.id === "wrl")!.rounds[8];
+    const cota = cal.series.find((s) => s.id === "wrl")!.rounds[9];
+    expect(nextSessionFor("WRL", sebring, Date.parse("2026-10-18T01:00:00Z"), sched)).toEqual({ name: "Race 2 · 7 Hour", kind: "race", startsAt: "2026-10-18T08:00:00-04:00" });
+    expect(nextSessionFor("WRL", sebring, Date.parse("2026-10-18T20:00:00Z"), sched)).toBeNull();
+    expect(nextSessionFor("WRL", cota, Date.parse("2026-10-18T01:00:00Z"), sched)).toBeNull();
   });
 
   it("a round in progress is live, and before it starts it is upcoming", () => {
