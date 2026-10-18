@@ -410,6 +410,8 @@ export interface FlagVisit {
   last: number;
   /** The pit flag sat on the lap after the visit (see redmistFlagVisits). */
   lateFlag?: boolean;
+  /** The pit flags stayed set after the car rejoined at racing pace (ignored from the out-lap on). */
+  stuckFlags?: boolean;
 }
 
 /**
@@ -423,8 +425,29 @@ export interface FlagVisit {
  * case follows a pit-report stop on the previous lap. A lap-1 flag with a crossing on track is
  * pre-race pit-lane staging, not a passage.
  */
+/**
+ * A lap at racing pace: within RACING_PACE of the car's median lap. A car cannot cross the line in
+ * the pit lane on two laps running at that pace, so such a lap's pit flag is stuck (Sebring Sunday
+ * 2026, #48: "in pit lane at the line" set from lap 88 to 137 while it lapped at 2:32).
+ */
+export const RACING_PACE = 1.05;
+
+function racingPace(rows: LapRow[]): (i: number) => boolean {
+  const xs = rows
+    .map((r) => r.lapTimeS)
+    .filter((v): v is number => typeof v === "number" && v > 0)
+    .sort((a, b) => a - b);
+  if (!xs.length) return () => false;
+  const med = xs[Math.floor(xs.length / 2)];
+  return (i) => {
+    const v = rows[i]?.lapTimeS;
+    return typeof v === "number" && v > 0 && v <= med * RACING_PACE;
+  };
+}
+
 export function redmistFlagVisits(rows: LapRow[]): FlagVisit[] {
   const n = rows.length;
+  const racing = racingPace(rows);
   const flagged = (i: number) => (rows[i].inPit || rows[i].crossedInPit) && !(i === 0 && rows[0].lap === 1 && !rows[0].crossedInPit);
   const out: FlagVisit[] = [];
   let k = 0;
@@ -442,7 +465,15 @@ export function redmistFlagVisits(rows: LapRow[]): FlagVisit[] {
       continue;
     }
     let j = k;
-    while (rows[j].crossedInPit && j + 1 < n) j++;
+    while (rows[j].crossedInPit && j + 1 < n && !(j > i0 && racing(j + 1))) j++;
+    if (rows[j].crossedInPit && j > i0 && j + 1 < n && racing(j + 1)) {
+      // The next lap is at racing pace: the car was back on track; its pit flags from here are stuck.
+      out.push({ i0, i1: j, last: j, stuckFlags: true });
+      lastEnd = j;
+      k = j + 1;
+      while (k < n && flagged(k) && racing(k)) k++;
+      continue;
+    }
     if (rows[j].crossedInPit) {
       out.push({ i0, i1: null, last: j });
       break;
