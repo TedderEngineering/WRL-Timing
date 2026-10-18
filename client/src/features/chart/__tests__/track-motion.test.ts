@@ -13,6 +13,11 @@ import {
   OVERDUE_SLACK_MS,
   STALE,
   isStopped,
+  isPitting,
+  visibility,
+  FADE_IN_MS,
+  PIT_FADE_M,
+  type PitLane,
   coastLimit,
   isFrozen,
   paceFromFixes,
@@ -253,5 +258,53 @@ describe("a stopped car (frozen fix, next lap overdue)", () => {
   it("an off-track car is never 'stopped' (it is drawn where it is)", () => {
     const m = read(new Map(), [["5", 100, null, OFF_TRACK, [10, 10]]], 0, laps(10));
     expect(isStopped(m.get("5")!, due * 3, LEN)).toBe(false);
+  });
+});
+
+describe("a car going into the pits (before its flag)", () => {
+  // Sebring on Sunday: the pit flag comes on at 5,724 m, the limiter is 35 mph.
+  const lane: PitLane = { in: 5724, out: 832, mph: 35, n: 2 };
+  const readPit = (m: Map<string, CarMotion>, cars: CarPlace[], now: number) => takeReading(m, cars, now, 0, LEN, 38, laps(), false, lane);
+
+  it("is pitting at limiter speed in the approach to the pit-in point, and not elsewhere or at race speed", () => {
+    expect(isPitting(5597, 36, lane, LEN)).toBe(true); // #119, 4 s before its flag
+    expect(isPitting(5565, 36, lane, LEN)).toBe(true); // #120, 13 s before its flag
+    expect(isPitting(5430, 76, lane, LEN)).toBe(false); // at race speed
+    expect(isPitting(2600, 36, lane, LEN)).toBe(false); // a slow corner far from the pit lane
+    expect(isPitting(5597, 36, null, LEN)).toBe(false); // the pit lane not learned yet
+  });
+
+  it("runs no faster than its reading and never past the pit-in point, then fades out there", () => {
+    let m = readPit(new Map(), [["119", 5430, 76, 0]], 0);
+    m = readPit(m, [["119", 5597, 36, 0]], 5000);
+    const car = m.get("119")!;
+    expect(car.v).toBeCloseTo(36 * 0.44704, 3);
+    expect(targetOf(car, 60_000, LEN)).toBe(5724);
+    for (let t = 5000; t < 40_000; t += 100) step(m, t + 100, 100, LEN);
+    expect(signedGap(m.get("119")!.shown, 5724, LEN)).toBeGreaterThanOrEqual(-1);
+    expect(visibility(m.get("119")!, 40_000, LEN)).toBeLessThan(0.05);
+  });
+
+  it("is not 'stopped' while waiting at the pit-in point for its flag", () => {
+    let m = readPit(new Map(), [["119", 5430, 76, 0]], 0);
+    m = readPit(m, [["119", 5700, 35, 0]], 5000);
+    expect(isStopped(m.get("119")!, 400_000, LEN)).toBe(false);
+  });
+
+  it("goes back to its pace when its next reading says it was not pitting after all", () => {
+    let m = readPit(new Map(), [["5", 5430, 76, 0]], 0);
+    m = readPit(m, [["5", 5560, 40, 0]], 5000);
+    expect(m.get("5")!.pitIn).toBe(5724);
+    m = readPit(m, [["5", 5690, 70, 0]], 10_000);
+    expect(m.get("5")!.pitIn).toBeNull();
+    expect(m.get("5")!.v).toBe(PACE);
+  });
+
+  it("a car new to the map fades in", () => {
+    const m = read(new Map(), [["1", 1000, null, 0]], 10_000);
+    expect(visibility(m.get("1")!, 10_000, LEN)).toBe(0);
+    expect(visibility(m.get("1")!, 10_000 + FADE_IN_MS / 2, LEN)).toBeCloseTo(0.5, 3);
+    expect(visibility(m.get("1")!, 10_000 + FADE_IN_MS, LEN)).toBe(1);
+    expect(PIT_FADE_M).toBeGreaterThan(0);
   });
 });

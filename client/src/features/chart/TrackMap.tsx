@@ -5,7 +5,23 @@ import { carKey, carNo } from "./car-number";
 import { getCompColor } from "./chart-renderer";
 import { RunningOrder, type PitVisit } from "./RunningOrder";
 import { TRACE } from "./constants";
-import { IN_PIT, NO_GPS, OFF_TRACK, STALE, isFrozen, isStopped, pointAt, signedGap, step, takeReading, type CarLaps, type CarMotion, type CarPlace } from "./track-motion";
+import {
+  IN_PIT,
+  NO_GPS,
+  OFF_TRACK,
+  STALE,
+  isFrozen,
+  isStopped,
+  pointAt,
+  signedGap,
+  step,
+  takeReading,
+  visibility,
+  type CarLaps,
+  type CarMotion,
+  type CarPlace,
+  type PitLane,
+} from "./track-motion";
 
 /** The circuit's outline from the server (metres; points ordered from the start/finish line). */
 interface TrackOutline {
@@ -36,6 +52,8 @@ const C = {
   offTrack: "#f97316",
   /** The ring round a stopped car. */
   stopped: "#ef4444",
+  /** The pit entry tag (the running order's blue P). */
+  pit: "#2563eb",
 };
 
 /**
@@ -70,6 +88,8 @@ export function TrackMap({
   const [trackMissing, setTrackMissing] = useState(false);
   const [readingAt, setReadingAt] = useState<number | null>(null);
   const [pits, setPits] = useState<string[]>([]);
+  /** The pit lane on the lap, once the server has learned it from the pit flags. */
+  const pitLane = useRef<PitLane | null>(null);
   const [unplaced, setUnplaced] = useState<string[]>([]);
   const [offTrack, setOffTrack] = useState<string[]>([]);
   const [pitVisits, setPitVisits] = useState<Map<number, PitVisit>>(() => new Map());
@@ -142,13 +162,24 @@ export function TrackMap({
     let alive = true;
     const load = () => {
       if (document.visibilityState !== "visible") return;
-      getPublic<{ ageMs: number; cars: CarPlace[] }>(`/live/${encodeURIComponent(slug)}/pos`)
+      getPublic<{ ageMs: number; cars: CarPlace[]; pit?: PitLane | null }>(`/live/${encodeURIComponent(slug)}/pos`)
         .then(({ body, edgeAgeMs }) => {
           if (!alive) return;
           const t = Date.now();
           const age = body.ageMs + edgeAgeMs;
           const onTrack = body.cars.filter((c) => !(c[3] & IN_PIT));
-          motions.current = takeReading(motions.current, onTrack, t, age, track.len, typicalSpeed, (n) => lapPaceRef.current.get(n) ?? null, cautionRef.current);
+          pitLane.current = body.pit ?? null;
+          motions.current = takeReading(
+            motions.current,
+            onTrack,
+            t,
+            age,
+            track.len,
+            typicalSpeed,
+            (n) => lapPaceRef.current.get(n) ?? null,
+            cautionRef.current,
+            pitLane.current
+          );
           setReadingAt(t - age);
           const inPit = body.cars.filter((c) => c[3] & IN_PIT).map((c) => c[0]);
           setPits(inPit);
@@ -227,6 +258,34 @@ export function TrackMap({
     ctx.lineTo(sx + Math.cos(ang) * 11, sy + Math.sin(ang) * 11);
     ctx.stroke();
 
+    // The pit entry: a PIT tag beside the track where the pit flag comes on, with the cars in the
+    // pits; pitting cars fade into it.
+    if (pitLane.current) {
+      const [ex, ey] = px(pointAt(track.pts, track.ds, track.len, pitLane.current.in));
+      const [fx, fy] = px(pointAt(track.pts, track.ds, track.len, pitLane.current.in + 20));
+      const a = Math.atan2(fy - ey, fx - ex) + Math.PI / 2;
+      const off = 22;
+      const lx = ex + Math.cos(a) * off;
+      const ly = ey + Math.sin(a) * off;
+      ctx.strokeStyle = C.pit;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ex + Math.cos(a) * 9, ey + Math.sin(a) * 9);
+      ctx.lineTo(lx - Math.cos(a) * 7, ly - Math.sin(a) * 7);
+      ctx.stroke();
+      const text = pits.length ? `PIT ${pits.length}` : "PIT";
+      ctx.font = "700 9px system-ui, sans-serif";
+      const w = ctx.measureText(text).width + 10;
+      ctx.fillStyle = C.pit;
+      ctx.beginPath();
+      ctx.roundRect(lx - w / 2, ly - 7, w, 14, 4);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, lx, ly + 0.5);
+    }
+
     // The cars: the rest, then compare cars, the overall leader, then the focus car on top.
     const t = Date.now();
     const dt = Math.min(100, t - lastFrame.current);
@@ -256,8 +315,11 @@ export function TrackMap({
       const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
       const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : d.leader ? C.leaderDot : C.dim;
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
-      if (d.leader) leaderAt = { x, y, r };
-      ctx.globalAlpha = d.other ? 0.3 : d.compared || d.focus || d.leader ? 1 : 0.7;
+      // Fading in onto the map, or out into the pit lane.
+      const vis = offTrack ? 1 : visibility(d.m, t, track.len);
+      if (vis < 0.02) continue;
+      if (d.leader && vis > 0.5) leaderAt = { x, y, r };
+      ctx.globalAlpha = (d.other ? 0.3 : d.compared || d.focus || d.leader ? 1 : 0.7) * vis;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       if (hollow) {
@@ -300,7 +362,7 @@ export function TrackMap({
         ctx.fillText(label, x, y + 0.5);
       }
       ctx.globalAlpha = 1;
-      hits.current.push({ key: d.key, x, y, r: Math.max(r, 10) });
+      if (vis > 0.5) hits.current.push({ key: d.key, x, y, r: Math.max(r, 10) });
     }
 
     // The overall leader: a gold ring round its dot and a P1 tag above it, on top of everything.
