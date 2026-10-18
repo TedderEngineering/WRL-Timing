@@ -7,9 +7,12 @@ import { Button } from "../components/Button";
 import { Alert } from "../components/Alert";
 import { peekPostAuthRedirect, clearPostAuthRedirect } from "../lib/postAuthRedirect";
 import { OAuthButtons, oauthMessage } from "../features/auth/OAuthButtons";
+import { takeSignedOutNotice } from "../lib/signedOutNotice";
+import { useState } from "react";
 
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
+  const [signedOutNotice] = useState(takeSignedOutNotice);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,6 +56,11 @@ export function LoginPage() {
       {oauthMessage(location.search) && (
         <div className="mb-5">
           <Alert variant="error">{oauthMessage(location.search)}</Alert>
+        </div>
+      )}
+      {signedOutNotice && (
+        <div className="mb-5">
+          <Alert variant="info">{signedOutNotice}</Alert>
         </div>
       )}
       <OAuthButtons next={from} />

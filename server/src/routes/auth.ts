@@ -83,7 +83,10 @@ authRouter.post("/refresh", async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const result = await authService.refresh(oldToken);
+    const result = await authService.refresh(oldToken, new Date(), {
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
 
     // A refresh inside the rotation grace window returns only an access token:
     // the browser already holds the newer cookie from the request that won.

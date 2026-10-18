@@ -14,7 +14,8 @@ export interface RefreshTokenPayload {
 }
 
 const ACCESS_TOKEN_EXPIRY = "15m";
-const REFRESH_TOKEN_EXPIRY = "7d";
+/** A session lasts 90 days from its last renewal: a race-weekend app is opened every week or few. */
+const REFRESH_TOKEN_EXPIRY = "90d";
 const EMAIL_VERIFY_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -60,8 +61,10 @@ export function getPasswordResetExpiry(): Date {
   return new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
 }
 
+export const REFRESH_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
+
 export function getRefreshTokenExpiry(): Date {
-  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  return new Date(Date.now() + REFRESH_LIFETIME_MS); // 90 days, renewed at every refresh
 }
 
 // ─── Refresh cookie ──────────────────────────────────────────────────────────
@@ -83,7 +86,7 @@ type SameSite = "none" | "lax";
 export const LEGACY_REFRESH_COOKIE = "refresh_token";
 const DOMAIN_REFRESH_COOKIE = "te_session";
 const REFRESH_COOKIE_PATH = "/api/auth";
-const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+const REFRESH_COOKIE_MAX_AGE = REFRESH_LIFETIME_MS;
 
 /** COOKIE_DOMAIN as a cookie Domain attribute, or null when unset or unusable. */
 export function cookieDomain(raw: string | undefined = env.COOKIE_DOMAIN): string | null {
