@@ -100,6 +100,22 @@ The validator (`validate-package`, rules V1–V8 and A1–A22; banned phrases in
 
 **Stop and ask the owner** when: a `blocker` is in `dataQuality`; two facts contradict each other; a value looks wrong against the source (give the fact id); a class has a car with no laps and no result; validation still fails after 3 rounds.
 
+## 3b. Stories on facts built by the GitHub workflow (WRL from RedMist, the race-weekend runs)
+
+RedMist (and the race-weekend imports) are reached only from the GitHub runner, which imports the race and uploads its facts as a draft package. To write the stories:
+
+1. `intake package <raceId>` reads the newest stored package into `intake-work/<slug>/analysis/package.json` (+ `race.json`).
+2. `npx tsx scripts/analysis.ts digest <run>/package.json --out <run>/digest`.
+3. Before writing, check the facts against the data (the stories would repeat any error):
+   - no pit cycle result spanning more than ~15 laps (`cycres:` beforeLap → afterLap);
+   - no pit passage over 2 laps that is not a garage visit;
+   - pit-lane times that are not plausible (a few seconds; tens of minutes on a 1-lap stop);
+   - `dataQuality` blockers and new warning codes.
+   If any of these show up, do not write over them: report the fact ids to the owner (an engine fix may be needed).
+4. Write the patches following `WRITING_GUIDE.md` (this folder), whole race, class by class; then `npx tsx scripts/analysis.ts merge <run>/package.json <run>/patches --out <run>/draft.json` until PASS, and `intake validate <run>/draft.json`.
+5. Read the summary and a handful of stories (winners, retirements, penalties): no gendered pronouns, no "unofficial", no timing company names, no make names when makes are TBD.
+6. `intake upload <raceId> <run>/draft.json --notes "…"`: a DRAFT version. Never publish.
+
 ## 4. Report to the owner
 
 End with one table and at most 5 lines of notes:
