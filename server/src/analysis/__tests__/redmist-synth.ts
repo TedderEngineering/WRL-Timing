@@ -51,6 +51,8 @@ interface CarSpec {
   lip: number[];
   ip: number[];
   driver: (lap: number) => string;
+  /** Laps run (default 20). */
+  laps?: number;
 }
 
 export const RM_CARS: CarSpec[] = [
@@ -71,15 +73,28 @@ export function crossing(c: CarSpec, lap: number): number {
 /** Car 3's extra out-lap time with { garage: true }. */
 export const RM_GARAGE_EXTRA_S = 1300;
 
-export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean } = {}): InputFile[] {
+/** { dtReissued: true }: car 1's drive-through, issued at race clock 1740 and served in its lap-18 visit. */
+export const RM_DT_ISSUED = "09:29:00";
+
+export function redmistFiles(
+  opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean; lateJoin?: boolean; dtReissued?: boolean; retireInPit?: boolean } = {},
+): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
   let cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
   // { stuckFlags: true }: car 2's "in pit lane at the line" flag stays set from its stop (lap 12) to
   // lap 18 while it laps at racing pace again (Sebring Sunday 2026, #48).
   if (opts.stuckFlags) cars = cars.map((c) => (c.car === "2" ? { ...c, ip: [12, 13, 14, 15, 16, 17, 18], lip: [12, 13, 14, 15, 16, 17, 18] } : c));
+  // { lateJoin: true }: car 6 joins from the garage 1000 s after the start and runs 10 laps (Sebring 2026 #290).
+  if (opts.lateJoin) cars = [...cars, { car: "6", cls: "GP1", team: "Foxtrot Racing", grid: 1000, extra: {}, lip: [], ip: [], driver: () => "Gus Gray", laps: 10 }];
+  // { dtReissued: true }: car 1's second visit (laps 18-19) holds a stop and the drive-through race
+  // control issued just before; the equipment reissued the entry, so the report times only the
+  // last 15 s (Sebring 2026 #696).
+  if (opts.dtReissued) cars = cars.map((c) => (c.car === "1" ? { ...c, extra: { ...c.extra, 18: 25, 19: 110 }, lip: [...c.lip, 18, 19], ip: [...c.ip, 18] } : c));
+  // { retireInPit: true }: car 4 comes in on lap 14 and stays; laps 15-16 are counted in the pit lane (Sebring 2026 #260).
+  if (opts.retireInPit) cars = cars.map((c) => (c.car === "4" ? { ...c, extra: { ...c.extra, 15: 100, 16: 100 }, lip: [...c.lip, 14, 15, 16], ip: [...c.ip, 14, 15, 16], laps: 16 } : c));
   const laps: Record<string, unknown>[] = [];
   for (const c of cars) {
-    for (let lap = 1; lap <= 20; lap++) {
+    for (let lap = 1; lap <= (c.laps ?? 20); lap++) {
       const end = crossing(c, lap);
       laps.push({
         eid: "9",
@@ -133,6 +148,9 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: b
       ...(opts.phantom
         ? [{ carNumber: "1", stopNumber: 2, startLap: 15, endLap: 15, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 5000, pitDuration: "0:05.000", driverBefore: "Bob Baker", driverAfter: "Bob Baker", driverChanged: false }]
         : []),
+      ...(opts.dtReissued
+        ? [{ carNumber: "1", stopNumber: 2, startLap: 18, endLap: 19, pitEntryTime: `${local(crossing(cars[0], 18) + 60)}-05:00`, pitExitTime: `${local(crossing(cars[0], 18) + 75)}-05:00`, pitEntryTimeUnavailable: false, pitEntryTimeRenumbered: true, pitDurationMs: 15000, pitDuration: "0:15.000", driverBefore: "Bob Baker", driverAfter: "Bob Baker", driverChanged: false }]
+        : []),
       ...(opts.garage
         ? [{ carNumber: "3", stopNumber: 1, startLap: 15, endLap: 16, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Dan Drew", driverAfter: "Dan Drew", driverChanged: false }]
         : []),
@@ -149,7 +167,7 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: b
     sessionStartTime: "0001-01-01T00:00:00",
     localTimeZoneOffset: 0,
     eventEntries: cars.map((c) => ({ no: c.car, nm: c.team, t: "Sponsor Co", c: c.cls })),
-    carPositions: cars.map((c, i) => ({ n: c.car, class: c.cls, ovp: i + 1, clp: c.cls === "GTO" ? i + 1 : i - 1, llp: 20, bt: "00:01:40.000", bl: 2, ttm: hms(crossing(c, 20)) })),
+    carPositions: cars.map((c, i) => ({ n: c.car, class: c.cls, ovp: i + 1, clp: c.cls === "GTO" ? i + 1 : i - 1, llp: c.laps ?? 20, bt: "00:01:40.000", bl: 2, ttm: hms(crossing(c, c.laps ?? 20)) })),
     classOrder: { GTO: "1", GP1: "2" },
   };
   const flagsDoc = [
@@ -171,6 +189,8 @@ export function redmistFiles(opts: { pits?: boolean; prefix?: string; garage?: b
     { o: 6, t: `${RM_DATE}T04:15:00`, cor: "2", c1: "2", c1h: false, c2: "5", c2h: false, n: "Contact", s: "Under Investigation", a: null },
     { o: 7, t: `${RM_DATE}T09:27:00`, cor: null, c1: null, c1h: false, c2: null, c2h: false, n: "GREEN FLAG", s: null, a: null },
   ];
+  if (opts.dtReissued)
+    control.push({ o: 8, t: `${RM_DATE}T${RM_DT_ISSUED}`, cor: "PR", c1: "1", c1h: false, c2: null, c2h: false, n: "PIT LANE/FUELING INFRACTION", s: "FINAL", a: "DRIVE THROUGH" });
   const out = [textFile(`${pre}_laps.json`, "laps", JSON.stringify(lapsDoc))];
   if (opts.pits !== false) out.push(textFile(`${pre}_pits.json`, "pit_cards_json", JSON.stringify(pitsDoc)));
   out.push(textFile(`${pre}_results.json`, "results", JSON.stringify(resultsDoc)));

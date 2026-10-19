@@ -204,6 +204,11 @@ export function buildResults(ctx: Ctx, passages: Passage[]): ResultsOut {
       confidence: rp ? "high" : "medium",
     };
     if (!rp) r.confidenceNotes = ["retirement_location_unknown"];
+    // Crossings after the car came in, all made in the pit lane (Sebring 2026 #260: in on lap 43,
+    // laps 44-47 counted in the pit lane): the results count them, the car's last lap on track is earlier.
+    else if (rp.inIdx !== null && rp.inIdx < rows.length - 1 && rows.slice(rp.inIdx + 1).every((x) => x.crossedInPit || x.inPit)) {
+      r.confidenceNotes = ["laps_counted_in_pit_lane_after_retirement"];
+    }
     retirements.push(r);
   }
   return { entries, retirements, resultsStatus: status, tookFlag };

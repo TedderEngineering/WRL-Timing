@@ -358,3 +358,41 @@ describe("RedMist race without time-of-day sources", () => {
     expect(pkg.events.pitPassages.map((p) => p.inLap)).toEqual([6, 12, 15, 9]);
   });
 });
+
+describe("Sebring 2026 follow-ups (engine 1.2.8)", () => {
+  it("a car that joined late starts its first stint with its first lap, not the green flag (#290)", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ lateJoin: true }), options: OPTS });
+    const s = pkg.stints.find((x: any) => x.id === "stint:6:1") as any;
+    expect(s.startReason).toBe("pit_lane_start");
+    expect(s.confidenceNotes).toContain("late_join_first_lap_start");
+    // 10 laps of 100 s, not 1000 s of waiting plus the laps.
+    expect(s.driveTimeS).toBeCloseTo(1000, 0);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("links a drive-through served in a visit whose entry was reissued, and keeps the stop (#696)", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ dtReissued: true }), options: OPTS });
+    const pen = pkg.events.penalties.find((x: any) => x.car === "1" && x.penaltyType === "drive_through") as any;
+    expect(pen).toBeTruthy();
+    const p = pkg.events.pitPassages.find((x: any) => x.id === pen.servedByPassageId) as any;
+    expect(p).toMatchObject({ car: "1", kind: "stop" });
+    expect(p.confidenceNotes).toContain("drive_through_in_reissued_visit");
+    expect(pen.confidence).toBe("medium");
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("notes laps the results count in the pit lane after the car came in to retire (#260)", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ retireInPit: true }), options: OPTS });
+    const r = pkg.events.retirements.find((x: any) => x.car === "4") as any;
+    expect(r.lastCompletedLap).toBe(16);
+    expect(r.confidenceNotes).toContain("laps_counted_in_pit_lane_after_retirement");
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("leaves the other cars as they were", () => {
+    const plain = buildFacts({ format: "redmist", files: redmistFiles(), options: OPTS });
+    const late = buildFacts({ format: "redmist", files: redmistFiles({ lateJoin: true }), options: OPTS });
+    const pick = (pkg: any) => pkg.stints.filter((x: any) => x.car !== "6").map((x: any) => [x.id, x.startReason, x.driveTimeS]);
+    expect(pick(late)).toEqual(pick(plain));
+  });
+});
