@@ -377,6 +377,8 @@ describe("Sebring 2026 follow-ups (engine 1.2.8)", () => {
     const p = pkg.events.pitPassages.find((x: any) => x.id === pen.servedByPassageId) as any;
     expect(p).toMatchObject({ car: "1", kind: "stop" });
     expect(p.confidenceNotes).toContain("drive_through_in_reissued_visit");
+    // The 15 s is only the last entry to the exit: not shown as the visit's pit-lane time (1.2.10).
+    expect(p.officialPitLaneTimeS).toBeNull();
     expect(pen.confidence).toBe("medium");
     expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
   });
@@ -414,5 +416,16 @@ describe("RedMist pit report rows too short for a visit (engine 1.2.9)", () => {
     const p = pkg.events.pitPassages.find((e: any) => e.car === "2" && e.inLap === 12) as any;
     expect(p.officialPitLaneTimeS).toBe(88);
     expect(p.confidenceNotes ?? []).not.toContain("pit_report_rows_merged");
+  });
+});
+
+describe("RedMist lap records that name the new driver late (engine 1.2.10)", () => {
+  it("gives the out-lap to the driver the stop changed to, with no one-lap stint", () => {
+    const plain = buildFacts({ format: "redmist", files: redmistFiles(), options: OPTS });
+    const lag = buildFacts({ format: "redmist", files: redmistFiles({ lagDriver: true }), options: OPTS });
+    const pick = (pkg: any) => pkg.stints.filter((x: any) => x.car === "1").map((x: any) => [x.startLap, x.endLap, x.driver]);
+    expect(pick(lag)).toEqual(pick(plain));
+    expect(lag.stints.filter((x: any) => x.car === "1").some((x: any) => (x.confidenceNotes ?? []).includes("driver_change_without_stop"))).toBe(false);
+    expect(lag.dataQuality.some((q: any) => q.code === "DRIVER-CHANGE-NO-STOP")).toBe(false);
   });
 });

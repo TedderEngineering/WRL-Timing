@@ -14,6 +14,8 @@ const SERVICE = new Set(["stop", "garage", "retirement"]);
  * pit lane, Sebring 2026 #290): its first stint starts with that lap, not at the green flag.
  */
 export const LATE_JOIN_S = 300;
+/** How many laps after a driver-change stop the lap records may still name the old driver. */
+export const LAG_LAPS = 2;
 const PENALTY = new Set(["drive_through", "stop_and_go", "penalty_served"]);
 
 
@@ -39,11 +41,13 @@ export function buildStints(
     const lapBasedCar = wrl || plist.some((p) => SERVICE.has(p.kind) && lapBased(p));
     const pinOf = (p: Passage) => (lapBased(p) ? rows[p.inIdx ?? 0].endT : p.pinT ?? p.sortT);
     const poutOf = (p: Passage) => (lapBased(p) ? rows[p.inIdx ?? 0].endT : p.poutT ?? p.rejoinT ?? p.sortT);
-    type Seg = { a: number; b: number; sr: Stint["startReason"]; er: Stint["endReason"]; i0: number; i1: number };
+    // The stint a passage starts: its driver change, when the passage names one (in and out drivers).
+    type Seg = { a: number; b: number; sr: Stint["startReason"]; er: Stint["endReason"]; i0: number; i1: number; from?: Passage };
     const segs: Seg[] = [];
     let a = ctx.axis.origin;
     let sr: Stint["startReason"] = "race_start";
     let i0 = 0;
+    let from: Passage | undefined;
     const pls = plist.find((p) => p.kind === "pit_lane_start");
     let lateJoin = false;
     if (pls) {
@@ -60,30 +64,39 @@ export function buildStints(
       if (!SERVICE.has(p.kind) && !heldChange) continue;
       const endIdx = p.inIdx ?? rows.length - 1;
       if (p.kind === "retirement") {
-        segs.push({ a, b: p.pinT ?? rows[endIdx].endT, sr, er: "retired", i0, i1: endIdx });
+        segs.push({ a, b: p.pinT ?? rows[endIdx].endT, sr, er: "retired", i0, i1: endIdx, ...(from ? { from } : {}) });
         i0 = -1;
         break;
       }
       if (p.outcome !== "rejoined" || p.outIdx === null) {
-        segs.push({ a, b: pinOf(p), sr, er: "chequered", i0, i1: endIdx });
+        segs.push({ a, b: pinOf(p), sr, er: "chequered", i0, i1: endIdx, ...(from ? { from } : {}) });
         i0 = -1;
         break;
       }
-      segs.push({ a, b: pinOf(p), sr, er: "pit_in", i0, i1: endIdx });
+      segs.push({ a, b: pinOf(p), sr, er: "pit_in", i0, i1: endIdx, ...(from ? { from } : {}) });
       a = poutOf(p);
       sr = "pit_out";
       i0 = p.outIdx;
+      from = p;
     }
-    if (i0 >= 0) segs.push({ a, b: rows[rows.length - 1].endT, sr, er: tookFlag ? "chequered" : "retired", i0, i1: rows.length - 1 });
+    if (i0 >= 0) segs.push({ a, b: rows[rows.length - 1].endT, sr, er: tookFlag ? "chequered" : "retired", i0, i1: rows.length - 1, ...(from ? { from } : {}) });
 
     const perDriver = new Map<number, { ids: string[]; t: number }>();
     const changeLaps: string[] = [];
     let n = 0;
+    const entryDrivers = ctx.race.entries.find((e) => e.car === car)?.drivers ?? [];
     for (const s of segs) {
+      // The stop's driver change, when it names one. The lap records' driver can lag it by a lap or
+      // two (the transponder reads the new driver late: Sebring Sunday 2026 #120, out-lap 118 still
+      // the old driver): those first laps are the new driver's, not a stint of their own.
+      const dIn = s.from ? (s.from.inDriverNumber ?? matchDriver(s.from.inDriverName, entryDrivers)) : null;
+      const dOut = s.from ? (s.from.outDriverNumber ?? matchDriver(s.from.outDriverName, entryDrivers)) : null;
+      const lagging = dIn !== null && dOut !== null && dIn !== dOut && rows.slice(s.i0, Math.min(s.i1, s.i0 + LAG_LAPS) + 1).some((r) => r.driver === dOut);
+      const driverAt = (i: number) => (lagging && i <= s.i0 + LAG_LAPS - 1 && rows[i].driver === dIn ? dOut : rows[i].driver);
       // split at driver changes inside a stint (warning)
       const parts: { i0: number; i1: number; driver: number | null }[] = [];
       for (let i = s.i0; i <= s.i1; i++) {
-        const d = rows[i].driver;
+        const d = driverAt(i);
         const last = parts[parts.length - 1];
         if (last && (last.driver === d || d === null || last.driver === null)) {
           last.i1 = i;
