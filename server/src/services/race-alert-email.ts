@@ -4,7 +4,9 @@
  * stops, places over the pit cycles), who drove when with each stint's average, and the pit cycles
  * one row each, numbered the car's own way. For a followed driver, their own drive comes first.
  *
- * Email clients: tables and inline styles only, no images, no web fonts, a light background.
+ * Email clients: tables and inline styles only, no images, no web fonts. The colours are RaceTrace's
+ * own dark theme (client styles/globals.css .dark), set with bgcolor as well as CSS so clients that
+ * drop CSS backgrounds keep them, and marked dark-only so mail apps don't re-colour it.
  * Facts only, as on the card.
  */
 import type { CarFacts } from "../dashboard/my-car.js";
@@ -12,15 +14,18 @@ import type { CarDrive, DriverFacts } from "../dashboard/my-driver.js";
 import { displayName } from "./driver-search.js";
 import { escapeHtml } from "./email.js";
 
+// RaceTrace's dark theme (--rt-* in client/src/styles/globals.css).
+const BG = "#0b0b18";
+const SURFACE = "#12122a";
 const ACCENT = "#F48C34";
-const TEXT = "#1b1b28";
-const SOFT = "#444455";
-const MUTED = "#6b6b80";
-const LINE = "#e3e3ea";
-const GOOD = "#0a7f0a";
-const BAD = "#c0392b";
-/** Each driver's colour in the stint bar, in the order they first drove (light background). */
-const DRIVER_COLORS = ["#F48C34", "#2a78d6", "#7c3aed", "#0d9488", "#6b6b80"];
+const TEXT = "#e0e0e8";
+const SOFT = "#cbd5e1";
+const MUTED = "#9a9ab4";
+const LINE = "#1e1e38";
+const GOOD = "#4ade80";
+const BAD = "#e66767";
+/** Each driver's colour in the stint bar, in the order they first drove (as the car card). */
+const DRIVER_COLORS = ["#F48C34", "#7aa2ff", "#a78bfa", "#2dd4bf", "#9a9ab4"];
 const ORDINAL = ["", "fastest", "2nd fastest", "3rd fastest"];
 const QUICKEST = ["", "Quickest", "2nd quickest", "3rd quickest"];
 
@@ -131,7 +136,7 @@ export function alertEmailHtml(p: AlertEmail): string {
     const share = dd.carTimeS > 0 ? ` · ${Math.round((dd.driveTimeS / dd.carTimeS) * 100)}%` : "";
     const my = dd.stints.filter((s) => s.mine);
     const avgs = my.filter((s) => s.avgLapS).map((s) => `laps ${s.start}–${s.end} <b style="font-family: Menlo, Consolas, monospace; color: ${TEXT};">${lapTime(s.avgLapS!)}</b>`);
-    parts.push(`<div style="border: 1px solid ${LINE}; border-radius: 10px; padding: 14px 16px; margin: 0 0 12px;">
+    parts.push(`<div style="border: 1px solid ${LINE}; border-radius: 10px; padding: 14px 16px; margin: 0 0 12px; background: ${SURFACE};">
         ${label(`${first}'s drive`)}
         ${stats([
           { value: e(driveTime(dd.driveTimeS)), sub: `drive time${share}` },
@@ -193,7 +198,7 @@ export function alertEmailHtml(p: AlertEmail): string {
   } else if (drive) {
     raceBox.push(`<p style="margin: 12px 0 0; font-size: 12px; color: ${MUTED};">This race's timing doesn't say who drove when.</p>`);
   }
-  parts.push(`<div style="border: 1px solid ${LINE}; border-radius: 10px; padding: 14px 16px; margin: 0 0 16px;">${raceBox.join("")}</div>`);
+  parts.push(`<div style="border: 1px solid ${LINE}; border-radius: 10px; padding: 14px 16px; margin: 0 0 16px; background: ${SURFACE};">${raceBox.join("")}</div>`);
 
   // The pit cycles, one row each.
   if (cycles.length) {
@@ -218,17 +223,24 @@ export function alertEmailHtml(p: AlertEmail): string {
       </table>`);
   }
 
-  return `
-    <div style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; color: ${TEXT};">
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark only"><meta name="supported-color-schemes" content="dark only">
+<style>:root { color-scheme: dark only; } a { color: ${ACCENT}; }</style></head>
+<body style="margin: 0; padding: 0; background: ${BG};" bgcolor="${BG}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BG}" style="background: ${BG}; border-collapse: collapse;"><tr><td align="center" style="padding: 24px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BG}" style="max-width: 560px; background: ${BG}; border-collapse: collapse;"><tr><td style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; color: ${TEXT}; text-align: left;">
       <p style="margin: 0 0 4px; font-size: 13px; color: ${MUTED};">RaceTrace · ${p.kicker}</p>
-      <h2 style="margin: 0 0 6px; font-size: 20px; line-height: 1.3;">${e(p.subject)}</h2>
+      <h2 style="margin: 0 0 6px; font-size: 20px; line-height: 1.3; color: ${TEXT};">${e(p.subject)}</h2>
       <p style="margin: 0 0 14px; font-size: 14px; color: ${SOFT};">${e(p.raceName)} · ${e(date)}</p>
       ${parts.join("\n")}
-      <a href="${p.raceUrl}" style="display: inline-block; background: ${ACCENT}; color: #fff; padding: 11px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Open the race</a>
-      <p style="margin: 24px 0 0; color: #888; font-size: 12px; line-height: 1.5;">
+      <a href="${p.raceUrl}" style="display: inline-block; background: ${ACCENT}; color: ${BG}; padding: 11px 20px; border-radius: 8px; text-decoration: none; font-weight: 700;">Open the race</a>
+      <p style="margin: 24px 0 0; color: ${MUTED}; font-size: 12px; line-height: 1.5;">
         You get this because you follow ${p.driverName ? e(p.driverName) : `#${e(f.number)}`} on RaceTrace and turned on race emails.
-        <a href="${p.unsubscribeUrl}" style="color: #888;">Turn these emails off</a> ·
-        <a href="${p.settingsUrl}" style="color: #888;">${p.driverName ? "My drivers" : "My cars"}</a>
+        <a href="${p.unsubscribeUrl}" style="color: ${MUTED};">Turn these emails off</a> ·
+        <a href="${p.settingsUrl}" style="color: ${MUTED};">${p.driverName ? "My drivers" : "My cars"}</a>
       </p>
-    </div>`;
+  </td></tr></table>
+</td></tr></table>
+</body></html>`;
 }
