@@ -137,7 +137,7 @@ function CarDriversInApp({
                   {drive.best ? ` · best ${formatDuration(drive.best.sec)}` : ""}
                 </div>
               )}
-              {raceId && <ShareRaceDriverCard raceId={raceId} carNumber={car.label ?? String(focusNum)} driver={n} chart={data} />}
+              {raceId && <ShareRaceDriverCard raceId={raceId} carNumber={car.label ?? String(focusNum)} driver={n} chart={data} annotations={annotations} />}
             </div>
             <button
               type="button"

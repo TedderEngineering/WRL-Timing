@@ -60,6 +60,13 @@ export interface PitCycleResult {
   before: number;
   after: number;
   net: number;
+  /** The car's stop in this cycle (its in-lap), when one is found. */
+  stopLap?: number | null;
+  /** The stop was a drive-through, or made under a caution. */
+  driveThrough?: boolean;
+  caution?: boolean;
+  /** The stop's time lost ranked against the class's stops in the same pit cycle, when in the top three of three or more. */
+  quickest?: { rank: number; of: number } | null;
 }
 
 export interface CarFacts {
@@ -135,6 +142,9 @@ export function classPitCycles(laps: LapRow[], settles: Settle[]): PitCycleResul
   return out;
 }
 
+/** "Quickest stop of 7 in GTO, lap 63" (the class's same pit cycle): the stop's lap, not a class cycle number the card doesn't show. */
+const QUICKEST = ["", "Quickest", "2nd quickest", "3rd quickest"];
+
 const ordinal = (n: number) =>
   `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
 
@@ -150,6 +160,34 @@ function rankableLoss(p: PitMarker): number | null {
 
 function stopsWithTiming(ann: Annotations | null, key: string): PitMarker[] {
   return [...(ann?.[key]?.pits ?? [])].filter((p) => p.pitTiming).sort((a, b) => a.l - b.l);
+}
+
+/**
+ * Each pit cycle's stop: the car's last stop before the cycle settled (and after the previous
+ * one), whether it was a drive-through or under a caution, and how its time lost ranked in the
+ * class's same pit cycle (top three of three or more only, as the benchmarks).
+ */
+export function withStops(data: ChartData, ann: Annotations | null, key: string, cycles: PitCycleResult[]): PitCycleResult[] {
+  const car = data.cars[key];
+  const pitLaps = car.laps.filter((l) => l.pit === 1).map((l) => l.l);
+  const markers = stopsWithTiming(ann, key);
+  const classKeys = Object.keys(data.cars).filter((k) => k !== key && data.cars[k].cls === car.cls);
+  const others = classKeys.map((k) => stopsWithTiming(ann, k));
+  return cycles.map((c, i) => {
+    const after = i > 0 ? cycles[i - 1].lap : 0;
+    const stopLap = [...pitLaps].reverse().find((l) => l < c.lap && l > after) ?? null;
+    if (stopLap === null) return { ...c, stopLap: null, quickest: null };
+    const m = markers.find((p) => p.l === stopLap);
+    const t = m?.pitTiming;
+    let quickest: PitCycleResult["quickest"] = null;
+    const loss = m ? rankableLoss(m) : null;
+    if (m?.cycle && loss !== null) {
+      const field = [loss, ...others.map((o) => o.find((p) => p.cycle?.id === m.cycle!.id)).map((p) => (p ? rankableLoss(p) : null)).filter((v): v is number => typeof v === "number")];
+      const rank = field.filter((v) => v < loss).length + 1;
+      if (field.length >= 3 && rank <= 3) quickest = { rank, of: field.length };
+    }
+    return { ...c, stopLap, driveThrough: !!t?.isDriveThrough, caution: !!t?.context && t.context !== "green", quickest };
+  });
 }
 
 export function classBenchmarks(data: ChartData, ann: Annotations | null, key: string, cycles: PitCycleResult[]): string[] {
@@ -170,7 +208,7 @@ export function classBenchmarks(data: ChartData, ann: Annotations | null, key: s
       .filter((v): v is number => typeof v === "number");
     const rank = rankOf(loss, field);
     if (field.length >= 3 && rank <= 3) {
-      out.push(`Pit loss ${ordinal(rank)} of ${field.length} in ${cycle ? `${car.cls} pit cycle ${cycle.ordinal}` : `${car.cls}'s ${ordinal(i + 1)} stops`}`);
+      out.push(`${QUICKEST[rank]} stop of ${field.length} in ${car.cls}${cycle ? "" : `'s ${ordinal(i + 1)} stops`}, lap ${stop.l}`);
     }
   });
 
@@ -222,7 +260,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     bestLapClassRank = rank <= 3 ? rank : null;
   }
 
-  const pitCycles = classPitCycles(car.laps, ann?.[key]?.settles ?? []);
+  const pitCycles = withStops(data, ann, key, classPitCycles(car.laps, ann?.[key]?.settles ?? []));
   const finished = tookFlag(data, car, status);
   return {
     carKey: key,

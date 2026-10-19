@@ -136,3 +136,37 @@ export function driverFacts(
     bestRank,
   };
 }
+
+export interface CarStint {
+  start: number;
+  end: number;
+  driver: string | null;
+  avgLapS: number | null;
+  avgLaps: number;
+}
+
+export interface CarDrive {
+  /** False when the timing doesn't say who drove when. */
+  known: boolean;
+  stints: CarStint[];
+  /** Each named driver, in the order they first drove: laps, stints and time at the wheel. */
+  drivers: { name: string; stints: number; laps: number; driveTimeS: number; bestLap: { sec: number; lap: number } | null }[];
+  carTimeS: number;
+}
+
+/** The whole car's stints and drivers (the car card): the same stints as a driver's card, every driver at once. */
+export function carDrive(car: { laps: LapRow[] }, pits: PitRow[] | undefined, entryDrivers: string[]): CarDrive {
+  const sole = entryDrivers.length === 1 ? entryDrivers[0] : null;
+  const avg = stintAverage(car.laps);
+  const stints = stintsOf(car.laps, pits ?? [], sole, entryDrivers).map((s) => ({ ...s, ...avg(s) }));
+  const known = stints.some((s) => s.driver);
+  const sum = (ls: LapRow[]) => ls.reduce((t, l) => t + (l.ltSec > 0 ? l.ltSec : 0), 0);
+  const names: string[] = [];
+  for (const s of stints) if (s.driver && !names.some((n) => sameDriver(n, s.driver!))) names.push(s.driver);
+  const drivers = names.map((name) => {
+    const own = stints.filter((s) => s.driver && sameDriver(s.driver, name));
+    const laps = car.laps.filter((l) => own.some((s) => l.l >= s.start && l.l <= s.end));
+    return { name, stints: own.length, laps: laps.length, driveTimeS: Math.round(sum(laps)), bestLap: bestOf(laps) };
+  });
+  return { known, stints, drivers, carTimeS: Math.round(sum(car.laps)) };
+}

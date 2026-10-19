@@ -6,7 +6,7 @@
  *   subtitle  "Pilot Challenge — VIR · Oct 10, 2026"
  *   body      the car's class position lap by lap against its class (a small position trace),
  *             its pit stops marked, then its finish and pit cycles as facts
- *   fact      its best class benchmark ("Pit loss 1st of 24 in GS's 2nd stops"), in good colour
+ *   fact      its best class benchmark ("Quickest stop of 7 in GTO · lap 63"), in good colour
  *
  * Facts only, as on the page; nothing about how other cars did beyond the trace itself.
  */
@@ -108,7 +108,7 @@ export function makeRaceCarCard(data: RaceChartData, annotations: AnnotationData
     title,
     subtitle,
     body: (ctx, box, style) => drawRaceCarBody(ctx, box, style, data, annotations, carNum),
-    fact: best ? { text: best.text, tone: "good" } : undefined,
+    fact: best ? { text: best.at ? `${best.text} · ${best.at}` : best.text, tone: "good" } : undefined,
   });
 }
 

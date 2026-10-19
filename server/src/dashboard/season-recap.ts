@@ -125,7 +125,7 @@ export function buildRecap(
     classWins: rows.filter((r) => r.f.finishClass === 1).length,
     podiums: rows.filter((r) => r.f.finishClass !== null && r.f.finishClass <= 3).length,
     pitCycles: { count: cycles.length, gained: gained > 0 ? gained : null },
-    topThreePitStops: rows.reduce((a, r) => a + r.f.benchmarks.filter((b) => b.startsWith("Pit loss")).length, 0),
+    topThreePitStops: rows.reduce((a, r) => a + r.f.benchmarks.filter((b) => / stop of \d+ in /.test(b)).length, 0),
     topThreeFastestLaps: rows.filter((r) => r.f.benchmarks.some((b) => b.startsWith("Fastest lap"))).length,
     raceList: rows.map(({ race, f }) => ({
       id: race.id,

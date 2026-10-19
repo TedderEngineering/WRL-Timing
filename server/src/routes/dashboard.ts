@@ -18,11 +18,13 @@ import { withPitFacts } from "../packages/race-pit-facts.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../dashboard/latest.js";
 import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
-import { cardCar, driverCardData } from "../dashboard/driver-card.js";
+import { cardCar, driverCardData, entryDrivers } from "../dashboard/driver-card.js";
+import { carDrive } from "../dashboard/my-driver.js";
+import { displayName } from "../services/driver-search.js";
 import { listDrivers, racesForDriver, type DriverRaceRow } from "../services/my-drivers.js";
 import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
 import { LIVE_SCHEDULE } from "../live/schedule.js";
-import { carMatchesEntry, entryForCar, listCars } from "../services/my-cars.js";
+import { entryForCar, listCars } from "../services/my-cars.js";
 import { getRaceAlerts } from "../services/race-alerts.js";
 import { normCar } from "../intake/reimport.js";
 import { availableSeasons, buildSeason, calendarFor, locateRace, nextSessionFor, roundScheduleOver, type SeasonRace } from "../dashboard/season.js";
@@ -239,6 +241,9 @@ dashboardRouter.get("/season", requireAuth, async (req: Request, res: Response, 
 
 // ─── GET /api/dashboard/my-car — "Your car's latest race" (engagement plan C) ──
 
+/** How many of the car's races the card lists to pick from (the newest first). */
+const CAR_RECENT_OF = 12;
+
 dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.userId;
@@ -248,40 +253,61 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       return;
     }
     // The user's cars, for the dashboard's car tabs; ?car=<id> shows that car's latest race,
-    // otherwise the newest race of any of them.
+    // otherwise the newest race of any of them; ?race=<id> one of that car's earlier races.
     const carList = cars.map((c) => ({ id: c.id, number: c.number, label: c.label, series: c.series, teamName: c.teamName }));
     const chosen = typeof req.query.car === "string" ? cars.find((c) => c.id === req.query.car) ?? null : null;
-    const pool = chosen ? [chosen] : cars;
-    // Candidate numbers as stored ("7" and "007" are one car).
-    const numbers = [...new Set(pool.flatMap((c) => [c.number, normCar(c.number)]))];
-    const candidates = (await prisma.race.findMany({
-      where: { status: "PUBLISHED", entries: { some: { carNumber: { in: numbers } } } },
-      orderBy: [{ date: "desc" }, { name: "asc" }],
-      take: 40,
-      select: {
-        id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true,
-        premium: true, createdAt: true, currentPackageId: true, packagesDisabled: true, resultsStatus: true,
-        entries: { where: { carNumber: { in: numbers } }, select: { carNumber: true, teamName: true } },
-      },
-    })) as any[];
-
-    let hit: { race: any; car: (typeof cars)[number]; carNumber: string } | null = null;
-    for (const race of candidates) {
-      for (const e of race.entries) {
-        const car = pool.find((c) => carMatchesEntry(c, race, e));
-        if (car) {
-          hit = { race, car, carNumber: e.carNumber };
-          break;
+    const raceSelect = {
+      id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true,
+      premium: true, createdAt: true, currentPackageId: true, packagesDisabled: true, resultsStatus: true,
+    };
+    // A pool's races, newest first, each with the pool car it is and that car's entry.
+    const racesOf = async (pool: typeof cars, take: number) => {
+      // Candidate numbers as stored ("7" and "007" are one car).
+      const numbers = [...new Set(pool.flatMap((c) => [c.number, normCar(c.number)]))];
+      const rows = (await prisma.race.findMany({
+        where: { status: "PUBLISHED", entries: { some: { carNumber: { in: numbers } } } },
+        orderBy: [{ date: "desc" }, { name: "asc" }],
+        take,
+        select: {
+          ...raceSelect,
+          entries: {
+            where: { carNumber: { in: numbers } },
+            select: { carNumber: true, teamName: true, carClass: true, driverNames: true, finishPos: true, finishPosClass: true },
+          },
+        },
+      })) as any[];
+      const out: { race: any; car: (typeof cars)[number]; entry: any }[] = [];
+      for (const race of rows) {
+        for (const car of pool) {
+          const entry = entryForCar(car, race, race.entries);
+          if (entry) {
+            out.push({ race, car, entry });
+            break;
+          }
         }
       }
-      if (hit) break;
-    }
-    if (!hit) {
+      return out;
+    };
+
+    const first = (await racesOf(chosen ? [chosen] : cars, 40))[0];
+    if (!first) {
       res.json({ carCount: cars.length, car: chosen ?? cars[0], race: null, alerts, cars: carList });
       return;
     }
+    // The car's own races, for the list under the card.
+    const own = (await racesOf([first.car], 60)).filter((h) => h.car.id === first.car.id);
+    const recent = own.slice(0, CAR_RECENT_OF).map(({ race, entry }) => ({
+      raceId: race.id, raceName: race.name, date: race.date.toISOString().slice(0, 10), track: race.track,
+      series: race.series, subSeries: race.subSeries ?? null, carNumber: entry.carNumber, carClass: entry.carClass,
+      finishPos: entry.finishPos ?? null, finishPosClass: entry.finishPosClass ?? null,
+    }));
+    const asked = typeof req.query.race === "string" ? own.find((h) => h.race.id === req.query.race) ?? null : null;
+    const hit = asked ?? first;
+    const isLatest = hit.race.id === (own[0] ?? first).race.id;
+    const base = { carCount: cars.length, alerts, cars: carList, recent, totalRaces: own.length, isLatest };
 
-    const { race, car, carNumber } = hit;
+    const { race, car, entry } = hit;
+    const carNumber: string = entry.carNumber;
     const viewer = await resolveViewer(req.user ?? undefined);
     const access = await canUserAccessRace(race, viewer.plan, viewer.role);
     const raceOut = {
@@ -294,8 +320,10 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       locked: !access.accessible,
       lockReason: access.accessible ? null : access.reason ?? null,
     };
+    const drivers = entryDrivers(entry.driverNames);
+    const driversOut = drivers.map(displayName);
     if (!access.accessible) {
-      res.json({ carCount: cars.length, car, race: raceOut, facts: null, story: null, viewed: false, alerts, cars: carList });
+      res.json({ ...base, car, race: raceOut, drivers: driversOut, facts: null, drive: null, story: null, viewed: false });
       return;
     }
     const [data, viewed] = await Promise.all([
@@ -305,8 +333,9 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
     ]);
     const facts = data ? carFacts(data.data, data.annotations ?? null, carNumber) : null;
+    const drive = data && facts ? carDrive(data.data.cars[facts.carKey], data.annotations?.[facts.carKey]?.pits, drivers) : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
-    res.json({ carCount: cars.length, car, race: raceOut, facts, story, viewed: !!viewed, alerts, cars: carList });
+    res.json({ ...base, car, race: raceOut, drivers: driversOut, facts, drive, story, viewed: !!viewed });
   } catch (err) {
     next(err);
   }

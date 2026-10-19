@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 const text = (node: React.ReactNode) =>
-  renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>).replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>).replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
 
 const facts: NonNullable<MyCarResponse["facts"]> = {
   number: "68", team: "RAFA Racing Team", cls: "Silver", vehicle: "Toyota GR Supra GT4", finishClass: 2, finishOverall: 5, classSize: 14,
@@ -34,24 +34,73 @@ const base: MyCarResponse = {
 };
 
 describe("your car's latest race", () => {
-  it("states the finish, laps, best lap and each pit cycle as facts", () => {
+  it("states the finish, laps, best lap, stops and each pit cycle as facts", () => {
     const t = text(<MyCarCard data={base} />);
-    expect(t).toContain("#68 · RAFA Racing Team");
-    expect(t).toContain("Finished P2 in Silver of 14 · P5 overall");
-    expect(t).toContain("34 of 34 laps · best lap 1:28.107 on lap 12, 2nd fastest in Silver");
-    expect(t).toContain("Pit cycle 1 (settled lap 15): P5 → P2 in Silver, gained 3");
-    expect(t).toContain("Pit cycle 2 (settled lap 28): P2 → P3 in Silver, lost 1");
+    expect(t).toContain("#68 RAFA Racing Team · Silver");
+    expect(t).toContain("Finished P2 in Silver of 14 · P5 overall · 34 of 34 laps");
+    expect(t).toContain("#68's race");
+    expect(t).toContain("1:28.107 best lap, lap 12 · 2nd fastest in Silver");
+    // Net over the cycles: +3 then −1.
+    expect(t).toContain("+2 places in Silver over 2 pit cycles");
+    expect(t).toContain("Pit cycles in Silver");
+    expect(t).toContain("P5 → P2 Gained 3");
+    expect(t).toContain("P2 → P3 Lost 1");
     expect(t).toContain("Position Trace →");
-    // No share at the peak moment: it carries the coffee ask (shared Finding Grip rule).
+    // No chart key from this server: no share.
     expect(t).not.toContain("Share");
   });
 
-  it("shows the class benchmarks the server stated", () => {
-    const t = text(<MyCarCard data={{ ...base, facts: { ...facts, benchmarks: ["Pit loss 2nd of 14 in Silver's 1st stops", "Fastest lap 2nd of 14 in Silver"] } }} />);
-    expect(t).toContain("Pit loss 2nd of 14 in Silver&#x27;s 1st stops");
-    expect(t).toContain("Fastest lap 2nd of 14 in Silver");
-    // The rank then lives in the benchmark, not repeated on the laps line.
-    expect(t).toContain("best lap 1:28.107 on lap 12 ");
+  it("names who drove when, with each stint's average, and marks a quick stop on its cycle", () => {
+    const data: MyCarResponse = {
+      ...base,
+      facts: {
+        ...facts,
+        carKey: "68",
+        pitCycles: [{ cycle: 1, lap: 15, before: 5, after: 2, net: 3, stopLap: 13, quickest: { rank: 1, of: 7 } }, { cycle: 2, lap: 28, before: 2, after: 3, net: -1, stopLap: 26, caution: true }],
+      },
+      drivers: ["Alex Rivera", "Jamie Cole"],
+      drive: {
+        known: true,
+        carTimeS: 3000,
+        stints: [
+          { start: 1, end: 13, driver: "Alex Rivera", avgLapS: 89.5, avgLaps: 11 },
+          { start: 14, end: 26, driver: "JAMIE COLE", avgLapS: 89.9, avgLaps: 11 },
+          { start: 27, end: 34, driver: "Alex Rivera", avgLapS: null, avgLaps: 0 },
+        ],
+        drivers: [
+          { name: "Alex Rivera", stints: 2, laps: 21, driveTimeS: 1860, bestLap: null },
+          { name: "JAMIE COLE", stints: 1, laps: 13, driveTimeS: 1140, bestLap: null },
+        ],
+      },
+    };
+    const t = text(<MyCarCard data={data} />);
+    expect(t).toContain("Alex Rivera and Jamie Cole");
+    expect(t).toContain("2 stops laps 13, 26");
+    expect(t).toContain("Alex Rivera 31 min · 62%");
+    expect(t).toContain("Jamie Cole 19 min · 38%");
+    expect(t).toContain("laps 1–13 Alex Rivera 1:29.500");
+    expect(t).toContain("laps 14–26 Jamie Cole 1:29.900");
+    expect(t).toContain("1 · lap 13 P5 → P2 Gained 3 Quickest stop of 7");
+    expect(t).toContain("2 · lap 26 · caution");
+    // Support is off in tests (no ask), so the share card shows.
+    expect(t).toMatch(/(Share|Copy) #68's race card/);
+  });
+
+  it("lets the car's races be picked, and an earlier one goes back to the latest", () => {
+    const recent = ["r1", "r0"].map((id, i) => ({
+      raceId: id, raceName: `Race ${i}`, date: "2026-10-0" + (9 - i), track: "T", series: "SRO", subSeries: null, carNumber: "68", carClass: "Silver", finishPos: 5, finishPosClass: 2,
+    }));
+    const pick = () => undefined;
+    const html = renderToStaticMarkup(<MemoryRouter><MyCarCard data={{ ...base, recent, totalRaces: 2 }} onPickRace={pick} /></MemoryRouter>);
+    expect(html).toContain("#68&#x27;s races");
+    expect(html.match(/<button[^>]*aria-current="true"[^>]*>(?:(?!<\/button>).)*Race 0/s)).not.toBeNull();
+    expect(html.match(/<button[^>]*>(?:(?!<\/button>).)*Race 1/s)).not.toBeNull();
+    expect(text(<MyCarCard data={{ ...base, recent, isLatest: false }} onPickRace={pick} />)).toContain("← Latest race");
+  });
+
+  it("says when the timing doesn't name who drove", () => {
+    const t = text(<MyCarCard data={{ ...base, drive: { known: false, stints: [], drivers: [], carTimeS: 0 } }} />);
+    expect(t).toContain("This race's timing doesn't say who drove when.");
   });
 
   it("leads with the package's car story when there is one", () => {
@@ -71,6 +120,7 @@ describe("your car's latest race", () => {
     expect(finishLine({ ...facts, finishClass: null, finishOverall: null, status: "dnf" })).toBe("Did not finish");
     expect(finishLine({ ...facts, laps: 16, finished: false })).toBe("Retired after lap 16 · classified P2 in Silver of 14");
     expect(pitCycleLine({ cycle: 1, lap: 9, before: 4, after: 4, net: 0 }, "GS")).toBe("Pit cycle 1 (settled lap 9): P4 → P4 in GS, held position");
+    expect(pitCycleLine({ cycle: 2, lap: 30, before: 3, after: 1, net: 2, stopLap: 27 }, "GS")).toBe("Pit cycle 2 (stop on lap 27): P3 → P1 in GS, gained 2");
   });
 });
 
@@ -85,7 +135,7 @@ describe("first steps", () => {
     expect(none).toContain("Find a race → Add a car → Find a driver →");
     const followed = text(<FirstStepsChecklist data={base} />);
     expect(followed).toContain("2 of 4 done");
-    expect(followed).toContain("Get an email when your car&#x27;s race is up Turn on");
+    expect(followed).toContain("Get an email when your car's race is up Turn on");
     expect(text(<FirstStepsChecklist data={{ ...base, viewed: true }} />)).toContain("3 of 4 done");
     expect(text(<FirstStepsChecklist data={{ ...base, viewed: true, alerts: true }} />)).toBe("");
   });
@@ -94,7 +144,7 @@ describe("first steps", () => {
     const driver = { driverCount: 1, race: { id: "plm" }, car: { number: "7" }, viewed: false };
     const t = text(<FirstStepsChecklist data={{ carCount: 0, car: null, race: null }} driver={driver} />);
     expect(t).toContain("2 of 4 done");
-    expect(t).toContain("Open your driver&#x27;s latest race");
+    expect(t).toContain("Open your driver's latest race");
     expect(t).toContain("Turn on");
     expect(text(<FirstStepsChecklist data={{ carCount: 0, car: null, race: null }} driver={{ ...driver, viewed: true }} />)).toContain("3 of 4 done");
   });
