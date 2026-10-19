@@ -1025,6 +1025,16 @@ export function greenSecondsBetween(periods: { start: number; end: number }[], a
 export const SERVED_BEFORE_MESSAGE_S = 120;
 
 /**
+ * A drive-through takes the pit lane's transit time, give or take a second (Indianapolis 2026: the
+ * served drive-throughs took 51.0-52.0 s). A visit a few seconds longer stopped in the box (#59 lap
+ * 103, 56.5 s: a splash of fuel to finish). So "at transit" is within DT_SLACK_S (or 5 %) of it.
+ */
+export const DT_SLACK_S = 3;
+export function atTransit(pl: number | null, T: number | null): boolean {
+  return pl !== null && T !== null && pl <= T + Math.max(DT_SLACK_S, 0.05 * T);
+}
+
+/**
  * RedMist: when the in-car equipment reissued the pit entry during a visit, the reported time is
  * only the last entry to the exit. A segment this short, after race control issued a drive-through,
  * is that drive-through, served in the same visit as the stop (Sebring 2026 #696, lap 128).
@@ -1072,7 +1082,7 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
     const cand = pens
       .filter((x) => x.car === p.car && !x.servedBy && x.t !== null && x.t <= pin && greenSecondsBetween(neutral, x.t, pin) <= serveWindowS)
       .sort((a, b) => a.t! - b.t!);
-    const short = pl !== null && T !== null && pl <= 1.15 * T;
+    const short = atTransit(pl, T);
     // A visit with no penalty before it, and a penalty of its kind announced just after it (the
     // team is told before the message appears): a drive-through for a short visit, a stop penalty
     // for a longer one.
@@ -1120,7 +1130,7 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       // A Stop + N holds the car for N seconds: a pass at transit speed did not serve it.
       set("penalty_served", ["rc_penalty_match"]);
       link(sp);
-    } else if (p.pitType === "PENALTY" && pl !== null && T !== null && pl > 1.15 * T) {
+    } else if (p.pitType === "PENALTY" && pl !== null && T !== null && !atTransit(pl, T)) {
       set("penalty_served", ["drive_time_pit_type"]);
     } else if (
       dt &&
@@ -1136,7 +1146,10 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       dt.confidence = "medium";
       dt.confNotes.push("served_in_reissued_visit");
       link(dt);
-    } else if (!cand.length && p.pitType !== "PENALTY" && transit.valid && short && ctx.race.format !== "redmist") {
+    } else if (p.pitType !== "PENALTY" && transit.valid && short && ctx.race.format !== "redmist") {
+      // At transit speed the car did not stop in the box: not a pit stop, even with a stop penalty
+      // pending that this pass could not serve (VIR 2026 #81 lap 2, 21.7 s, a Stop + 60 pending).
+      if (cand.length) p.confNotes.push("pass_with_stop_penalty_pending");
       // Rule 6, read per passage: no penalty record explains this passage (no matched RC penalty and no
       // Drive Time PENALTY type). DEFINITIONS.md says "no penalty record exists for the race"; read
       // literally, MPC #59 L62 (37.1 s, transit 35.1 s) would become a 37-second "stop".
@@ -1146,7 +1159,7 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       set("garage", ["garage_threshold"]);
     } else {
       set("stop", ["default_stop"]);
-      if (transit.valid && pl !== null && T !== null && pl > 1.15 * T && pl <= 1.5 * T && !cand.length) p.confNotes.push("ambiguous_short_stop");
+      if (transit.valid && pl !== null && T !== null && !atTransit(pl, T) && pl <= 1.5 * T && !cand.length) p.confNotes.push("ambiguous_short_stop");
     }
   }
 }

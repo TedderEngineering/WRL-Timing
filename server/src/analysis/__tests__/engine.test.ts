@@ -7,7 +7,8 @@ import { buildFacts } from "../buildFacts.js";
 import { validatePackage } from "../validate-package.js";
 import { AdapterBlocker } from "../adapters/index.js";
 import type { PitPassage, RaceAnalysisPackage } from "../schema/package-types.js";
-import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace, noCardPenaltyRace, serveWindowRace } from "./scenarios.js";
+import { fcyRace, greenRace, OPTS, redFlagRace, doubleStopRace, penaltyRace, noCardPenaltyRace, serveWindowRace, pitPassRace } from "./scenarios.js";
+import { atTransit } from "../engine/passages.js";
 import { synthImsa, synthSpeedhive, synthWrlWebsite, textFile } from "./synth.js";
 
 const green = buildFacts({ format: "alkamel-imsa", files: synthImsa(greenRace()), options: OPTS });
@@ -508,5 +509,34 @@ describe("a caution record seconds long at the green (engine 1.2.11)", () => {
     const pkg = buildFacts({ format: "alkamel-imsa", files: synthImsa(early), options: OPTS });
     expect(pkg.fcyPeriods).toHaveLength(2);
     expect(pkg.dataQuality.some((q) => q.code === "FCY-START-BLIP")).toBe(false);
+  });
+});
+
+describe("drive-through or stop by pit-lane time (engine 1.2.12)", () => {
+  it("is at transit within 3 s (or 5 %), not 15 %", () => {
+    // Indianapolis 2026: drive-throughs 51.0-52.0 s; #59's 56.5 s stopped in the box.
+    expect(atTransit(51.9, 51.018)).toBe(true);
+    expect(atTransit(56.456, 51.018)).toBe(false);
+    // VIR 2026: drive-throughs 21.4-21.8 s; #81's 21.7 s pass is one, a 28.4 s visit is a stop.
+    expect(atTransit(21.695, 21.449)).toBe(true);
+    expect(atTransit(28.438, 21.449)).toBe(false);
+    expect(atTransit(37.1, 35.1)).toBe(true);
+  });
+
+  const f = buildFacts({ format: "alkamel-imsa", files: synthImsa(pitPassRace()), options: { ...OPTS, rulebook: { ...OPTS.rulebook!, serveWindowS: 3600 } } });
+
+  it("a pass at transit speed is a drive-through, not a pit stop, even with a Stop + 60 pending", () => {
+    const p = pass(f, "pit:91:1");
+    expect(p.kind).toBe("drive_through");
+    expect(p.confidenceNotes).toContain("pass_with_stop_penalty_pending");
+    expect(p.cycleId ?? null).toBeNull();
+    // The Stop + 60 is served by the long stop, not by the pass.
+    expect(f.events.penalties.find((x) => x.id === "pen:91:1")!.servedByPassageId).toBe("pit:91:2");
+  });
+
+  it("a visit a few seconds longer than a drive-through is a stop (a splash)", () => {
+    expect(pass(f, "pit:92:2").kind).toBe("stop");
+    expect(pass(f, "pit:90:1").kind).toBe("drive_through");
+    expect(validatePackage(f).errors).toEqual([]);
   });
 });
