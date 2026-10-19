@@ -6,7 +6,7 @@ import { track } from "../../lib/analytics";
 import { FollowTabs } from "./FollowTabs";
 import { formatDayRange } from "./format";
 import { StatusPill } from "./RecapCard";
-import { finishLine, type MyCarResponse } from "./MyCarCard";
+import { HighlightsList, finishLine, type Highlight, type MyCarResponse } from "./MyCarCard";
 import { driveTimeText, isSoloDrive } from "../my-drivers/stints";
 import { displayName } from "../my-drivers/api";
 import { ShareDriverCardButton } from "../my-drivers/driverCard";
@@ -45,6 +45,8 @@ export interface MyDriverResponse {
     bestLap: { sec: number; lap: number } | null;
     bestRank: { rank: number; of: number } | null;
   } | null;
+  /** What went right for the driver, ranked (server dashboard/highlights.ts). */
+  driverHighlights?: Highlight[];
   story?: MyCarResponse["story"];
   viewed?: boolean;
   recent?: {
@@ -202,6 +204,7 @@ export function MyDriverCard({
               </p>
             )}
 
+            <HighlightsList items={data.driverHighlights} />
             {drive && <DriveBox name={driver.name} drive={drive} carBest={facts?.bestLap ?? null} />}
 
             {story && story.paragraphs.length > 0 && expanded && (
@@ -234,7 +237,7 @@ export function MyDriverCard({
               <Link to={chartHref(race.id, car.number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
-              <ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null }} />
+              <ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null, highlights: data.driverHighlights }} />
             </div>
           </>
         )}

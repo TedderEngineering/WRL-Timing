@@ -9,6 +9,7 @@
  */
 import type { Prose } from "../analysis/schema/package-types.js";
 import { normCar } from "../intake/reimport.js";
+import { carHighlights, type Highlight } from "./highlights.js";
 
 interface LapRow {
   l: number;
@@ -97,6 +98,8 @@ export interface CarFacts {
    * rules as the race page (client/src/features/chart/benchmarks.ts).
    */
   benchmarks: string[];
+  /** What went right, ranked (dashboard/highlights.ts): the share card shows the first, the card the first three. */
+  highlights: Highlight[];
 }
 
 /** The chart's key for a race entry's number ("007" and "7" are one car). */
@@ -262,7 +265,7 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
 
   const pitCycles = withStops(data, ann, key, classPitCycles(car.laps, ann?.[key]?.settles ?? []));
   const finished = tookFlag(data, car, status);
-  return {
+  const facts: CarFacts = {
     carKey: key,
     number: car.label ?? String(car.num ?? key),
     team: car.team,
@@ -279,7 +282,10 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     bestLapClassRank,
     pitCycles,
     benchmarks: classBenchmarks(data, ann, key, pitCycles),
+    highlights: [],
   };
+  facts.highlights = carHighlights(data as any, ann as any, key, facts);
+  return facts;
 }
 
 export interface CarStory {

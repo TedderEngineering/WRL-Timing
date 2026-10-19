@@ -198,6 +198,7 @@ racesRouter.get(
         car: cardCar(entry, driverName),
         facts: card.facts,
         driverFacts: card.driverFacts,
+        driverHighlights: card.driverHighlights,
       });
     } catch (err) {
       next(err);

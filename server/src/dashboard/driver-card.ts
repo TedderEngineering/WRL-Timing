@@ -11,6 +11,7 @@ import { normCar } from "../intake/reimport.js";
 import { coDrivers, driverInNames } from "../services/my-drivers.js";
 import { carFacts, chartKeyFor, type CarFacts } from "./my-car.js";
 import { carDrive, driverFacts, type CarDrive, type DriverFacts } from "./my-driver.js";
+import { driverHighlights, type Highlight } from "./highlights.js";
 
 export interface DriverCardCar {
   number: string;
@@ -22,6 +23,19 @@ export interface DriverCardCar {
 export interface DriverCardData {
   facts: CarFacts | null;
   driverFacts: DriverFacts | null;
+  /** What went right for the driver, ranked (dashboard/highlights.ts). */
+  driverHighlights: Highlight[];
+}
+
+/** Every entry's drivers in the race, by car number (to name each class car's stints). */
+async function driversByCar(raceId: string): Promise<Record<string, string[]>> {
+  const rows = (await prisma.raceEntry.findMany({ where: { raceId }, select: { carNumber: true, driverNames: true } })) as Array<{ carNumber: string; driverNames: string }>;
+  const out: Record<string, string[]> = {};
+  for (const r of rows) {
+    out[r.carNumber] = entryDrivers(r.driverNames);
+    out[normCar(r.carNumber)] ??= out[r.carNumber];
+  }
+  return out;
 }
 
 /** The entry's drivers as a list ("A; B; C"). */
@@ -48,11 +62,12 @@ export async function driverCardData(raceId: string, carNumber: string, driverNa
     select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true },
   })) as any;
   const data = row?.chartData ? ((await withPitFacts(row, { data: row.chartData, annotations: row.annotationData ?? {} })) as any) : null;
-  if (!data) return { facts: null, driverFacts: null };
+  if (!data) return { facts: null, driverFacts: null, driverHighlights: [] };
   const facts = carFacts(data.data, data.annotations ?? null, carNumber);
   const key = chartKeyFor(data.data, carNumber);
   const drive = key ? driverFacts(data.data.cars[key], data.annotations?.[key]?.pits, driverName, entryDrivers(driverNames)) : null;
-  return { facts, driverFacts: drive };
+  const highlights = key && drive?.known ? driverHighlights(data.data, data.annotations ?? null, key, driverName, await driversByCar(raceId), facts) : [];
+  return { facts, driverFacts: drive, driverHighlights: highlights };
 }
 
 /**

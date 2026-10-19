@@ -41,6 +41,8 @@ export interface DriverCardInput {
   car: Car;
   facts: Facts | null;
   drive: Drive | null;
+  /** The driver's highlights, ranked (server); the first is the card's fact. */
+  highlights?: { text: string }[];
 }
 
 // ─── Chart data, once per race ───────────────────────────────────────────────
@@ -85,8 +87,8 @@ export function loadDriverCardFacts(raceId: string, carNumber: string, driver: s
   if (!p) {
     const q = `car=${encodeURIComponent(carNumber)}&driver=${encodeURIComponent(driver)}`;
     p = api
-      .get<{ race: Race; car: Car; facts: Facts | null; driverFacts: Drive | null }>(`/races/${raceId}/driver-card?${q}`)
-      .then((r) => ({ race: r.race, car: r.car, facts: r.facts ?? null, drive: r.driverFacts ?? null }))
+      .get<{ race: Race; car: Car; facts: Facts | null; driverFacts: Drive | null; driverHighlights?: { text: string }[] }>(`/races/${raceId}/driver-card?${q}`)
+      .then((r) => ({ race: r.race, car: r.car, facts: r.facts ?? null, drive: r.driverFacts ?? null, highlights: r.driverHighlights ?? [] }))
       .catch(() => {
         cardFacts.delete(key);
         return null;
@@ -249,6 +251,7 @@ const ORD = ["", "", "2nd ", "3rd "];
  */
 export function driverCardFact(input: DriverCardInput, chart: RaceChartData | null = null, key: string | null = null): { text: string; tone: "good" } | undefined {
   const { drive, facts, car } = input;
+  if (input.highlights?.length) return { text: input.highlights[0].text, tone: "good" };
   const mineKnown = !!drive?.known && drive.myStints > 0;
   const own = chart && key ? chart.cars[key] : null;
   if (mineKnown && own) {

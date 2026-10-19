@@ -88,6 +88,18 @@ describe("your car's latest race", () => {
     expect(t).toMatch(/(Share|Copy) #68's race card/);
   });
 
+  it("lists the car's top three highlights, best first", () => {
+    const highlights = [
+      { kind: "result", text: "Won Silver and the race overall", score: 100 },
+      { kind: "fewest_stops", text: "1 pit stop, fewest in Silver", score: 55 },
+      { kind: "race_pace", text: "2nd-best race pace in Silver", score: 40 },
+      { kind: "consistency", text: "Most consistent laps in Silver", score: 12 },
+    ];
+    const t = text(<MyCarCard data={{ ...base, facts: { ...facts, highlights } }} />);
+    expect(t).toContain("✓ Won Silver and the race overall ✓ 1 pit stop, fewest in Silver ✓ 2nd-best race pace in Silver");
+    expect(t).not.toContain("Most consistent laps");
+  });
+
   it("lets the car's races be picked, and an earlier one goes back to the latest", () => {
     const recent = ["r1", "r0"].map((id, i) => ({
       raceId: id, raceName: `Race ${i}`, date: "2026-10-0" + (9 - i), track: "T", series: "SRO", subSeries: null, carNumber: "68", carClass: "Silver", finishPos: 5, finishPosClass: 2,

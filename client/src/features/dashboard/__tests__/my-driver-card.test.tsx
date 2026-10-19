@@ -126,6 +126,10 @@ describe("who drove when", () => {
 describe("driver card share image", () => {
   const input = { driverName: "Alex Rivera", race: base.race!, car: base.car!, facts: base.facts!, drive: base.driverFacts! };
 
+  it("puts the driver's top highlight on the card when the server ranks them", () => {
+    expect(driverCardFact({ ...input, highlights: [{ text: "Brought #7 home to the GTP win" }] })).toEqual({ text: "Brought #7 home to the GTP win", tone: "good" });
+  });
+
   it("offers each driver's card on the race page", () => {
     const t = text(<ShareRaceDriverCard raceId="plm" carNumber="7" driver="Jamie Cole" />);
     expect(t).toMatch(/(Share|Copy) Jamie's card/);

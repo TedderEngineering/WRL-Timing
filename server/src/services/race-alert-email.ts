@@ -91,6 +91,8 @@ export interface AlertEmail {
   /** A followed driver: their name and their drive. */
   driverName?: string | null;
   driverDrive?: DriverFacts | null;
+  /** The driver's highlights, ranked (dashboard/highlights.ts). */
+  driverHighlights?: { text: string }[];
   raceUrl: string;
   unsubscribeUrl: string;
   settingsUrl: string;
@@ -126,8 +128,14 @@ export function alertEmailHtml(p: AlertEmail): string {
       <ul style="padding-left: 18px; margin: 0 0 16px; color: ${SOFT}; line-height: 1.6;">${p.changes.map((l) => `<li>${e(l)}</li>`).join("")}</ul>`);
   }
 
-  // The result.
-  parts.push(`<p style="margin: 0 0 16px; font-size: 16px; font-weight: 600; color: ${TEXT};">${e(finishText(f))} · ${e(f.laps)} of ${e(f.raceLaps)} laps</p>`);
+  // The result, then what went right (the car's top three highlights, or the driver's).
+  parts.push(`<p style="margin: 0 0 ${f.highlights?.length ? 8 : 16}px; font-size: 16px; font-weight: 600; color: ${TEXT};">${e(finishText(f))} · ${e(f.laps)} of ${e(f.raceLaps)} laps</p>`);
+  const tops = (p.driverName && p.driverHighlights?.length ? p.driverHighlights : f.highlights ?? []).slice(0, 3);
+  if (tops.length) {
+    parts.push(`<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin: 0 0 16px; font-size: 14px;">${tops
+      .map((h) => `<tr><td style="padding: 2px 8px 2px 0; color: ${GOOD}; font-weight: 700;">✓</td><td style="padding: 2px 0; color: ${SOFT};">${e(h.text)}</td></tr>`)
+      .join("")}</table>`);
+  }
 
   // A followed driver's own drive.
   const dd = p.driverDrive;

@@ -266,7 +266,8 @@ export function carCardText(input: CarCardInput): { title: string; subtitle: str
 export async function makeCarCard(input: CarCardInput): Promise<Blob> {
   const chart = await loadRaceChartWithNotes(input.race.id);
   const { title, subtitle } = carCardText(input);
-  const fact = input.facts.benchmarks?.[0];
+  // The car's top highlight; a server without highlights gives its first benchmark.
+  const fact = input.facts.highlights?.[0]?.text ?? input.facts.benchmarks?.[0];
   return makeShareCard({
     site: "racetrace",
     title,
