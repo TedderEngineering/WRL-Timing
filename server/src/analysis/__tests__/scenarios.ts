@@ -188,3 +188,27 @@ export function serveWindowRace(stopPlusAt: number): SynthRace {
     driveTime: true,
   };
 }
+
+/**
+ * Pit passes and splashes (engine 1.2.12): the served drive-through (#90, lap 5) takes 34 s. #91 drives
+ * through at transit speed on lap 8 with a Stop + 60 pending (announced at 600 s), then serves it on
+ * lap 12 (VIR 2026 #81). #92 stops 5 s longer than a drive-through on lap 20, near the end (Indianapolis
+ * 2026 #59, a splash to finish). #93 and #94 stop normally.
+ */
+export function pitPassRace(): SynthRace {
+  const lap = (c: string, i: number, stops: SynthCar["stops"]) => car(c, "GS", i, { laps: 22, stops });
+  return {
+    cars: [
+      lap("90", 0, [{ lap: 5, pitLane: 34 }, { lap: 11, pitLane: 70 }]),
+      lap("91", 1, [{ lap: 8, pitLane: 34.3 }, { lap: 12, pitLane: 130 }]),
+      lap("92", 2, [{ lap: 11, pitLane: 68 }, { lap: 20, pitLane: 38.5 }]),
+      lap("93", 3, [{ lap: 11, pitLane: 66 }]),
+      lap("94", 4, [{ lap: 11, pitLane: 67 }]),
+    ],
+    rc: [
+      [350, "Car 90: Penalty - Pit lane speeding - Drive Through"],
+      [600, "Car 91: Penalty - More than Emergency Service in closed pit - Stop + 60"],
+    ],
+    driveTime: true,
+  };
+}
