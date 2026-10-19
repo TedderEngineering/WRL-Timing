@@ -11,6 +11,11 @@ updates:
     groups:
       server-minor-and-patch:
         update-types: [minor, patch]
+    # supabase-js 2.98+ needs Node 22 (native WebSocket); the server runs Node 20 on Railway. Unpin
+    # once the server moves to Node 22.
+    ignore:
+      - dependency-name: "@supabase/*"
+        versions: [">=2.98.0"]
     labels: [dependencies]
 
   - package-ecosystem: npm
