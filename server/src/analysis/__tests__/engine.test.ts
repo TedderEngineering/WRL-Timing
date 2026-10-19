@@ -493,3 +493,20 @@ describe("serve windows: garage time and stop penalties announced after the car 
     expect(g.events.penalties.find((x) => x.car === "81")!.servedByPassageId).not.toBe("pit:81:1");
   });
 });
+
+describe("a caution record seconds long at the green (engine 1.2.11)", () => {
+  it("is the start signal, not a caution period, and is noted (Mustang COTA 2026 Race 1)", () => {
+    const blip = { ...fcyRace(), fcy: [[0.001, 10.053], [800, 1120]] as [number, number][] };
+    const pkg = buildFacts({ format: "alkamel-imsa", files: synthImsa(blip), options: OPTS });
+    expect(pkg.fcyPeriods.map((f) => [Math.round(f.start.raceTimeS), Math.round(f.end.raceTimeS)])).toEqual([[800, 1120]]);
+    expect(pkg.dataQuality.some((q) => q.code === "FCY-START-BLIP")).toBe(true);
+    expect(validatePackage(pkg, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("keeps a real caution at the start", () => {
+    const early = { ...fcyRace(), fcy: [[2, 300], [800, 1120]] as [number, number][] };
+    const pkg = buildFacts({ format: "alkamel-imsa", files: synthImsa(early), options: OPTS });
+    expect(pkg.fcyPeriods).toHaveLength(2);
+    expect(pkg.dataQuality.some((q) => q.code === "FCY-START-BLIP")).toBe(false);
+  });
+});
