@@ -5,7 +5,7 @@ import { MyDriverCard, type MyDriverResponse } from "../MyDriverCard";
 import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
-import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners } from "../../my-drivers/driverCard";
+import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners, ShareRaceDriverCard } from "../../my-drivers/driverCard";
 import { formatDuration } from "../../../lib/prose";
 
 const text = (node: React.ReactNode) =>
@@ -62,8 +62,37 @@ describe("MyDriverCard", () => {
     expect(t).toContain("1:10.881");
     expect(t).not.toContain("quickest of");
     expect(t).toContain("Jamie Cole"); // the legend, display-cased
-    expect(t).toContain("Alex's recent races");
+    expect(t).toContain("Alex's races");
     expect(t).toContain("Indianapolis 8 Hour");
+  });
+
+  it("lets any of the driver's races be picked, and an earlier one goes back to the latest", () => {
+    const pick = () => undefined;
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <MyDriverCard data={base} onPickRace={pick} />
+      </MemoryRouter>
+    );
+    expect(html).toContain("Pick a race to see it above and share its card.");
+    // Both races are buttons; the one shown is marked.
+    expect(html.match(/<button[^>]*aria-current="true"[^>]*>.*?Petit Le Mans/s)).not.toBeNull();
+    expect(html.match(/<button[^>]*>(?:(?!<\/button>).)*Indianapolis 8 Hour/s)).not.toBeNull();
+    expect(text(<MyDriverCard data={base} onPickRace={pick} />)).not.toContain("Latest race");
+
+    const earlier = { ...base, isLatest: false, race: { ...base.race!, id: "indy", name: "Indianapolis 8 Hour", date: "2026-09-27" } };
+    const t = text(<MyDriverCard data={earlier} onPickRace={pick} />);
+    expect(t).toContain("← Latest race");
+    expect(t).toContain("Indianapolis 8 Hour · Sep 27");
+  });
+
+  it("lists the first five races, the rest behind More races, with the year for another season", () => {
+    const recent = Array.from({ length: 8 }, (_, i) => ({
+      ...base.recent![1], raceId: `r${i}`, raceName: `Race ${i}`, date: i < 7 ? `${new Date().getFullYear()}-0${9 - Math.floor(i / 2)}-1${i}` : "2025-11-02",
+    }));
+    const t = text(<MyDriverCard data={{ ...base, recent, totals: { races: 8, series: ["SRO"] } }} onPickRace={() => undefined} />);
+    expect(t).toContain("Race 4");
+    expect(t).not.toContain("Race 5");
+    expect(t).toContain("More races (3)");
   });
 
   it("says so when the timing doesn't name who drove when", () => {
@@ -96,6 +125,11 @@ describe("who drove when", () => {
 
 describe("driver card share image", () => {
   const input = { driverName: "Alex Rivera", race: base.race!, car: base.car!, facts: base.facts!, drive: base.driverFacts! };
+
+  it("offers each driver's card on the race page", () => {
+    const t = text(<ShareRaceDriverCard raceId="plm" carNumber="7" driver="Jamie Cole" />);
+    expect(t).toMatch(/(Share|Copy) Jamie's card/);
+  });
 
   it("puts a share button on the card", () => {
     const t = text(<MyDriverCard data={base} />);

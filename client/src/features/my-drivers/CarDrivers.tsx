@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { useAuth, useOptionalAuth } from "../auth/AuthContext";
 import { rememberPostAuthRedirect } from "../../lib/postAuthRedirect";
@@ -17,6 +17,7 @@ import {
   useMyDrivers,
 } from "./api";
 import { driveOf, driveTimeText, stintsOf } from "./stints";
+import { ShareRaceDriverCard } from "./driverCard";
 
 const T = { line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#f48c34", control: "#2c2c50" };
 
@@ -31,7 +32,8 @@ export function carDriverNames(car: { team?: string; drivers?: string[] } | unde
 
 /**
  * "Drivers" under the focus car on the race page: each driver's share of the race when the timing
- * says who drove when, and a Follow button. Signed out, Follow asks for an account first and the
+ * says who drove when, a Follow button and (on a stored race, not RaceTrace Live) the driver's
+ * share card for this race. Signed out, Follow asks for an account first and the
  * follow is done on the way back.
  */
 export function CarDrivers(props: { data: RaceChartData; focusNum: number; annotations: AnnotationData | null; heading?: string }) {
@@ -53,6 +55,10 @@ function CarDriversInApp({
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [params] = useSearchParams();
+  // The share card needs the stored race: the race page (/chart?race=), not RaceTrace Live.
+  const raceId = pathname === "/chart" ? params.get("race") : null;
   const mine = useMyDrivers(user?.id);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +137,7 @@ function CarDriversInApp({
                   {drive.best ? ` · best ${formatDuration(drive.best.sec)}` : ""}
                 </div>
               )}
+              {raceId && <ShareRaceDriverCard raceId={raceId} carNumber={car.label ?? String(focusNum)} driver={n} chart={data} />}
             </div>
             <button
               type="button"

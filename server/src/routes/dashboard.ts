@@ -4,6 +4,7 @@
  *   GET /api/dashboard/latest?limit=6   newest race weekends with recaps
  *   GET /api/dashboard/season?season=   each calendar series, round by round
  *   GET /api/dashboard/my-car           the latest race of a car the user follows (plan C)
+ *   GET /api/dashboard/my-driver        a followed driver's latest race (?driver=, ?race= for an earlier one)
  *   GET /api/dashboard/season-recap     "Your 2026", per followed car and series once its season is over (plan H)
  */
 import { Router, Request, Response, NextFunction } from "express";
@@ -16,9 +17,9 @@ import { getServedGzip, gunzip } from "../packages/store.js";
 import { withPitFacts } from "../packages/race-pit-facts.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../dashboard/latest.js";
-import { carFacts, chartKeyFor, extractCarStory, type CarStory } from "../dashboard/my-car.js";
-import { driverFacts } from "../dashboard/my-driver.js";
-import { coDrivers, listDrivers, racesForDriver, type DriverRaceRow } from "../services/my-drivers.js";
+import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
+import { cardCar, driverCardData } from "../dashboard/driver-card.js";
+import { listDrivers, racesForDriver, type DriverRaceRow } from "../services/my-drivers.js";
 import { buildRecap, recapSeriesFor, seasonOver, type RecapRaceIn } from "../dashboard/season-recap.js";
 import { LIVE_SCHEDULE } from "../live/schedule.js";
 import { carMatchesEntry, entryForCar, listCars } from "../services/my-cars.js";
@@ -315,6 +316,8 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
 
 /** How many of the followed drivers are compared for "newest race first" without ?driver. */
 const NEWEST_OF = 8;
+/** How many of the driver's races the panel lists to pick from (the newest first). */
+const RECENT_OF = 12;
 
 dashboardRouter.get("/my-driver", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -337,17 +340,20 @@ dashboardRouter.get("/my-driver", requireAuth, async (req: Request, res: Respons
       driver = newest.d;
       rows = newest.rows;
     }
-    const recent = rows.slice(0, 6).map((r) => ({
+    const recent = rows.slice(0, RECENT_OF).map((r) => ({
       raceId: r.raceId, raceName: r.raceName, date: r.date, track: r.track, series: r.series, subSeries: r.subSeries,
       carNumber: r.carNumber, carClass: r.carClass, finishPos: r.finishPos, finishPosClass: r.finishPosClass,
     }));
     const totals = { races: rows.length, series: [...new Set(rows.map((r) => r.series))] };
     const base = { driverCount: drivers.length, driver, drivers: list, alerts, recent, totals };
-    const latest = rows[0];
+    // ?race=<id> shows that race of the driver's (an earlier one); otherwise the latest.
+    const askedRace = typeof req.query.race === "string" ? rows.find((r) => r.raceId === req.query.race) ?? null : null;
+    const latest = askedRace ?? rows[0];
     if (!latest) {
-      res.json({ ...base, race: null });
+      res.json({ ...base, race: null, isLatest: true });
       return;
     }
+    const isLatest = latest.raceId === rows[0].raceId;
 
     const race = (await prisma.race.findUnique({
       where: { id: latest.raceId },
@@ -368,35 +374,17 @@ dashboardRouter.get("/my-driver", requireAuth, async (req: Request, res: Respons
       locked: !access.accessible,
       lockReason: access.accessible ? null : access.reason ?? null,
     };
-    const car = {
-      number: latest.carNumber,
-      team: latest.teamName,
-      cls: latest.carClass,
-      coDrivers: coDrivers(latest.driverNames, driver.name),
-    };
+    const car = cardCar(latest, driver.name);
     if (!access.accessible) {
-      res.json({ ...base, race: raceOut, car, facts: null, driverFacts: null, story: null, viewed: false });
+      res.json({ ...base, isLatest, race: raceOut, car, facts: null, driverFacts: null, story: null, viewed: false });
       return;
     }
-    const [data, viewed] = await Promise.all([
-      prisma.race
-        .findUnique({ where: { id: race.id }, select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true } })
-        .then((r: any) => (r?.chartData ? withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null)) as Promise<any>,
+    const [card, viewed] = await Promise.all([
+      driverCardData(race.id, latest.carNumber, driver.name, latest.driverNames),
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
     ]);
-    const facts = data ? carFacts(data.data, data.annotations ?? null, latest.carNumber) : null;
-    const key = data ? chartKeyFor(data.data, latest.carNumber) : null;
-    const drive =
-      data && key
-        ? driverFacts(
-            data.data.cars[key],
-            data.annotations?.[key]?.pits,
-            driver.name,
-            latest.driverNames.split(/;\s*/).map((n) => n.trim()).filter(Boolean)
-          )
-        : null;
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, latest.carNumber) : null;
-    res.json({ ...base, race: raceOut, car, facts, driverFacts: drive, story, viewed: !!viewed });
+    res.json({ ...base, isLatest, race: raceOut, car, facts: card.facts, driverFacts: card.driverFacts, story, viewed: !!viewed });
   } catch (err) {
     next(err);
   }
