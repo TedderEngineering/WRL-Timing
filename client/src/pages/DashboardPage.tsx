@@ -60,6 +60,19 @@ export function DashboardPage() {
       // keep what is shown
     }
   }, []);
+  // One of the driver's races on the card (null: the latest).
+  const [pickingRace, setPickingRace] = useState<string | null>(null);
+  const pickDriverRace = useCallback(async (driverId: string, raceId: string | null) => {
+    setPickingRace(raceId ?? "latest");
+    try {
+      const q = `driver=${encodeURIComponent(driverId)}${raceId ? `&race=${encodeURIComponent(raceId)}` : ""}`;
+      setMyDriver(await api.get<MyDriverResponse>(`/dashboard/my-driver?${q}`));
+    } catch {
+      // keep what is shown
+    } finally {
+      setPickingRace(null);
+    }
+  }, []);
   // Hold and drag a tab to reorder: shown at once, saved to the account.
   const orderCars = (ids: string[]) => {
     setMyCar((m) => (m?.cars ? { ...m, cars: ids.map((id) => m.cars!.find((c) => c.id === id)!).filter(Boolean) } : m));
@@ -285,7 +298,7 @@ export function DashboardPage() {
                   {view === "cars" ? "My cars →" : "My drivers →"}
                 </Link>
               </div>
-              {view === "cars" ? <MyCarCard data={myCar!} ask={shownRecaps.length === 0} /> : <MyDriverCard data={myDriver!} />}
+              {view === "cars" ? <MyCarCard data={myCar!} ask={shownRecaps.length === 0} /> : <MyDriverCard data={myDriver!} onPickRace={(raceId) => void pickDriverRace(myDriver!.driver!.id, raceId)} picking={pickingRace} />}
             </section>
           )}
           {/* "Your 2026", series by series as each season ends (plan H), for the car shown. */}

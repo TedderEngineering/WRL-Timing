@@ -13,6 +13,10 @@
  * Facts only, as on the card. The race's chart data is fetched once per race and kept, and is
  * fetched ahead (shortly after the card shows) so that the phone's share sheet opens straight
  * from the tap.
+ *
+ * Two places make it: the dashboard's driver panel (any of a followed driver's races) and the race
+ * page's Drivers list (any driver of the car in view, ShareRaceDriverCard), which fetches the
+ * card's facts from GET /races/:id/driver-card.
  */
 import { useEffect } from "react";
 import type { ChartDataResponse, RaceChartData } from "@shared/types";
@@ -20,6 +24,7 @@ import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/prose";
 import { drawText, imageName, makeShareCard, roundRect, sharedUrl, type Box, type SiteStyle } from "@/features/share";
 import { ShareImageActions } from "@/features/share/ShareImageActions";
+import { isComputer } from "@/features/share/shareImage";
 import { finishLine, type MyCarResponse } from "../dashboard/MyCarCard";
 import type { MyDriverResponse } from "../dashboard/MyDriverCard";
 import { displayName } from "./api";
@@ -54,6 +59,34 @@ export function loadRaceChart(raceId: string): Promise<RaceChartData | null> {
         return null;
       });
     charts.set(raceId, p);
+  }
+  return p;
+}
+
+/** The race page already has the chart: keep it for the card instead of fetching it again. */
+export function primeRaceChart(raceId: string, chart: RaceChartData): void {
+  if (!charts.has(raceId)) charts.set(raceId, Promise.resolve(chart));
+}
+
+// ─── A driver's card facts for any race (the race page) ──────────────────────
+
+type CardFacts = Omit<DriverCardInput, "driverName">;
+const cardFacts = new Map<string, Promise<CardFacts | null>>();
+
+/** The race, car, facts and drive for one driver of one car; null when it can't be had. */
+export function loadDriverCardFacts(raceId: string, carNumber: string, driver: string): Promise<CardFacts | null> {
+  const key = `${raceId}|${carNumber}|${driver}`;
+  let p = cardFacts.get(key);
+  if (!p) {
+    const q = `car=${encodeURIComponent(carNumber)}&driver=${encodeURIComponent(driver)}`;
+    p = api
+      .get<{ race: Race; car: Car; facts: Facts | null; driverFacts: Drive | null }>(`/races/${raceId}/driver-card?${q}`)
+      .then((r) => ({ race: r.race, car: r.car, facts: r.facts ?? null, drive: r.driverFacts ?? null }))
+      .catch(() => {
+        cardFacts.delete(key);
+        return null;
+      });
+    cardFacts.set(key, p);
   }
   return p;
 }
@@ -306,6 +339,36 @@ export function ShareDriverCardButton({ input }: { input: DriverCardInput }) {
       kind="driver_race"
       label={`Share ${first(input.driverName)}'s race card`}
       className="min-h-[36px] text-left text-sm font-semibold hover:underline disabled:opacity-60"
+    />
+  );
+}
+
+/**
+ * "Share" for one driver in the race page's Drivers list: the same card as the dashboard's, for
+ * this race. On a phone the card's facts and the chart are fetched ahead, so the share sheet
+ * opens from the tap.
+ */
+export function ShareRaceDriverCard({ raceId, carNumber, driver, chart }: { raceId: string; carNumber: string; driver: string; chart?: RaceChartData }) {
+  const name = displayName(driver);
+  useEffect(() => {
+    if (chart) primeRaceChart(raceId, chart);
+    if (isComputer()) return;
+    const t = window.setTimeout(() => void loadDriverCardFacts(raceId, carNumber, driver), 1200);
+    return () => window.clearTimeout(t);
+  }, [raceId, carNumber, driver, chart]);
+  const make = async () => {
+    const facts = await loadDriverCardFacts(raceId, carNumber, driver);
+    if (!facts) throw new Error("no card");
+    return makeDriverCard({ driverName: name, ...facts });
+  };
+  return (
+    <ShareImageActions
+      make={make}
+      filename={imageName("racetrace", `${name} ${carNumber}`)}
+      text={`${name} · #${carNumber} on RaceTrace ${sharedUrl(`/chart?race=${raceId}&car=${encodeURIComponent(carNumber)}`)}`}
+      kind="driver_race"
+      label={`Share ${first(name)}'s card`}
+      className="min-h-[28px] text-left text-[12px] font-semibold hover:underline disabled:opacity-60"
     />
   );
 }

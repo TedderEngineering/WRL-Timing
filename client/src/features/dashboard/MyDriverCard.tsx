@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type ProseContext } from "../../lib/prose";
@@ -14,7 +14,8 @@ import { ShareDriverCardButton } from "../my-drivers/driverCard";
 /**
  * "Your driver's latest race": a followed driver's newest race whatever the car or series, the
  * car's result and story, and the driver's own part (stints, drive time, best lap) when the timing
- * says who drove when. Facts only, as on My Car.
+ * says who drove when. Facts only, as on My Car. Any race in the driver's list can be picked to
+ * show it here instead (with its share card); "Latest race" goes back.
  */
 
 interface DriverStint {
@@ -59,6 +60,8 @@ export interface MyDriverResponse {
     finishPosClass: number | null;
   }[];
   totals?: { races: number; series: string[] };
+  /** False when the card shows an earlier race of the driver's (?race=). */
+  isLatest?: boolean;
 }
 
 const chartHref = (id: string, car?: string, tab?: string) =>
@@ -104,9 +107,31 @@ export function DriverTabs({
   );
 }
 
-export function MyDriverCard({ data }: { data: MyDriverResponse }) {
+/** "Oct 11", with the year for a race of another year ("Oct 11, 2025"). */
+function shortDate(date: string): string {
+  const d = formatDayRange(date, date);
+  return date.slice(0, 4) === String(new Date().getFullYear()) ? d.replace(/,\s*\d{4}$/, "") : d;
+}
+
+/** How many of the driver's races show before "More races". */
+const RACES_SHOWN = 5;
+
+export function MyDriverCard({
+  data,
+  onPickRace,
+  picking = null,
+}: {
+  data: MyDriverResponse;
+  /** Show one of the driver's races on the card; null for the latest. */
+  onPickRace?: (raceId: string | null) => void;
+  /** The race being loaded, while it loads. */
+  picking?: string | null;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [allRaces, setAllRaces] = useState(false);
   const { driver, race, car, facts, driverFacts: drive, story } = data;
+  const raceId = race?.id;
+  useEffect(() => setExpanded(false), [raceId]);
   if (!driver) return null;
   const first = firstName(driver.name);
 
@@ -125,6 +150,8 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
   const ctx: ProseContext = { cars: story?.cars, classes: story?.classes };
   const recent = data.recent ?? [];
   const totals = data.totals;
+  const earlier = data.isLatest === false;
+  const shownRaces = allRaces ? recent : recent.slice(0, RACES_SHOWN);
 
   return (
     <article className="overflow-hidden rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left">
@@ -135,6 +162,16 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
           {race.name} · {formatDayRange(race.date, race.date)}
         </span>
         <StatusPill status={race.resultsStatus} />
+        {earlier && onPickRace && (
+          <button
+            type="button"
+            onClick={() => onPickRace(null)}
+            disabled={picking !== null}
+            className="ml-auto min-h-[32px] text-[13px] font-semibold text-[var(--rt-accent)] disabled:opacity-60"
+          >
+            ← Latest race
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 px-5 pt-2.5 text-[13px] text-[var(--rt-text-secondary)]">
@@ -206,33 +243,63 @@ export function MyDriverCard({ data }: { data: MyDriverResponse }) {
       {recent.length > 1 && (
         <div className="border-t border-[var(--rt-border)] px-5 pb-3 pt-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--rt-text-muted)]">{first}&apos;s recent races</h3>
+            <h3 className="m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--rt-text-muted)]">{first}&apos;s races</h3>
             {totals && (
               <span className="text-[12px] text-[var(--rt-text-muted)]">
                 {totals.races} race{totals.races === 1 ? "" : "s"} · {totals.series.length} series
               </span>
             )}
           </div>
+          {onPickRace && <p className="m-0 mt-0.5 text-[12px] text-[var(--rt-text-muted)]">Pick a race to see it above and share its card.</p>}
           <ul className="m-0 mt-1.5 flex list-none flex-col p-0 text-[13px] tabular-nums">
-            {recent.slice(1, 5).map((r) => (
-              <li key={r.raceId} className="flex min-h-[40px] items-center gap-3 border-t border-[var(--rt-border)]">
-                <span className="w-12 shrink-0 text-[var(--rt-text-muted)]">{formatDayRange(r.date, r.date).replace(/,\s*\d{4}$/, "")}</span>
-                <SeriesBadge series={r.series} size="sm" />
-                <Link to={chartHref(r.raceId, r.carNumber)} className="min-w-0 flex-1 truncate text-[var(--rt-text)] hover:text-[var(--rt-accent)]">
-                  {r.raceName}
-                </Link>
-                <span className="hidden shrink-0 text-[var(--rt-text-secondary)] sm:inline">
-                  #{r.carNumber} · {r.carClass}
-                </span>
-                <span className="w-10 shrink-0 text-right font-semibold text-[var(--rt-text)]">{result(r)}</span>
-              </li>
-            ))}
+            {shownRaces.map((r) => {
+              const current = r.raceId === race.id;
+              const row = (
+                <>
+                  <span className="min-w-12 shrink-0 text-[var(--rt-text-muted)]">{shortDate(r.date)}</span>
+                  <SeriesBadge series={r.series} size="sm" />
+                  <span className={`min-w-0 flex-1 truncate ${current ? "font-semibold text-[var(--rt-accent)]" : "text-[var(--rt-text)]"}`}>
+                    {picking === r.raceId ? "Loading…" : r.raceName}
+                  </span>
+                  <span className="hidden shrink-0 text-[var(--rt-text-secondary)] sm:inline">
+                    #{r.carNumber} · {r.carClass}
+                  </span>
+                  <span className="w-10 shrink-0 text-right font-semibold text-[var(--rt-text)]">{result(r)}</span>
+                </>
+              );
+              return (
+                <li key={r.raceId} className="border-t border-[var(--rt-border)]">
+                  {onPickRace ? (
+                    <button
+                      type="button"
+                      aria-current={current ? "true" : undefined}
+                      disabled={picking !== null}
+                      onClick={() => !current && onPickRace(r.raceId === recent[0]?.raceId ? null : r.raceId)}
+                      className="flex min-h-[40px] w-full items-center gap-3 text-left hover:text-[var(--rt-accent)] disabled:cursor-wait"
+                    >
+                      {row}
+                    </button>
+                  ) : (
+                    <Link to={chartHref(r.raceId, r.carNumber)} className="flex min-h-[40px] items-center gap-3">
+                      {row}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
-          {totals && totals.races > 5 && (
-            <Link to={`/races?q=${encodeURIComponent(driver.name)}`} className="mt-1.5 inline-flex min-h-[36px] items-center text-[13px] text-[var(--rt-accent)]">
-              All of {first}&apos;s races →
-            </Link>
-          )}
+          <div className="mt-1.5 flex flex-wrap gap-x-5">
+            {!allRaces && recent.length > RACES_SHOWN && (
+              <button type="button" onClick={() => setAllRaces(true)} className="inline-flex min-h-[36px] items-center text-[13px] text-[var(--rt-accent)]">
+                More races ({recent.length - RACES_SHOWN})
+              </button>
+            )}
+            {totals && totals.races > recent.length && (allRaces || recent.length <= RACES_SHOWN) && (
+              <Link to={`/races?q=${encodeURIComponent(driver.name)}`} className="inline-flex min-h-[36px] items-center text-[13px] text-[var(--rt-accent)]">
+                All of {first}&apos;s races →
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </article>
