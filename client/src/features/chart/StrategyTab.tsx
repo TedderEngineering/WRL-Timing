@@ -33,6 +33,29 @@ function fmtTime(s: number): string {
   return m + ":" + sec.toFixed(3).padStart(6, "0");
 }
 
+const PIT_KIND = { stop: "Pit stop", garage: "Garage", penalty: "Penalty (not a stop)" } as const;
+
+function pitDurText(p: StrategyMetrics["pits"][number], verified: boolean): string {
+  if (p.dur === null) return p.kind === "garage" ? "Garage visit" : "Pit lane time: not timed";
+  return verified ? `In the pit lane: ${p.dur.toFixed(0)}s` : `Duration: ~${p.dur > 0 ? p.dur.toFixed(0) + "s" : "< 1s"}`;
+}
+
+function pitTimeTitle(m: StrategyMetrics): string {
+  const what = m.verified ? "Time in the pit lane over the car's stops and penalties" : "Pit laps' time over the car's green pace (estimate)";
+  const notes = [
+    m.untimedStops > 0 ? `* ${m.untimedStops} without a pit-lane time, not included` : "",
+    m.garageVisits > 0 ? `${m.garageVisits} garage visit${m.garageVisits === 1 ? "" : "s"}, not included` : "",
+  ].filter(Boolean);
+  return [what, ...notes].join("\n");
+}
+
+/** Seconds → M:SS.s (pit-lane times are timed to the second or tenth). */
+function fmtTenths(s: number): string {
+  if (!s) return "—";
+  const m = Math.floor(s / 60);
+  return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0");
+}
+
 // ─── Table column definitions ───────────────────────────────────────────────
 
 type SortKey = string;
@@ -52,10 +75,10 @@ const COLUMNS: Column[] = [
   { key: "carNum", label: "Car", getValue: (m) => m.carNum, fmt: (m) => `#${m.carLabel}`, type: "num", defaultDir: "asc", width: "56px" },
   { key: "team", label: "Team", getValue: (m) => m.team, fmt: (m) => m.team, type: "str", defaultDir: "asc" },
   { key: "lapsCompleted", label: "Laps", getValue: (m) => m.lapsCompleted, fmt: (m) => String(m.lapsCompleted), type: "num", defaultDir: "desc", width: "52px" },
-  { key: "stintCount", label: "Stops", getValue: (m) => m.stintCount - 1, fmt: (m) => String(m.stintCount - 1), type: "num", defaultDir: "asc", width: "52px" },
+  { key: "stops", label: "Stops", getValue: (m) => m.stops, fmt: (m) => String(m.stops), type: "num", defaultDir: "asc", width: "52px" },
   { key: "avgGreenPace", label: "Avg Pace", getValue: (m) => m.avgGreenPace || 99999, fmt: (m) => fmtPace(m.avgGreenPace), type: "num", defaultDir: "asc", width: "80px" },
   { key: "bestLap", label: "Best Lap", getValue: (m) => m.bestLap || 99999, fmt: (m) => fmtPace(m.bestLap), type: "num", defaultDir: "asc", width: "80px" },
-  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => fmtTime(m.totalPitTime), type: "num", defaultDir: "asc", width: "80px" },
+  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => (m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)) + (m.untimedStops > 0 ? "*" : ""), type: "num", defaultDir: "asc", width: "80px" },
   { key: "pitPct", label: "Pit %", getValue: (m) => m.pitPct, fmt: (m) => m.pitPct.toFixed(1) + "%", type: "num", defaultDir: "asc", width: "56px" },
   { key: "yellowPitPct", label: "Yellow Pits", getValue: (m) => m.yellowPitPct, fmt: (m) => m.yellowPitPct.toFixed(0) + "%", type: "num", defaultDir: "desc", width: "76px" },
   { key: "avgStintLen", label: "Avg Stint", getValue: (m) => m.avgStintLen, fmt: (m) => m.avgStintLen.toFixed(1) + "L", type: "num", defaultDir: "desc", width: "68px" },
@@ -402,6 +425,19 @@ export function StrategyTab({
                         </td>
                       );
                     }
+                    // Pit Time: what it covers, and any stop without a time
+                    if (col.key === "totalPitTime") {
+                      return (
+                        <td key={col.key} title={pitTimeTitle(m)} style={{
+                          padding: "8px 12px",
+                          borderBottom: `1px solid ${S.bdr}`,
+                          whiteSpace: "nowrap",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>
+                          {val}
+                        </td>
+                      );
+                    }
                     // Yellow Pits column - tag style
                     if (col.key === "yellowPitPct") {
                       const pct = m.yellowPitPct;
@@ -542,7 +578,7 @@ function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.3rem", fontWeight: 800, color: clsColor }}>
-          #{m.carNum}
+          #{m.carLabel}
         </span>
         <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{m.team}</h3>
         <span style={{
@@ -611,7 +647,7 @@ function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
               key={i}
               leftPct={leftPct}
               isYellow={p.yel}
-              tooltip={`Lap ${p.lap} · ${p.yel ? "Yellow" : "Green"}\nDuration: ~${p.dur > 0 ? p.dur.toFixed(0) + "s" : "< 1s"}\nPosition: P${p.pb} → P${p.pa} (${posStr})`}
+              tooltip={`Lap ${p.lap} · ${PIT_KIND[p.kind]} · ${p.yel ? "Yellow" : "Green"}\n${pitDurText(p, m.verified)}\nPosition: P${p.pb} → P${p.pa} (${posStr})`}
             />
           );
         })}
