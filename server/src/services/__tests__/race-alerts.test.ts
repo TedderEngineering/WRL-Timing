@@ -88,6 +88,17 @@ describe("race-ready emails", () => {
     expect(m.subject).toBe("#67 at VIRginia International Raceway: P2 in GS, lost 1 place in pit cycle 1");
     expect(m.unsubscribeUrl).toMatch(/\/api\/alerts\/unsubscribe\?t=/);
     expect(m.html).toContain("from=alert");
+    // Laid out like the dashboard's car card: the car and its drivers, the result, the car's race, the cycles.
+    expect(m.html).toContain("Blackdog Racing");
+    expect(m.html).toContain("Lucas Weisenberg and Harrison Goodman");
+    expect(m.html).toContain("Finished P2 in GS of 2 · P2 overall · 5 of 5 laps");
+    expect(m.html).toMatch(/#67(&#39;|&#x27;|')s race/);
+    expect(m.html).toContain("Pit cycles in GS");
+    expect(m.html).toContain("1 · lap 3");
+    expect(m.html).toContain("P1 → P2");
+    expect(m.html).toContain("Lost 1");
+    expect(m.html).not.toContain("Pit loss");
+    expect(m.html).toContain("&car=67");
     // A second trigger (results turning official) repeats nothing.
     expect((await sendRaceAlerts("vir", NOW)).sent).toBe(0);
     expect(fake.state.mail).toHaveLength(1);
