@@ -22,6 +22,9 @@ interface DriverStint {
   end: number;
   driver: string | null;
   mine: boolean;
+  /** Average green lap of the stint (server dashboard/my-driver.ts); absent from older servers. */
+  avgLapS?: number | null;
+  avgLaps?: number;
 }
 
 export interface MyDriverResponse {
@@ -300,6 +303,18 @@ function DriveBox({
           </dt>
         </div>
       </dl>
+      {mine.some((s) => s.avgLapS) && (
+        <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12px] tabular-nums text-[var(--rt-text-muted)]">
+          <span className="font-semibold">{mine.length === 1 ? "Stint average" : "Stint averages"}</span>
+          {mine.map((s) =>
+            s.avgLapS ? (
+              <span key={s.start} title={`Average of ${s.avgLaps ?? 0} green laps (no pit, out-lap or caution laps)`}>
+                laps {s.start}–{s.end} <span className="font-mono font-semibold text-[var(--rt-text)]">{formatDuration(s.avgLapS)}</span>
+              </span>
+            ) : null
+          )}
+        </div>
+      )}
       {!solo && (
       <div>
         <div

@@ -6,6 +6,7 @@ import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
 import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners } from "../../my-drivers/driverCard";
+import { formatDuration } from "../../../lib/prose";
 
 const text = (node: React.ReactNode) =>
   renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
@@ -103,6 +104,16 @@ describe("driver card share image", () => {
 
   it("says the finish and the driver's drive under the trace", () => {
     expect(driverCardLines(input)).toEqual(["Finished P1 in GTP of 9 · P1 overall · 30 laps", "Alex: 3:42 h (37%) · 2 stints · best lap 1:10.881"]);
+  });
+
+  it("adds the driver's stint averages, one line per stint up to three", () => {
+    const drive = {
+      ...input.drive,
+      stints: input.drive.stints.map((s: any, i: number) => ({ ...s, avgLapS: s.mine ? 71.5 + i : null, avgLaps: 5 })),
+    };
+    const lines = driverCardLines({ ...input, drive });
+    const mine = drive.stints.filter((s: any) => s.mine);
+    expect(lines.slice(2)).toEqual(mine.map((s: any) => `Laps ${s.start}–${s.end} · stint avg ${formatDuration(s.avgLapS)}`));
   });
 
   it("falls back to the car's best lap when the timing doesn't say who drove", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
 
-import { driverFacts, stintsOf } from "../my-driver.js";
+import { driverFacts, stintAverage, stintsOf } from "../my-driver.js";
 import { bestSpelling, coDrivers, driverInNames, expandDriverName, sameDriver } from "../../services/my-drivers.js";
 
 const laps = (n: number, sec: (l: number) => number, pits: number[] = [], fcy: number[] = []) =>
@@ -85,5 +85,22 @@ describe("driverFacts", () => {
     expect(solo.known).toBe(true);
     expect(solo.myStints).toBe(2);
     expect(solo.driveTimeS).toBe(solo.carTimeS);
+  });
+});
+
+describe("stint averages", () => {
+  it("average each stint's green laps: no pit lap, out-lap, caution lap or lap far over pace", () => {
+    // Laps 1-10: 90 s, lap 3 under caution (120), lap 10 the pit lap (150); lap 11 the out-lap (130),
+    // lap 15 a slow lap (200, over 1.25 x the median), the rest 92 s.
+    const ls = laps(20, (l) => (l === 3 ? 120 : l === 10 ? 150 : l === 11 ? 130 : l === 15 ? 200 : l <= 10 ? 90 : 92), [10], [3]);
+    const avg = stintAverage(ls);
+    expect(avg({ start: 1, end: 10 })).toEqual({ avgLapS: 90, avgLaps: 8 });
+    expect(avg({ start: 11, end: 20 })).toEqual({ avgLapS: 92, avgLaps: 8 });
+  });
+
+  it("are on every stint of the driver's facts", () => {
+    const car = { laps: laps(20, (l) => (l <= 10 ? 90 : 92), [10]) };
+    const f = driverFacts(car, [{ l: 10, inDriver: "Alex Rivera", outDriver: "Jamie Cole" }], "Jamie Cole", ["Alex Rivera", "Jamie Cole"]);
+    expect(f.stints.map((s) => s.avgLapS)).toEqual([90, 92]);
   });
 });
