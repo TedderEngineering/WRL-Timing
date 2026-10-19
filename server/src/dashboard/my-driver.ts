@@ -26,6 +26,10 @@ export interface DriverStint {
   /** As the timing names them; null when it doesn't. */
   driver: string | null;
   mine: boolean;
+  /** Average of the stint's green laps (no pit lap, out-lap, caution lap or lap far over the car's pace); null with none. */
+  avgLapS: number | null;
+  /** How many laps that average is over. */
+  avgLaps: number;
 }
 
 export interface DriverFacts {
@@ -74,6 +78,27 @@ export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | nu
   return named;
 }
 
+/** Laps over this share of the car's median green lap are not racing laps (a slow lap, a stop in the garage). */
+const STINT_LAP_MAX = 1.25;
+
+/**
+ * Each stint's average green lap: no pit lap, no out-lap (the stint's first lap after a stop), no
+ * caution lap, nothing over STINT_LAP_MAX of the car's median green lap.
+ */
+export function stintAverage(laps: LapRow[]): (s: { start: number; end: number }) => { avgLapS: number | null; avgLaps: number } {
+  const greens = laps.filter((l) => l.pit !== 1 && green(l) && l.ltSec > 0).map((l) => l.ltSec).sort((a, b) => a - b);
+  const med = greens.length ? greens[Math.floor(greens.length / 2)] : 0;
+  const pitLaps = new Set(laps.filter((l) => l.pit === 1).map((l) => l.l));
+  return (s) => {
+    const xs = laps
+      .filter((l) => l.l >= s.start && l.l <= s.end && l.pit !== 1 && !pitLaps.has(l.l - 1) && green(l) && l.ltSec > 0)
+      .filter((l) => !med || l.ltSec <= med * STINT_LAP_MAX)
+      .map((l) => l.ltSec);
+    if (!xs.length) return { avgLapS: null, avgLaps: 0 };
+    return { avgLapS: Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 1000) / 1000, avgLaps: xs.length };
+  };
+}
+
 export function driverFacts(
   car: { laps: LapRow[] },
   pits: PitRow[] | undefined,
@@ -81,7 +106,8 @@ export function driverFacts(
   entryDrivers: string[]
 ): DriverFacts {
   const sole = entryDrivers.length === 1 ? entryDrivers[0] : null;
-  const stints = stintsOf(car.laps, pits ?? [], sole, entryDrivers).map((s) => ({ ...s, mine: !!s.driver && sameDriver(s.driver, name) }));
+  const avg = stintAverage(car.laps);
+  const stints = stintsOf(car.laps, pits ?? [], sole, entryDrivers).map((s) => ({ ...s, mine: !!s.driver && sameDriver(s.driver, name), ...avg(s) }));
   const known = stints.some((s) => s.driver);
   const inStint = (l: LapRow, list: DriverStint[]) => list.some((s) => l.l >= s.start && l.l <= s.end);
   const mineList = stints.filter((s) => s.mine);

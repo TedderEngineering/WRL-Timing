@@ -180,10 +180,24 @@ export function driverCardLines(input: DriverCardInput): string[] {
       const share = drive.carTimeS > 0 ? ` (${Math.round((drive.driveTimeS / drive.carTimeS) * 100)}%)` : "";
       out.push(`${first(driverName)}: ${driveTimeText(drive.driveTimeS)}${share} · ${drive.myStints} stint${drive.myStints === 1 ? "" : "s"}${best}`);
     }
+    out.push(...stintAverageLines(drive));
   } else if (facts?.bestLap) {
     out.push(`Car's best lap ${formatDuration(facts.bestLap.sec)} on lap ${facts.bestLap.lap}`);
   }
   return out;
+}
+
+/**
+ * The driver's stints with their average green lap: one line each for up to three ("Laps 61–89 ·
+ * stint avg 2:20.104"), else one line of averages. None when no stint has one.
+ */
+export function stintAverageLines(drive: Drive): string[] {
+  const mine = drive.stints.filter((s) => s.mine && s.avgLapS);
+  if (!mine.length) return [];
+  if (mine.length <= 3) {
+    return mine.map((s) => `Laps ${s.start}–${s.end} · stint avg ${formatDuration(s.avgLapS!)}`);
+  }
+  return [`Stint averages ${mine.map((s) => formatDuration(s.avgLapS!)).join(" · ")}`];
 }
 
 const ORD = ["", "", "2nd ", "3rd "];
@@ -230,19 +244,24 @@ function drawBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, cha
   const carLine = `#${car.number} ${car.team} · ${car.cls}${car.coDrivers.length ? ` · with ${list(car.coDrivers.map((d) => displayName(d)))}` : ""}`;
   drawText(ctx, carLine, box.x, box.y + 30, { size: 30, weight: 600, color: style.text, maxWidth: box.w });
   const lines = driverCardLines(input);
-  const lineH = 52;
+  // The finish and drive lines at full size; the stint averages under them smaller.
+  const small = (i: number) => i >= 2;
+  const heightOf = (i: number) => (small(i) ? 42 : 52);
+  const linesH = lines.reduce((h, _t, i) => h + heightOf(i), 0);
   const traceTop = box.y + 64;
-  const traceH = box.h - (traceTop - box.y) - lines.length * lineH - 24;
+  const traceH = box.h - (traceTop - box.y) - linesH - 24;
   const key = chart ? chartCarKey(chart, car.number) : null;
   if (chart && key) drawOverallTrace(ctx, { x: box.x, y: traceTop, w: box.w, h: traceH }, style, chart, key, input);
-  lines.forEach((t, i) =>
-    drawText(ctx, t, box.x, traceTop + (chart && key ? traceH : 0) + 56 + i * lineH, {
-      size: 32,
+  let y = traceTop + (chart && key ? traceH : 0) + 56;
+  lines.forEach((t, i) => {
+    drawText(ctx, t, box.x, y, {
+      size: small(i) ? 26 : 32,
       weight: i === 0 ? 600 : 500,
       color: i === 0 ? style.text : style.muted,
       maxWidth: box.w,
-    }),
-  );
+    });
+    y += heightOf(i + 1 < lines.length ? i + 1 : i);
+  });
 }
 
 export function driverCardText(input: DriverCardInput): { title: string; subtitle: string } {
