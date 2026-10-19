@@ -59,11 +59,11 @@ function bestOf(laps: LapRow[]): { sec: number; lap: number } | null {
  * The car's stints between stops, each with its driver when the timing names one; a short name
  * ("Boehm") becomes the car's full one ("Kevin Boehm") when `carDrivers` gives it.
  */
-export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | null, carDrivers: string[] = []): Omit<DriverStint, "mine">[] {
+export function stintsOf(laps: LapRow[], pits: PitRow[], soleDriver: string | null, carDrivers: string[] = []): Omit<DriverStint, "mine" | "avgLapS" | "avgLaps">[] {
   const last = laps.length ? Math.max(...laps.map((l) => l.l)) : 0;
   if (last === 0) return [];
   const stops = [...new Map(pits.filter((p) => p.l > 0 && p.l < last).map((p) => [p.l, p])).values()].sort((a, b) => a.l - b.l);
-  const out: Omit<DriverStint, "mine">[] = [];
+  const out: Omit<DriverStint, "mine" | "avgLapS" | "avgLaps">[] = [];
   let start = 1;
   let driver: string | null = null;
   for (const p of stops) {
