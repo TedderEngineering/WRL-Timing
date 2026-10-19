@@ -42,7 +42,7 @@ export interface DriverCardInput {
   facts: Facts | null;
   drive: Drive | null;
   /** The driver's highlights, ranked (server); the first is the card's fact. */
-  highlights?: { text: string }[];
+  highlights?: { kind?: string; text: string }[];
 }
 
 // ─── Chart data, once per race ───────────────────────────────────────────────
@@ -280,6 +280,30 @@ export function driverCardFact(input: DriverCardInput, chart: RaceChartData | nu
   return b ? { text: b, tone: "good" } : undefined;
 }
 
+/**
+ * The badge at the card's top right for a car that took the flag on the podium: "Overall Winner!",
+ * "GTO Winner!", "GTO Podium!". The card's result line gives the places.
+ */
+export function podiumBadge(f: Pick<Facts, "finishClass" | "finishOverall" | "finished" | "cls"> | null | undefined): string | null {
+  if (!f || f.finished === false || !f.finishClass || f.finishClass > 3) return null;
+  if (f.finishOverall === 1) return "Overall Winner!";
+  return f.finishClass === 1 ? `${f.cls} Winner!` : `${f.cls} Podium!`;
+}
+
+/**
+ * The driver card's pills: up to two of the driver's highlights (the server's), else the card's own
+ * fact; none when there is nothing to say. "Brought the car home" is left out under a podium
+ * badge, which already says it.
+ */
+export function driverCardPills(input: DriverCardInput, chart: RaceChartData | null): string[] {
+  const badge = podiumBadge(input.facts);
+  if (input.highlights?.length) {
+    return input.highlights.filter((h) => !(badge && h.kind === "brought_home")).slice(0, 2).map((h) => h.text);
+  }
+  const f = driverCardFact(input, chart, chart ? chartCarKey(chart, input.car.number) : null);
+  return f && !(badge && /^Brought /.test(f.text)) ? [f.text] : [];
+}
+
 function drawBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, chart: RaceChartData | null, input: DriverCardInput) {
   const { car } = input;
   const carLine = `#${car.number} ${car.team} · ${car.cls}${car.coDrivers.length ? ` · with ${list(car.coDrivers.map((d) => displayName(d)))}` : ""}`;
@@ -318,7 +342,8 @@ export async function makeDriverCard(input: DriverCardInput): Promise<Blob> {
     title,
     subtitle,
     body: (ctx, box, style) => drawBody(ctx, box, style, chart, input),
-    fact: driverCardFact(input, chart, chart ? chartCarKey(chart, input.car.number) : null),
+    facts: driverCardPills(input, chart).map((text) => ({ text, tone: "good" as const })),
+    badge: podiumBadge(input.facts) ?? undefined,
   });
 }
 

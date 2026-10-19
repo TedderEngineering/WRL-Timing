@@ -194,7 +194,13 @@ export function carHighlights(data: Chart, ann: Ann | null, key: string, f: CarF
   }
 
   // Fewest pit stops, among the cars that ran (almost) the full distance.
-  const stopsOf = (c: Car) => c.laps.filter((l) => l.pit === 1).length;
+  // The race's stops (the pit notes, as the cards count them); else the laps flagged as pit laps. A
+  // visit can flag several laps (WRL: in the pit lane at the line on laps 12-14), so the notes come first.
+  const stopsOf = (c: Car) => {
+    const k = classCars.find(([, x]) => x === c)?.[0];
+    const notes = k ? ann?.[k]?.pits : undefined;
+    return notes ? new Set(notes.map((p) => p.l)).size : c.laps.filter((l) => l.pit === 1).length;
+  };
   const full = classCars.filter(([, c]) => c.laps.length >= leaderLaps - 1);
   if (full.length >= MIN_FIELD && full.some(([k]) => k === key)) {
     const mine = stopsOf(car);

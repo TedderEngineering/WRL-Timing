@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carCardResult, carCardStats, carCardText, lapColor, CARD_DRIVER_COLORS } from "../carShare";
+import { cardHighlights, carCardResult, carCardStats, carCardText, lapColor, CARD_DRIVER_COLORS } from "../carShare";
 
 const facts: any = {
   carKey: "120", number: "120", team: "AE Victory Racing", cls: "GTO", vehicle: null, finishClass: 1, finishOverall: 1, classSize: 16, status: null, finished: true,
@@ -36,5 +36,18 @@ describe("the car's share card", () => {
       title: "#120 AE Victory Racing",
       subtitle: "WRL Sunday 7 Hour — Sebring International Raceway · Oct 18, 2026",
     });
+  });
+
+  it("shows up to two highlights past the result, or fewer", () => {
+    const h = (kind: string, text: string) => ({ kind, text, score: 1 });
+    const won = h("result", "Won GTO and the race overall");
+    expect(cardHighlights({ ...facts, highlights: [won, h("fewest_stops", "6 pit stops, fewest in GTO"), h("race_pace", "2nd-best race pace in GTO"), h("passes", "x")] })).toEqual([
+      "6 pit stops, fewest in GTO",
+      "2nd-best race pace in GTO",
+    ]);
+    expect(cardHighlights({ ...facts, highlights: [won], benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual([]);
+    expect(cardHighlights({ ...facts, highlights: [h("race_pace", "2nd-best race pace in GTO")] })).toEqual(["2nd-best race pace in GTO"]);
+    // Older responses without highlights: the benchmarks stand in.
+    expect(cardHighlights({ ...facts, benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual(["Quickest stop of 6 in GTO, lap 61"]);
   });
 });

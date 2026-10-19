@@ -18,7 +18,7 @@ import { formatDuration } from "@/lib/prose";
 import { SANS, drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
 import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { isComputer } from "@/features/share/shareImage";
-import { loadRaceChartWithNotes, primeRaceChart } from "../my-drivers/driverCard";
+import { loadRaceChartWithNotes, podiumBadge, primeRaceChart } from "../my-drivers/driverCard";
 import { displayName } from "../my-drivers/api";
 import { driveTimeText } from "../my-drivers/stints";
 import { finishLine, type CarDriveFacts, type MyCarResponse } from "./MyCarCard";
@@ -219,6 +219,14 @@ function drawCycles(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, f
   });
 }
 
+/** The car card's pills: up to two highlights past the result (the badge carries the podium), or fewer. */
+export function cardHighlights(f: Facts): string[] {
+  const hs = f.highlights ?? [];
+  // Older responses carry no highlights; their benchmarks stand in.
+  if (!hs.length) return f.benchmarks?.slice(0, 2) ?? [];
+  return hs.filter((h) => h.kind !== "result").slice(0, 2).map((h) => h.text);
+}
+
 export function drawCarCardBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, chart: RaceChartData | null, input: CarCardInput) {
   const { facts: f } = input;
   let y = box.y;
@@ -266,14 +274,14 @@ export function carCardText(input: CarCardInput): { title: string; subtitle: str
 export async function makeCarCard(input: CarCardInput): Promise<Blob> {
   const chart = await loadRaceChartWithNotes(input.race.id);
   const { title, subtitle } = carCardText(input);
-  // The car's top highlight; a server without highlights gives its first benchmark.
-  const fact = input.facts.highlights?.[0]?.text ?? input.facts.benchmarks?.[0];
+  const pills = cardHighlights(input.facts);
   return makeShareCard({
     site: "racetrace",
     title,
     subtitle,
     body: (ctx, box, style) => drawCarCardBody(ctx, box, style, chart?.data ?? null, input),
-    fact: fact ? { text: fact, tone: "good" } : undefined,
+    facts: pills.map((text) => ({ text, tone: "good" as const })),
+    badge: podiumBadge(input.facts) ?? undefined,
   });
 }
 

@@ -86,6 +86,10 @@ export interface ShareCardOptions {
   body: (ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle) => void;
   /** One short line of fact; "good" shows it in the site's good colour. */
   fact?: { text: string; tone?: "good" | "neutral" };
+  /** Up to two facts side by side in the fact slot (in place of `fact`). */
+  facts?: { text: string; tone?: "good" | "neutral" }[];
+  /** A short badge at the top right of the header, beside the product name ("Overall Winner!"). */
+  badge?: string;
 }
 
 // ─── Drawing helpers (also for body slots) ───────────────────────────────────
@@ -187,6 +191,28 @@ export async function drawShareCard(
   }
   drawText(ctx, style.name, nameX, 124, { size: 44, weight: 700, color: style.text });
 
+  // Badge: right-aligned, level with the product name, in the site's accent.
+  if (opts.badge) {
+    const maxW = W - PAD - (nameX + 300);
+    let size = 36;
+    ctx.font = `800 ${size}px ${SANS}`;
+    while (size > 22 && ctx.measureText(opts.badge).width + 64 > maxW) {
+      size -= 2;
+      ctx.font = `800 ${size}px ${SANS}`;
+    }
+    const bw = Math.min(maxW, ctx.measureText(opts.badge).width + 64);
+    const bh = 76;
+    const bx = W - PAD - bw;
+    const by = 108 - bh / 2;
+    roundRect(ctx, bx, by, bw, bh, bh / 2);
+    ctx.fillStyle = hexAlpha(style.accent, 0.16);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = style.accent;
+    ctx.stroke();
+    drawText(ctx, opts.badge, bx + bw / 2, by + bh / 2 + size * 0.36, { size, weight: 800, color: style.accent, align: "center" });
+  }
+
   // Title and subtitle.
   drawText(ctx, opts.title, PAD, 270, {
     size: 64,
@@ -209,19 +235,32 @@ export async function drawShareCard(
     x: PAD,
     y: 380,
     w: W - PAD * 2,
-    h: (opts.fact ? factTop - 32 : footerTop - 40) - 380,
+    h: (opts.fact || opts.facts?.length ? factTop - 32 : footerTop - 40) - 380,
   };
   ctx.save();
   opts.body(ctx, bodyBox, style);
   ctx.restore();
 
-  // Fact line.
-  if (opts.fact) {
-    const good = opts.fact.tone === "good";
+  // Fact line: one pill, or two side by side.
+  const pills = (opts.facts?.length ? opts.facts : opts.fact ? [opts.fact] : []).slice(0, 2);
+  if (pills.length === 2) {
+    const gap = 20;
+    const w = (W - PAD * 2 - gap) / 2;
+    pills.forEach((f, i) => {
+      const x = PAD + i * (w + gap);
+      const good = f.tone === "good";
+      roundRect(ctx, x, factTop, w, 96, 48);
+      ctx.fillStyle = good ? hexAlpha(style.good, 0.14) : style.panel;
+      ctx.fill();
+      drawText(ctx, f.text, x + w / 2, factTop + 60, { size: 30, weight: 600, color: good ? style.good : style.text, align: "center", maxWidth: w - 48 });
+    });
+  } else if (pills.length === 1) {
+    const fact = pills[0];
+    const good = fact.tone === "good";
     roundRect(ctx, PAD, factTop, W - PAD * 2, 96, 48);
     ctx.fillStyle = good ? hexAlpha(style.good, 0.14) : style.panel;
     ctx.fill();
-    drawText(ctx, opts.fact.text, W / 2, factTop + 62, {
+    drawText(ctx, fact.text, W / 2, factTop + 62, {
       size: 36,
       weight: 600,
       color: good ? style.good : style.text,

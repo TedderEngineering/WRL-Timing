@@ -5,7 +5,7 @@ import { MyDriverCard, type MyDriverResponse } from "../MyDriverCard";
 import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
-import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners, ShareRaceDriverCard } from "../../my-drivers/driverCard";
+import { chartCarKey, driverCardFact, driverCardPills, podiumBadge, driverCardLines, driverShareUrl, lapOwners, ShareRaceDriverCard } from "../../my-drivers/driverCard";
 import { formatDuration } from "../../../lib/prose";
 
 const text = (node: React.ReactNode) =>
@@ -128,6 +128,23 @@ describe("driver card share image", () => {
 
   it("puts the driver's top highlight on the card when the server ranks them", () => {
     expect(driverCardFact({ ...input, highlights: [{ text: "Brought #7 home to the GTP win" }] })).toEqual({ text: "Brought #7 home to the GTP win", tone: "good" });
+  });
+
+  it("badges a podium finish and shows up to two of the driver's highlights", () => {
+    const f = input.facts as any;
+    expect(podiumBadge({ ...f, cls: "GTO", finishClass: 1, finishOverall: 1, finished: true })).toBe("Overall Winner!");
+    expect(podiumBadge({ ...f, cls: "GTO", finishClass: 1, finishOverall: 4, finished: true })).toBe("GTO Winner!");
+    expect(podiumBadge({ ...f, cls: "GTO", finishClass: 3, finishOverall: 9, finished: true })).toBe("GTO Podium!");
+    expect(podiumBadge({ ...f, cls: "GTO", finishClass: 4, finishOverall: 9, finished: true })).toBeNull();
+    expect(podiumBadge({ ...f, cls: "GTO", finishClass: 1, finishOverall: 1, finished: false })).toBeNull();
+    const won = { ...input, facts: { ...f, finishClass: 1, finishOverall: 1, finished: true } };
+    const three = [{ kind: "brought_home", text: "Brought #7 home to the GTP win" }, { kind: "driver_laps_led", text: "Led the race for 8 laps" }, { kind: "longest_stint", text: "Longest stint" }];
+    // Under the badge, "brought home" repeats it.
+    expect(driverCardPills({ ...won, highlights: three }, null)).toEqual(["Led the race for 8 laps", "Longest stint"]);
+    expect(driverCardPills({ ...won, highlights: three.slice(0, 2) }, null)).toEqual(["Led the race for 8 laps"]);
+    expect(driverCardPills({ ...won, highlights: three.slice(0, 1) }, null)).toEqual([]);
+    const off = { ...input, facts: { ...f, finishClass: 5, finishOverall: 9, finished: true } };
+    expect(driverCardPills({ ...off, highlights: three }, null)).toEqual(three.slice(0, 2).map((h) => h.text));
   });
 
   it("offers each driver's card on the race page", () => {
