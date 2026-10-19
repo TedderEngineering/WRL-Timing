@@ -64,20 +64,39 @@ export function createApp() {
   );
 
   // ─── Body Parsing ──────────────────────────────────────────────────────────
+  // 1 MB for everything (forms, settings, follows, Setup Sheet edits). Larger bodies only where a
+  // signed-in request sends whole files as JSON, and only with an Authorization header, so an
+  // anonymous request can't make the server read 50 MB before auth and the rate limits run:
+  //   - an intake push carries a race's raw timing files; a 24-hour race's lap analysis alone is
+  //     over 50 MB (intake token required);
+  //   - the admin pages upload race and qualifying files as text (admin only);
+  //   - Finding Grip's admin imports and Setup Sheet's workbook import.
   const INTAKE_PUSH_PATH = /^\/api\/admin\/intake\/races\/?$/;
   const INTAKE_BODY_LIMIT = "160mb";
+  const FILE_BODY_PATHS = [/^\/api\/admin\//, /^\/api\/grip\/admin\//, /^\/api\/setup\/teams\/[^/]+\/import\/?$/];
+  const FILE_BODY_LIMIT = "50mb";
+  const DEFAULT_BODY_LIMIT = "1mb";
+  const jsonParsers = new Map(
+    [INTAKE_BODY_LIMIT, FILE_BODY_LIMIT, DEFAULT_BODY_LIMIT].map((limit) => [limit, express.json({ limit })])
+  );
   // Stripe webhook needs raw body — skip JSON parsing for that route.
   // Race Analysis Package uploads read the raw bytes too (plain or gzip JSON,
   // hashed exactly as sent; see routes/packages.ts).
   app.use((req, res, next) => {
     if (req.path === "/api/billing/webhook") return next();
     if (req.method === "POST" && PACKAGE_UPLOAD_PATH.test(req.path)) return next();
-    // An intake push carries a race's raw timing files; a 24-hour race's lap analysis alone
-    // is over 50 MB. Only that route (intake token required) accepts more.
-    const limit = req.method === "POST" && INTAKE_PUSH_PATH.test(req.path) ? INTAKE_BODY_LIMIT : "50mb";
-    express.json({ limit })(req, res, next);
+    const auth = req.headers.authorization;
+    const signedIn = typeof auth === "string" && auth.startsWith("Bearer ");
+    const limit = !signedIn
+      ? DEFAULT_BODY_LIMIT
+      : req.method === "POST" && INTAKE_PUSH_PATH.test(req.path)
+        ? INTAKE_BODY_LIMIT
+        : FILE_BODY_PATHS.some((re) => re.test(req.path))
+          ? FILE_BODY_LIMIT
+          : DEFAULT_BODY_LIMIT;
+    jsonParsers.get(limit)!(req, res, next);
   });
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(cookieParser());
 
   // ─── Setup Sheet ─────────────────────────────────────────────────────────

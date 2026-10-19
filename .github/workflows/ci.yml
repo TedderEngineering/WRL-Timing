@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# The jobs only read the code; nothing here writes to the repository.
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: "20"
 
@@ -38,6 +42,18 @@ jobs:
       - name: Lint server
         working-directory: server
         run: npm run lint
+
+      # Known advisories in the packages that ship (dev tools are left out). The website fails on
+      # high or critical. The server fails on critical for now: its remaining highs all come from
+      # the Prisma CLI's config package (fixed only in Prisma 7, a major upgrade); raise this to
+      # high once Prisma is upgraded.
+      - name: Audit client dependencies
+        working-directory: client
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit server dependencies
+        working-directory: server
+        run: npm audit --omit=dev --audit-level=critical
 
   test:
     name: Test
