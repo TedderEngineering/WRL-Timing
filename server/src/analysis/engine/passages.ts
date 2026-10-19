@@ -435,6 +435,14 @@ export const RACING_PACE = 1.05;
 /** A pit-report row with no lap pit flag and under this many seconds in the pit lane is not a stop. */
 export const PHANTOM_STOP_S = 10;
 
+/**
+ * No car gets through a pit lane this fast (Sebring's takes about half a minute at the limiter). A
+ * RedMist report row shorter than this is not a pit-lane time: with no lap pit flag it is not a visit
+ * at all, and inside a visit the time is unknown. Rows the equipment split from one visit (Sebring
+ * Sunday 2026, #120 laps 12-14 under caution: 1 s, 5 s, 5 s) are one passage.
+ */
+export const MIN_VISIT_S = 20;
+
 function racingPace(rows: LapRow[]): (i: number) => boolean {
   const xs = rows
     .map((r) => r.lapTimeS)
@@ -498,6 +506,49 @@ export function redmistFlagVisits(rows: LapRow[]): FlagVisit[] {
   return out;
 }
 
+/**
+ * Report rows under MIN_VISIT_S inside a visit: their time is not a pit-lane time (unknown), and rows
+ * whose laps overlap, at least one of them that short, are the equipment splitting one visit: one passage.
+ */
+function mergeShortReportRows(mine: Passage[], merged: string[]): void {
+  // A row whose entry was reissued times only its last part (already not reliable); it keeps that part.
+  const short = (p: Passage) => p.official !== null && p.official < MIN_VISIT_S && !p.pitLaneStart && !p.confNotes.includes("pit_entry_renumbered");
+  const sorted = [...mine].sort((a, b) => (a.inIdx ?? -1) - (b.inIdx ?? -1));
+  const keep: Passage[] = [];
+  for (const p of sorted) {
+    const prev = keep[keep.length - 1];
+    const prevEnd = prev ? (prev.outIdx ?? prev.lastIdx ?? prev.inIdx) : null;
+    if (prev && prev.inIdx !== null && p.inIdx !== null && prevEnd !== null && p.inIdx <= prevEnd && (short(prev) || short(p)) && !prev.pitLaneStart && !p.pitLaneStart) {
+      // One visit: the first row's entry, the last row's exit; a real pit-lane time when one row has it.
+      const times = [prev, p].map((x) => (short(x) ? null : x.official)).filter((v): v is number => v !== null);
+      prev.outIdx = p.outIdx;
+      if (p.lastIdx !== undefined) prev.lastIdx = p.lastIdx;
+      else delete prev.lastIdx;
+      prev.outLap = p.outLap;
+      prev.poutT = p.poutT ?? prev.poutT;
+      prev.rejoinT = p.rejoinT ?? prev.rejoinT;
+      prev.outDriverName = p.outDriverName ?? prev.outDriverName;
+      prev.official = times.length === 1 ? times[0] : null;
+      if (prev.official === null) prev.reliable = false;
+      prev.refs = [...prev.refs, ...p.refs];
+      if (!prev.confNotes.includes("pit_report_rows_merged")) prev.confNotes.push("pit_report_rows_merged");
+      prev.notes.push("The pit report splits this visit into several rows of a few seconds each; they are one stop, and its pit-lane time is unknown.");
+      merged.push(`${p.car} L${prev.inLap}-${prev.outLap ?? "none"}`);
+      continue;
+    }
+    keep.push(p);
+  }
+  for (const p of keep) {
+    if (!short(p)) continue;
+    p.notes.push(`The reported ${rd(p.official!, 0)} s is too short for a pit-lane visit; the pit-lane time is unknown.`);
+    p.confNotes.push("pit_report_time_too_short");
+    p.official = null;
+    p.reliable = false;
+    merged.push(`${p.car} L${p.inLap}`);
+  }
+  mine.splice(0, mine.length, ...keep);
+}
+
 function lapRange(p: { inIdx: number | null; outIdx: number | null; lastIdx?: number }): [number, number] | null {
   if (p.inIdx === null) return null;
   return [p.inIdx, p.outIdx ?? p.lastIdx ?? p.inIdx];
@@ -518,6 +569,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
   const corrected: string[] = [];
   const noFlags: string[] = [];
   const phantom: string[] = [];
+  const merged: string[] = [];
   const extra: string[] = [];
   const clockOff: string[] = [];
   const staging: string[] = [];
@@ -650,7 +702,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
       if (!rows.slice(range[0], range[1] + 1).some((x) => x.inPit || x.crossedInPit)) {
         // No lap pit flag and only a few seconds in the pit lane: not a visit (no car passes through a
         // pit lane that fast). The report repeats such rows (Sebring 2026: #120 laps 8, 9, 17, 22, 5 s).
-        if (r.pitTimeS !== null && r.pitTimeS < PHANTOM_STOP_S) {
+        if (r.pitTimeS !== null && r.pitTimeS < Math.max(PHANTOM_STOP_S, MIN_VISIT_S)) {
           phantom.push(`${car} L${p.inLap} (${rd(r.pitTimeS, 0)} s)`);
           return;
         }
@@ -679,6 +731,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
       prevEnd = range[1];
       mine.push(p);
     });
+    mergeShortReportRows(mine, merged);
     if (n && rows[0].lap === 1 && rows[0].inPit && !rows[0].crossedInPit && !mine.some((p) => p.inIdx === 0)) staging.push(car);
     // Lap-flag visits the report does not cover (or all of them, without a report).
     const claimed = mine.map(lapRange).filter((x): x is [number, number] => x !== null);
@@ -730,7 +783,8 @@ function redmistPassages(ctx: Ctx): Passage[] {
     ctx.issues.push({ severity: "note", code: "REDMIST-NO-PIT-REPORT", message: "No RedMist pit report (no Flagtronics pit data): passages come from the lap pit flags only, with no pit-in/pit-out and no official pit-lane time; time lost is still measured over the in-lap and out-lap." });
   }
   if (corrected.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-LAPS-CORRECTED", message: `${corrected.length} pit-report stop(s) re-anchored on the lap pit flags: ${list(corrected)}.`, files });
-  if (phantom.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-PHANTOM", message: `${phantom.length} pit-report row(s) with no lap pit flag and under ${PHANTOM_STOP_S} s in the pit lane are not counted as stops: ${list(phantom)}.`, files });
+  if (phantom.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-PHANTOM", message: `${phantom.length} pit-report row(s) with no lap pit flag and under ${MIN_VISIT_S} s in the pit lane are not counted as stops: ${list(phantom)}.`, files });
+  if (merged.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-SHORT-ROWS", message: `${merged.length} pit visit(s) whose report rows are under ${MIN_VISIT_S} s (no pit lane is that quick): the rows of one visit are one stop and its pit-lane time is unknown: ${list(merged)}.`, files });
   if (noFlags.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-NO-LAP-FLAG", message: `${noFlags.length} pit-report stop(s) have no lap pit flag on their laps: ${list(noFlags)}.`, files });
   if (extra.length) ctx.issues.push({ severity: "warning", code: "PASSAGE-NOT-IN-PIT-REPORT", message: `${extra.length} pit visit(s) seen in the lap pit flags are missing from the pit report (no pit-lane time): ${list(extra)}.`, files });
   if (clockOff.length) ctx.issues.push({ severity: "warning", code: "PIT-CLOCK-LAP-MISMATCH", message: `${clockOff.length} pit-report clock(s) do not fit the passage laps by more than 30 s: ${list(clockOff)}.`, files });
@@ -1069,7 +1123,7 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       dt.confidence = "medium";
       dt.confNotes.push("served_in_reissued_visit");
       link(dt);
-    } else if (!cand.length && p.pitType !== "PENALTY" && transit.valid && short) {
+    } else if (!cand.length && p.pitType !== "PENALTY" && transit.valid && short && ctx.race.format !== "redmist") {
       // Rule 6, read per passage: no penalty record explains this passage (no matched RC penalty and no
       // Drive Time PENALTY type). DEFINITIONS.md says "no penalty record exists for the race"; read
       // literally, MPC #59 L62 (37.1 s, transit 35.1 s) would become a 37-second "stop".

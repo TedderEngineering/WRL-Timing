@@ -396,3 +396,23 @@ describe("Sebring 2026 follow-ups (engine 1.2.8)", () => {
     expect(pick(late)).toEqual(pick(plain));
   });
 });
+
+describe("RedMist pit report rows too short for a visit (engine 1.2.9)", () => {
+  it("joins the rows the equipment split from one visit into one stop with an unknown pit-lane time", () => {
+    const pkg = buildFacts({ format: "redmist", files: redmistFiles({ splitRows: true }), options: OPTS });
+    const mine = pkg.events.pitPassages.filter((e: any) => e.car === "2" && e.kind !== "pit_lane_start") as any[];
+    expect(mine.map((p) => [p.kind, p.inLap, p.outLap, p.officialPitLaneTimeS])).toEqual([["stop", 12, 13, null]]);
+    expect(mine[0].confidenceNotes).toContain("pit_report_rows_merged");
+    // Never a drive-through from a 1-second row, and the transit estimate ignores such rows.
+    expect(pkg.events.pitPassages.some((e: any) => e.kind === "drive_through")).toBe(false);
+    expect(pkg.dataQuality.some((q: any) => q.code === "PIT-REPORT-SHORT-ROWS")).toBe(true);
+    expect(validatePackage(pkg as any, { stage: "facts" }).errors).toEqual([]);
+  });
+
+  it("keeps real visits and their pit-lane times as they were", () => {
+    const pkg = build();
+    const p = pkg.events.pitPassages.find((e: any) => e.car === "2" && e.inLap === 12) as any;
+    expect(p.officialPitLaneTimeS).toBe(88);
+    expect(p.confidenceNotes ?? []).not.toContain("pit_report_rows_merged");
+  });
+});

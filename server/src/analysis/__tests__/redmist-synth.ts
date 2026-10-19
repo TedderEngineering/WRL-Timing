@@ -77,7 +77,7 @@ export const RM_GARAGE_EXTRA_S = 1300;
 export const RM_DT_ISSUED = "09:29:00";
 
 export function redmistFiles(
-  opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean; lateJoin?: boolean; dtReissued?: boolean; retireInPit?: boolean } = {},
+  opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean; lateJoin?: boolean; dtReissued?: boolean; retireInPit?: boolean; splitRows?: boolean } = {},
 ): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
   let cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
@@ -137,7 +137,14 @@ export function redmistFiles(
     pitStops: [
       // car 1: entry 70 s into lap 6, exit in lap 7
       { carNumber: "1", stopNumber: 1, startLap: 6, endLap: 7, pitEntryTime: `${local(RM_CAR1_ENTRY)}-05:00`, pitExitTime: `${local(RM_CAR1_ENTRY + RM_CAR1_PIT)}-05:00`, pitEntryTimeUnavailable: false, pitEntryTimeRenumbered: false, pitDurationMs: 95123, pitDuration: "1:35.123", driverBefore: "Ann Able", driverAfter: "Bob Baker", driverChanged: true },
-      { carNumber: "2", stopNumber: 1, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 88000, pitDuration: "1:28.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
+      // { splitRows: true }: the equipment splits car 2's visit into rows of 1 s and 5 s (Sebring Sunday 2026, #120 laps 12-14).
+      ...(opts.splitRows
+        ? [
+            { carNumber: "2", stopNumber: 1, startLap: 12, endLap: 12, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 1000, pitDuration: "0:01.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
+            { carNumber: "2", stopNumber: 2, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 5000, pitDuration: "0:05.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
+            { carNumber: "2", stopNumber: 3, startLap: 13, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 5000, pitDuration: "0:05.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false },
+          ]
+        : [{ carNumber: "2", stopNumber: 1, startLap: 12, endLap: 13, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 88000, pitDuration: "1:28.000", driverBefore: "Cat Cole", driverAfter: "Cat Cole", driverChanged: false }]),
       { carNumber: "4", stopNumber: 1, startLap: 10, endLap: 10, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 70000, pitDuration: "1:10.000", driverBefore: "Eve Egan", driverAfter: "Eve Egan", driverChanged: false },
       { carNumber: "5", stopNumber: 1, startLap: 1, endLap: 1, pitEntryTime: null, pitExitTime: null, pitEntryTimeUnavailable: true, pitEntryTimeRenumbered: false, pitDurationMs: 1500000, pitDuration: "25:00.000", driverBefore: "", driverAfter: "Fay Fox", driverChanged: false },
       // { stuckFlags: true }: car 2's next reported stop, laps 18-19, inside its stuck flags.
