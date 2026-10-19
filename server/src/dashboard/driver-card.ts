@@ -10,7 +10,7 @@ import { withPitFacts } from "../packages/race-pit-facts.js";
 import { normCar } from "../intake/reimport.js";
 import { coDrivers, driverInNames } from "../services/my-drivers.js";
 import { carFacts, chartKeyFor, type CarFacts } from "./my-car.js";
-import { driverFacts, type DriverFacts } from "./my-driver.js";
+import { carDrive, driverFacts, type CarDrive, type DriverFacts } from "./my-driver.js";
 
 export interface DriverCardCar {
   number: string;
@@ -67,4 +67,17 @@ export function pickEntry<E extends { carNumber: string }>(entries: E[], carNumb
 /** The driver as the entry spells them, when they are in it. */
 export function driverOfEntry(entry: { driverNames: string }, name: string): string | null {
   return driverInNames(entry.driverNames, name);
+}
+
+/** The car's facts and drive (who drove when, every driver), for the car's share card. */
+export async function carCardData(raceId: string, carNumber: string, driverNames: string): Promise<{ facts: CarFacts | null; drive: CarDrive | null }> {
+  const row = (await prisma.race.findUnique({
+    where: { id: raceId },
+    select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true },
+  })) as any;
+  const data = row?.chartData ? ((await withPitFacts(row, { data: row.chartData, annotations: row.annotationData ?? {} })) as any) : null;
+  if (!data) return { facts: null, drive: null };
+  const facts = carFacts(data.data, data.annotations ?? null, carNumber);
+  const drive = facts ? carDrive(data.data.cars[facts.carKey], data.annotations?.[facts.carKey]?.pits, entryDrivers(driverNames)) : null;
+  return { facts, drive };
 }

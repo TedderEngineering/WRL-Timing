@@ -12,8 +12,8 @@
  */
 import { createContext, useContext } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
-import { drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
-import { ShareImageActions } from "@/features/share/ShareImageActions";
+import { drawText, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
+import { ShareRaceCarCardButton } from "../dashboard/carShare";
 import { classBenchmarks, classCycleNets } from "./benchmarks";
 import { finishInfo } from "./finish";
 
@@ -112,19 +112,23 @@ export function makeRaceCarCard(data: RaceChartData, annotations: AnnotationData
   });
 }
 
-/** "Share image" for the focus car: the phone's share sheet with the PNG; on a computer, copy or download. */
+/**
+ * "Share image" for the focus car: the car's card (features/dashboard/carShare.tsx, as on the
+ * dashboard), its facts fetched from the server; on a phone the share sheet, on a computer copy or
+ * download.
+ */
 export function ShareCarImageButton({ data, annotations, carNum }: { data: RaceChartData; annotations: AnnotationData | null; carNum: number }) {
   const meta = useContext(RaceMetaContext);
-  if (!meta || !data.cars[String(carNum)]) return null;
-  const { title } = raceCardText(data, carNum, meta);
+  const car = data.cars[String(carNum)];
+  if (!meta || !car) return null;
   return (
-    <ShareImageActions
-      make={() => makeRaceCarCard(data, annotations, carNum, meta)}
-      filename={imageName("racetrace", `${title} ${meta.name}`)}
-      text={`${title} · ${meta.name} on RaceTrace`}
-      kind="race_car"
-      label="Share an image of this car's race"
-      className="min-h-[36px] text-left text-[13px] hover:underline disabled:opacity-60"
+    <ShareRaceCarCardButton
+      raceId={meta.id}
+      raceName={meta.name}
+      carNumber={car.label ?? String(car.num ?? carNum)}
+      team={car.team}
+      chart={data}
+      annotations={annotations}
     />
   );
 }

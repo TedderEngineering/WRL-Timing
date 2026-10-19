@@ -290,7 +290,9 @@ export function MyCarCard({
               <Link to={chartHref(race.id, number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
                 Pit stops →
               </Link>
-              {!askNow && facts?.carKey && <ShareCarCardButton race={race} carKey={facts.carKey} short={`#${number}`} />}
+              {!askNow && facts?.carKey && (
+                <ShareCarCardButton input={{ race, number, team: facts.team, cls: facts.cls, drivers, facts, drive: data.drive ?? null }} />
+              )}
               {data.carCount > 1 && (
                 <Link to="/settings/cars" className="ml-auto text-[13px] text-[var(--rt-text-muted)]">
                   {data.carCount} cars followed

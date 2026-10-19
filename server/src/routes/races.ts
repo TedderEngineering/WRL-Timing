@@ -12,7 +12,8 @@ import { packagesFlagOn } from "../packages/flags.js";
 import { parseVersion } from "../packages/service.js";
 import { publishedPitFacts } from "../packages/race-pit-facts.js";
 import { pitStopsFromFacts } from "../packages/pit-facts.js";
-import { cardCar, driverCardData, driverOfEntry, pickEntry } from "../dashboard/driver-card.js";
+import { carCardData, cardCar, driverCardData, driverOfEntry, entryDrivers, pickEntry } from "../dashboard/driver-card.js";
+import { displayName } from "../services/driver-search.js";
 
 export const racesRouter = Router();
 
@@ -197,6 +198,45 @@ racesRouter.get(
         car: cardCar(entry, driverName),
         facts: card.facts,
         driverFacts: card.driverFacts,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/races/:id/car-card?car= — one car's share card ─────────────────
+// The race, the car, its drivers, facts and drive (as the dashboard's car card), for the race
+// page's share image. Same gating as /chart-data.
+
+racesRouter.get(
+  "/:id/car-card",
+  optionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const raceId = req.params.id as string;
+      const carNumber = typeof req.query.car === "string" ? req.query.car.trim() : "";
+      if (!carNumber || carNumber.length > 8) throw new AppError(400, "A car number is needed", "BAD_REQUEST");
+      const race = (await prisma.race.findUnique({
+        where: { id: raceId },
+        select: { id: true, name: true, date: true, track: true, series: true, premium: true, createdAt: true, status: true, resultsStatus: true },
+      })) as any;
+      if (!race || (race.status !== "PUBLISHED" && req.user?.role !== "ADMIN")) throw new AppError(404, "Race not found", "NOT_FOUND");
+      await assertRaceAccess(await resolveViewer(req.user), race);
+      const entries = (await prisma.raceEntry.findMany({
+        where: { raceId },
+        select: { carNumber: true, teamName: true, carClass: true, driverNames: true },
+      })) as Array<{ carNumber: string; teamName: string; carClass: string; driverNames: string }>;
+      const entry = pickEntry(entries, carNumber);
+      if (!entry) throw new AppError(404, "That car is not in this race", "NOT_FOUND");
+      const card = await carCardData(raceId, entry.carNumber, entry.driverNames);
+      res.set("Cache-Control", req.user ? "private, max-age=300" : "public, max-age=300");
+      res.json({
+        race: { id: race.id, name: race.name, date: race.date.toISOString().slice(0, 10), track: race.track, series: race.series, resultsStatus: race.resultsStatus ?? null },
+        car: { number: entry.carNumber, team: entry.teamName.replace(/\s*\([^()]*\)\s*$/, ""), cls: entry.carClass },
+        drivers: entryDrivers(entry.driverNames).map(displayName),
+        facts: card.facts,
+        drive: card.drive,
       });
     } catch (err) {
       next(err);
