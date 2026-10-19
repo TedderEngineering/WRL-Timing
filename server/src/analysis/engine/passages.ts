@@ -24,6 +24,11 @@ export interface Passage {
   /** Rejoin instant for cycles and positions: pit-out, the B-flag estimate, or the out-lap end (WRL). */
   rejoinT: number | null;
   official: number | null;
+  /**
+   * RedMist, entry reissued during the visit: the reported time covers only the last entry to the
+   * exit. Kept here (not as the pit-lane time) when it is too short to be a visit.
+   */
+  segmentS?: number;
   reliable: boolean;
   inLap: number;
   inLapCompleted: boolean;
@@ -511,8 +516,16 @@ export function redmistFlagVisits(rows: LapRow[]): FlagVisit[] {
  * whose laps overlap, at least one of them that short, are the equipment splitting one visit: one passage.
  */
 function mergeShortReportRows(mine: Passage[], merged: string[]): void {
-  // A row whose entry was reissued times only its last part (already not reliable); it keeps that part.
   const short = (p: Passage) => p.official !== null && p.official < MIN_VISIT_S && !p.pitLaneStart && !p.confNotes.includes("pit_entry_renumbered");
+  // A row whose entry was reissued times only its last part: not a pit-lane time when that short,
+  // but kept as the segment (a drive-through served in the visit, D-PENALTY).
+  for (const p of mine) {
+    if (p.official !== null && p.official < MIN_VISIT_S && !p.pitLaneStart && p.confNotes.includes("pit_entry_renumbered")) {
+      p.segmentS = p.official;
+      p.official = null;
+      p.reliable = false;
+    }
+  }
   const sorted = [...mine].sort((a, b) => (a.inIdx ?? -1) - (b.inIdx ?? -1));
   const keep: Passage[] = [];
   for (const p of sorted) {
@@ -784,7 +797,7 @@ function redmistPassages(ctx: Ctx): Passage[] {
   }
   if (corrected.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-LAPS-CORRECTED", message: `${corrected.length} pit-report stop(s) re-anchored on the lap pit flags: ${list(corrected)}.`, files });
   if (phantom.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-PHANTOM", message: `${phantom.length} pit-report row(s) with no lap pit flag and under ${MIN_VISIT_S} s in the pit lane are not counted as stops: ${list(phantom)}.`, files });
-  if (merged.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-SHORT-ROWS", message: `${merged.length} pit visit(s) whose report rows are under ${MIN_VISIT_S} s (no pit lane is that quick): the rows of one visit are one stop and its pit-lane time is unknown: ${list(merged)}.`, files });
+  if (merged.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-SHORT-ROWS", message: `${merged.length} pit visit(s) with report rows under ${MIN_VISIT_S} s (no pit lane is that quick): the rows of one visit are one stop, with the pit-lane time of its one full row when it has one, else unknown: ${list(merged)}.`, files });
   if (noFlags.length) ctx.issues.push({ severity: "note", code: "PIT-REPORT-NO-LAP-FLAG", message: `${noFlags.length} pit-report stop(s) have no lap pit flag on their laps: ${list(noFlags)}.`, files });
   if (extra.length) ctx.issues.push({ severity: "warning", code: "PASSAGE-NOT-IN-PIT-REPORT", message: `${extra.length} pit visit(s) seen in the lap pit flags are missing from the pit report (no pit-lane time): ${list(extra)}.`, files });
   if (clockOff.length) ctx.issues.push({ severity: "warning", code: "PIT-CLOCK-LAP-MISMATCH", message: `${clockOff.length} pit-report clock(s) do not fit the passage laps by more than 30 s: ${list(clockOff)}.`, files });
@@ -1113,9 +1126,9 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       dt &&
       ctx.race.format === "redmist" &&
       p.confNotes.includes("pit_entry_renumbered") &&
-      p.official !== null &&
-      p.official > 0 &&
-      p.official <= REISSUED_DT_SEGMENT_MAX_S
+      (p.segmentS ?? p.official) !== null &&
+      (p.segmentS ?? p.official)! > 0 &&
+      (p.segmentS ?? p.official)! <= REISSUED_DT_SEGMENT_MAX_S
     ) {
       // The stop stays a stop (its time lost covers both); the drive-through is served in it.
       set("stop", ["default_stop", "rc_penalty_match"]);

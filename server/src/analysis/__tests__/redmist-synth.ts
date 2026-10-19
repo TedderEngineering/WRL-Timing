@@ -77,7 +77,7 @@ export const RM_GARAGE_EXTRA_S = 1300;
 export const RM_DT_ISSUED = "09:29:00";
 
 export function redmistFiles(
-  opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean; lateJoin?: boolean; dtReissued?: boolean; retireInPit?: boolean; splitRows?: boolean } = {},
+  opts: { pits?: boolean; prefix?: string; garage?: boolean; stuckFlags?: boolean; phantom?: boolean; lateJoin?: boolean; dtReissued?: boolean; retireInPit?: boolean; splitRows?: boolean; lagDriver?: boolean } = {},
 ): InputFile[] {
   const pre = opts.prefix ?? "redmist_9_1";
   let cars = opts.garage ? RM_CARS.map((c) => (c.car === "3" ? { ...c, extra: { 15: 25, 16: 65 + RM_GARAGE_EXTRA_S } } : c)) : RM_CARS;
@@ -91,6 +91,8 @@ export function redmistFiles(
   // last 15 s (Sebring 2026 #696).
   if (opts.dtReissued) cars = cars.map((c) => (c.car === "1" ? { ...c, extra: { ...c.extra, 18: 25, 19: 110 }, lip: [...c.lip, 18, 19], ip: [...c.ip, 18] } : c));
   // { retireInPit: true }: car 4 comes in on lap 14 and stays; laps 15-16 are counted in the pit lane (Sebring 2026 #260).
+  // { lagDriver: true }: car 1's lap records still name Ann Able on its out-lap (7) after the change to Bob Baker (Sebring Sunday 2026, #120 lap 118).
+  if (opts.lagDriver) cars = cars.map((c) => (c.car === "1" ? { ...c, driver: (l: number) => (l <= 7 ? "Ann Able" : "Bob Baker") } : c));
   if (opts.retireInPit) cars = cars.map((c) => (c.car === "4" ? { ...c, extra: { ...c.extra, 15: 100, 16: 100 }, lip: [...c.lip, 14, 15, 16], ip: [...c.ip, 14, 15, 16], laps: 16 } : c));
   const laps: Record<string, unknown>[] = [];
   for (const c of cars) {
