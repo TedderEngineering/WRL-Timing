@@ -10,6 +10,9 @@ import {
 } from "react";
 import { api, ApiClientError } from "@/lib/api";
 
+/** How long the app waits for the start-up sign-in check before showing (it keeps checking). */
+export const STARTUP_WAIT_MS = 8_000;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface User {
@@ -134,7 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshTokens();
+    // The sign-in check can hang while the server restarts (a deploy): don't hold the whole app on a
+    // spinner. After STARTUP_WAIT_MS the app shows as signed out; the check keeps going, and when it
+    // answers the session is restored where the user is.
+    const wait = setTimeout(() => {
+      setState((prev) => (prev.isLoading ? { user: null, isLoading: false, isAuthenticated: false } : prev));
+    }, STARTUP_WAIT_MS);
     return () => {
+      clearTimeout(wait);
       if (refreshTimer) clearTimeout(refreshTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
