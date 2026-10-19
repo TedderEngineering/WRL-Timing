@@ -14,11 +14,14 @@ export interface StintData {
 }
 
 export interface PitData {
-  lap: number;     // lap number of pit
-  dur: number;     // estimated pit duration (seconds)
+  lap: number;     // the in-lap
+  /** Seconds in the pit lane (verified stops), or the pit lap's time over green pace (lap flags); null when not timed. */
+  dur: number | null;
   pb: number;      // class position before pit
   pa: number;      // class position after pit
   yel: boolean;    // under yellow flag
+  /** "stop" (service), "garage" (behind the wall) or "penalty" (drive-through, stop-and-go: not a stop). */
+  kind: "stop" | "garage" | "penalty";
 }
 
 export interface RaceConditions {
@@ -52,6 +55,14 @@ export interface StrategyMetrics {
   classPos: number;
   overallPos: number;
   stintCount: number;
+  /** Pit stops: service stops and garage visits, not drive-throughs or penalties. */
+  stops: number;
+  /** Stops and penalties with no pit-lane time; totalPitTime leaves them out. */
+  untimedStops: number;
+  /** Garage visits (counted as stops; their time is not in totalPitTime). */
+  garageVisits: number;
+  /** True when the stops come from the race's verified pit stops, false when from the laps' pit flags. */
+  verified: boolean;
   avgGreenPace: number;
   bestLap: number;
   totalPitTime: number;
@@ -92,6 +103,58 @@ function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = s - m * 60;
   return m + ":" + sec.toFixed(3).padStart(6, "0");
+}
+
+/** Seconds → M:SS.s */
+function fmtTenths(s: number): string {
+  const m = Math.floor(s / 60);
+  return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0");
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/** "Time in the pit lane: 6:21.000 (1.5% of race)", naming stops that were not timed. */
+export function pitTimeSentence(m: StrategyMetrics): string {
+  const label = m.verified ? "Time in the pit lane" : "Total pit time";
+  const timed = m.stops - m.garageVisits - m.untimedStops;
+  const over = m.untimedStops > 0 ? ` over ${plural(Math.max(0, timed), "timed stop")}` : "";
+  const garage = m.garageVisits > 0 ? `, plus ${plural(m.garageVisits, "garage visit")}` : "";
+  return `${label}: ${m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)}${over} (${m.pitPct.toFixed(1)}% of race)${garage}.`;
+}
+
+/** The class's cars that ran at least SCORE_MIN_DISTANCE of its most laps (all of them when none has laps). */
+function ranMostOfRace(cars: StrategyMetrics[]): StrategyMetrics[] {
+  const most = Math.max(0, ...cars.map((c) => c.lapsCompleted));
+  return most > 0 ? cars.filter((c) => c.lapsCompleted >= most * SCORE_MIN_DISTANCE) : cars;
+}
+
+/** True when the race's pit notes come from its verified stops (each note says what the car did). */
+export function hasVerifiedStops(annotations: AnnotationData | null | undefined): boolean {
+  return Object.values(annotations ?? {}).some((a) => a?.pits?.some((p) => !!p.kind));
+}
+
+type Visit = PitData;
+
+/** The car's pit visits from its verified stops: one per visit, retirements left out. */
+function verifiedVisits(annotations: AnnotationData, key: string, laps: { l: number; cp: number; pit: number }[], fcyLaps: Set<number>): Visit[] {
+  const pits = [...(annotations[key]?.pits ?? [])].filter((p) => p.kind && p.kind !== "retirement").sort((a, b) => a.l - b.l);
+  return pits.map((p) => {
+    const kind: Visit["kind"] = p.kind === "garage" ? "garage" : p.kind === "stop" ? "stop" : "penalty";
+    const t = p.pitTiming;
+    const i = laps.findIndex((l) => l.l === p.l);
+    const before = i > 0 ? laps[i - 1] : laps[i];
+    const after = laps.slice(i + 1).find((l) => l.pit === 0) ?? laps[i];
+    return {
+      lap: p.l,
+      dur: t?.pitRoadTime ?? null,
+      pb: before?.cp ?? 0,
+      pa: after?.cp ?? 0,
+      yel: t?.context ? t.context !== "green" : fcyLaps.has(p.l),
+      kind,
+    };
+  });
 }
 
 /** A car is scored only with at least this share of its class's most laps. */
@@ -138,8 +201,11 @@ export function computeClassStats(
     const paces = cars.filter((c) => c.avgGreenPace > 0).map((c) => c.avgGreenPace);
     const avgPace = paces.length > 0 ? paces.reduce((a, b) => a + b, 0) / paces.length : 0;
     const bestPace = paces.length > 0 ? Math.min(...paces) : 0;
-    const avgStops = cars.length > 0 ? cars.reduce((a, c) => a + (c.stintCount - 1), 0) / cars.length : 0;
-    const avgStint = cars.length > 0 ? cars.reduce((a, c) => a + c.avgStintLen, 0) / cars.length : 0;
+    // Stops and stint length over the cars that ran most of the race (an early retirement's few
+    // stops and short stints say nothing about the class's strategy).
+    const ran = ranMostOfRace(cars);
+    const avgStops = ran.length > 0 ? ran.reduce((a, c) => a + c.stops, 0) / ran.length : 0;
+    const avgStint = ran.length > 0 ? ran.reduce((a, c) => a + c.avgStintLen, 0) / ran.length : 0;
     result[cls] = { count: cars.length, avgPace, bestPace, avgStops, avgStint };
   }
   return result;
@@ -159,15 +225,16 @@ export function computeInsights(
     arr.push(m);
   }
 
-  for (const [cls, cars] of byClass) {
+  for (const [cls, all] of byClass) {
     // 1. Winner strategy
-    const winner = cars.find((c) => c.classPos === 1);
+    const winner = all.find((c) => c.classPos === 1);
+    // The rest compare cars that ran most of the race.
+    const cars = ranMostOfRace(all);
     if (winner) {
-      const stops = winner.stintCount - 1;
       insights.push({
         type: "winner_strategy", cls,
         title: `${cls} Winner Strategy`,
-        text: `#${winner.carLabel} ${winner.team} won ${cls} with ${stops} pit stop${stops !== 1 ? "s" : ""}, averaging ${winner.avgStintLen.toFixed(1)} laps per stint. Green-flag pace: ${fmtPace(winner.avgGreenPace)}. Total pit time: ${fmtTime(winner.totalPitTime)} (${winner.pitPct.toFixed(1)}% of race).`,
+        text: `#${winner.carLabel} ${winner.team} won ${cls} with ${plural(winner.stops, "pit stop")}, averaging ${winner.avgStintLen.toFixed(1)} laps per stint. Green-flag pace: ${fmtPace(winner.avgGreenPace)}. ${pitTimeSentence(winner)}`,
       });
     }
 
@@ -195,7 +262,7 @@ export function computeInsights(
       insights.push({
         type: "optimal_stint", cls,
         title: `${cls} Optimal Stint Length`,
-        text: `Stints of ${bestBucket} laps produced the best average pace (${fmtPace(bestBucketPace)}) across all ${cls} cars.`,
+        text: `Stints of ${bestBucket} laps produced the best average pace (${fmtPace(bestBucketPace)}) across the ${cls} cars that ran most of the race.`,
       });
     }
 
@@ -218,7 +285,7 @@ export function computeInsights(
     // 4. Stop count analysis
     const stopGroups = new Map<number, { count: number; avgPos: number }>();
     for (const c of cars) {
-      const stops = c.stintCount - 1;
+      const stops = c.stops;
       let g = stopGroups.get(stops);
       if (!g) { g = { count: 0, avgPos: 0 }; stopGroups.set(stops, g); }
       g.count++;
@@ -229,14 +296,14 @@ export function computeInsights(
     const stopDist: string[] = [];
     for (const [stops, g] of [...stopGroups].sort((a, b) => a[0] - b[0])) {
       g.avgPos = g.avgPos / g.count;
-      stopDist.push(`${stops} stops: ${g.count} car${g.count !== 1 ? "s" : ""} (avg P${g.avgPos.toFixed(1)})`);
+      stopDist.push(`${plural(stops, "stop")}: ${plural(g.count, "car")} (avg P${g.avgPos.toFixed(1)})`);
       if (g.avgPos < bestStopsAvg) { bestStopsAvg = g.avgPos; bestStops = stops; }
     }
     if (stopGroups.size > 1) {
       insights.push({
         type: "stop_count", cls,
         title: `${cls} Pit Stop Count Analysis`,
-        text: `Cars making ${bestStops} stops averaged the best class finish (P${bestStopsAvg.toFixed(1)}). Stop distribution: ${stopDist.join(", ")}`,
+        text: `Cars making ${plural(bestStops, "stop")} averaged the best class finish (P${bestStopsAvg.toFixed(1)}). Stop distribution: ${stopDist.join(", ")}`,
       });
     }
   }
@@ -248,9 +315,12 @@ export function computeInsights(
 
 export function computeStrategyMetrics(
   data: RaceChartData,
-  _annotations: AnnotationData,
+  annotations: AnnotationData,
 ): StrategyMetrics[] {
   const fcyLaps = buildFcySet(data);
+  // The verified stops (one note per pit visit, with its pit-lane time) when the race has them.
+  // The laps' pit flags count a visit spanning two laps twice and flag some cars' first lap.
+  const verified = hasVerifiedStops(annotations);
   const raw: StrategyMetrics[] = [];
 
   for (const [numStr, car] of Object.entries(data.cars)) {
@@ -275,7 +345,25 @@ export function computeStrategyMetrics(
     const bestLap =
       greenTimes.length > 0 ? Math.min(...greenTimes) : 0;
 
-    // ── Build stints ────────────────────────────────────────────
+    // ── Pit visits: the verified stops when the race has them, else the laps' pit flags ──
+    const visits: Visit[] = verified
+      ? verifiedVisits(annotations, numStr, laps, fcyLaps)
+      : laps.flatMap((d, i) => {
+          if (d.pit !== 1) return [];
+          const garage = d.ltSec > 900; // a garage stay, not a stop's time
+          return [{
+            lap: d.l,
+            dur: !garage && avgGreenPace > 0 && d.ltSec > 1 ? Math.max(0, d.ltSec - avgGreenPace) : null,
+            pb: i > 0 ? laps[i - 1].cp : d.cp,
+            pa: i < laps.length - 1 ? laps[i + 1].cp : d.cp,
+            yel: fcyLaps.has(d.l),
+            kind: garage ? ("garage" as const) : ("stop" as const),
+          }];
+        });
+    const stopVisits = visits.filter((v) => v.kind !== "penalty");
+    const stintEnds = new Set(stopVisits.map((v) => v.lap));
+
+    // ── Build stints: each ends with a stop's in-lap ──────────────
     const stints: StintData[] = [];
     let stintLaps: typeof laps = [];
     let stintNum = 1;
@@ -283,7 +371,7 @@ export function computeStrategyMetrics(
     for (let i = 0; i < laps.length; i++) {
       const d = laps[i];
       stintLaps.push(d);
-      if (d.pit === 1 || i === laps.length - 1) {
+      if (stintEnds.has(d.l) || i === laps.length - 1) {
         // Close this stint
         const gl = stintLaps.filter((l) => !fcyLaps.has(l.l) && l.pit === 0).length;
         const yl = stintLaps.filter((l) => fcyLaps.has(l.l) && l.pit === 0).length;
@@ -323,40 +411,15 @@ export function computeStrategyMetrics(
       }
     }
 
-    // ── Pit data ────────────────────────────────────────────────
-    const pitsData: PitData[] = [];
-    for (let i = 0; i < laps.length; i++) {
-      const d = laps[i];
-      if (d.pit !== 1) continue;
-      if (d.ltSec > 900) continue; // skip garage stays from pit timing aggregates
-      const prevLap = i > 0 ? laps[i - 1] : null;
-      const nextLap = i < laps.length - 1 ? laps[i + 1] : null;
-      const dur = avgGreenPace > 0 && d.ltSec > 1
-        ? Math.max(0, d.ltSec - avgGreenPace)
-        : 0;
-      pitsData.push({
-        lap: d.l,
-        dur,
-        pb: prevLap ? prevLap.cp : d.cp,
-        pa: nextLap ? nextLap.cp : d.cp,
-        yel: fcyLaps.has(d.l),
-      });
-    }
-
     // ── Aggregates ──────────────────────────────────────────────
     const stintCount = stints.length;
-    const pitLaps = laps.filter((d) => d.pit === 1);
-    const normalPitLaps = pitLaps.filter((d) => d.ltSec <= 900); // exclude garage stays
-    let totalPitTime = 0;
-    let yellowPitCount = 0;
-    for (const d of normalPitLaps) {
-      if (avgGreenPace > 0 && d.ltSec > 1) {
-        totalPitTime += Math.max(0, d.ltSec - avgGreenPace);
-      }
-      if (fcyLaps.has(d.l)) yellowPitCount++;
-    }
-    const avgPitDuration = normalPitLaps.length > 0 ? totalPitTime / normalPitLaps.length : 0;
-    const yellowPitPct = pitLaps.length > 0 ? (yellowPitCount / pitLaps.length) * 100 : 0;
+    const stops = stopVisits.length;
+    const garageVisits = visits.filter((v) => v.kind === "garage").length;
+    const timedVisits = visits.filter((v) => v.kind !== "garage" && v.dur !== null);
+    const untimedStops = visits.filter((v) => v.kind !== "garage" && v.dur === null).length;
+    const totalPitTime = timedVisits.reduce((s, v) => s + (v.dur ?? 0), 0);
+    const avgPitDuration = timedVisits.length > 0 ? totalPitTime / timedVisits.length : 0;
+    const yellowPitPct = stops > 0 ? (stopVisits.filter((v) => v.yel).length / stops) * 100 : 0;
 
     const totalRaceTime = laps.reduce((s, d) => s + (d.ltSec > 0 ? d.ltSec : 0), 0);
     const pitPct = totalRaceTime > 0 ? (totalPitTime / totalRaceTime) * 100 : 0;
@@ -373,6 +436,10 @@ export function computeStrategyMetrics(
       classPos: car.finishPosClass,
       overallPos: car.finishPos,
       stintCount,
+      stops,
+      untimedStops,
+      garageVisits,
+      verified,
       avgGreenPace,
       bestLap,
       totalPitTime,
@@ -385,7 +452,7 @@ export function computeStrategyMetrics(
       avgStintLen,
       maxStintLen,
       stints,
-      pits: pitsData,
+      pits: visits,
     });
   }
 
