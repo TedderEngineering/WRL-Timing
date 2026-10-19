@@ -20,7 +20,11 @@ import { env } from "../config/env.js";
 import { entryForCar } from "./my-cars.js";
 import { driverInNames } from "./my-drivers.js";
 import { carFacts, type CarFacts } from "../dashboard/my-car.js";
-import { escapeHtml, sendRaceAlertEmail } from "./email.js";
+import { sendRaceAlertEmail } from "./email.js";
+import { alertEmailHtml } from "./race-alert-email.js";
+import { carDrive, driverFacts } from "../dashboard/my-driver.js";
+import { entryDrivers } from "../dashboard/driver-card.js";
+import { displayName } from "./driver-search.js";
 import { racetraceSite } from "./site.js";
 import { canonicalTrack } from "../lib/weekends.js";
 
@@ -91,54 +95,6 @@ export function alertSubject(f: CarFacts, track: string, resultsStatus: string |
   const cycle = big && big.net !== 0 ? `, ${big.net > 0 ? "gained" : "lost"} ${Math.abs(big.net)} place${Math.abs(big.net) === 1 ? "" : "s"} in pit cycle ${big.cycle}` : "";
   const prov = resultsStatus === "official" ? "" : " (provisional)";
   return `${where}: ${finish}${cycle}${prov}`;
-}
-
-function alertHtml(p: {
-  subject: string;
-  raceName: string;
-  f: CarFacts;
-  raceUrl: string;
-  unsubscribeUrl: string;
-  settingsUrl: string;
-  /** The official follow-up: what changed since the provisional email. */
-  changes?: string[];
-  /** Set when the email is about a followed driver rather than a followed car. */
-  driverName?: string | null;
-}): string {
-  const { f } = p;
-  const lines = [
-    f.finishClass !== null ? `Finished P${f.finishClass} in ${f.cls}${f.classSize ? ` of ${f.classSize}` : ""} · P${f.finishOverall} overall` : null,
-    `${f.laps} of ${f.raceLaps} laps`,
-    ...f.pitCycles.map(
-      (c) => `Pit cycle ${c.cycle} (settled lap ${c.lap}): P${c.before} → P${c.after} in ${f.cls}, ${c.net > 0 ? `gained ${c.net}` : c.net < 0 ? `lost ${-c.net}` : "held position"}`
-    ),
-    ...(f.benchmarks ?? []),
-  ].filter(Boolean) as string[];
-  const accent = "#F48C34";
-  return `
-    <div style="font-family: -apple-system, Segoe UI, sans-serif; max-width: 520px; margin: 0 auto; color: #1b1b28;">
-      <p style="margin: 0 0 4px; font-size: 13px; color: #6b6b80;">RaceTrace · ${p.changes ? "the results are official" : p.driverName ? "your driver's race is up" : "your car's race is up"}</p>
-      <h2 style="margin: 0 0 12px; font-size: 20px;">${escapeHtml(p.subject)}</h2>
-      <p style="margin: 0 0 12px; color: #444;">${escapeHtml(p.raceName)}</p>
-      ${
-        p.changes
-          ? `<p style="margin: 0 0 6px; color: #333; font-weight: 600;">Changed since the provisional results</p>
-      <ul style="padding-left: 18px; margin: 0 0 16px; color: #333; line-height: 1.6;">
-        ${p.changes.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}
-      </ul>
-      <p style="margin: 0 0 6px; color: #333; font-weight: 600;">Official result</p>`
-          : ""
-      }
-      <ul style="padding-left: 18px; margin: 0 0 16px; color: #333; line-height: 1.6;">
-        ${lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}
-      </ul>
-      <a href="${p.raceUrl}" style="display: inline-block; background: ${accent}; color: #fff; padding: 11px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">Open the race</a>
-      <p style="margin: 24px 0 0; color: #888; font-size: 12px; line-height: 1.5;">
-        You get this because you follow ${p.driverName ? escapeHtml(p.driverName) : `#${escapeHtml(f.number)}`} on RaceTrace and turned on race emails.
-        <a href="${p.unsubscribeUrl}" style="color: #888;">Turn these emails off</a> ·
-        <a href="${p.settingsUrl}" style="color: #888;">${p.driverName ? "My drivers" : "My cars"}</a>
-      </p>
-    </div>`;
 }
 
 // ─── Provisional → official ───────────────────────────────────────────────────
@@ -254,7 +210,7 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
     where: optedIn,
     select: { id: true, userId: true, name: true, user: { select: { email: true } } },
   })) as any[];
-  type Follower = { userId: string; email: string; carId: string | null; driverName: string | null; entry: { carNumber: string } };
+  type Follower = { userId: string; email: string; carId: string | null; driverName: string | null; entry: { carNumber: string; driverNames: string } };
   const followers: Follower[] = [];
   for (const c of carRows) {
     const entry = entryForCar(c, race, entries);
@@ -312,20 +268,30 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
       ? `Official: ${alertSubject(f, race.track, "official", car.driverName)}`
       : alertSubject(f, race.track, race.resultsStatus, car.driverName);
     const unsubscribeUrl = `${site.url}/api/alerts/unsubscribe?t=${unsubscribeToken(car.userId)}`;
+    // Who drove when, for the stint bar and averages (as the dashboard's car card).
+    const key = f.carKey;
+    const names = entryDrivers(entry.driverNames);
+    const pits = (chart.annotations as any)?.[key]?.pits;
+    const drive = key && (chart.data as any).cars?.[key] ? carDrive((chart.data as any).cars[key], pits, names) : null;
     try {
       await sendRaceAlertEmail({
         to: car.email,
         subject,
         unsubscribeUrl,
-        html: alertHtml({
+        html: alertEmailHtml({
           subject,
+          kicker: changes ? "the results are official" : car.driverName ? "your driver's race is up" : "your car's race is up",
           raceName: race.name,
+          raceDate: new Date(race.date).toISOString().slice(0, 10),
           f,
-          raceUrl: `${site.url}/chart?race=${race.id}&from=alert`,
+          drivers: names.map(displayName),
+          drive,
+          driverName: car.driverName,
+          driverDrive: car.driverName && key ? driverFacts(chart.data.cars[key], pits, car.driverName, names) : null,
+          raceUrl: `${site.url}/chart?race=${race.id}&car=${encodeURIComponent(f.number)}&from=alert`,
           unsubscribeUrl,
           settingsUrl: `${site.url}/settings/${car.driverName ? "drivers" : "cars"}`,
           changes,
-          driverName: car.driverName,
         }),
       });
       sent++;
