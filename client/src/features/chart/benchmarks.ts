@@ -1,7 +1,8 @@
 /**
  * Class benchmarks (engagement plan E): where a car's race stood in its class, as facts.
  *
- *   "Pit loss 3rd of 24 in GS's 2nd stops"   its stop against every class car's same stop
+ *   "Quickest stop of 7 in GTO"              its stop's time lost against the class's same pit cycle
+ *   "3rd quickest stop of 24 in GS's 2nd stops"  (no pit cycles: against every class car's same stop)
  *   "Fastest lap 2nd of 24 in GS"            its best green lap against the class's
  *   "Gained 4 places over 3 pit cycles"      the pit cycles' settled results added up
  *
@@ -93,6 +94,8 @@ export function classCycleResults(laps: LapData[], settles: { l: number; su: str
   return out;
 }
 
+const QUICKEST = ["", "Quickest", "2nd quickest", "3rd quickest"];
+
 export function classBenchmarks(data: RaceChartData, annotations: AnnotationData | null, carNum: number): Benchmark[] {
   const car = data.cars[String(carNum)];
   if (!car) return [];
@@ -116,7 +119,8 @@ export function classBenchmarks(data: RaceChartData, annotations: AnnotationData
       if (rank <= TOP) {
         out.push({
           kind: "pit_loss",
-          text: `Pit loss ${ordinal(rank)} of ${field.length} in ${cycle ? `${car.cls} pit cycle ${cycle.ordinal}` : `${car.cls}'s ${ordinal(i + 1)} stops`}`,
+          // The stop's lap (`at`) says which stop; a class pit-cycle number would not match the car's own count.
+          text: `${QUICKEST[rank]} stop of ${field.length} in ${car.cls}${cycle ? "" : `'s ${ordinal(i + 1)} stops`}`,
           at: lapsAt([s.pitLap]),
         });
       }

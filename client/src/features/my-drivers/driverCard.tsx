@@ -19,7 +19,7 @@
  * card's facts from GET /races/:id/driver-card.
  */
 import { useEffect } from "react";
-import type { ChartDataResponse, RaceChartData } from "@shared/types";
+import type { AnnotationData, ChartDataResponse, RaceChartData } from "@shared/types";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/prose";
 import { drawText, imageName, makeShareCard, roundRect, sharedUrl, type Box, type SiteStyle } from "@/features/share";
@@ -45,15 +45,15 @@ export interface DriverCardInput {
 
 // ─── Chart data, once per race ───────────────────────────────────────────────
 
-const charts = new Map<string, Promise<RaceChartData | null>>();
+const charts = new Map<string, Promise<{ data: RaceChartData; annotations: AnnotationData | null } | null>>();
 
-/** The race's chart data, or null when it can't be had (locked, offline): the card is drawn without the trace. */
-export function loadRaceChart(raceId: string): Promise<RaceChartData | null> {
+/** The race's chart data and its notes (pit stops, cycles), once per race; null when they can't be had. */
+export function loadRaceChartWithNotes(raceId: string): Promise<{ data: RaceChartData; annotations: AnnotationData | null } | null> {
   let p = charts.get(raceId);
   if (!p) {
     p = api
       .get<ChartDataResponse>(`/races/${raceId}/chart-data`)
-      .then((r) => r.data as unknown as RaceChartData)
+      .then((r) => ({ data: r.data as unknown as RaceChartData, annotations: (r.annotations ?? null) as AnnotationData | null }))
       .catch(() => {
         charts.delete(raceId);
         return null;
@@ -63,9 +63,14 @@ export function loadRaceChart(raceId: string): Promise<RaceChartData | null> {
   return p;
 }
 
+/** The race's chart data, or null when it can't be had (locked, offline): the card is drawn without the trace. */
+export function loadRaceChart(raceId: string): Promise<RaceChartData | null> {
+  return loadRaceChartWithNotes(raceId).then((r) => r?.data ?? null);
+}
+
 /** The race page already has the chart: keep it for the card instead of fetching it again. */
-export function primeRaceChart(raceId: string, chart: RaceChartData): void {
-  if (!charts.has(raceId)) charts.set(raceId, Promise.resolve(chart));
+export function primeRaceChart(raceId: string, chart: RaceChartData, annotations: AnnotationData | null = null): void {
+  if (!charts.has(raceId)) charts.set(raceId, Promise.resolve({ data: chart, annotations }));
 }
 
 // ─── A driver's card facts for any race (the race page) ──────────────────────
@@ -348,14 +353,26 @@ export function ShareDriverCardButton({ input }: { input: DriverCardInput }) {
  * this race. On a phone the card's facts and the chart are fetched ahead, so the share sheet
  * opens from the tap.
  */
-export function ShareRaceDriverCard({ raceId, carNumber, driver, chart }: { raceId: string; carNumber: string; driver: string; chart?: RaceChartData }) {
+export function ShareRaceDriverCard({
+  raceId,
+  carNumber,
+  driver,
+  chart,
+  annotations = null,
+}: {
+  raceId: string;
+  carNumber: string;
+  driver: string;
+  chart?: RaceChartData;
+  annotations?: AnnotationData | null;
+}) {
   const name = displayName(driver);
   useEffect(() => {
-    if (chart) primeRaceChart(raceId, chart);
+    if (chart) primeRaceChart(raceId, chart, annotations);
     if (isComputer()) return;
     const t = window.setTimeout(() => void loadDriverCardFacts(raceId, carNumber, driver), 1200);
     return () => window.clearTimeout(t);
-  }, [raceId, carNumber, driver, chart]);
+  }, [raceId, carNumber, driver, chart, annotations]);
   const make = async () => {
     const facts = await loadDriverCardFacts(raceId, carNumber, driver);
     if (!facts) throw new Error("no card");

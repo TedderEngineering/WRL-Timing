@@ -238,6 +238,22 @@ describe("GET /api/dashboard/my-car", () => {
     else expect(res.body.story).toBeNull();
   });
 
+  it("lists the car's races and shows an earlier one (?race=), with its drivers", async () => {
+    for (const r of fake.state.races) if (r.id.startsWith("gt4")) r.entries[0] = { ...r.entries[0], carClass: "Silver", driverNames: "Alex Rivera; JAMIE COLE", finishPos: 1, finishPosClass: 1 };
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "sro", teamName: null, season: null, label: null, carClass: null }];
+    const latest = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));
+    expect(latest.body.isLatest).toBe(true);
+    expect(latest.body.recent.map((r: any) => r.raceId)).toEqual(["gt4r2", "gt4r1"]);
+    expect(latest.body.recent[0]).toMatchObject({ carNumber: "68", carClass: "Silver", finishPosClass: 1 });
+    expect(latest.body.drivers).toEqual(["Alex Rivera", "Jamie Cole"]);
+    expect(latest.body.drive).toMatchObject({ known: false });
+    const earlier = await request(app).get("/api/dashboard/my-car?car=c1&race=gt4r1").set("Authorization", bearer(users.pro));
+    expect(earlier.body.race.id).toBe("gt4r1");
+    expect(earlier.body.isLatest).toBe(false);
+    // A race that isn't the car's falls back to its latest.
+    expect((await request(app).get("/api/dashboard/my-car?car=c1&race=wrlsat").set("Authorization", bearer(users.pro))).body.race.id).toBe("gt4r2");
+  });
+
   it("does not take another series' car with the same number", async () => {
     fake.state.cars = [{ id: "c1", userId: "u_pro", number: "68", series: "wrl", teamName: null, season: null, label: null, carClass: null }];
     const res = await request(app).get("/api/dashboard/my-car").set("Authorization", bearer(users.pro));

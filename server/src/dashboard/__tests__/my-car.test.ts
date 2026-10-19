@@ -24,7 +24,7 @@ describe("your car's race facts", () => {
     // Best green lap 99.5 on lap 2 (the 130 s in-lap does not count); 12's best is 99.0, so 2nd in GS.
     expect(f.bestLap).toEqual({ sec: 99.5, lap: 2 });
     expect(f.bestLapClassRank).toBe(2);
-    expect(f.pitCycles).toEqual([{ cycle: 1, lap: 5, before: 2, after: 1, net: 1 }]);
+    expect(f.pitCycles).toEqual([{ cycle: 1, lap: 5, before: 2, after: 1, net: 1, stopLap: 3, driveThrough: false, caution: false, quickest: null }]);
     // Only two GS cars: too few to rank, so the class benchmarks are the pit-cycle gain alone.
     expect(f.benchmarks).toEqual(["Gained 1 place over 1 pit cycle in GS"]);
   });
@@ -36,11 +36,25 @@ describe("your car's race facts", () => {
     big.cars["21"] = { ...big.cars["12"], num: 21, laps: [lap(1, 5, 4, 103), lap(2, 5, 4, 104), lap(3, 5, 4, 150, 1)] };
     const a: any = { "7": { ...pits(31), settles: ann["7"].settles }, "12": pits(35, 5), "20": pits(40), "21": pits(50) };
     expect(carFacts(big, a, "7")!.benchmarks).toEqual([
-      "Pit loss 1st of 4 in GS's 1st stops",
+      "Quickest stop of 4 in GS's 1st stops, lap 3",
       "Fastest lap 3rd of 4 in GS",
       "Gained 1 place over 1 pit cycle in GS",
     ]);
     expect(carFacts(big, a, "21")!.benchmarks).toEqual([]);
+  });
+
+  it("ties each pit cycle to the car's stop and ranks it in the class's same cycle", () => {
+    const big = structuredClone(data) as any;
+    big.cars["20"] = { ...big.cars["12"], num: 20, laps: [lap(1, 4, 3, 98.0), lap(2, 4, 3, 99), lap(3, 4, 3, 140, 1)] };
+    const cyc = { id: "GS-1", ordinal: 7 };
+    const stop = (l: number, loss: number, context = "green") => ({ pits: [{ l, cycle: cyc, pitTiming: { totalPitLoss: loss, isDriveThrough: false, context } }], settles: [] as any[] });
+    const a: any = { "7": { ...stop(3, 31), settles: ann["7"].settles }, "12": stop(5, 35), "20": stop(3, 40) };
+    const [c] = carFacts(big, a, "7")!.pitCycles;
+    expect(c).toMatchObject({ cycle: 1, stopLap: 3, caution: false, quickest: { rank: 1, of: 3 } });
+    expect(carFacts(big, a, "7")!.benchmarks[0]).toBe("Quickest stop of 3 in GS, lap 3");
+    // Under a caution the stop is not ranked (time lost is measured against other cars).
+    const fcy: any = { ...a, "7": { ...stop(3, 31, "fcy"), settles: ann["7"].settles } };
+    expect(carFacts(big, fcy, "7")!.pitCycles[0]).toMatchObject({ caution: true, quickest: null });
   });
 
   it("gives no position to a disqualified car", () => {

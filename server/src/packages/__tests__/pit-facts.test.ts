@@ -122,9 +122,9 @@ describe("pit facts from the analysis package", () => {
   it("Your car counts pit cycles in class and ranks only green stops", () => {
     const out = applyPitFacts(chart() as any, annotations() as any, facts);
     const f = carFacts(out.data as any, out.annotations as any, "1")!;
-    expect(f.pitCycles).toEqual([{ cycle: 1, lap: 4, before: 1, after: 2, net: -1 }]);
+    expect(f.pitCycles).toEqual([{ cycle: 1, lap: 4, before: 1, after: 2, net: -1, stopLap: 3, driveThrough: false, caution: false, quickest: null }]);
     // #2's stop was under a caution, so there is no field of three green stops to rank against.
-    expect(f.benchmarks.filter((b) => b.startsWith("Pit loss"))).toEqual([]);
+    expect(f.benchmarks.filter((b) => / stop of \d+ in /.test(b))).toEqual([]);
   });
 
   it("names the drivers from the facts when the import named nobody (WRL from RedMist)", () => {

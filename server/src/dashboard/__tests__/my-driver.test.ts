@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
 
-import { driverFacts, stintAverage, stintsOf } from "../my-driver.js";
+import { carDrive, driverFacts, stintAverage, stintsOf } from "../my-driver.js";
 import { bestSpelling, coDrivers, driverInNames, expandDriverName, sameDriver } from "../../services/my-drivers.js";
 
 const laps = (n: number, sec: (l: number) => number, pits: number[] = [], fcy: number[] = []) =>
@@ -102,5 +102,28 @@ describe("stint averages", () => {
     const car = { laps: laps(20, (l) => (l <= 10 ? 90 : 92), [10]) };
     const f = driverFacts(car, [{ l: 10, inDriver: "Alex Rivera", outDriver: "Jamie Cole" }], "Jamie Cole", ["Alex Rivera", "Jamie Cole"]);
     expect(f.stints.map((s) => s.avgLapS)).toEqual([90, 92]);
+  });
+});
+
+describe("the car's drive", () => {
+  it("names every driver with their stints, laps and time, and averages each stint", () => {
+    const car = { laps: laps(30, (l) => (l <= 10 ? 90 : l <= 20 ? 92 : 91), [10, 20]) };
+    const d = carDrive(car, [{ l: 10, inDriver: "Alex Rivera", outDriver: "Jamie Cole" }, { l: 20, inDriver: "Jamie Cole", outDriver: "RIVERA Alex" }], ["Alex Rivera", "Jamie Cole"]);
+    expect(d.known).toBe(true);
+    expect(d.stints.map((s) => [s.start, s.end, s.driver, s.avgLapS])).toEqual([
+      [1, 10, "Alex Rivera", 90],
+      [11, 20, "Jamie Cole", 92],
+      [21, 30, "Alex Rivera", 91],
+    ]);
+    expect(d.drivers.map((x) => [x.name, x.stints, x.laps, x.driveTimeS])).toEqual([
+      ["Alex Rivera", 2, 20, 1810],
+      ["Jamie Cole", 1, 10, 920],
+    ]);
+  });
+
+  it("says so when the timing doesn't name who drove", () => {
+    const d = carDrive({ laps: laps(10, () => 90, [5]) }, [{ l: 5 }], ["A Driver", "B Driver"]);
+    expect(d.known).toBe(false);
+    expect(d.drivers).toEqual([]);
   });
 });

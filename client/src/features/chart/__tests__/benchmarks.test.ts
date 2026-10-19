@@ -31,7 +31,7 @@ const ann = {
 describe("class benchmarks", () => {
   it("states the top-three facts for the car's class only", () => {
     expect(classBenchmarks(data, ann, 1).map((b) => b.text)).toEqual([
-      "Pit loss 1st of 4 in GS's 1st stops",
+      "Quickest stop of 4 in GS's 1st stops",
       "Fastest lap 2nd of 4 in GS",
       "Gained 2 places over 1 pit cycle in GS",
     ]);
@@ -80,7 +80,7 @@ describe("benchmarks from the analysis package's pit facts", () => {
     // Cycle 1 has two green stops, cycle 2 one: no field of three anywhere.
     expect(classBenchmarks(data, facts, 1).filter((b) => b.kind === "pit_loss")).toEqual([]);
     const three = { ...facts, "2": withCycle(ann["2"], "c1", 1) } as unknown as AnnotationData;
-    expect(classBenchmarks(data, three, 1).find((b) => b.kind === "pit_loss")?.text).toBe("Pit loss 1st of 3 in GS pit cycle 1");
+    expect(classBenchmarks(data, three, 1).find((b) => b.kind === "pit_loss")?.text).toBe("Quickest stop of 3 in GS");
   });
 
   it("counts places gained from the class positions the package gives", () => {
