@@ -9,6 +9,11 @@ import type { Period } from "./fcy.js";
 import type { Passage } from "./passages.js";
 
 const SERVICE = new Set(["stop", "garage", "retirement"]);
+/**
+ * A car whose first lap starts this long after the race start joined late (from the garage or the
+ * pit lane, Sebring 2026 #290): its first stint starts with that lap, not at the green flag.
+ */
+export const LATE_JOIN_S = 300;
 const PENALTY = new Set(["drive_through", "stop_and_go", "penalty_served"]);
 
 
@@ -40,9 +45,14 @@ export function buildStints(
     let sr: Stint["startReason"] = "race_start";
     let i0 = 0;
     const pls = plist.find((p) => p.kind === "pit_lane_start");
+    let lateJoin = false;
     if (pls) {
       a = pls.poutT ?? pls.rejoinT ?? a;
       sr = "pit_lane_start";
+    } else if (rows[0].startT - ctx.axis.origin > LATE_JOIN_S) {
+      a = rows[0].startT;
+      sr = "pit_lane_start";
+      lateJoin = true;
     }
     for (const p of plist) {
       // A red-flag hold ends a stint only when the driver changed during it.
@@ -99,6 +109,7 @@ export function buildStints(
           notes.push("driver_change_without_stop");
           conf = "medium";
         }
+        if (lateJoin && n === 1) notes.push("late_join_first_lap_start");
         const st: Stint = {
           id,
           car,

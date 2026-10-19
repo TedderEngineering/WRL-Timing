@@ -957,6 +957,13 @@ export function greenSecondsBetween(periods: { start: number; end: number }[], a
  */
 export const SERVED_BEFORE_MESSAGE_S = 120;
 
+/**
+ * RedMist: when the in-car equipment reissued the pit entry during a visit, the reported time is
+ * only the last entry to the exit. A segment this short, after race control issued a drive-through,
+ * is that drive-through, served in the same visit as the stop (Sebring 2026 #696, lap 128).
+ */
+export const REISSUED_DT_SEGMENT_MAX_S = 45;
+
 export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraft[], transit: Transit, garageS: number, serveWindowS: number, periods: { start: number; end: number }[] = []): void {
   const T = transit.valueS;
   const holds = redHolds(ctx.race.flagRecords, ctx.raceEndT);
@@ -1048,6 +1055,20 @@ export function classifyAlkamel(ctx: Ctx, passages: Passage[], pens: PenaltyDraf
       link(sp);
     } else if (p.pitType === "PENALTY" && pl !== null && T !== null && pl > 1.15 * T) {
       set("penalty_served", ["drive_time_pit_type"]);
+    } else if (
+      dt &&
+      ctx.race.format === "redmist" &&
+      p.confNotes.includes("pit_entry_renumbered") &&
+      p.official !== null &&
+      p.official > 0 &&
+      p.official <= REISSUED_DT_SEGMENT_MAX_S
+    ) {
+      // The stop stays a stop (its time lost covers both); the drive-through is served in it.
+      set("stop", ["default_stop", "rc_penalty_match"]);
+      p.confNotes.push("drive_through_in_reissued_visit");
+      dt.confidence = "medium";
+      dt.confNotes.push("served_in_reissued_visit");
+      link(dt);
     } else if (!cand.length && p.pitType !== "PENALTY" && transit.valid && short) {
       // Rule 6, read per passage: no penalty record explains this passage (no matched RC penalty and no
       // Drive Time PENALTY type). DEFINITIONS.md says "no penalty record exists for the race"; read
