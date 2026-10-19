@@ -391,7 +391,7 @@ function CarRaceBox({ facts, drive }: { facts: NonNullable<MyCarResponse["facts"
           <dd className="m-0 text-[16px] font-bold leading-none text-[var(--rt-text)] sm:text-[20px]">
             {stops} <span className="text-[13px] font-semibold text-[var(--rt-text-muted)]">stop{stops === 1 ? "" : "s"}</span>
           </dd>
-          <dt className="mt-1 truncate text-[12px] text-[var(--rt-text-muted)]">{stopLaps.length ? `laps ${stopLaps.join(", ")}` : "no pit stops"}</dt>
+          <dt className="mt-1 truncate text-[12px] text-[var(--rt-text-muted)]">{stopLaps.length ? `laps ${stopLaps.join(", ")}` : stops > 0 ? "in the pit lane" : "no pit stops"}</dt>
         </div>
         {cycles.length > 0 && (
           <div>

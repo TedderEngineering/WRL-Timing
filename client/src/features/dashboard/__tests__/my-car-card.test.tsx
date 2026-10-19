@@ -45,6 +45,8 @@ describe("your car's latest race", () => {
     expect(t).toContain("Pit cycles in Silver");
     expect(t).toContain("P5 → P2 Gained 3");
     expect(t).toContain("P2 → P3 Lost 1");
+    // An older server (no stop laps, no drive): the count from the cycles, never "no pit stops".
+    expect(t).toContain("2 stops in the pit lane");
     expect(t).toContain("Position Trace →");
     // No chart key from this server: no share.
     expect(t).not.toContain("Share");
