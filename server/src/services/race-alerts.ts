@@ -23,6 +23,7 @@ import { carFacts, type CarFacts } from "../dashboard/my-car.js";
 import { sendRaceAlertEmail } from "./email.js";
 import { alertEmailHtml } from "./race-alert-email.js";
 import { carDrive, driverFacts } from "../dashboard/my-driver.js";
+import { driverHighlights } from "../dashboard/highlights.js";
 import { entryDrivers } from "../dashboard/driver-card.js";
 import { displayName } from "./driver-search.js";
 import { racetraceSite } from "./site.js";
@@ -229,6 +230,8 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
   );
 
   const site = racetraceSite();
+  // Every entry's drivers by car number, to name the class's stints (driver highlights).
+  const byCar: Record<string, string[]> = Object.fromEntries(entries.map((x) => [x.carNumber, entryDrivers(x.driverNames)]));
   let sent = 0;
   const done = new Set<string>();
   for (const car of followers) {
@@ -288,6 +291,7 @@ export async function sendRaceAlerts(raceId: string, now = Date.now()): Promise<
           drive,
           driverName: car.driverName,
           driverDrive: car.driverName && key ? driverFacts(chart.data.cars[key], pits, car.driverName, names) : null,
+          driverHighlights: car.driverName && key ? driverHighlights(chart.data as any, (chart.annotations as any) ?? null, key, car.driverName, byCar, f) : [],
           raceUrl: `${site.url}/chart?race=${race.id}&car=${encodeURIComponent(f.number)}&from=alert`,
           unsubscribeUrl,
           settingsUrl: `${site.url}/settings/${car.driverName ? "drivers" : "cars"}`,

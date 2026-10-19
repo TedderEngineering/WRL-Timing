@@ -9,45 +9,13 @@
 import { z } from "zod";
 import { prisma } from "../models/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
-import { DRIVER_SEPARATOR, driverKey } from "../utils/driverNames.js";
+import { DRIVER_SEPARATOR, driverKey, expandDriverName, sameDriver } from "../utils/driverNames.js";
+
+export { expandDriverName, sameDriver };
 import { displayName } from "./driver-search.js";
 import { canonicalTrack } from "../lib/weekends.js";
 
 export const MAX_DRIVERS = 20;
-
-const wordsOf = (key: string) => key.split(" ").filter((w) => w.length > 1 || /\d/.test(w));
-
-/** True when two driver names are one driver. Initials are left out of the word check. */
-export function sameDriver(a: string, b: string): boolean {
-  const ka = driverKey(a);
-  const kb = driverKey(b);
-  if (!ka || !kb) return false;
-  if (ka === kb) return true;
-  const wa = wordsOf(ka);
-  const wb = wordsOf(kb);
-  if (wa.length < 2 || wb.length < 2) return false;
-  const [short, long] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
-  return short.every((w) => long.includes(w));
-}
-
-/**
- * A driver as the timing names them in one place ("Boehm", "K. Boehm") made into the car's full
- * name ("Kevin Boehm") when exactly one of the car's drivers fits: every full word matches and
- * each initial starts one of their names. Otherwise the name is kept as it is.
- */
-export function expandDriverName(name: string, carDrivers: string[]): string {
-  const same = carDrivers.find((d) => sameDriver(d, name));
-  if (same) return same;
-  const key = driverKey(name).split(" ").filter(Boolean);
-  const full = key.filter((w) => w.length > 1);
-  const initials = key.filter((w) => w.length === 1);
-  if (!full.length) return name;
-  const fits = carDrivers.filter((d) => {
-    const dw = driverKey(d).split(" ");
-    return full.every((w) => dw.includes(w)) && initials.every((i) => dw.some((x) => x.startsWith(i)));
-  });
-  return fits.length === 1 ? fits[0] : name;
-}
 
 /** The entry's spelling of the driver, when the entry has them. */
 export function driverInNames(driverNames: string | null | undefined, name: string): string | null {

@@ -413,7 +413,7 @@ dashboardRouter.get("/my-driver", requireAuth, async (req: Request, res: Respons
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
     ]);
     const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, latest.carNumber) : null;
-    res.json({ ...base, isLatest, race: raceOut, car, facts: card.facts, driverFacts: card.driverFacts, story, viewed: !!viewed });
+    res.json({ ...base, isLatest, race: raceOut, car, facts: card.facts, driverFacts: card.driverFacts, driverHighlights: card.driverHighlights, story, viewed: !!viewed });
   } catch (err) {
     next(err);
   }

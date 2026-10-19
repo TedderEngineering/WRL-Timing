@@ -98,6 +98,9 @@ describe("race-ready emails", () => {
     expect(m.html).toContain("P1 → P2");
     expect(m.html).toContain("Lost 1");
     expect(m.html).not.toContain("Pit loss");
+    // What went right, ranked: the class result first.
+    expect(m.html).toContain("✓");
+    expect(m.html).toContain("P2 in GS, P2 overall");
     expect(m.html).toContain("&car=67");
     // A second trigger (results turning official) repeats nothing.
     expect((await sendRaceAlerts("vir", NOW)).sent).toBe(0);

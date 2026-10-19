@@ -51,6 +51,29 @@ export interface PitCycleFact {
   quickest?: { rank: number; of: number } | null;
 }
 
+/** One thing that went right, ranked by its score (server dashboard/highlights.ts). */
+export interface Highlight {
+  kind: string;
+  text: string;
+  score: number;
+}
+
+/** The top highlights as a short list with checks (the car and driver cards). */
+export function HighlightsList({ items, max = 3 }: { items: Highlight[] | undefined; max?: number }) {
+  const shown = (items ?? []).slice(0, max);
+  if (!shown.length) return null;
+  return (
+    <ul aria-label="Highlights" className="m-0 flex list-none flex-col gap-1 p-0 text-[14px] text-[var(--rt-text-secondary)]">
+      {shown.map((h) => (
+        <li key={h.kind + h.text} className="flex items-baseline gap-2">
+          <span aria-hidden className="font-bold text-[var(--rt-good)]">✓</span>
+          <span>{h.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export interface CarRaceRow {
   raceId: string;
   raceName: string;
@@ -97,6 +120,8 @@ export interface MyCarResponse {
     pitCycles: PitCycleFact[];
     /** Class benchmarks (plan E), facts in the class top three only. */
     benchmarks?: string[];
+    /** What went right, ranked (server dashboard/highlights.ts); absent from older servers. */
+    highlights?: Highlight[];
   } | null;
   /** The entry's drivers, display-cased. */
   drivers?: string[];
@@ -257,6 +282,7 @@ export function MyCarCard({
               </p>
             )}
 
+            {facts && <HighlightsList items={facts.highlights} />}
             {facts && <CarRaceBox facts={facts} drive={data.drive ?? null} />}
             {facts && facts.pitCycles.length > 0 && <PitCycles cls={facts.cls} cycles={facts.pitCycles} />}
 

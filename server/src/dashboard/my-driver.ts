@@ -6,7 +6,7 @@
  * numbers instead. Nothing here is estimated: a stint whose driver the timing doesn't name stays
  * unnamed.
  */
-import { expandDriverName, sameDriver } from "../services/my-drivers.js";
+import { expandDriverName, sameDriver } from "../utils/driverNames.js";
 
 interface LapRow {
   l: number;
