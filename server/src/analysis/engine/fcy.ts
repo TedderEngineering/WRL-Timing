@@ -100,6 +100,10 @@ export interface FcyResult {
   source: "flags" | "race_control" | "reconstruction";
 }
 
+/** A caution record shorter than this, starting within START_BLIP_WINDOW_S of the green, is the start signal. */
+export const START_BLIP_S = 20;
+export const START_BLIP_WINDOW_S = 5;
+
 export function buildFcyPeriods(ctx: Ctx): FcyResult {
   const { race, laps, issues } = ctx;
   const recon = reconstructFcy(laps, ctx.axis.origin, ctx.raceEndT);
@@ -130,6 +134,17 @@ export function buildFcyPeriods(ctx: Ctx): FcyResult {
       cur.end = ctx.raceEndT;
       cur.endsAtFinish = true;
       official.push(cur);
+    }
+    // A caution record a few seconds long right at the green is the start signal, not a caution (no
+    // full-course caution lasts that long): Mustang COTA 2026 Race 1, FCY 0.001-10.053 s.
+    const blips = official.filter((p) => p.type !== "red" && p.end - p.start < START_BLIP_S && p.start - ctx.axis.origin <= START_BLIP_WINDOW_S);
+    if (blips.length) {
+      official = official.filter((p) => !blips.includes(p));
+      issues.push({
+        severity: "note",
+        code: "FCY-START-BLIP",
+        message: `${blips.length} caution record(s) under ${START_BLIP_S} s at the start (${blips.map((p) => `${rd(p.start - ctx.axis.origin, 3)}-${rd(p.end - ctx.axis.origin, 3)} s`).join(", ")}) are the start signal, not a caution period; not counted.`,
+      });
     }
   } else {
     // Rank 2: race-control texts.
