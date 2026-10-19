@@ -86,6 +86,8 @@ export interface ShareCardOptions {
   body: (ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle) => void;
   /** One short line of fact; "good" shows it in the site's good colour. */
   fact?: { text: string; tone?: "good" | "neutral" };
+  /** Up to two facts side by side in the fact slot (in place of `fact`). */
+  facts?: { text: string; tone?: "good" | "neutral" }[];
 }
 
 // ─── Drawing helpers (also for body slots) ───────────────────────────────────
@@ -209,19 +211,32 @@ export async function drawShareCard(
     x: PAD,
     y: 380,
     w: W - PAD * 2,
-    h: (opts.fact ? factTop - 32 : footerTop - 40) - 380,
+    h: (opts.fact || opts.facts?.length ? factTop - 32 : footerTop - 40) - 380,
   };
   ctx.save();
   opts.body(ctx, bodyBox, style);
   ctx.restore();
 
-  // Fact line.
-  if (opts.fact) {
-    const good = opts.fact.tone === "good";
+  // Fact line: one pill, or two side by side.
+  const pills = (opts.facts?.length ? opts.facts : opts.fact ? [opts.fact] : []).slice(0, 2);
+  if (pills.length === 2) {
+    const gap = 20;
+    const w = (W - PAD * 2 - gap) / 2;
+    pills.forEach((f, i) => {
+      const x = PAD + i * (w + gap);
+      const good = f.tone === "good";
+      roundRect(ctx, x, factTop, w, 96, 48);
+      ctx.fillStyle = good ? hexAlpha(style.good, 0.14) : style.panel;
+      ctx.fill();
+      drawText(ctx, f.text, x + w / 2, factTop + 60, { size: 30, weight: 600, color: good ? style.good : style.text, align: "center", maxWidth: w - 48 });
+    });
+  } else if (pills.length === 1) {
+    const fact = pills[0];
+    const good = fact.tone === "good";
     roundRect(ctx, PAD, factTop, W - PAD * 2, 96, 48);
     ctx.fillStyle = good ? hexAlpha(style.good, 0.14) : style.panel;
     ctx.fill();
-    drawText(ctx, opts.fact.text, W / 2, factTop + 62, {
+    drawText(ctx, fact.text, W / 2, factTop + 62, {
       size: 36,
       weight: 600,
       color: good ? style.good : style.text,

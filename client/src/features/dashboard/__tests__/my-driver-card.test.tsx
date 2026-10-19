@@ -5,7 +5,7 @@ import { MyDriverCard, type MyDriverResponse } from "../MyDriverCard";
 import { driveOf, driveTimeText, stintsOf } from "../../my-drivers/stints";
 import { sameDriver } from "../../my-drivers/api";
 import { carDriverNames } from "../../my-drivers/CarDrivers";
-import { chartCarKey, driverCardFact, driverCardLines, driverShareUrl, lapOwners, ShareRaceDriverCard } from "../../my-drivers/driverCard";
+import { chartCarKey, driverCardBanner, driverCardFact, driverCardPills, driverCardLines, driverShareUrl, lapOwners, ShareRaceDriverCard } from "../../my-drivers/driverCard";
 import { formatDuration } from "../../../lib/prose";
 
 const text = (node: React.ReactNode) =>
@@ -128,6 +128,18 @@ describe("driver card share image", () => {
 
   it("puts the driver's top highlight on the card when the server ranks them", () => {
     expect(driverCardFact({ ...input, highlights: [{ text: "Brought #7 home to the GTP win" }] })).toEqual({ text: "Brought #7 home to the GTP win", tone: "good" });
+  });
+
+  it("leads with the car's podium as a banner and shows up to two of the driver's highlights", () => {
+    const won = { ...input, facts: { ...input.facts, finishClass: 1, highlights: [{ kind: "result", text: "Won GTP", score: 100 }] } as any };
+    expect(driverCardBanner(won)).toEqual({ text: "#7 won GTP", place: 1 });
+    expect(driverCardBanner({ ...input, facts: { ...input.facts, highlights: [] } as any })).toBeNull();
+    const three = [{ kind: "brought_home", text: "Brought #7 home to the GTP win" }, { kind: "driver_laps_led", text: "Led the race for 8 laps" }, { kind: "longest_stint", text: "Longest stint" }];
+    // Under the banner, "brought home" repeats it.
+    expect(driverCardPills({ ...won, highlights: three }, null)).toEqual(["Led the race for 8 laps", "Longest stint"]);
+    expect(driverCardPills({ ...won, highlights: three.slice(0, 2) }, null)).toEqual(["Led the race for 8 laps"]);
+    expect(driverCardPills({ ...won, highlights: three.slice(0, 1) }, null)).toEqual([]);
+    expect(driverCardPills({ ...input, facts: { ...input.facts, highlights: [] } as any, highlights: three }, null)).toEqual(three.slice(0, 2).map((h) => h.text));
   });
 
   it("offers each driver's card on the race page", () => {

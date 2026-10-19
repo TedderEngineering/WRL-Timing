@@ -48,6 +48,14 @@ describe("car highlights", () => {
     expect(h.map((x) => x.score)).toEqual([...h.map((x) => x.score)].sort((a, b) => b - a));
   });
 
+  it("count the stops from the pit notes when the race has them (a visit can flag several laps)", () => {
+    const multi = structuredClone(data);
+    // #1's single visit flags laps 15-17 as pit laps; its notes list one stop.
+    for (const l of multi.cars["1"].laps) if (l.l >= 15 && l.l <= 17) l.pit = 1;
+    const notes: any = { ...ann, "4": { pits: [{ l: 10 }, { l: 20 }] }, "5": { pits: [{ l: 10 }, { l: 20 }] } };
+    expect(carFacts(multi, notes, "1")!.highlights.find((x) => x.kind === "fewest_stops")?.text).toBe("1 pit stop, fewest in GS");
+  });
+
   it("never make a weak result a highlight", () => {
     const h = carFacts(data, ann, "5")!.highlights;
     expect(h.some((x) => x.kind === "race_pace" || x.kind === "fastest_lap" || x.kind === "result")).toBe(false);
