@@ -81,3 +81,22 @@ describe("GET /api/races/:id/driver-card", () => {
     expect((await request(app).get("/api/races/r1/driver-card?car=007&driver=Jamie%20Cole")).status).toBe(404);
   });
 });
+
+describe("GET /api/races/:id/car-card", () => {
+  it("gives the car, its drivers, facts and who drove when", async () => {
+    const res = await request(app).get("/api/races/r1/car-card?car=7");
+    expect(res.status).toBe(200);
+    expect(res.body.car).toEqual({ number: "007", team: "Rivera Racing", cls: "GS" });
+    expect(res.body.drivers).toEqual(["Alex Rivera", "Jamie Cole"]);
+    expect(res.body.facts).toMatchObject({ carKey: "7", laps: 20, raceLaps: 20 });
+    expect(res.body.drive.known).toBe(true);
+    expect(res.body.drive.drivers.map((d: any) => d.name)).toEqual(["Alex Rivera", "Jamie Cole"]);
+  });
+
+  it("refuses a missing car and a draft race", async () => {
+    expect((await request(app).get("/api/races/r1/car-card?car=99")).status).toBe(404);
+    expect((await request(app).get("/api/races/r1/car-card")).status).toBe(400);
+    fake.state.races[0].status = "DRAFT";
+    expect((await request(app).get("/api/races/r1/car-card?car=007")).status).toBe(404);
+  });
+});
