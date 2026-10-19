@@ -35,7 +35,7 @@
     "@types/pdf-parse": "^1.1.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -76,5 +76,8 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.71.2",
     "vitest": "^2.1.8"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
