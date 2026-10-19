@@ -88,6 +88,8 @@ export interface ShareCardOptions {
   fact?: { text: string; tone?: "good" | "neutral" };
   /** Up to two facts side by side in the fact slot (in place of `fact`). */
   facts?: { text: string; tone?: "good" | "neutral" }[];
+  /** A short badge at the top right of the header, beside the product name ("Overall Winner!"). */
+  badge?: string;
 }
 
 // ─── Drawing helpers (also for body slots) ───────────────────────────────────
@@ -188,6 +190,28 @@ export async function drawShareCard(
     nameX = PAD + 108;
   }
   drawText(ctx, style.name, nameX, 124, { size: 44, weight: 700, color: style.text });
+
+  // Badge: right-aligned, level with the product name, in the site's accent.
+  if (opts.badge) {
+    const maxW = W - PAD - (nameX + 300);
+    let size = 36;
+    ctx.font = `800 ${size}px ${SANS}`;
+    while (size > 22 && ctx.measureText(opts.badge).width + 64 > maxW) {
+      size -= 2;
+      ctx.font = `800 ${size}px ${SANS}`;
+    }
+    const bw = Math.min(maxW, ctx.measureText(opts.badge).width + 64);
+    const bh = 76;
+    const bx = W - PAD - bw;
+    const by = 108 - bh / 2;
+    roundRect(ctx, bx, by, bw, bh, bh / 2);
+    ctx.fillStyle = hexAlpha(style.accent, 0.16);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = style.accent;
+    ctx.stroke();
+    drawText(ctx, opts.badge, bx + bw / 2, by + bh / 2 + size * 0.36, { size, weight: 800, color: style.accent, align: "center" });
+  }
 
   // Title and subtitle.
   drawText(ctx, opts.title, PAD, 270, {

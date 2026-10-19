@@ -38,16 +38,16 @@ describe("the car's share card", () => {
     });
   });
 
-  it("takes the result as the banner and up to two other highlights, or fewer", () => {
+  it("shows up to two highlights past the result, or fewer", () => {
     const h = (kind: string, text: string) => ({ kind, text, score: 1 });
     const won = h("result", "Won GTO and the race overall");
-    expect(cardHighlights({ ...facts, highlights: [won, h("fewest_stops", "6 pit stops, fewest in GTO"), h("race_pace", "2nd-best race pace in GTO"), h("passes", "x")] })).toEqual({
-      banner: "Won GTO and the race overall",
-      pills: ["6 pit stops, fewest in GTO", "2nd-best race pace in GTO"],
-    });
-    expect(cardHighlights({ ...facts, highlights: [won], benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual({ banner: "Won GTO and the race overall", pills: [] });
-    expect(cardHighlights({ ...facts, highlights: [h("race_pace", "2nd-best race pace in GTO")] })).toEqual({ banner: null, pills: ["2nd-best race pace in GTO"] });
+    expect(cardHighlights({ ...facts, highlights: [won, h("fewest_stops", "6 pit stops, fewest in GTO"), h("race_pace", "2nd-best race pace in GTO"), h("passes", "x")] })).toEqual([
+      "6 pit stops, fewest in GTO",
+      "2nd-best race pace in GTO",
+    ]);
+    expect(cardHighlights({ ...facts, highlights: [won], benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual([]);
+    expect(cardHighlights({ ...facts, highlights: [h("race_pace", "2nd-best race pace in GTO")] })).toEqual(["2nd-best race pace in GTO"]);
     // Older responses without highlights: the benchmarks stand in.
-    expect(cardHighlights({ ...facts, benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual({ banner: null, pills: ["Quickest stop of 6 in GTO, lap 61"] });
+    expect(cardHighlights({ ...facts, benchmarks: ["Quickest stop of 6 in GTO, lap 61"] })).toEqual(["Quickest stop of 6 in GTO, lap 61"]);
   });
 });

@@ -18,7 +18,7 @@ import { formatDuration } from "@/lib/prose";
 import { SANS, drawText, imageName, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
 import { ShareImageActions } from "@/features/share/ShareImageActions";
 import { isComputer } from "@/features/share/shareImage";
-import { loadRaceChartWithNotes, primeRaceChart } from "../my-drivers/driverCard";
+import { loadRaceChartWithNotes, podiumBadge, primeRaceChart } from "../my-drivers/driverCard";
 import { displayName } from "../my-drivers/api";
 import { driveTimeText } from "../my-drivers/stints";
 import { finishLine, type CarDriveFacts, type MyCarResponse } from "./MyCarCard";
@@ -219,36 +219,17 @@ function drawCycles(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, f
   });
 }
 
-/** A class podium as the card's leading banner: gold for the win, silver and bronze for P2 and P3. */
-const PODIUM = [
-  { bg: "#F5C542", text: "#1d1600" },
-  { bg: "#C9D1E0", text: "#11131a" },
-  { bg: "#D9935A", text: "#1a0d02" },
-];
-
-/** The card's highlights: the class podium as the banner, the next two in the fact pills. */
-export function cardHighlights(f: Facts): { banner: string | null; pills: string[] } {
+/** The car card's pills: up to two highlights past the result (the badge carries the podium), or fewer. */
+export function cardHighlights(f: Facts): string[] {
   const hs = f.highlights ?? [];
-  const result = hs.find((h) => h.kind === "result");
-  const rest = hs.filter((h) => h !== result).map((h) => h.text);
-  // Up to two: a car may have one highlight past its result, or none. Older responses carry no
-  // highlights; their benchmarks stand in.
-  const pills = hs.length ? rest.slice(0, 2) : f.benchmarks?.slice(0, 2) ?? [];
-  return { banner: result ? result.text : null, pills };
+  // Older responses carry no highlights; their benchmarks stand in.
+  if (!hs.length) return f.benchmarks?.slice(0, 2) ?? [];
+  return hs.filter((h) => h.kind !== "result").slice(0, 2).map((h) => h.text);
 }
 
 export function drawCarCardBody(ctx: CanvasRenderingContext2D, box: Box, style: SiteStyle, chart: RaceChartData | null, input: CarCardInput) {
   const { facts: f } = input;
   let y = box.y;
-  const { banner } = cardHighlights(f);
-  if (banner && f.finishClass) {
-    const c = PODIUM[Math.min(f.finishClass, 3) - 1];
-    roundRect(ctx, box.x, y, box.w, 72, 18);
-    ctx.fillStyle = c.bg;
-    ctx.fill();
-    drawText(ctx, banner.toUpperCase(), box.x + box.w / 2, y + 48, { size: 34, weight: 800, color: c.text, align: "center", maxWidth: box.w - 48 });
-    y += 72 + 22;
-  }
   const named = !!input.drive?.known && input.drive.drivers.length > 0;
   // The drivers are in the stint legend; without it, they go under the result.
   drawText(ctx, carCardResult(f), box.x, y + 34, { size: 34, weight: 600, color: style.text, maxWidth: box.w });
@@ -270,7 +251,7 @@ export function drawCarCardBody(ctx: CanvasRenderingContext2D, box: Box, style: 
   });
   y += sb.h + 20;
 
-  const tilesH = f.pitCycles.length ? (banner ? 100 : 108) : 0;
+  const tilesH = f.pitCycles.length ? 108 : 0;
   const stintsH = named ? 74 : 0;
   const traceH = box.y + box.h - y - (stintsH ? stintsH + 18 : 0) - (tilesH ? tilesH + 20 : 0);
   const key = f.carKey && chart?.cars[f.carKey] ? f.carKey : null;
@@ -293,14 +274,14 @@ export function carCardText(input: CarCardInput): { title: string; subtitle: str
 export async function makeCarCard(input: CarCardInput): Promise<Blob> {
   const chart = await loadRaceChartWithNotes(input.race.id);
   const { title, subtitle } = carCardText(input);
-  // The next two highlights in the pills (the podium is the banner); a server without highlights gives its benchmarks.
-  const { pills } = cardHighlights(input.facts);
+  const pills = cardHighlights(input.facts);
   return makeShareCard({
     site: "racetrace",
     title,
     subtitle,
     body: (ctx, box, style) => drawCarCardBody(ctx, box, style, chart?.data ?? null, input),
     facts: pills.map((text) => ({ text, tone: "good" as const })),
+    badge: podiumBadge(input.facts) ?? undefined,
   });
 }
 
