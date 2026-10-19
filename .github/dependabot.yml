@@ -16,6 +16,10 @@ updates:
     ignore:
       - dependency-name: "@supabase/*"
         versions: [">=2.98.0"]
+      # Major versions are planned upgrades (Prisma 7 needs a migration; TypeScript 7 isn't supported
+      # by typescript-eslint yet), not weekly PRs: a red check on a server package can take the API down.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: [dependencies]
 
   - package-ecosystem: npm
@@ -27,6 +31,10 @@ updates:
     groups:
       client-minor-and-patch:
         update-types: [minor, patch]
+    # Major versions are planned upgrades, not weekly PRs.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: [dependencies]
 
   - package-ecosystem: github-actions
