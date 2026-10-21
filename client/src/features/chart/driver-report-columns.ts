@@ -1,6 +1,7 @@
 /**
  * The Driver Report's column names and what each one means: the tab's headers and their ⓘ
- * explanations, and the PDF's headers, from one list so they never disagree.
+ * explanations (only where a column needs one), and the PDF's headers, from one list so they
+ * never disagree.
  */
 import { CLASS_LIMIT, CLEAR_GAP_S, DRIVER_LIMIT, Z_WINDOW_S } from "./driver-performance";
 
@@ -11,24 +12,16 @@ export interface DriverColumnText {
   name: string;
   /** The PDF's header (short, upper case). */
   pdf: string;
-  /** The ⓘ explanation: what it is, and how to read it. */
-  tip: string;
+  /** The ⓘ explanation: what it is, and how to read it. None for a column that explains itself. */
+  tip?: string;
 }
 
 export const DRIVER_COLUMNS: Record<DriverColumnId, DriverColumnText> = {
-  driver: { name: "Driver", pdf: "DRIVER", tip: "Who drove, from the driver changes at the pit stops." },
-  car: { name: "Car", pdf: "CAR", tip: "Car number and team." },
-  spread: {
-    name: "Lap-time spread",
-    pdf: "LAP-TIME SPREAD",
-    tip: `Each lap counted in the average, on the class's time scale. Green: clean air. Purple: a car within ${CLEAR_GAP_S} s ahead. The box is the driver's best lap.`,
-  },
-  avgLap: {
-    name: "Avg lap",
-    pdf: "AVG LAP",
-    tip: "The average of the laps counted: the driver's fastest racing laps, at most half the laps they drove. The table is ranked on it.",
-  },
-  fastLap: { name: "Best lap", pdf: "BEST LAP", tip: "The driver's fastest racing lap." },
+  driver: { name: "Driver", pdf: "DRIVER" },
+  car: { name: "Car", pdf: "CAR" },
+  spread: { name: "Lap-time spread", pdf: "LAP-TIME SPREAD" },
+  avgLap: { name: "Avg lap", pdf: "AVG LAP" },
+  fastLap: { name: "Best lap", pdf: "BEST LAP" },
   stdDev: {
     name: "Consistency",
     pdf: "CONSISTENCY",

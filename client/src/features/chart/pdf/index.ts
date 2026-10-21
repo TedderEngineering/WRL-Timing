@@ -2,6 +2,8 @@
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { api } from "../../../lib/api";
 import { driverPerformance } from "../driver-performance";
+import { DRIVER_COLUMNS } from "../driver-report-columns";
+import { driverReportView, sortDriverRows } from "../driver-report-view";
 import type { PitAnalysisResponse } from "../PitAnalysisTab";
 import { loadRaceStories, storyCarFor } from "../StoryTab";
 import { pdfFileName, type PdfMeta } from "./kit";
@@ -37,8 +39,21 @@ export async function tabPdf(tab: PdfTab, input: TabPdfInput): Promise<{ blob: B
       return { blob: await (await import("./lapTimes")).lapTimesPdf(data, annotations, focusNum, meta), name };
     case "strategy":
       return { blob: await (await import("./strategy")).strategyPdf(data, annotations, focusNum, meta), name };
-    case "drivers":
-      return { blob: await (await import("./driverReport")).driverReportPdf(driverPerformance(data, annotations), meta), name };
+    case "drivers": {
+      // As the table is on screen: its class, in its order (every class, ranked on average lap, when
+      // the tab was never opened).
+      const view = driverReportView(data);
+      let reports = driverPerformance(data, annotations);
+      let order: string | undefined;
+      if (view) {
+        const ranked = view.sort.key === "avgLap" && view.sort.dir === "asc";
+        reports = reports.filter((r) => r.cls === view.cls).map((r) => ({ ...r, rows: sortDriverRows(r.rows, view.sort) }));
+        const col = DRIVER_COLUMNS[view.sort.key].name;
+        const numeric = view.sort.key !== "driver" && view.sort.key !== "car";
+        if (!ranked) order = `Sorted by ${col.toLowerCase()}, ${numeric ? (view.sort.dir === "asc" ? "lowest first" : "highest first") : view.sort.dir === "asc" ? "A to Z" : "Z to A"}`;
+      }
+      return { blob: await (await import("./driverReport")).driverReportPdf(reports, meta, order), name };
+    }
     case "pitanalysis": {
       const pits = await api.get<PitAnalysisResponse>(`/races/${raceId}/pit-analysis`);
       return { blob: await (await import("./pitStops")).pitStopsPdf(data, pits, focusNum, meta), name };

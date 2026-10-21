@@ -3,11 +3,12 @@
  * (driver-performance.ts), with the spread of those laps, a z-score against the class at the same
  * time, clear air, cars passed, laps driven and when in the race they drove.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
 import { InfoTip } from "../../components/InfoTip";
 import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
+import { DEFAULT_SORT, SORT_COLUMNS as COLUMNS, setDriverReportView, sortDriverRows, type DriverSort, type SortKey } from "./driver-report-view";
 import {
   CLASS_LIMIT,
   CLEAR_GAP_S,
@@ -52,26 +53,6 @@ function axisText(s: number): string {
   return `${m}:${(Number.isInteger(sec) ? String(sec) : sec.toFixed(1)).padStart(2, "0")}`;
 }
 
-type SortKey = "avgLap" | "fastLap" | "stdDev" | "avgZ" | "clearAirPct" | "overtakes" | "shown" | "laps" | "driver" | "car";
-
-interface Column {
-  key: SortKey & DriverColumnId;
-  value: (r: DriverRow) => number | string | null;
-  dir: "asc" | "desc";
-}
-
-/** The sortable figure columns, in order; their names and ⓘ notes are in driver-report-columns.ts. */
-const COLUMNS: Column[] = [
-  { key: "avgLap", value: (r) => r.avgLap || null, dir: "asc" },
-  { key: "fastLap", value: (r) => r.fastLap || null, dir: "asc" },
-  { key: "stdDev", value: (r) => (r.shown.length ? r.stdDev : null), dir: "asc" },
-  { key: "avgZ", value: (r) => r.avgZ, dir: "asc" },
-  { key: "clearAirPct", value: (r) => r.clearAirPct, dir: "desc" },
-  { key: "overtakes", value: (r) => r.overtakes, dir: "desc" },
-  { key: "shown", value: (r) => r.shown.length, dir: "desc" },
-  { key: "laps", value: (r) => r.laps, dir: "desc" },
-];
-
 export interface DriverReportTabProps {
   data: RaceChartData;
   annotations: AnnotationData;
@@ -83,25 +64,14 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
   const reports = useMemo(() => driverPerformance(data, annotations), [data, annotations]);
   const focusCls = data.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState<string>(() => (focusCls && reports.some((r) => r.cls === focusCls) ? focusCls : reports[0]?.cls ?? ""));
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "avgLap", dir: "asc" });
+  const [sort, setSort] = useState<DriverSort>(DEFAULT_SORT);
   const report = reports.find((r) => r.cls === cls) ?? reports[0];
 
-  const rows = useMemo(() => {
-    if (!report) return [];
-    const col = COLUMNS.find((c) => c.key === sort.key);
-    const value = (r: DriverRow): number | string | null =>
-      sort.key === "driver" ? r.driver ?? "" : sort.key === "car" ? r.carLabel : col ? col.value(r) : null;
-    const dir = sort.dir === "asc" ? 1 : -1;
-    return [...report.rows].sort((a, b) => {
-      const av = value(a);
-      const bv = value(b);
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1; // no value: always last
-      if (bv === null) return -1;
-      if (typeof av === "string" || typeof bv === "string") return dir * String(av).localeCompare(String(bv));
-      return dir * (av - bv);
-    });
-  }, [report, sort]);
+  const rows = useMemo(() => (report ? sortDriverRows(report.rows, sort) : []), [report, sort]);
+  // The PDF button prints the table as it is now: this class, this order.
+  useEffect(() => {
+    if (report) setDriverReportView(data, { cls: report.cls, sort });
+  }, [data, report, sort]);
 
   if (!report) {
     return <p className="px-6 py-8 text-sm" style={{ color: S.muted }}>No laps to report for this race.</p>;
@@ -120,13 +90,13 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
     >
       {DRIVER_COLUMNS[key].name}
       {sort.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
-      <InfoTip label={DRIVER_COLUMNS[key].name} text={DRIVER_COLUMNS[key].tip} />
+      {DRIVER_COLUMNS[key].tip && <InfoTip label={DRIVER_COLUMNS[key].name} text={DRIVER_COLUMNS[key].tip} />}
     </th>
   );
   const plainHead = (id: DriverColumnId, width: number) => (
     <th className="whitespace-nowrap px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider" style={{ color: S.muted, width }}>
       {DRIVER_COLUMNS[id].name}
-      <InfoTip label={DRIVER_COLUMNS[id].name} text={DRIVER_COLUMNS[id].tip} />
+      {DRIVER_COLUMNS[id].tip && <InfoTip label={DRIVER_COLUMNS[id].name} text={DRIVER_COLUMNS[id].tip} />}
     </th>
   );
 

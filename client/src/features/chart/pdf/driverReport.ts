@@ -148,8 +148,9 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
   doc.text(`${Math.round(report.raceS / 3600)} h`, xs[trackI] + cols[trackI].w, bottom + 10, { align: "right" });
 }
 
-export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta): Promise<Blob> {
-  const pdf = await newPdf("landscape");
+/** `order`: how the rows are sorted, when not on average lap (the table's sort when printed from it). */
+export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta, order?: string): Promise<Blob> {
+  const pdf = await newPdf("landscape", meta);
   let first = true;
   for (const report of reports) {
     const cols = columns(report.rows.some((r) => r.make), pdf.size.w);
@@ -157,7 +158,7 @@ export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta): Pr
     const { perPage } = rowsThatFit(pdf, top + 14, report.rows.length);
     const pages = pagesOf(report.rows, perPage);
     pages.forEach((rows, page) => {
-      startPage(pdf, meta, `DRIVER PERFORMANCE REPORT · CLASS ${report.cls}${pages.length > 1 ? ` (${page + 1}/${pages.length})` : ""}`, "Fastest racing laps (at most 50% of each driver's laps)", first);
+      startPage(pdf, meta, `DRIVER PERFORMANCE REPORT · CLASS ${report.cls}${pages.length > 1 ? ` (${page + 1}/${pages.length})` : ""}`, `Fastest racing laps (at most 50% of each driver's laps)${order ? ` · ${order}` : ""}`, first);
       first = false;
       const { rowH } = rowsThatFit(pdf, top + 14, rows.length);
       drawRows(pdf.doc, report, cols, rows, top, rowH, pdf.size.w);
