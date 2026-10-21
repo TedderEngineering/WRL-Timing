@@ -11,6 +11,11 @@ import {
   DEFAULT_STRATEGY_SORT,
   STRATEGY_KEY,
   STRATEGY_SORTS,
+  STINT_CAUTION,
+  STINT_FAST,
+  STINT_MID,
+  STINT_SLOW,
+  STINT_TEXT,
   paceRgb,
   rgbCss,
   setStrategyView,
@@ -91,7 +96,6 @@ const P = {
   muted: "#9a9ab4",
   accent: "#F48C34",
   clear: "#22c55e",
-  caution: "#facc15",
   focus: "rgba(244,140,52,0.12)",
 } as const;
 
@@ -144,8 +148,12 @@ function StintMap({ m, totalLaps, best }: { m: StrategyMetrics; totalLaps: numbe
           (s.ps && s.pe ? ` · P${s.ps} → P${s.pe} in class` : "");
         return (
           <div key={s.n} className="relative h-full shrink-0 overflow-hidden rounded-[2px]" style={{ width: `${pct}%`, background: rgbCss(paceRgb(s.pace, best)) }} title={title}>
-            {pct >= 3.5 && <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">{s.laps}</span>}
-            {s.yl > 0 && <span className="absolute bottom-0 left-0 h-[3px]" style={{ width: `${(s.yl / Math.max(1, s.laps)) * 100}%`, background: P.caution }} />}
+            {pct >= 3.5 && (
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold" style={{ color: STINT_TEXT }}>
+                {s.laps}
+              </span>
+            )}
+            {s.yl > 0 && <span className="absolute bottom-0 left-0 h-[3px]" style={{ width: `${(s.yl / Math.max(1, s.laps)) * 100}%`, background: rgbCss(STINT_CAUTION) }} />}
           </div>
         );
       })}
@@ -293,13 +301,16 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: P.muted }}>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(paceRgb(1, 1)) }} /> {STRATEGY_KEY.best}
+          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_FAST) }} /> {STRATEGY_KEY.best}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(paceRgb(1.05, 1)) }} /> {STRATEGY_KEY.slow}
+          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_MID) }} /> {STRATEGY_KEY.mid}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-[3px] w-3" style={{ background: P.caution }} /> {STRATEGY_KEY.caution}
+          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_SLOW) }} /> {STRATEGY_KEY.slow}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-[3px] w-3" style={{ background: rgbCss(STINT_CAUTION) }} /> {STRATEGY_KEY.caution}
         </span>
         <span>Tap a car for its stints and stops.</span>
       </div>
