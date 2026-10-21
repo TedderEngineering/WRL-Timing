@@ -9,6 +9,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+import { LiveStrategyTab } from "../features/chart/LiveStrategyTab";
 import { TrackMap } from "../features/chart/TrackMap";
 import { LiveGapsPanel } from "../features/chart/LiveGapsPanel";
 import { TraceControls } from "../features/chart/TraceControls";
@@ -560,7 +561,7 @@ export function LiveRacePage() {
     };
   }, [slug, eventNameNow]);
   const now = useNow();
-  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes">("position");
+  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes" | "strategy">("position");
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
@@ -695,7 +696,11 @@ export function LiveRacePage() {
     { id: "map" as const, label: "Track Map", locked: false },
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
+    { id: "strategy" as const, label: "Strategy", locked: !isTeam },
   ];
+  // Time to go now: the timing's last value, counted down since it arrived (held under a red flag).
+  const ttgAt = spanSec(st?.timeToGo);
+  const timeToGoS = live?.ended ? 0 : ttgAt === null ? null : Math.max(0, ttgAt - (clockAt !== null && flag !== "Red" ? (now - clockAt) / 1000 : 0));
 
   return (
     // No RaceMetaContext: the race-card share image describes a finished result.
@@ -816,6 +821,14 @@ export function LiveRacePage() {
         {tab === "pitanalysis" && (
           <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
             <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} />
+          </div>
+        )}
+        {tab === "strategy" && (
+          <div className="flex flex-col md:min-h-0 md:flex-1">
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+            <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+              <LiveStrategyTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} flag={flag} timeToGoS={timeToGoS} />
+            </div>
           </div>
         )}
         {tab === "laptimes" && (
