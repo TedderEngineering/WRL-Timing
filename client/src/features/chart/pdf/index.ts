@@ -2,7 +2,6 @@
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { api } from "../../../lib/api";
 import { driverPerformance } from "../driver-performance";
-import { DRIVER_COLUMNS } from "../driver-report-columns";
 import { driverReportView, sortDriverRows } from "../driver-report-view";
 import type { PitAnalysisResponse } from "../PitAnalysisTab";
 import { loadRaceStories, storyCarFor } from "../StoryTab";
@@ -44,15 +43,8 @@ export async function tabPdf(tab: PdfTab, input: TabPdfInput): Promise<{ blob: B
       // the tab was never opened).
       const view = driverReportView(data);
       let reports = driverPerformance(data, annotations);
-      let order: string | undefined;
-      if (view) {
-        const ranked = view.sort.key === "avgLap" && view.sort.dir === "asc";
-        reports = reports.filter((r) => r.cls === view.cls).map((r) => ({ ...r, rows: sortDriverRows(r.rows, view.sort) }));
-        const col = DRIVER_COLUMNS[view.sort.key].name;
-        const numeric = view.sort.key !== "driver" && view.sort.key !== "car";
-        if (!ranked) order = `Sorted by ${col.toLowerCase()}, ${numeric ? (view.sort.dir === "asc" ? "lowest first" : "highest first") : view.sort.dir === "asc" ? "A to Z" : "Z to A"}`;
-      }
-      return { blob: await (await import("./driverReport")).driverReportPdf(reports, meta, order), name };
+      if (view) reports = reports.filter((r) => r.cls === view.cls).map((r) => ({ ...r, rows: sortDriverRows(r.rows, view.sort) }));
+      return { blob: await (await import("./driverReport")).driverReportPdf(reports, meta, view?.sort), name };
     }
     case "pitanalysis": {
       const pits = await api.get<PitAnalysisResponse>(`/races/${raceId}/pit-analysis`);

@@ -51,6 +51,9 @@ describe("Driver Report PDF follows the table", () => {
     expect(order).toEqual(["2", "1"]);
     expect(text).not.toContain("CLASS GTU");
     expect(text).toContain("Sorted by consistency, lowest first");
+    // The method note says the same, not that drivers are ranked on average lap.
+    expect(text).toContain("Sorted by consistency, lowest first. The average lap is the average");
+    expect(text).not.toContain("Drivers are ranked");
   });
 
   it("ranked on average lap: no sort note", async () => {
@@ -58,5 +61,6 @@ describe("Driver Report PDF follows the table", () => {
     const { text, order } = await pdfOrder();
     expect(order).toEqual(["1", "2"]);
     expect(text).not.toContain("Sorted by");
+    expect(text).toContain("Drivers are ranked on the average of their fastest laps");
   });
 });

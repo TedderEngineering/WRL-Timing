@@ -18,6 +18,42 @@ export interface DriverReportView {
 
 export const DEFAULT_SORT: DriverSort = { key: "avgLap", dir: "asc" };
 
+const SORT_NAMES: Record<SortKey, string> = {
+  avgLap: "average lap",
+  fastLap: "best lap",
+  stdDev: "consistency",
+  avgZ: "pace vs class",
+  clearAirPct: "clean-air laps",
+  overtakes: "passes",
+  shown: "laps counted",
+  laps: "laps driven",
+  driver: "driver",
+  car: "car",
+};
+
+/** "Sorted by consistency, lowest first", or null when the table is ranked on average lap. */
+export function driverSortNote(sort: DriverSort): string | null {
+  if (sort.key === DEFAULT_SORT.key && sort.dir === DEFAULT_SORT.dir) return null;
+  const text = sort.key === "driver" || sort.key === "car";
+  return `Sorted by ${SORT_NAMES[sort.key]}, ${text ? (sort.dir === "asc" ? "A to Z" : "Z to A") : sort.dir === "asc" ? "lowest first" : "highest first"}`;
+}
+
+/**
+ * The method note under the table and the PDF: how the table is ordered (the ranking on average
+ * lap, or the column the viewer sorted on), then which laps count and what the measures mean.
+ */
+export function driverMethodText(sort: DriverSort, limits: { classPct: number; driverPct: number }): string {
+  const note = driverSortNote(sort);
+  const order = note
+    ? `${note}. The average lap is the average of each driver's fastest laps, at most half of the laps they drove.`
+    : "Drivers are ranked on the average of their fastest laps, at most half of the laps they drove.";
+  return (
+    `${order} Lap 1, pit in- and out-laps and laps under caution don't count, nor do laps over ${limits.classPct}% slower than the class's fastest ` +
+    `or ${limits.driverPct}% slower than the driver's own fastest. Pace vs class compares each lap with the class's laps from the same part ` +
+    `of the race (below 0 is quicker). Clean air and passes come from timing-line crossings and may miss some passes and traffic between the lines.`
+  );
+}
+
 /** The sortable figure columns, in order, each with its first sort direction. */
 export const SORT_COLUMNS: { key: SortKey & DriverColumnId; value: (r: DriverRow) => number | string | null; dir: "asc" | "desc" }[] = [
   { key: "avgLap", value: (r) => r.avgLap || null, dir: "asc" },

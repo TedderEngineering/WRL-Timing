@@ -10,9 +10,13 @@ import type { PitAnalysisResponse, PitStop } from "../PitAnalysisTab";
 import { carKey } from "../car-number";
 import { C, M, fit, footer, ink, newPdf, pagesOf, rowsThatFit, secText, startPage, stroke, table, type Column, type KeyItem, type PdfMeta } from "./kit";
 import { classesOf, entriesOf, finishOrder, finishText } from "./raceData";
+import { DEFAULT_PIT_SORT, type PitSortKey } from "../pit-view";
 import { PIT_COLORS, PIT_KEY, PIT_KIND_LABEL, isCautionStop, laneTime, pitMethod, pitRow, pitSortNote, pitView, sortPits, stopTone, type PitRow } from "../pit-view";
 
 type Row = PitRow & { pos: string };
+
+/** The PDF's header for each sortable column (where the sort mark goes). */
+const PIT_PDF_LABELS: Record<PitSortKey, string> = { classPos: "P", car: "CAR", team: "TEAM", stops: "STOPS", avgLane: "AVG LANE", avgLost: "AVG LOST", best: "BEST", worst: "WORST" };
 
 const tint = (c: readonly [number, number, number], a: number): [number, number, number] => [0, 1, 2].map((i) => Math.round(255 - (255 - c[i]) * a)) as [number, number, number];
 
@@ -100,7 +104,8 @@ export async function pitStopsPdf(data: RaceChartData, pits: PitAnalysisResponse
         ...fixed,
         { label: "EACH STOP: LAP · PIT LANE / TIME LOST", w: stripW, draw: (d, r, x, y, _w, h) => drawStops(d, r.stops, x, y, stripW, h, cellW) },
       ];
-      table(doc, M, top + 2, cols, pageRows, { rowH, fontSize: 8, highlight: (r) => r.label === focusLabel });
+      const sort = view?.sort ?? DEFAULT_PIT_SORT;
+      table(doc, M, top + 2, cols, pageRows, { rowH, fontSize: 8, highlight: (r) => r.label === focusLabel, sorted: { label: PIT_PDF_LABELS[sort.key], dir: sort.dir } });
       footer(pdf, meta, pitMethod(pits.source === "facts"), KEY);
     });
   }

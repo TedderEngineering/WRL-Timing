@@ -8,9 +8,27 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { computeInsights, computeStrategyMetrics, type StrategyMetrics } from "../strategy-engine";
 import { C, M, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, secText, startPage, stroke, table, type Column, type KeyItem, type PdfMeta } from "./kit";
 import { classesOf } from "./raceData";
+import { DEFAULT_STRATEGY_SORT, type StrategySortKey } from "../strategy-view";
 import { STINT_CAUTION, STINT_FAST, STINT_MID, STINT_SLOW, STRATEGY_KEY, paceRgb, sortStrategy, strategyMethod, strategySortNote, strategyView } from "../strategy-view";
 
 const paceColor = paceRgb;
+
+/** The PDF's header for each sortable column (where the sort mark goes). */
+const STRATEGY_PDF_LABELS: Record<StrategySortKey, string> = {
+  classPos: "P",
+  carNum: "CAR",
+  team: "TEAM",
+  lapsCompleted: "LAPS",
+  stops: "STOPS",
+  avgGreenPace: "AVG PACE",
+  bestLap: "BEST",
+  totalPitTime: "PIT TIME",
+  pitPct: "PIT %",
+  yellowPitPct: "YELLOW",
+  avgStintLen: "AVG STINT",
+  maxStintLen: "MAX",
+  strategyScore: "SCORE",
+};
 
 const KEY: KeyItem[] = [
   { label: STRATEGY_KEY.best, draw: (doc, x, y) => (doc.setFillColor(...STINT_FAST), doc.rect(x, y - 3, 7, 6, "F")) },
@@ -119,7 +137,8 @@ export async function strategyPdf(data: RaceChartData, annotations: AnnotationDa
         ...fixed,
         { label: "STINT MAP (LAPS PER STINT)", w: mapW, draw: (d, m, x, yy, _w, h) => drawStints(d, m, x, yy, mapW, h, totalLaps, best) },
       ];
-      table(doc, M, y, cols, pageRows, { rowH, gap: 5, fontSize: Math.min(8, rowH * 0.62), highlight: (m) => m.carNum === focusNum });
+      const sort = view?.sort ?? DEFAULT_STRATEGY_SORT;
+      table(doc, M, y, cols, pageRows, { rowH, gap: 5, fontSize: Math.min(8, rowH * 0.62), highlight: (m) => m.carNum === focusNum, sorted: { label: STRATEGY_PDF_LABELS[sort.key], dir: sort.dir } });
       stroke(doc, C.grid);
       footer(pdf, meta, strategyMethod(verified), KEY);
     });

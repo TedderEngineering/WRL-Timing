@@ -8,7 +8,7 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
 import { InfoTip } from "../../components/InfoTip";
 import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
-import { DEFAULT_SORT, SORT_COLUMNS as COLUMNS, setDriverReportView, sortDriverRows, type DriverSort, type SortKey } from "./driver-report-view";
+import { DEFAULT_SORT, SORT_COLUMNS as COLUMNS, driverMethodText, setDriverReportView, sortDriverRows, type DriverSort, type SortKey } from "./driver-report-view";
 import {
   CLASS_LIMIT,
   CLEAR_GAP_S,
@@ -208,11 +208,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
         </span>
       </div>
       <p className="mt-2 max-w-4xl text-xs leading-relaxed" style={{ color: S.muted }}>
-        Drivers are ranked on the average of their fastest laps, at most half of the laps they drove. Lap 1, pit in- and out-laps
-        and laps under caution don't count, nor do laps slower than {Math.round((CLASS_LIMIT - 1) * 100)}% over the class's fastest
-        or {Math.round((DRIVER_LIMIT - 1) * 100)}% over the driver's own fastest. The z-score compares each lap with the class's
-        laps from the same part of the race. Clean air and passes come from timing-line crossings, so they may miss some passes and
-        traffic between the lines.
+        {driverMethodText(sort, { classPct: Math.round((CLASS_LIMIT - 1) * 100), driverPct: Math.round((DRIVER_LIMIT - 1) * 100) })}
       </p>
     </div>
   );
