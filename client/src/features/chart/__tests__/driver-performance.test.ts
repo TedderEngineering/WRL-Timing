@@ -83,3 +83,19 @@ describe("race PDFs", () => {
     );
   });
 });
+
+describe("driver report column names", () => {
+  it("gives every column a plain name, a PDF header and a short explanation", async () => {
+    const { DRIVER_COLUMNS } = await import("../driver-report-columns");
+    const cols = Object.values(DRIVER_COLUMNS);
+    expect(new Set(cols.map((c) => c.name)).size).toBe(cols.length);
+    for (const c of cols) {
+      expect(c.pdf).toBe(c.pdf.toUpperCase());
+      expect(c.tip.length).toBeGreaterThan(10);
+      expect(c.tip.length).toBeLessThan(320);
+    }
+    expect(DRIVER_COLUMNS.avgZ.name).toBe("Pace vs class");
+    expect(DRIVER_COLUMNS.shown.name).toBe("Laps counted");
+    expect(DRIVER_COLUMNS.clearAirPct.tip).toContain("2 s");
+  });
+});

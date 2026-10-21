@@ -4,6 +4,7 @@
  */
 import type { jsPDF as JsPDF } from "jspdf";
 import { CLASS_LIMIT, CLEAR_GAP_S, DRIVER_LIMIT, type ClassReport, type DriverRow } from "../driver-performance";
+import { DRIVER_COLUMNS, type DriverColumnId } from "../driver-report-columns";
 import { C, M, axisLapText, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, startPage, stroke, type KeyItem, type PdfMeta } from "./kit";
 
 const GAP = 6;
@@ -17,27 +18,28 @@ interface Col {
 }
 
 function columns(hasMake: boolean, pageW: number): Col[] {
+  const h = (id: DriverColumnId) => DRIVER_COLUMNS[id].pdf;
   const cols: Col[] = [
-    { label: "DRIVER", w: hasMake ? 110 : 122, align: "left", cell: (r) => r.driver ?? "Driver not named" },
-    { label: "CAR", w: hasMake ? 130 : 154, align: "left", cell: (r) => `#${r.carLabel} ${r.team}` },
-    ...(hasMake ? [{ label: "MAKE", w: 60, align: "left" as const, cell: (r: DriverRow) => r.make ?? "" }] : []),
-    { label: "LAP TIME DISTRIBUTION", w: hasMake ? 160 : 180, align: "center", draw: "dist" },
-    { label: "AVG LAP", w: 52, align: "right", cell: (r) => lapText(r.avgLap) },
-    { label: "BEST", w: 50, align: "right", cell: (r) => lapText(r.fastLap) },
-    { label: "STD DEV", w: 40, align: "right", cell: (r) => (r.shown.length ? r.stdDev.toFixed(3) : "—") },
-    { label: "Z-SCORE", w: 40, align: "right", cell: (r) => (r.avgZ === null ? "—" : r.avgZ.toFixed(2)) },
-    { label: "CLEAR AIR", w: 44, align: "right", cell: (r) => (r.clearAirPct === null ? "—" : `${Math.round(r.clearAirPct)}%`) },
-    { label: "PASSES", w: 36, align: "right", cell: (r) => String(r.overtakes) },
-    { label: "SHOWN", w: 32, align: "right", cell: (r) => String(r.shown.length) },
-    { label: "LAPS (%)", w: 52, align: "right", cell: (r) => `${r.laps} (${Math.round(r.lapsPct)}%)` },
+    { label: h("driver"), w: hasMake ? 104 : 114, align: "left", cell: (r) => r.driver ?? "Driver not named" },
+    { label: h("car"), w: hasMake ? 114 : 130, align: "left", cell: (r) => `#${r.carLabel} ${r.team}` },
+    ...(hasMake ? [{ label: "MAKE", w: 56, align: "left" as const, cell: (r: DriverRow) => r.make ?? "" }] : []),
+    { label: h("spread"), w: hasMake ? 146 : 160, align: "center", draw: "dist" },
+    { label: h("avgLap"), w: 50, align: "right", cell: (r) => lapText(r.avgLap) },
+    { label: h("fastLap"), w: 50, align: "right", cell: (r) => lapText(r.fastLap) },
+    { label: h("stdDev"), w: 54, align: "right", cell: (r) => (r.shown.length ? r.stdDev.toFixed(3) : "—") },
+    { label: h("avgZ"), w: 62, align: "right", cell: (r) => (r.avgZ === null ? "—" : r.avgZ.toFixed(2)) },
+    { label: h("clearAirPct"), w: 48, align: "right", cell: (r) => (r.clearAirPct === null ? "—" : `${Math.round(r.clearAirPct)}%`) },
+    { label: h("overtakes"), w: 58, align: "right", cell: (r) => String(r.overtakes) },
+    { label: h("shown"), w: 62, align: "right", cell: (r) => String(r.shown.length) },
+    { label: h("laps"), w: 54, align: "right", cell: (r) => `${r.laps} (${Math.round(r.lapsPct)}%)` },
   ];
   const used = cols.reduce((s, c) => s + c.w + GAP, 0);
-  cols.push({ label: "TIME ON TRACK", w: pageW - 2 * M - used, align: "center", draw: "track" });
+  cols.push({ label: h("track"), w: pageW - 2 * M - used, align: "center", draw: "track" });
   return cols;
 }
 
 export const driverKey: KeyItem[] = [
-  { label: "Clear air", draw: (doc, x, y) => (fill(doc, C.clear), doc.circle(x + 3, y, 2.6, "F")) },
+  { label: "Clean air", draw: (doc, x, y) => (fill(doc, C.clear), doc.circle(x + 3, y, 2.6, "F")) },
   { label: `Car within ${CLEAR_GAP_S} s ahead`, draw: (doc, x, y) => (fill(doc, C.traffic), doc.lines([[3, 3], [-3, 3], [-3, -3]], x + 3, y - 3, [1, 1], "F", true)) },
   { label: "Fastest lap", draw: (doc, x, y) => (stroke(doc, C.text), doc.setLineWidth(0.8), doc.rect(x + 1.5, y - 3.5, 3.2, 7, "S")) },
 ];
@@ -45,7 +47,7 @@ export const driverKey: KeyItem[] = [
 export const driverMethod =
   `Drivers are ranked on the average of their fastest laps, at most half of the laps they drove. Lap 1, pit in- and out-laps and laps under caution ` +
   `don't count, nor do laps over ${Math.round((CLASS_LIMIT - 1) * 100)}% slower than the class's fastest or ${Math.round((DRIVER_LIMIT - 1) * 100)}% slower than the driver's own fastest. ` +
-  `The z-score compares each lap with the class's laps from the same part of the race (below 0 is quicker). Clear air and passes come from ` +
+  `Pace vs class compares each lap with the class's laps from the same part of the race (below 0 is quicker). Clean air and passes come from ` +
   `timing-line crossings and may miss some passes and traffic between the lines.`;
 
 function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[], top: number, rowH: number, pageW: number) {
@@ -90,9 +92,9 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
     const base = mid + fontSize * 0.34;
     cols.forEach((c, ci) => {
       if (!c.cell) return;
-      doc.setFont("helvetica", ci === 0 || c.label === "AVG LAP" ? "bold" : "normal");
+      doc.setFont("helvetica", ci === 0 || c.label === DRIVER_COLUMNS.avgLap.pdf ? "bold" : "normal");
       doc.setFontSize(fontSize);
-      ink(doc, c.label === "BEST" ? C.clear : C.text);
+      ink(doc, c.label === DRIVER_COLUMNS.fastLap.pdf ? C.clear : C.text);
       const tx = c.align === "right" ? xs[ci] + c.w : c.align === "center" ? xs[ci] + c.w / 2 : xs[ci];
       doc.text(fit(doc, pdfSafe(c.cell(r)), c.w), tx, base, { align: c.align });
     });
