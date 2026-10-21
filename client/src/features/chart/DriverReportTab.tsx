@@ -6,6 +6,8 @@
 import { useMemo, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
+import { InfoTip } from "../../components/InfoTip";
+import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
 import {
   CLASS_LIMIT,
   CLEAR_GAP_S,
@@ -53,22 +55,21 @@ function axisText(s: number): string {
 type SortKey = "avgLap" | "fastLap" | "stdDev" | "avgZ" | "clearAirPct" | "overtakes" | "shown" | "laps" | "driver" | "car";
 
 interface Column {
-  key: SortKey;
-  label: string;
-  title: string;
+  key: SortKey & DriverColumnId;
   value: (r: DriverRow) => number | string | null;
   dir: "asc" | "desc";
 }
 
+/** The sortable figure columns, in order; their names and ⓘ notes are in driver-report-columns.ts. */
 const COLUMNS: Column[] = [
-  { key: "avgLap", label: "Avg lap", title: "Average of the shown laps", value: (r) => r.avgLap || null, dir: "asc" },
-  { key: "fastLap", label: "Best", title: "The driver's fastest racing lap", value: (r) => r.fastLap || null, dir: "asc" },
-  { key: "stdDev", label: "Std dev", title: "Spread of the shown laps (seconds)", value: (r) => (r.shown.length ? r.stdDev : null), dir: "asc" },
-  { key: "avgZ", label: "Z-score", title: "Shown laps against the class's laps at the same time of the race: below 0 is quicker than the class then", value: (r) => r.avgZ, dir: "asc" },
-  { key: "clearAirPct", label: "Clear air", title: `Shown laps with no car within ${CLEAR_GAP_S} s ahead at either end of the lap`, value: (r) => r.clearAirPct, dir: "desc" },
-  { key: "overtakes", label: "Passes", title: "Cars passed on track on the driver's racing laps (any class)", value: (r) => r.overtakes, dir: "desc" },
-  { key: "shown", label: "Shown", title: "Laps counted in the average", value: (r) => r.shown.length, dir: "desc" },
-  { key: "laps", label: "Laps (%)", title: "Laps the driver drove, and the share of the car's laps", value: (r) => r.laps, dir: "desc" },
+  { key: "avgLap", value: (r) => r.avgLap || null, dir: "asc" },
+  { key: "fastLap", value: (r) => r.fastLap || null, dir: "asc" },
+  { key: "stdDev", value: (r) => (r.shown.length ? r.stdDev : null), dir: "asc" },
+  { key: "avgZ", value: (r) => r.avgZ, dir: "asc" },
+  { key: "clearAirPct", value: (r) => r.clearAirPct, dir: "desc" },
+  { key: "overtakes", value: (r) => r.overtakes, dir: "desc" },
+  { key: "shown", value: (r) => r.shown.length, dir: "desc" },
+  { key: "laps", value: (r) => r.laps, dir: "desc" },
 ];
 
 export interface DriverReportTabProps {
@@ -109,17 +110,23 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
   const hasMake = report.rows.some((r) => r.make);
   const sortBy = (key: SortKey, dir: "asc" | "desc") =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir }));
-  const head = (key: SortKey, label: string, title: string, dir: "asc" | "desc", align: "left" | "right" = "right", sticky = false) => (
+  const head = (key: SortKey & DriverColumnId, dir: "asc" | "desc", align: "left" | "right" = "right", sticky = false) => (
     <th
       key={key}
-      title={title}
       onClick={() => sortBy(key, dir)}
       className={`cursor-pointer select-none whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider${sticky ? " sticky left-0 z-10" : ""}`}
       style={{ color: sort.key === key ? S.text : S.muted, textAlign: align, background: sticky ? S.card : undefined }}
       aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
     >
-      {label}
+      {DRIVER_COLUMNS[key].name}
       {sort.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+      <InfoTip label={DRIVER_COLUMNS[key].name} text={DRIVER_COLUMNS[key].tip} />
+    </th>
+  );
+  const plainHead = (id: DriverColumnId, width: number) => (
+    <th className="whitespace-nowrap px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider" style={{ color: S.muted, width }}>
+      {DRIVER_COLUMNS[id].name}
+      <InfoTip label={DRIVER_COLUMNS[id].name} text={DRIVER_COLUMNS[id].tip} />
     </th>
   );
 
@@ -156,16 +163,12 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${S.border}` }}>
-              {head("driver", "Driver", "Driver", "asc", "left", true)}
-              {head("car", "Car", "Car number and team", "asc", "left")}
+              {head("driver", "asc", "left", true)}
+              {head("car", "asc", "left")}
               {hasMake && <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: S.muted }}>Make</th>}
-              <th className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider" style={{ color: S.muted, width: DIST_W }}>
-                Lap time distribution
-              </th>
-              {COLUMNS.map((c) => head(c.key, c.label, c.title, c.dir))}
-              <th className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wider" style={{ color: S.muted, width: TRACK_W }}>
-                Time on track
-              </th>
+              {plainHead("spread", DIST_W)}
+              {COLUMNS.map((c) => head(c.key, c.dir))}
+              {plainHead("track", TRACK_W)}
             </tr>
           </thead>
           <tbody>
@@ -225,7 +228,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: S.muted }}>
         <span className="flex items-center gap-1.5">
-          <svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={S.clear} /></svg> Clear air
+          <svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={S.clear} /></svg> Clean air
         </span>
         <span className="flex items-center gap-1.5">
           <svg width="10" height="10" aria-hidden><path d="M5 0.5 L9.5 5 L5 9.5 L0.5 5 Z" fill={S.traffic} /></svg> Car within {CLEAR_GAP_S} s ahead
@@ -238,7 +241,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
         Drivers are ranked on the average of their fastest laps, at most half of the laps they drove. Lap 1, pit in- and out-laps
         and laps under caution don't count, nor do laps slower than {Math.round((CLASS_LIMIT - 1) * 100)}% over the class's fastest
         or {Math.round((DRIVER_LIMIT - 1) * 100)}% over the driver's own fastest. The z-score compares each lap with the class's
-        laps from the same part of the race. Clear air and passes come from timing-line crossings, so they may miss some passes and
+        laps from the same part of the race. Clean air and cars passed come from timing-line crossings, so they may miss some passes and
         traffic between the lines.
       </p>
     </div>
@@ -285,7 +288,7 @@ function Distribution({ row, report }: { row: DriverRow; report: ClassReport }) 
               </path>
             ) : (
               <circle key={s.l} cx={x} cy={mid} r={3.2} fill={S.clear} opacity={0.85}>
-                <title>{`Lap ${s.l}: ${lapText(s.t)}${s.clear ? ", clear air" : ""}`}</title>
+                <title>{`Lap ${s.l}: ${lapText(s.t)}${s.clear ? ", clean air" : ""}`}</title>
               </circle>
             );
           })}
