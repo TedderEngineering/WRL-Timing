@@ -229,3 +229,27 @@ describe("validator: A23 direction of a difference to the cycle mean", () => {
     expect(run(withDelta(wrong).p).errors.join("\n")).toMatch(/^A23 /m);
   });
 });
+
+describe("validator: A24 a car that lost laps says how", () => {
+  const lostCar = () => GOOD.carStories.find((s) => s.paragraphs.some((p) => p.refs.some((r) => r.factId.startsWith("laploss:"))))!.car;
+  const without = () => {
+    const p = clone(GOOD);
+    const st = story(p, lostCar());
+    st.paragraphs = st.paragraphs.filter((x) => !x.refs.some((r) => r.factId.startsWith("laploss:")));
+    return p;
+  };
+  it("is an error in the writer's check (against the facts base)", () => {
+    expect(run(without()).errors.join("\n")).toMatch(new RegExp(`^A24 story:${lostCar()} car lost laps`, "m"));
+  });
+  it("is a warning on the server (no base), so earlier analyses still publish", () => {
+    const r = validatePackage(without(), { stage: "analysis" });
+    expect(r.errors.filter((e) => e.startsWith("A24"))).toEqual([]);
+    expect(r.warnings.join("\n")).toMatch(/^A24 /m);
+  });
+  it("laploss: fields resolve and are checked against the derived values", () => {
+    const p = clone(GOOD);
+    const ref0 = story(p, lostCar()).paragraphs.flatMap((x) => x.refs).find((r) => r.factId.startsWith("laploss:"))!;
+    ref0.value = (ref0.value as number) + 1;
+    expect(run(p).errors.join("\n")).toMatch(/A4 .*laploss/);
+  });
+});

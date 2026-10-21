@@ -8,7 +8,9 @@
  * Rule-check contract (schema 1.1.0): the engine writes ruleChecks[] (passes included), ruleMarkers[] and
  * ruleCoverage; Claude writes ruleFindings[] from the checks. V2/V3/V8 check check ids, marker links, margins
  * and coverage counts; A21 (every stage) refuses a finding whose severity exceeds the severityCeiling of a
- * check it cites.
+ * check it cites. A24: the story of a car that lost laps to its class leader (and did not finish on the lead
+ * lap) cites laploss:<car> (how it
+ * lost them; derived in lap-loss.ts); an error when checked against the facts base, a warning otherwise.
  *
  * Stages:
  *  - 'facts'    (engine draft): V1–V8; prose, if any, is checked for references and values.
@@ -24,6 +26,7 @@ import schemaJson from "./schema/race-analysis-package.schema.json" with { type:
 import proseRulesJson from "./schema/prose-rules.json" with { type: "json" };
 import type { FactRef, FindingSeverity, Prose, RaceAnalysisPackage, StoryEvent } from "./schema/package-types.js";
 import { buildStoryEvents } from "./engine/story-events.js";
+import { lapLossFacts } from "./lap-loss.js";
 
 export interface ValidateOptions {
   publish?: boolean;
@@ -165,6 +168,8 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
   for (let i = 0; i < pr.lap.length; i++) rowFacts.set(`pass:${pr.winner[i]}:${pr.lap[i]}:${pr.loser[i]}`, { lap: pr.lap[i], winner: pr.winner[i], loser: pr.loser[i], mechanism: pr.mechanism[i], fcy: pr.fcy?.[i] });
   const ld = P.positionChanges.lapDowns;
   if (ld) for (let i = 0; i < ld.car.length; i++) rowFacts.set(`lapdown:${ld.car[i]}:${ld.lap[i]}`, { car: ld.car[i], lap: ld.lap[i], lapsDown: ld.lapsDown[i], cause: ld.cause[i] });
+  const lapLoss = lapLossFacts(P);
+  for (const [car, l] of lapLoss) rowFacts.set(`laploss:${car}`, l);
   const swapRows = pr.lap.length;
 
   const resolve = (fid: string): any | null => {
@@ -178,7 +183,7 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
       for (const [k, v] of Object.entries(cols)) row[k] = (v as unknown[])[i];
       return row;
     }
-    if (fid.startsWith("pass:") || fid.startsWith("lapdown:")) return rowFacts.get(fid) ?? null;
+    if (fid.startsWith("pass:") || fid.startsWith("lapdown:") || fid.startsWith("laploss:")) return rowFacts.get(fid) ?? null;
     return facts.has(fid) ? facts.get(fid) : null;
   };
   const field = (obj: any, path: string): unknown => {
@@ -453,6 +458,13 @@ export function validatePackage(pkgIn: unknown, opts: ValidateOptions = {}): Val
       // A car that retired may still be classified (SRO lists such cars as Classified): write both,
       // "retired after lap N" and "classified P in class", never that it finished.
       if (ev.retirements.some((r) => r.car === car) && prs.some((p) => /\bfinish(?:ed|es|ing)?\b/i.test(p.text))) err("A22", `${sid} car retired (ret:${car}): say it retired and how the results classify it, not that it finished`);
+      // A car that lost laps to its class leader and did not finish on the lead lap: the story says how
+      // (pit stops, garage, caution stops, on track), citing laploss:<car>. An error in the writer's check
+      // (run against the facts base); a warning on the server, so earlier analyses can still be published.
+      const lost = lapLoss.get(car);
+      if (lost && lost.lapsLost > 0 && lost.finishLapsDown !== 0 && !cites(prs, (r) => r.factId === `laploss:${car}`)) {
+        (opts.base ? err : warn)("A24", `${sid} car lost laps (laploss:${car} lapsLost=${lost.lapsLost}): say how, citing laploss:${car}`);
+      }
     }
     const judged = new Set((st.lowConfidenceJudgements ?? []).map((j) => j.factId));
     for (const x of lowCited.filter((y) => y.where.startsWith(sid + "."))) {

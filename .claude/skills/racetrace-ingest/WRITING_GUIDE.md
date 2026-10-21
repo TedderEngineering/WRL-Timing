@@ -66,7 +66,8 @@ Fix the patch until it prints `PASS` (when a class is split in parts, the only e
 2. Each stop: lap, time in the pit lane, time lost against green pace (green stops) or under the caution; the class pit cycle: class position before → after (`cycres` `classPosBefore`/`classPosAfter`), net gained/lost/held, and the rank for time lost or the delta to the cycle mean.
 3. Penalties (quote `reason` via a ref with `field: "reason"` — it is text, so it is cited, not typed).
 4. On-track class swaps worth naming (a pass row is fact `pass:<winner>:<lap>:<loser>`, fields `lap`).
-5. Finish: class and overall position, laps, "provisional" when the results are; or the retirement.
+5. Laps lost (every car with a `laploss:<car>` line whose `finishLapsDown` is not 0; validator A24): say how the car lost its laps to the class leader, citing `laploss:<car>`. Use the fields that are not zero: `inPitStops` (at green-flag stops), `inGarage` (in the garage), `underCaution` (at stops under a caution), `onTrack` (the leader came round on track, from lap `onTrackFirstLap` to `onTrackLastLap`), `notExplained` (say only that the timing does not show how). Name the single biggest loss with `biggestLaps` and `biggestLap`, and its `lapdown:<car>:<lap>` or pit passage when it adds something. `lapsLost` counts laps lost over the race; laps won back are not taken off, so the gap at the flag is `finishLapsDown`, cited separately (null for a car that retired). Say "lost {0} laps", "a lap" only when the value is one, and never add the parts up yourself.
+6. Finish: class and overall position, laps, "provisional" when the results are; or the retirement.
 
 Plain, factual, past tense, no praise or blame. Name the driver handover when the digest gives `driverIn`/`driverOut` numbers. Vary sentence openings; do not copy the same template for every car.
 

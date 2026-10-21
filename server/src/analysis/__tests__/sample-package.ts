@@ -6,6 +6,7 @@
 import { buildFacts } from "../buildFacts.js";
 import { buildStoryEvents } from "../engine/story-events.js";
 import { formatDuration } from "../validate-package.js";
+import { lapLossFacts } from "../lap-loss.js";
 import type { CarStory, FactRef, KeyMoment, RaceAnalysisPackage, RuleCheck } from "../schema/package-types.js";
 import { greenRace, OPTS } from "./scenarios.js";
 import { synthImsa } from "./synth.js";
@@ -61,6 +62,7 @@ export const ref = (pkg: RaceAnalysisPackage, factId: string, field: string, uni
 export function sampleAnalysis(base: RaceAnalysisPackage): RaceAnalysisPackage {
   const P = clone(base);
   const events = buildStoryEvents(base);
+  const lapLoss = lapLossFacts(base);
   P.carStories = P.entries.map((e): CarStory => {
     const car = e.car;
     const need = new Set<string>([`result:${car}`]);
@@ -72,6 +74,10 @@ export function sampleAnalysis(base: RaceAnalysisPackage): RaceAnalysisPackage {
     if (firstStop) {
       paragraphs.push({ text: "It spent {0} in the pit lane on lap {1}.", refs: [ref(P, firstStop.id, "officialPitLaneTimeS", "s"), ref(P, firstStop.id, "inLap", "lap")] });
       need.add(firstStop.id);
+    }
+    const lost = lapLoss.get(car);
+    if (lost && lost.lapsLost > 0) {
+      paragraphs.push({ text: "It lost {0} laps to its class leader, {1} of them on track.", refs: [{ value: lost.lapsLost, factId: `laploss:${car}`, field: "lapsLost", unit: "laps" }, { value: lost.onTrack, factId: `laploss:${car}`, field: "onTrack", unit: "laps" }] });
     }
     const evs = (events[car] ?? []).map((x, i) => (i === 0 ? { ...x, title: { text: `{car:${car}} in the pit lane`, refs: [] } } : x));
     return {
