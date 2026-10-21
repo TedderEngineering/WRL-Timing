@@ -3,9 +3,10 @@
  * (driver-performance.ts), with the spread of those laps, a z-score against the class at the same
  * time, clear air, cars passed, laps driven and when in the race they drove.
  */
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
+import { RaceMetaContext } from "./raceCard";
 import {
   CLASS_LIMIT,
   CLEAR_GAP_S,
@@ -84,6 +85,29 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
   const [cls, setCls] = useState<string>(() => (focusCls && reports.some((r) => r.cls === focusCls) ? focusCls : reports[0]?.cls ?? ""));
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "avgLap", dir: "asc" });
   const report = reports.find((r) => r.cls === cls) ?? reports[0];
+  const meta = useContext(RaceMetaContext);
+  const [pdf, setPdf] = useState<"idle" | "busy" | "failed">("idle");
+
+  /** Every class, one landscape page each, saved as a file. */
+  const downloadPdf = async () => {
+    setPdf("busy");
+    try {
+      const { makeDriverReportPdf, driverReportFileName } = await import("./driverReportPdf");
+      const info = { raceName: meta?.name ?? "Race", track: meta?.track, date: meta?.date };
+      const blob = await makeDriverReportPdf(reports, info);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = driverReportFileName(info);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      setPdf("idle");
+    } catch {
+      setPdf("failed");
+    }
+  };
 
   const rows = useMemo(() => {
     if (!report) return [];
@@ -125,11 +149,30 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
 
   return (
     <div className="px-2 py-3 sm:px-6" style={{ color: S.text }}>
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className="m-0 text-base font-semibold">Driver performance</h2>
         <span className="text-sm" style={{ color: S.muted }}>
           Fastest racing laps (at most half of each driver's laps) · {report.cls} · {report.rows.length} drivers
         </span>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={downloadPdf}
+          disabled={pdf === "busy"}
+          className="flex min-h-[32px] items-center gap-1.5 rounded-md border px-3 text-sm"
+          style={{ borderColor: S.border, background: S.card, color: S.text, opacity: pdf === "busy" ? 0.6 : 1 }}
+          title="Every class, one landscape page each"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" />
+          </svg>
+          {pdf === "busy" ? "Preparing PDF…" : "Download PDF"}
+        </button>
+        {pdf === "failed" && (
+          <span className="text-xs" style={{ color: "#ef4444" }}>
+            The PDF couldn't be made. Try again.
+          </span>
+        )}
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Class">
