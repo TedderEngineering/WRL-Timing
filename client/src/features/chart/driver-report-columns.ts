@@ -24,8 +24,8 @@ export const DRIVER_COLUMNS: Record<DriverColumnId, DriverColumnText> = {
     tip: `Each lap counted in the average, on the class's time scale. Green: clean air. Purple: a car within ${CLEAR_GAP_S} s ahead. The box is the driver's best lap.`,
   },
   avgLap: {
-    name: "Average pace",
-    pdf: "AVG PACE",
+    name: "Avg lap",
+    pdf: "AVG LAP",
     tip: "The average of the laps counted: the driver's fastest racing laps, at most half the laps they drove. The table is ranked on it.",
   },
   fastLap: { name: "Best lap", pdf: "BEST LAP", tip: "The driver's fastest racing lap." },
@@ -45,8 +45,8 @@ export const DRIVER_COLUMNS: Record<DriverColumnId, DriverColumnText> = {
     tip: `Share of the counted laps with no car within ${CLEAR_GAP_S} s ahead when the driver crossed the line at the start and at the end of the lap. Traffic between the lines can be missed.`,
   },
   overtakes: {
-    name: "Cars passed",
-    pdf: "CARS PASSED",
+    name: "Passes",
+    pdf: "PASSES",
     tip: "Cars of any class the driver passed on track: ahead of the driver at one crossing of the line, behind at the next. Pit and caution laps don't count.",
   },
   shown: {
@@ -55,5 +55,5 @@ export const DRIVER_COLUMNS: Record<DriverColumnId, DriverColumnText> = {
     tip: `Laps in the average: the fastest racing laps, at most half the laps driven. Lap 1, pit in- and out-laps, caution laps, and laps over ${Math.round((CLASS_LIMIT - 1) * 100)}% off the class's best or ${Math.round((DRIVER_LIMIT - 1) * 100)}% off the driver's own are left out.`,
   },
   laps: { name: "Laps driven", pdf: "LAPS DRIVEN", tip: "Laps the driver drove, and their share of the car's laps." },
-  track: { name: "When they drove", pdf: "WHEN THEY DROVE", tip: "The driver's stints from the start to the flag, lighter early and darker late. DNF marks where the car stopped." },
+  track: { name: "Time on track", pdf: "TIME ON TRACK", tip: "The driver's stints from the start to the flag, lighter early and darker late. DNF marks where the car stopped." },
 };

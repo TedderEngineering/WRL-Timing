@@ -47,7 +47,7 @@ export const driverKey: KeyItem[] = [
 export const driverMethod =
   `Drivers are ranked on the average of their fastest laps, at most half of the laps they drove. Lap 1, pit in- and out-laps and laps under caution ` +
   `don't count, nor do laps over ${Math.round((CLASS_LIMIT - 1) * 100)}% slower than the class's fastest or ${Math.round((DRIVER_LIMIT - 1) * 100)}% slower than the driver's own fastest. ` +
-  `Pace vs class compares each lap with the class's laps from the same part of the race (below 0 is quicker). Clean air and cars passed come from ` +
+  `Pace vs class compares each lap with the class's laps from the same part of the race (below 0 is quicker). Clean air and passes come from ` +
   `timing-line crossings and may miss some passes and traffic between the lines.`;
 
 function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[], top: number, rowH: number, pageW: number) {
