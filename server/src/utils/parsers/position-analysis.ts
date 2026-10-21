@@ -153,7 +153,9 @@ export function generateAnnotations(
       const isPit = d.pit === 1;
 
       // ── Pit marker ──────────────────────────────────────────
-      if (isPit) {
+      // One per pit visit: a visit the timing flags over two laps (in-lap and the lap after) is
+      // one stop, marked on its in-lap, where its timing and settle attach.
+      if (isPit && prev.pit !== 1) {
         pitCount++;
         if (!existingPits.some((ep) => ep.l === lapNum)) {
           const isGarage = d.ltSec > GARAGE_THRESHOLD_SECONDS;
