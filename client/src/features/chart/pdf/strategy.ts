@@ -8,14 +8,15 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { computeInsights, computeStrategyMetrics, type StrategyMetrics } from "../strategy-engine";
 import { C, M, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, secText, startPage, stroke, table, type Column, type KeyItem, type PdfMeta } from "./kit";
 import { classesOf } from "./raceData";
-import { STRATEGY_KEY, paceRgb, sortStrategy, strategyMethod, strategySortNote, strategyView } from "../strategy-view";
+import { STINT_CAUTION, STINT_FAST, STINT_MID, STINT_SLOW, STRATEGY_KEY, paceRgb, sortStrategy, strategyMethod, strategySortNote, strategyView } from "../strategy-view";
 
 const paceColor = paceRgb;
 
 const KEY: KeyItem[] = [
-  { label: STRATEGY_KEY.best, draw: (doc, x, y) => (doc.setFillColor(34, 197, 94), doc.rect(x, y - 3, 7, 6, "F")) },
-  { label: STRATEGY_KEY.slow, draw: (doc, x, y) => (doc.setFillColor(239, 68, 68), doc.rect(x, y - 3, 7, 6, "F")) },
-  { label: STRATEGY_KEY.caution, draw: (doc, x, y) => (doc.setFillColor(250, 204, 21), doc.rect(x, y - 1, 7, 2.5, "F")) },
+  { label: STRATEGY_KEY.best, draw: (doc, x, y) => (doc.setFillColor(...STINT_FAST), doc.rect(x, y - 3, 7, 6, "F")) },
+  { label: STRATEGY_KEY.mid, draw: (doc, x, y) => (doc.setFillColor(...STINT_MID), doc.rect(x, y - 3, 7, 6, "F")) },
+  { label: STRATEGY_KEY.slow, draw: (doc, x, y) => (doc.setFillColor(...STINT_SLOW), doc.rect(x, y - 3, 7, 6, "F")) },
+  { label: STRATEGY_KEY.caution, draw: (doc, x, y) => (doc.setFillColor(...STINT_CAUTION), doc.rect(x, y - 1, 7, 2.5, "F")) },
 ];
 
 function drawStints(doc: JsPDF, m: StrategyMetrics, x: number, y: number, w: number, h: number, maxLaps: number, best: number) {
@@ -26,13 +27,13 @@ function drawStints(doc: JsPDF, m: StrategyMetrics, x: number, y: number, w: num
     doc.setFillColor(c[0], c[1], c[2]);
     doc.rect(cx, y + 2, sw, h - 4, "F");
     if (s.yl > 0) {
-      doc.setFillColor(250, 204, 21);
+      doc.setFillColor(...STINT_CAUTION);
       doc.rect(cx, y + h - 4.5, Math.max(1, sw * (s.yl / Math.max(1, s.laps))), 2.5, "F");
     }
     if (sw > 16) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(Math.min(6.5, h * 0.45));
-      doc.setTextColor(255, 255, 255);
+      doc.setTextColor(11, 11, 24);
       doc.text(String(s.laps), cx + sw / 2, y + h / 2 + 2, { align: "center" });
     }
     cx += sw + 1;
