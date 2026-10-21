@@ -2,12 +2,16 @@
  * The landing page's race news, for visitors who are not signed in (everything else needs an
  * account).
  *
- *   GET /api/landing   { latest, next, upcoming }
+ *   GET /api/landing   { latest, next, upcoming, stats }
  *     latest:   the newest published race: name, track, date, series, results status, and its
  *               published story's headline (with the car and class names its tokens need)
  *     next:     the next race weekend on the season calendars (series, round, track, dates, and
  *               the first session's start when the live schedule knows it)
  *     upcoming: the two weekends after it
+ *     stats:    how many races RaceTrace has published, and from which series
+ *
+ *   GET /api/landing/race/:id   { name, track, date, series }
+ *     A published race's name, for the log-in page when a visitor follows a link to it.
  *
  * Names and dates only: no chart data, no stories beyond the one headline. Cached 5 minutes.
  */
@@ -106,8 +110,33 @@ landingRouter.get("/", async (_req: Request, res: Response, next: NextFunction) 
       };
     }
     const weekends = await upcomingWeekends(new Date());
+    const published = (await prisma.race.findMany({ where: { status: "PUBLISHED" }, select: { series: true } })) as { series: string }[];
+    const count = new Map<string, number>();
+    for (const r of published) count.set(r.series, (count.get(r.series) ?? 0) + 1);
+    const stats = {
+      races: published.length,
+      // Most races first.
+      series: [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s),
+    };
     res.set("Cache-Control", "public, max-age=300");
-    res.json({ latest, next: weekends[0] ?? null, upcoming: weekends.slice(1, 3) });
+    res.json({ latest, next: weekends[0] ?? null, upcoming: weekends.slice(1, 3), stats });
+  } catch (err) {
+    next(err);
+  }
+});
+
+landingRouter.get("/race/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const race = (await prisma.race.findFirst({
+      where: { id: String(req.params.id), status: "PUBLISHED" },
+      select: { name: true, date: true, track: true, series: true },
+    })) as { name: string; date: Date; track: string; series: string } | null;
+    if (!race) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.set("Cache-Control", "public, max-age=300");
+    res.json({ name: race.name, track: race.track, date: race.date.toISOString().slice(0, 10), series: race.series });
   } catch (err) {
     next(err);
   }

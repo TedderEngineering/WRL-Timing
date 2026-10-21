@@ -9,6 +9,9 @@ import { cn } from "../lib/utils";
 import { IS_GRIP_SITE } from "../lib/site";
 import { OAuthButtons } from "../features/auth/OAuthButtons";
 import { peekPostAuthRedirect } from "../lib/postAuthRedirect";
+import { AuthShowcase } from "../features/auth/AuthShowcase";
+import { gateObject, gateTarget, useGateRace } from "../features/auth/gate";
+import { useState } from "react";
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -62,15 +65,24 @@ function PasswordStrength({ password }: { password: string }) {
 
 const SIGNUP_SUBTITLE = IS_GRIP_SITE
   ? "Free tire pressure and damper tools"
-  : "Start analyzing race data for free";
+  : "Every lap of every race, free.";
 
 export function SignUpPage() {
   const { register, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  // What the visitor's link opens (they were sent here from a race link): named in the title.
+  const heading = peekPostAuthRedirect();
+  const forGrip = IS_GRIP_SITE || !!heading?.startsWith("/grip");
+  const target = forGrip ? null : gateTarget(heading);
+  const gateRace = useGateRace(target);
+  const opens = gateObject(target, gateRace);
+  const title = forGrip ? "Create your account" : opens ? `Sign up free to open ${opens}` : "Create your free account";
+  const aside = forGrip ? undefined : <AuthShowcase target={target} race={gateRace} free={false} />;
 
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({
-      initialValues: { displayName: "", email: "", password: "", confirmPassword: "" },
+      initialValues: { displayName: "", email: "", password: "" },
       validate: (vals) => {
         const errs: Record<string, string> = {};
         if (!vals.email) errs.email = "Email is required";
@@ -85,8 +97,6 @@ export function SignUpPage() {
           errs.password = "Must contain an uppercase letter";
         else if (!/[0-9]/.test(vals.password))
           errs.password = "Must contain a number";
-        if (vals.password !== vals.confirmPassword)
-          errs.confirmPassword = "Passwords don't match";
         return errs;
       },
       onSubmit: async (vals) => {
@@ -98,7 +108,7 @@ export function SignUpPage() {
 
   if (isLoading) {
     return (
-      <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
+      <AuthLayout title={title} subtitle={SIGNUP_SUBTITLE}>
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -111,7 +121,7 @@ export function SignUpPage() {
   }
 
   return (
-    <AuthLayout title="Create your account" subtitle={SIGNUP_SUBTITLE}>
+    <AuthLayout title={title} subtitle={SIGNUP_SUBTITLE} aside={aside}>
       <OAuthButtons next={peekPostAuthRedirect() || "/dashboard"} verb="Sign up" />
       <form onSubmit={handleSubmit} className="space-y-5">
         {globalError && <Alert variant="error">{globalError}</Alert>}
@@ -138,11 +148,21 @@ export function SignUpPage() {
           error={errors.email}
         />
 
-        <div>
+        <div className="relative">
+          {/* One password field with a Show switch, in place of typing it twice. */}
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute right-0 top-0 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+            aria-controls="password"
+            aria-pressed={showPassword}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
           <Input
             label="Password"
             name="password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="••••••••"
             value={values.password}
@@ -152,20 +172,10 @@ export function SignUpPage() {
           <PasswordStrength password={values.password} />
         </div>
 
-        <Input
-          label="Confirm Password"
-          name="confirmPassword"
-          type="password"
-          autoComplete="new-password"
-          placeholder="••••••••"
-          value={values.confirmPassword}
-          onChange={handleChange}
-          error={errors.confirmPassword}
-        />
-
         <Button type="submit" loading={isSubmitting} className="w-full" size="lg">
-          Create account
+          {forGrip ? "Create account" : "Create free account"}
         </Button>
+        {!forGrip && <p className="-mt-2 text-center text-xs text-gray-500">Free for everyone: no credit card, no ads.</p>}
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">

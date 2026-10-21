@@ -24,6 +24,8 @@ export interface Landing {
   } | null;
   next: LandingWeekend | null;
   upcoming: LandingWeekend[];
+  /** Published races and their series, most races first (older servers leave it out). */
+  stats?: { races: number; series: string[] };
 }
 
 export interface LandingWeekend {
