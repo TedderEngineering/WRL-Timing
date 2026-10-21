@@ -149,7 +149,9 @@ export function stopsOf(data: RaceChartData, annotations: AnnotationData | null,
     const lap = laps.find((x) => x.l === l);
     return fcy.has(l) || (!!lap?.flag && !isGreenFlag(lap.flag));
   };
-  const marks = (annotations?.[key]?.pits ?? []).filter((p) => p.kind !== "retirement" && p.l > 1);
+  // One per visit: a marker on the lap after another (a visit flagged over two laps) is the same stop.
+  const all = [...(annotations?.[key]?.pits ?? [])].sort((a, b) => a.l - b.l);
+  const marks = all.filter((p, i) => p.kind !== "retirement" && p.l > 1 && !(i > 0 && all[i - 1].l === p.l - 1 && !p.kind));
   if (marks.length) {
     return marks
       .map((m): Stop => {
