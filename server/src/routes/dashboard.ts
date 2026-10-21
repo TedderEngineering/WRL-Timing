@@ -35,7 +35,8 @@ export const dashboardRouter = Router();
 const recapCache = new Map<string, Recap | null>();
 const RECAP_CACHE_MAX = 200;
 
-async function recapFor(packageId: string): Promise<Recap | null> {
+/** A published package's recap (cached by content); also the landing page's headline. */
+export async function recapFor(packageId: string): Promise<Recap | null> {
   const row = (await prisma.raceAnalysisPackage.findUnique({
     where: { id: packageId },
     select: { storagePath: true, sha256: true, status: true },

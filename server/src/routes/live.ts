@@ -1,5 +1,10 @@
 /**
- * RaceTrace Live (public, no login): WRL sessions still running.
+ * RaceTrace Live: WRL sessions still running, for signed-in viewers.
+ *
+ *   GET /api/live/key      (signed in) the hour's live key: every race URL below takes `k=<key>`
+ *                          (live/key.ts), so the edge cache is shared and nobody signed out reads it
+ *   GET /api/live          (public) what is on now, coming up and just finished: names and times
+ *                          only, for the site banner and the landing page
  *
  *   GET /api/live          live WRL sessions right now, by RaceTrace slug
  *   GET /api/live/:slug?enc=2&v=<version the page holds, 0 for none>
@@ -30,8 +35,16 @@ import { Router, type Request, type Response } from "express";
 import { eventEntries, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
 import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
+import { currentLiveKey, requireLiveKey } from "../live/key.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export const liveRouter = Router();
+
+/** The hour's live key, for a signed-in viewer (never cached). */
+liveRouter.get("/key", requireAuth, (_req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  res.json(currentLiveKey());
+});
 
 /** Bodies under this go uncompressed (not worth it). */
 const MIN_COMPRESS = 1024;
@@ -143,7 +156,7 @@ function headOf(slug: string, snap: Snap) {
   };
 }
 
-liveRouter.get("/:slug/head", async (req, res, next) => {
+liveRouter.get("/:slug/head", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -161,7 +174,7 @@ liveRouter.get("/:slug/head", async (req, res, next) => {
  * Before the first lap: the entry list (from the state the poller reads anyway) and the scheduled
  * start, so the page can lay itself out (focus car, class, compare) ahead of the race.
  */
-liveRouter.get("/:slug/entries", async (req, res, next) => {
+liveRouter.get("/:slug/entries", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -176,7 +189,7 @@ liveRouter.get("/:slug/entries", async (req, res, next) => {
 });
 
 /** The track outline (no coordinates): drawn once by the track map. 404 until the feed has learned it. */
-liveRouter.get("/:slug/track", async (req, res, next) => {
+liveRouter.get("/:slug/track", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -199,7 +212,7 @@ liveRouter.get("/:slug/track", async (req, res, next) => {
  * from the state read every 5 s, and the pit lane once learned. Only the track map asks for it;
  * the edge keeps it 2 s.
  */
-liveRouter.get("/:slug/pos", async (req, res, next) => {
+liveRouter.get("/:slug/pos", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -218,7 +231,7 @@ liveRouter.get("/:slug/pos", async (req, res, next) => {
   }
 });
 
-liveRouter.get("/:slug/d/:epoch/:v", async (req, res, next) => {
+liveRouter.get("/:slug/d/:epoch/:v", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -238,7 +251,7 @@ liveRouter.get("/:slug/d/:epoch/:v", async (req, res, next) => {
   }
 });
 
-liveRouter.get("/:slug/full/:epoch/:v", async (req, res, next) => {
+liveRouter.get("/:slug/full/:epoch/:v", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -264,7 +277,7 @@ liveRouter.get("/:slug/full/:epoch/:v", async (req, res, next) => {
 export const MAX_STREAMS = Number(process.env.LIVE_MAX_STREAMS || 400);
 let openStreams = 0;
 
-liveRouter.get("/:slug/events", async (req, res, next) => {
+liveRouter.get("/:slug/events", requireLiveKey, async (req, res, next) => {
   try {
     const s = await sessionFor(req, res);
     if (!s) return;
@@ -328,7 +341,7 @@ liveRouter.get("/", async (_req, res, next) => {
  * A scheduled session before its timing opens (its pre-race page): the session, and the event's
  * entry list so a viewer can pick their car ahead of the start. Cached at the edge 5 min.
  */
-liveRouter.get("/next/:id", async (req, res, next) => {
+liveRouter.get("/next/:id", requireLiveKey, async (req, res, next) => {
   try {
     const id = String(req.params.id);
     const s = LIVE_SCHEDULE.find((x) => x.id === id);
@@ -347,7 +360,7 @@ liveRouter.get("/next/:id", async (req, res, next) => {
   }
 });
 
-liveRouter.get("/:slug", async (req, res, next) => {
+liveRouter.get("/:slug", requireAuth, async (req, res, next) => {
   try {
     const slug = String(req.params.slug);
     if (!/^[\p{Ll}\p{N}][\p{Ll}\p{N}-]{0,99}$/u.test(slug)) {

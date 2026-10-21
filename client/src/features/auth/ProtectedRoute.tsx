@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { rememberPostAuthRedirect } from "../../lib/postAuthRedirect";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,6 +20,9 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
   }
 
   if (!isAuthenticated) {
+    // Back here after signing in: by password (the login page reads `from`), with Google, or after
+    // signing up (both read the note), with the query kept (?race=…&car=…&tab=…).
+    rememberPostAuthRedirect(`${location.pathname}${location.search}${location.hash}`);
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

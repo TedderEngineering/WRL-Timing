@@ -517,7 +517,7 @@ describe("GET /api/races/:id/package", () => {
     const off = await get("", bearer(users.pro));
     expect(off.status).toBe(404);
     expect(off.body.code).toBe("PACKAGES_DISABLED");
-    expect((await get("")).body.code).toBe("PACKAGES_DISABLED");
+    expect((await get("")).status).toBe(401); // signed out never reach a race
     expect((await get("", bearer(users.admin))).status).toBe(200); // admins can still review
 
     process.env.RACETRACE_PACKAGES = "on";
@@ -538,7 +538,7 @@ describe("GET /api/races/:id/package", () => {
       fake.state.races.get(RACE)!.createdAt = new Date();
 
       const anon = await get("");
-      expect(anon.status).toBe(403);
+      expect(anon.status).toBe(401);
       expect(anon.body.code).toBe("AUTH_REQUIRED");
       expect((await get("", bearer(users.pro))).status).toBe(200);
     } finally {
@@ -546,10 +546,11 @@ describe("GET /api/races/:id/package", () => {
     }
   });
 
-  it("opens every published race to everyone while RaceTrace is free", async () => {
+  it("opens every published race to every signed-in user while RaceTrace is free, and none signed out", async () => {
     await uploadAndPublish("pkg-one");
     fake.state.races.get(RACE)!.createdAt = new Date();
-    expect((await get("")).status).toBe(200);
+    expect((await get("", bearer(users.pro))).status).toBe(200);
+    expect((await get("")).status).toBe(401);
   });
 
   it("hides draft races from users", async () => {

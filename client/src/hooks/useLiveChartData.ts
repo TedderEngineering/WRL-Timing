@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { applyDelta, applyFull, type WireDelta, type WireFull } from "../features/chart/live-wire";
+import { liveKey, needsLiveKey, withLiveKey } from "../features/live/liveKey";
 
 /** How often the page asks the server (the server reads the timing every 5 s too). */
 export const LIVE_POLL_MS = 5_000;
@@ -32,7 +33,10 @@ export const LIVE_API_BASE: string = import.meta.env.VITE_LIVE_API_URL || "/api"
 
 /** A public request without the login, so every phone asks the same question and the CDN can answer. */
 export async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
-  const res = await fetch(`${LIVE_API_BASE}${path}`, { credentials: "omit" });
+  // A live race URL takes the hour's key (signed in only); a 401 means the key turned over.
+  const keyed = needsLiveKey(path);
+  let res = await fetch(`${LIVE_API_BASE}${keyed ? withLiveKey(path, await liveKey()) : path}`, { credentials: "omit" });
+  if (keyed && res.status === 401) res = await fetch(`${LIVE_API_BASE}${withLiveKey(path, await liveKey(true))}`, { credentials: "omit" });
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
   // A copy the edge has held adds its Age (seconds) to how old the race clock is.
   const age = Number(res.headers.get("Age"));
@@ -303,18 +307,28 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
     let errors = 0;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let watchdog: ReturnType<typeof setInterval> | null = null;
+    // The page left while the key was on its way: open nothing.
+    let closed = false;
     const stop = (retryInMs: number | null) => {
       es?.close();
       es = null;
       setStreaming(false);
       if (watchdog) clearInterval(watchdog);
       watchdog = null;
-      if (retryInMs !== null) retry = setTimeout(open, retryInMs);
+      if (retryInMs !== null && !closed) retry = setTimeout(() => void open(), retryInMs);
     };
-    const open = () => {
+    const open = async () => {
       if (mode.current === "legacy") return;
       errors = 0;
-      es = new EventSource(`${LIVE_API_BASE}/live/${encodeURIComponent(slug)}/events`);
+      let k: string;
+      try {
+        k = await liveKey();
+      } catch {
+        stop(15_000); // no key yet (signed out, offline): polling carries on, the stream tries again
+        return;
+      }
+      if (closed) return;
+      es = new EventSource(`${LIVE_API_BASE}${withLiveKey(`/live/${encodeURIComponent(slug)}/events`, k)}`);
       lastMessage = Date.now();
       es.addEventListener("head", (ev) => {
         lastMessage = Date.now();
@@ -338,8 +352,9 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
         if (Date.now() - lastMessage > STREAM_SILENT_MS) stop(60_000);
       }, 5_000);
     };
-    open();
+    void open();
     return () => {
+      closed = true;
       if (retry) clearTimeout(retry);
       stop(null);
     };

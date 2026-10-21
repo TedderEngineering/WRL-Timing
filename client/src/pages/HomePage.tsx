@@ -8,6 +8,7 @@ import { HeroChart } from "../components/landing/HeroChart";
 import { FeatureCard } from "../components/landing/FeatureCard";
 import { useSiteConfig } from "../lib/site-config";
 import { FreePlans } from "../features/support/FreePlans";
+import { RaceNews } from "../features/landing/RaceNews";
 
 const PRICE_IDS: Record<string, string | undefined> = {
   PRO: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
@@ -57,7 +58,7 @@ export function HomePage() {
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-brand-900/20 via-transparent to-gray-950" />
 
-        <div className="relative container-page pt-20 pb-24 lg:pt-28 lg:pb-32">
+        <div className="relative container-page pt-20 pb-12 lg:pt-28 lg:pb-16">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left: Copy */}
             <div className="max-w-xl">
@@ -120,9 +121,10 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Bottom fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-gray-950" />
       </section>
+
+      {/* ─── The latest race, the next race, live timing ───────────────── */}
+      <RaceNews />
 
       {/* ─── Features ──────────────────────────────────────────────────── */}
       <section className="container-page py-20 lg:py-28">

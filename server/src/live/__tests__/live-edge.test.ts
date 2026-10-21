@@ -3,7 +3,12 @@
  * cache headers, and the Server-Sent Events stream, against a fast-ticking
  * poller on a synthetic feed whose laps grow. No network.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+// The sign-in checks have their own tests (key.test.ts); here every request is let through.
+vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
+vi.mock("../key.js", async (orig) => ({ ...(await orig<typeof import("../key.js")>()), requireLiveKey: (_q: unknown, _s: unknown, next: () => void) => next() }));
+vi.mock("../../middleware/auth.js", async (orig) => ({ ...(await orig<typeof import("../../middleware/auth.js")>()), requireAuth: (_q: unknown, _s: unknown, next: () => void) => next() }));
+
 import { readFileSync } from "node:fs";
 import { encode } from "@msgpack/msgpack";
 import express from "express";
