@@ -8,33 +8,15 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { computeInsights, computeStrategyMetrics, type StrategyMetrics } from "../strategy-engine";
 import { C, M, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, secText, startPage, stroke, table, type Column, type KeyItem, type PdfMeta } from "./kit";
 import { classesOf } from "./raceData";
+import { STRATEGY_KEY, paceRgb, sortStrategy, strategyMethod, strategySortNote, strategyView } from "../strategy-view";
 
-const paceColor = (pace: number, best: number): [number, number, number] => {
-  if (!(pace > 0) || !(best > 0)) return [200, 200, 214];
-  const f = Math.min(1, Math.max(0, (pace / best - 1) / 0.04)); // 0 at the class's best, 1 at 4% slower
-  return hsl(140 * (1 - f), 0.62, 0.44);
-};
-
-/** HSL (hue in degrees, s and l 0-1) to RGB. */
-function hsl(h: number, s: number, l: number): [number, number, number] {
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
+const paceColor = paceRgb;
 
 const KEY: KeyItem[] = [
-  { label: "Stint at the class's best pace", draw: (doc, x, y) => (doc.setFillColor(34, 197, 94), doc.rect(x, y - 3, 7, 6, "F")) },
-  { label: "4% or more slower", draw: (doc, x, y) => (doc.setFillColor(239, 68, 68), doc.rect(x, y - 3, 7, 6, "F")) },
-  { label: "Caution laps", draw: (doc, x, y) => (doc.setFillColor(250, 204, 21), doc.rect(x, y - 1, 7, 2.5, "F")) },
+  { label: STRATEGY_KEY.best, draw: (doc, x, y) => (doc.setFillColor(34, 197, 94), doc.rect(x, y - 3, 7, 6, "F")) },
+  { label: STRATEGY_KEY.slow, draw: (doc, x, y) => (doc.setFillColor(239, 68, 68), doc.rect(x, y - 3, 7, 6, "F")) },
+  { label: STRATEGY_KEY.caution, draw: (doc, x, y) => (doc.setFillColor(250, 204, 21), doc.rect(x, y - 1, 7, 2.5, "F")) },
 ];
-
-function method(verified: boolean): string {
-  return (
-    (verified ? "Stops and pit-lane time from the race's verified pit stops (* a stop without a pit-lane time). " : "Stops from the laps' pit flags; pit time is the pit laps' time over green pace. ") +
-    "Pace is the average green-flag lap. The score weighs pace, yellow-flag stops, pit time and consistency within the class, for cars that ran at least three quarters of the class's laps."
-  );
-}
 
 function drawStints(doc: JsPDF, m: StrategyMetrics, x: number, y: number, w: number, h: number, maxLaps: number, best: number) {
   let cx = x;
@@ -58,13 +40,17 @@ function drawStints(doc: JsPDF, m: StrategyMetrics, x: number, y: number, w: num
 }
 
 export async function strategyPdf(data: RaceChartData, annotations: AnnotationData, focusNum: number, meta: PdfMeta): Promise<Blob> {
-  const pdf = await newPdf("landscape");
+  const pdf = await newPdf("landscape", meta);
   const { doc } = pdf;
   const all = computeStrategyMetrics(data, annotations);
   const insights = computeInsights(data, all);
+  // As the tab is on screen: its class, in its order (every class in class order when it was never opened).
+  const view = strategyView(data);
+  const note = view ? strategySortNote(view.sort) : null;
   let first = true;
-  for (const cls of classesOf(data)) {
-    const rows = all.filter((m) => m.cls === cls).sort((a, b) => a.classPos - b.classPos);
+  for (const cls of view ? [view.cls] : classesOf(data)) {
+    const inClass = all.filter((m) => m.cls === cls);
+    const rows = view ? sortStrategy(inClass, view.sort) : inClass.sort((a, b) => a.classPos - b.classPos);
     if (!rows.length) continue;
     const verified = rows.some((m) => m.verified);
     const best = Math.min(...rows.map((m) => m.avgGreenPace).filter((p) => p > 0));
@@ -83,7 +69,7 @@ export async function strategyPdf(data: RaceChartData, annotations: AnnotationDa
     const { perPage } = rowsThatFit(pdf, 64 + 14 + insightsH, rows.length, 11, 18);
     const pages = pagesOf(rows, perPage);
     pages.forEach((pageRows, pi) => {
-      let y = startPage(pdf, meta, `STRATEGY · CLASS ${cls}${pages.length > 1 ? ` (${pi + 1}/${pages.length})` : ""}`, `${rows.length} cars`, first);
+      let y = startPage(pdf, meta, `STRATEGY · CLASS ${cls}${pages.length > 1 ? ` (${pi + 1}/${pages.length})` : ""}`, `${rows.length} cars${note ? ` · ${note}` : ""}`, first);
       first = false;
       if (pi === 0 && classInsights.length) {
         const bw = (pdf.size.w - 2 * M - 12) / 2;
@@ -134,7 +120,7 @@ export async function strategyPdf(data: RaceChartData, annotations: AnnotationDa
       ];
       table(doc, M, y, cols, pageRows, { rowH, gap: 5, fontSize: Math.min(8, rowH * 0.62), highlight: (m) => m.carNum === focusNum });
       stroke(doc, C.grid);
-      footer(pdf, meta, method(verified), KEY);
+      footer(pdf, meta, strategyMethod(verified), KEY);
     });
   }
   return doc.output("blob");

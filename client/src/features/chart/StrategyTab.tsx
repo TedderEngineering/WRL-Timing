@@ -1,23 +1,27 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
 import {
   computeStrategyMetrics,
   computeRaceConditions,
-  computeClassStats,
   computeInsights,
   type StrategyMetrics,
-  type StintData,
 } from "./strategy-engine";
+import {
+  DEFAULT_STRATEGY_SORT,
+  STRATEGY_KEY,
+  STRATEGY_SORTS,
+  paceRgb,
+  rgbCss,
+  setStrategyView,
+  sortStrategy,
+  strategyMethod,
+  type StrategySort,
+  type StrategySortKey,
+} from "./strategy-view";
 
 // ─── Format helpers ─────────────────────────────────────────────────────────
 
-function fmtPace(s: number): string {
-  if (!s) return "—";
-  const m = Math.floor(s / 60);
-  const sec = s - m * 60;
-  return m + ":" + sec.toFixed(1).padStart(4, "0");
-}
 
 function fmtPaceFull(s: number): string {
   if (!s) return "—";
@@ -56,36 +60,6 @@ function fmtTenths(s: number): string {
   return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0");
 }
 
-// ─── Table column definitions ───────────────────────────────────────────────
-
-type SortKey = string;
-
-interface Column {
-  key: SortKey;
-  label: string;
-  getValue: (m: StrategyMetrics) => number | string;
-  fmt: (m: StrategyMetrics) => string;
-  type: "num" | "str";
-  defaultDir: "asc" | "desc";
-  width?: string;
-}
-
-const COLUMNS: Column[] = [
-  { key: "classPos", label: "Pos", getValue: (m) => m.classPos, fmt: (m) => `P${m.classPos}`, type: "num", defaultDir: "asc", width: "48px" },
-  { key: "carNum", label: "Car", getValue: (m) => m.carNum, fmt: (m) => `#${m.carLabel}`, type: "num", defaultDir: "asc", width: "56px" },
-  { key: "team", label: "Team", getValue: (m) => m.team, fmt: (m) => m.team, type: "str", defaultDir: "asc" },
-  { key: "lapsCompleted", label: "Laps", getValue: (m) => m.lapsCompleted, fmt: (m) => String(m.lapsCompleted), type: "num", defaultDir: "desc", width: "52px" },
-  { key: "stops", label: "Stops", getValue: (m) => m.stops, fmt: (m) => String(m.stops), type: "num", defaultDir: "asc", width: "52px" },
-  { key: "avgGreenPace", label: "Avg Pace", getValue: (m) => m.avgGreenPace || 99999, fmt: (m) => fmtPace(m.avgGreenPace), type: "num", defaultDir: "asc", width: "80px" },
-  { key: "bestLap", label: "Best Lap", getValue: (m) => m.bestLap || 99999, fmt: (m) => fmtPace(m.bestLap), type: "num", defaultDir: "asc", width: "80px" },
-  { key: "totalPitTime", label: "Pit Time", getValue: (m) => m.totalPitTime, fmt: (m) => (m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)) + (m.untimedStops > 0 ? "*" : ""), type: "num", defaultDir: "asc", width: "80px" },
-  { key: "pitPct", label: "Pit %", getValue: (m) => m.pitPct, fmt: (m) => m.pitPct.toFixed(1) + "%", type: "num", defaultDir: "asc", width: "56px" },
-  { key: "yellowPitPct", label: "Yellow Pits", getValue: (m) => m.yellowPitPct, fmt: (m) => m.yellowPitPct.toFixed(0) + "%", type: "num", defaultDir: "desc", width: "76px" },
-  { key: "avgStintLen", label: "Avg Stint", getValue: (m) => m.avgStintLen, fmt: (m) => m.avgStintLen.toFixed(1) + "L", type: "num", defaultDir: "desc", width: "68px" },
-  { key: "maxStintLen", label: "Max Stint", getValue: (m) => m.maxStintLen, fmt: (m) => m.maxStintLen + "L", type: "num", defaultDir: "desc", width: "68px" },
-  { key: "strategyScore", label: "Strategy Score", getValue: (m) => m.strategyScore, fmt: (m) => (m.strategyScore < 0 ? "–" : m.strategyScore.toFixed(1)), type: "num", defaultDir: "desc", width: "130px" },
-];
-
 // ─── Inline style constants (matching reference design) ─────────────────────
 
 const S = {
@@ -105,6 +79,80 @@ const S = {
   pit: "#ff6b9d",
 } as const;
 
+// The page's look (as the Driver Report and the PDF).
+const P = {
+  card: "#12122a",
+  row: "#101024",
+  rowAlt: "#141430",
+  line: "#1e1e38",
+  border: "#3a3a5c",
+  text: "#e0e0e8",
+  soft: "#cbd5e1",
+  muted: "#9a9ab4",
+  accent: "#F48C34",
+  clear: "#22c55e",
+  caution: "#facc15",
+  focus: "rgba(244,140,52,0.12)",
+} as const;
+
+interface Col {
+  key: StrategySortKey;
+  label: string;
+  align: "left" | "right";
+  cell: (m: StrategyMetrics) => React.ReactNode;
+  title?: (m: StrategyMetrics) => string | undefined;
+}
+
+const COLS: Col[] = [
+  { key: "classPos", label: "P", align: "right", cell: (m) => <b>{m.classPos || "—"}</b> },
+  { key: "carNum", label: "Car", align: "left", cell: (m) => <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[m.cls] ?? P.accent }}>#{m.carLabel}</span> },
+  { key: "team", label: "Team", align: "left", cell: (m) => <span className="block max-w-[180px] truncate" title={m.team}>{m.team.replace(/\s*\([^()]*\)\s*$/, "")}</span> },
+  { key: "lapsCompleted", label: "Laps", align: "right", cell: (m) => m.lapsCompleted },
+  { key: "stops", label: "Stops", align: "right", cell: (m) => m.stops },
+  { key: "avgGreenPace", label: "Avg pace", align: "right", cell: (m) => <span className="font-mono">{fmtPaceFull(m.avgGreenPace)}</span> },
+  { key: "bestLap", label: "Best", align: "right", cell: (m) => <span className="font-mono" style={{ color: P.clear }}>{fmtPaceFull(m.bestLap)}</span> },
+  {
+    key: "totalPitTime",
+    label: "Pit time",
+    align: "right",
+    cell: (m) => <span className="font-mono">{(m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)) + (m.untimedStops > 0 ? "*" : "")}</span>,
+    title: (m) => pitTimeTitle(m),
+  },
+  { key: "pitPct", label: "Pit %", align: "right", cell: (m) => `${m.pitPct.toFixed(1)}%` },
+  { key: "yellowPitPct", label: "Yellow", align: "right", cell: (m) => `${Math.round(m.yellowPitPct)}%`, title: () => "Share of its stops made under a caution" },
+  { key: "avgStintLen", label: "Avg stint", align: "right", cell: (m) => m.avgStintLen.toFixed(1) },
+  { key: "maxStintLen", label: "Max", align: "right", cell: (m) => m.maxStintLen, title: () => "Longest stint (laps)" },
+  {
+    key: "strategyScore",
+    label: "Score",
+    align: "right",
+    cell: (m) => <b>{m.strategyScore < 0 ? "–" : m.strategyScore.toFixed(1)}</b>,
+    title: (m) => (m.strategyScore < 0 ? "Not scored: ran less than three quarters of its class's laps" : undefined),
+  },
+];
+
+/** One bar per stint: its width the stint's laps, its colour its green-flag pace against the class's best. */
+function StintMap({ m, totalLaps, best }: { m: StrategyMetrics; totalLaps: number; best: number }) {
+  return (
+    <div className="flex h-[22px] w-full gap-px" role="img" aria-label={`Stints: ${m.stints.map((s) => s.laps).join(", ")} laps`}>
+      {m.stints.map((s) => {
+        const pct = (s.laps / Math.max(1, totalLaps)) * 100;
+        const title =
+          `Stint ${s.n}: ${s.laps} lap${s.laps === 1 ? "" : "s"}` +
+          (s.yl ? ` (${s.yl} under caution)` : "") +
+          (s.pace > 0 ? ` · green pace ${fmtPaceFull(s.pace)}` : "") +
+          (s.ps && s.pe ? ` · P${s.ps} → P${s.pe} in class` : "");
+        return (
+          <div key={s.n} className="relative h-full shrink-0 overflow-hidden rounded-[2px]" style={{ width: `${pct}%`, background: rgbCss(paceRgb(s.pace, best)) }} title={title}>
+            {pct >= 3.5 && <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">{s.laps}</span>}
+            {s.yl > 0 && <span className="absolute bottom-0 left-0 h-[3px]" style={{ width: `${(s.yl / Math.max(1, s.laps)) * 100}%`, background: P.caution }} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 interface StrategyTabProps {
@@ -119,164 +167,75 @@ interface StrategyTabProps {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function StrategyTab({
-  data, annotations,
-  setFocusNum,
-  onSwitchToTrace,
-}: StrategyTabProps) {
-  const [sortKey, setSortKey] = useState<SortKey>("classPos");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [selectedCar, setSelectedCar] = useState<number | null>(null);
-  // Local class filter — does not affect Position Trace or Lap Times
-  const [localClassView, setLocalClassView] = useState("");
-
-  // Compute all data
+export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitchToTrace }: StrategyTabProps) {
   const allMetrics = useMemo(() => computeStrategyMetrics(data, annotations), [data, annotations]);
   const conditions = useMemo(() => computeRaceConditions(data), [data]);
-  const classStats = useMemo(() => computeClassStats(data, allMetrics), [data, allMetrics]);
   const allInsights = useMemo(() => computeInsights(data, allMetrics), [data, allMetrics]);
+  const classes = useMemo(() => [...new Set(allMetrics.map((m) => m.cls))].sort(), [allMetrics]);
 
-  // Determine active class
-  const classes = Object.keys(data.classGroups).sort();
-  const activeClass = localClassView; // "" means all classes
+  // One class at a time, as the PDF: the focus car's to start with.
+  const focusCls = data.cars[String(focusNum)]?.cls;
+  const [cls, setCls] = useState(() => (focusCls && classes.includes(focusCls) ? focusCls : classes[0] ?? ""));
+  const activeClass = classes.includes(cls) ? cls : classes[0] ?? "";
+  const [sort, setSort] = useState<StrategySort>(DEFAULT_STRATEGY_SORT);
+  const [selectedCar, setSelectedCar] = useState<number | null>(null);
 
-  // Filter by class
-  const classMetrics = useMemo(
-    () => activeClass ? allMetrics.filter((m) => m.cls === activeClass) : allMetrics,
-    [allMetrics, activeClass],
-  );
-
-  // Sort
-  const rows = useMemo(() => {
-    const col = COLUMNS.find((c) => c.key === sortKey);
-    if (!col) return classMetrics;
-    return [...classMetrics].sort((a, b) => {
-      const av = col.getValue(a);
-      const bv = col.getValue(b);
-      const dir = sortDir === "asc" ? 1 : -1;
-      if (typeof av === "string" && typeof bv === "string") return dir * av.localeCompare(bv);
-      return dir * ((av as number) - (bv as number));
-    });
-  }, [classMetrics, sortKey, sortDir]);
-
-  // Insights for active class
-  const insights = useMemo(
-    () => activeClass ? allInsights.filter((i) => i.cls === activeClass) : allInsights,
-    [allInsights, activeClass],
-  );
-
-  const stats = classStats[activeClass];
+  const classRows = useMemo(() => allMetrics.filter((m) => m.cls === activeClass), [allMetrics, activeClass]);
+  const rows = useMemo(() => sortStrategy(classRows, sort), [classRows, sort]);
+  const insights = allInsights.filter((i) => i.cls === activeClass);
+  const best = Math.min(...classRows.map((m) => m.avgGreenPace).filter((p) => p > 0));
+  const totalLaps = Math.max(1, ...classRows.map((m) => m.lapsCompleted));
+  const verified = classRows.some((m) => m.verified);
   const selectedMetrics = selectedCar != null ? allMetrics.find((m) => m.carNum === selectedCar) : null;
 
-  const handleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      const col = COLUMNS.find((c) => c.key === key);
-      setSortKey(key);
-      setSortDir(col?.defaultDir ?? "asc");
-    }
-  };
+  // The PDF button prints the table as it is now: this class, this order.
+  useEffect(() => {
+    if (activeClass) setStrategyView(data, { cls: activeClass, sort });
+  }, [data, activeClass, sort]);
 
-  const handleRowClick = (carNum: number) => {
-    setSelectedCar(selectedCar === carNum ? null : carNum);
-  };
+  const sortBy = (key: StrategySortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: STRATEGY_SORTS[key].dir }));
 
-  const handleGoToTrace = (carNum: number) => {
-    setFocusNum(carNum);
-    onSwitchToTrace();
-  };
+  const greenPct = conditions.totalLaps ? Math.round(100 - conditions.pctYellow) : 0;
 
   return (
-    <div style={{ color: S.txt, fontFamily: "'Outfit', system-ui, sans-serif" }}>
-      {/* ── Conditions cards ─────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <CondCard label="Total Cars" value={String(data.totalCars)} color={S.acc} />
-        <CondCard label="Leader Laps" value={String(conditions.totalLaps)} color={S.acc} />
-        <CondCard label="Green Laps" value={`${conditions.greenLaps} (${(100 - conditions.pctYellow).toFixed(0)}%)`} color={S.grn} />
-        <CondCard label="Yellow Laps" value={`${conditions.yellowLaps} (${conditions.pctYellow.toFixed(0)}%)`} color={S.yel} />
-        {stats && (
-          <>
-            <CondCard label={`${activeClass} Cars`} value={String(stats.count)} color={S.acc} />
-            <CondCard label={`${activeClass} Best Pace`} value={fmtPaceFull(stats.bestPace)} color={S.grn} mono />
-            <CondCard label={`${activeClass} Avg Stops`} value={stats.avgStops.toFixed(1)} color={S.acc} />
-            <CondCard label={`${activeClass} Avg Stint`} value={stats.avgStint.toFixed(1) + "L"} color={S.acc} />
-          </>
-        )}
+    <div className="px-2 py-3 sm:px-6" style={{ color: P.text }}>
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="m-0 text-base font-semibold">Strategy · {activeClass}</h2>
+        <span className="text-sm" style={{ color: P.muted }}>
+          {classRows.length} cars · race of {conditions.totalLaps} laps, {greenPct}% under green ({conditions.yellowLaps} caution laps)
+        </span>
       </div>
 
-      {/* ── Class tabs (pills) ───────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        <button
-          onClick={() => {
-            setLocalClassView("");
-            setSelectedCar(null);
-            setSortKey("classPos");
-            setSortDir("asc");
-          }}
-          style={{
-            padding: "6px 16px",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            fontFamily: "'JetBrains Mono', monospace",
-            background: activeClass === "" ? S.acc : S.bg2,
-            border: `1px solid ${activeClass === "" ? S.acc : S.bdr}`,
-            color: activeClass === "" ? "#fff" : S.dim,
-            transition: "all .2s",
-          }}
-        >
-          All
-        </button>
-        {classes.map((cls) => {
-          const isActive = cls === activeClass;
+      <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Class">
+        {classes.map((c) => {
+          const active = c === activeClass;
+          const color = CLASS_COLORS[c] ?? P.accent;
           return (
             <button
-              key={cls}
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => {
-                setLocalClassView(cls);
+                setCls(c);
                 setSelectedCar(null);
-                setSortKey("classPos");
-                setSortDir("asc");
               }}
-              style={{
-                padding: "6px 16px",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                fontFamily: "'JetBrains Mono', monospace",
-                background: isActive ? (CLASS_COLORS[cls] || S.acc) : S.bg2,
-                border: `1px solid ${isActive ? (CLASS_COLORS[cls] || S.acc) : S.bdr}`,
-                color: isActive ? "#fff" : S.dim,
-                transition: "all .2s",
-              }}
+              className="rounded-md border px-3 py-1 text-xs font-semibold"
+              style={{ borderColor: active ? color : P.border, background: active ? `${color}22` : P.card, color: active ? P.text : P.muted }}
             >
-              {cls}
+              {c}
             </button>
           );
         })}
       </div>
 
-      {/* ── Insights ─────────────────────────────────────────────── */}
       {insights.length > 0 && (
-        <div style={{ display: "grid", gap: 10, marginBottom: 24 }}>
+        <div className="mb-4 grid gap-3 lg:grid-cols-2">
           {insights.map((ins, i) => (
-            <div
-              key={i}
-              style={{
-                background: S.card,
-                border: `1px solid ${S.bdr}`,
-                borderRadius: 10,
-                padding: "14px 18px",
-                borderLeft: `3px solid ${S.acc2}`,
-              }}
-            >
-              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: S.acc, marginBottom: 4 }}>
-                {ins.title}
-              </div>
-              <div style={{ fontSize: "0.82rem", color: S.txt2, lineHeight: 1.55 }}>
+            <div key={i} className="rounded-md border-l-[3px] px-4 py-2.5" style={{ background: P.card, borderColor: P.accent }}>
+              <div className="text-[13px] font-semibold">{ins.title}</div>
+              <div className="mt-0.5 text-[13px] leading-relaxed" style={{ color: P.muted }}>
                 {ins.text}
               </div>
             </div>
@@ -284,223 +243,47 @@ export function StrategyTab({
         </div>
       )}
 
-      {/* ── Strategy Leaderboard header ──────────────────────────── */}
-      <div style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-        Strategy Leaderboard
-        <span style={{ fontSize: "0.72rem", color: S.dim, fontWeight: 400 }}>
-          — {rows.length} cars{activeClass ? ` in ${activeClass}` : ""}
-        </span>
-        <span style={{ flex: 1, height: 1, background: S.bdr }} />
-      </div>
-
-      {/* ── Table ────────────────────────────────────────────────── */}
-      <div
-        style={{
-          overflowX: "auto",
-          marginBottom: 24,
-          borderRadius: 10,
-          border: `1px solid ${S.bdr}`,
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+      <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
+        <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr>
-              {COLUMNS.map((col) => {
-                const isSorted = sortKey === col.key;
-                return (
-                  <th
-                    key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    style={{
-                      background: S.bg2,
-                      color: isSorted ? S.acc : S.txt2,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      fontSize: "0.68rem",
-                      padding: "10px 12px",
-                      textAlign: "left",
-                      whiteSpace: "nowrap",
-                      borderBottom: `1px solid ${S.bdr2}`,
-                      cursor: "pointer",
-                      userSelect: "none",
-                      width: col.width,
-                      transition: "color .15s",
-                    }}
-                  >
-                    {col.label}
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginLeft: 4,
-                        fontSize: "0.6rem",
-                        opacity: isSorted ? 1 : 0.3,
-                        transition: "opacity .15s, transform .15s",
-                        transform: isSorted && sortDir === "desc" ? "rotate(180deg)" : undefined,
-                      }}
-                    >
-                      ▲
-                    </span>
-                  </th>
-                );
-              })}
+            <tr style={{ borderBottom: `1px solid ${P.border}` }}>
+              {COLS.map((c) => (
+                <th
+                  key={c.key}
+                  onClick={() => sortBy(c.key)}
+                  className="cursor-pointer select-none whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider"
+                  style={{ color: sort.key === c.key ? P.text : P.muted, textAlign: c.align }}
+                  aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+                >
+                  {c.label}
+                  {sort.key === c.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+              <th className="min-w-[320px] whitespace-nowrap px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: P.muted, width: "40%" }}>
+                Stint map (laps per stint)
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((m) => {
-              const isSelected = m.carNum === selectedCar;
-              const clsColor = CLASS_COLORS[m.cls] || S.acc;
+            {rows.map((m, i) => {
+              const focus = m.carNum === focusNum;
+              const open = m.carNum === selectedCar;
               return (
                 <tr
                   key={m.carNum}
-                  onClick={() => handleRowClick(m.carNum)}
-                  style={{
-                    cursor: "pointer",
-                    background: isSelected ? "rgba(74,158,255,0.08)" : undefined,
-                    transition: "background .15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = "rgba(74,158,255,0.04)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isSelected ? "rgba(74,158,255,0.08)" : "";
-                  }}
+                  onClick={() => setSelectedCar(open ? null : m.carNum)}
+                  className="cursor-pointer hover:brightness-125"
+                  style={{ background: focus || open ? P.focus : i % 2 ? P.rowAlt : P.row, height: 30 }}
+                  aria-expanded={open}
                 >
-                  {COLUMNS.map((col) => {
-                    const val = col.fmt(m);
-                    // Position column
-                    if (col.key === "classPos") {
-                      return (
-                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
-                          <span style={{ fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: S.acc, fontSize: "0.9rem" }}>
-                            {val}
-                          </span>
-                        </td>
-                      );
-                    }
-                    // Car number
-                    if (col.key === "carNum") {
-                      return (
-                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
-                          <span style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontWeight: 700,
-                            background: clsColor + "20",
-                            color: clsColor,
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            display: "inline-block",
-                          }}>
-                            {val}
-                          </span>
-                        </td>
-                      );
-                    }
-                    // Team column
-                    if (col.key === "team") {
-                      return (
-                        <td key={col.key} style={{
-                          padding: "8px 12px",
-                          borderBottom: `1px solid ${S.bdr}`,
-                          maxWidth: 180,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}>
-                          {val}
-                        </td>
-                      );
-                    }
-                    // Best Lap column
-                    if (col.key === "bestLap") {
-                      return (
-                        <td key={col.key} style={{
-                          padding: "8px 12px",
-                          borderBottom: `1px solid ${S.bdr}`,
-                          whiteSpace: "nowrap",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          color: S.grn,
-                        }}>
-                          {val}
-                        </td>
-                      );
-                    }
-                    // Pit Time: what it covers, and any stop without a time
-                    if (col.key === "totalPitTime") {
-                      return (
-                        <td key={col.key} title={pitTimeTitle(m)} style={{
-                          padding: "8px 12px",
-                          borderBottom: `1px solid ${S.bdr}`,
-                          whiteSpace: "nowrap",
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}>
-                          {val}
-                        </td>
-                      );
-                    }
-                    // Yellow Pits column - tag style
-                    if (col.key === "yellowPitPct") {
-                      const pct = m.yellowPitPct;
-                      const isYellow = pct >= 50;
-                      return (
-                        <td key={col.key} style={{ padding: "8px 12px", borderBottom: `1px solid ${S.bdr}`, whiteSpace: "nowrap" }}>
-                          <span style={{
-                            fontSize: "0.65rem",
-                            padding: "1px 6px",
-                            borderRadius: 4,
-                            fontWeight: 700,
-                            display: "inline-block",
-                            background: isYellow ? "rgba(234,179,8,0.15)" : "rgba(34,197,94,0.15)",
-                            color: isYellow ? S.yel : S.grn,
-                          }}>
-                            {val}
-                          </span>
-                        </td>
-                      );
-                    }
-                    // Strategy score column with bar
-                    if (col.key === "strategyScore") {
-                      return (
-                        <td key={col.key} title={m.strategyScore < 0 ? "Not scored: ran less than three quarters of its class's laps" : undefined} style={{
-                          padding: "8px 12px",
-                          borderBottom: `1px solid ${S.bdr}`,
-                          whiteSpace: "nowrap",
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}>
-                          {val}
-                          <span style={{
-                            height: 6,
-                            borderRadius: 3,
-                            background: S.bdr,
-                            overflow: "hidden",
-                            width: 80,
-                            display: "inline-block",
-                            verticalAlign: "middle",
-                            marginLeft: 6,
-                          }}>
-                            <span style={{
-                              height: "100%",
-                              borderRadius: 3,
-                              background: `linear-gradient(90deg, ${S.acc}, ${S.acc2})`,
-                              display: "block",
-                              width: `${Math.min(100, Math.max(0, m.strategyScore))}%`,
-                            }} />
-                          </span>
-                        </td>
-                      );
-                    }
-                    // Default numeric cell
-                    return (
-                      <td key={col.key} style={{
-                        padding: "8px 12px",
-                        borderBottom: `1px solid ${S.bdr}`,
-                        whiteSpace: "nowrap",
-                        fontFamily: col.type === "num" ? "'JetBrains Mono', monospace" : undefined,
-                      }}>
-                        {val}
-                      </td>
-                    );
-                  })}
+                  {COLS.map((c) => (
+                    <td key={c.key} className="whitespace-nowrap px-2" style={{ textAlign: c.align }} title={c.title?.(m)}>
+                      {c.cell(m)}
+                    </td>
+                  ))}
+                  <td className="px-2 py-1">
+                    <StintMap m={m} totalLaps={totalLaps} best={best} />
+                  </td>
                 </tr>
               );
             })}
@@ -508,49 +291,36 @@ export function StrategyTab({
         </table>
       </div>
 
-      {/* ── Detail Panel ─────────────────────────────────────────── */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: P.muted }}>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(paceRgb(1, 1)) }} /> {STRATEGY_KEY.best}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(paceRgb(1.05, 1)) }} /> {STRATEGY_KEY.slow}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-[3px] w-3" style={{ background: P.caution }} /> {STRATEGY_KEY.caution}
+        </span>
+        <span>Tap a car for its stints and stops.</span>
+      </div>
+      <p className="mt-1.5 max-w-4xl text-xs leading-relaxed" style={{ color: P.muted }}>
+        {strategyMethod(verified)}
+      </p>
+
       {selectedMetrics && (
-        <DetailPanel
-          m={selectedMetrics}
-          totalLaps={conditions.totalLaps}
-          onClose={() => setSelectedCar(null)}
-          onGoToTrace={() => handleGoToTrace(selectedMetrics.carNum)}
-          activeClass={activeClass}
-        />
+        <div className="mt-4">
+          <DetailPanel
+            m={selectedMetrics}
+            totalLaps={conditions.totalLaps}
+            onClose={() => setSelectedCar(null)}
+            onGoToTrace={() => {
+              setFocusNum(selectedMetrics.carNum);
+              onSwitchToTrace();
+            }}
+            activeClass={activeClass}
+          />
+        </div>
       )}
-    </div>
-  );
-}
-
-// ─── Condition Card ──────────────────────────────────────────────────────────
-
-function CondCard({ label, value, color, mono }: { label: string; value: string; color: string; mono?: boolean }) {
-  return (
-    <div style={{
-      background: S.card,
-      border: `1px solid ${S.bdr}`,
-      borderRadius: 10,
-      padding: "12px 16px",
-    }}>
-      <div style={{
-        fontSize: "0.7rem",
-        textTransform: "uppercase",
-        letterSpacing: "0.06em",
-        color: S.txt2,
-        marginBottom: 4,
-        fontWeight: 600,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: "1.4rem",
-        fontWeight: 800,
-        letterSpacing: "-0.02em",
-        color,
-        fontFamily: mono ? "'JetBrains Mono', monospace" : undefined,
-      }}>
-        {value}
-      </div>
     </div>
   );
 }
@@ -565,7 +335,6 @@ function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
   activeClass: string;
 }) {
   const clsColor = CLASS_COLORS[m.cls] || S.acc;
-  const maxStintLaps = Math.max(...m.stints.map((s) => s.laps), 1);
 
   return (
     <div style={{
@@ -612,18 +381,6 @@ function DetailPanel({ m, totalLaps, onClose, onGoToTrace, activeClass }: {
         >
           ✕ Close
         </span>
-      </div>
-
-      {/* Stint Map */}
-      <SectionHeader>Stint Map</SectionHeader>
-      <div style={{ fontSize: "0.65rem", color: S.dim, marginBottom: 8 }}>
-        <span style={{ display: "inline-block", width: 10, height: 10, background: S.grn, borderRadius: 2, verticalAlign: "middle", marginRight: 3 }} /> Green laps
-        <span style={{ display: "inline-block", width: 10, height: 10, background: S.yel, borderRadius: 2, verticalAlign: "middle", marginLeft: 10, marginRight: 3 }} /> Yellow laps
-      </div>
-      <div style={{ display: "flex", gap: 2, alignItems: "end", height: 120, marginBottom: 12, padding: "8px 0" }}>
-        {m.stints.map((s) => (
-          <StintBar key={s.n} stint={s} maxLaps={maxStintLaps} />
-        ))}
       </div>
 
       {/* Pit Stop Timeline */}
@@ -746,38 +503,6 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StintBar({ stint, maxLaps }: { stint: StintData; maxLaps: number }) {
-  const totalH = Math.max(8, ((stint.gl + stint.yl) / maxLaps) * 100);
-  const greenPct = stint.gl + stint.yl > 0 ? (stint.gl / (stint.gl + stint.yl)) * 100 : 100;
-  const yellowPct = 100 - greenPct;
-
-  return (
-    <div
-      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 16, maxWidth: 60 }}
-      title={`Stint ${stint.n}: ${stint.laps}L (${stint.gl}G/${stint.yl}Y)\nPace: ${stint.pace > 0 ? fmtPaceFull(stint.pace) : "—"}\nDeg: ${stint.deg > 0 ? "+" : ""}${stint.deg.toFixed(3)}s/lap\nPos: P${stint.ps}→P${stint.pe}`}
-    >
-      <div style={{
-        width: "100%",
-        height: `${totalH}%`,
-        borderRadius: "3px 3px 0 0",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}>
-        {stint.yl > 0 && (
-          <div style={{ height: `${yellowPct}%`, background: S.yel }} />
-        )}
-        <div style={{ flex: 1, background: S.grn, borderRadius: stint.yl > 0 ? 0 : "3px 3px 0 0" }} />
-      </div>
-      <div style={{ fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: S.txt2, marginTop: 2 }}>
-        {stint.laps}L
-      </div>
-      <div style={{ fontSize: "0.6rem", fontFamily: "'JetBrains Mono', monospace", color: S.dim, textAlign: "center" }}>
-        {stint.pace > 0 ? fmtPace(stint.pace) : ""}
-      </div>
-    </div>
-  );
-}
 
 function PitMarker({ leftPct, isYellow, tooltip }: { leftPct: string; isYellow: boolean; tooltip: string }) {
   const [hovered, setHovered] = useState(false);
