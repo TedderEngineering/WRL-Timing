@@ -15,11 +15,10 @@ vi.mock("../../models/prisma.js", () => ({
   prisma: {
     race: {
       findFirst: vi.fn(async (q: { where: { id?: string } }) => (q.where.id && q.where.id !== "r1" ? null : race)),
-      findMany: vi.fn(async () => []),
-      groupBy: vi.fn(async () => [
-        { series: "IMSA", _count: { _all: 5 } },
-        { series: "WRL", _count: { _all: 12 } },
-      ]),
+      // The calendar's query (season) gets none; the stats' query gets 12 WRL and 5 IMSA races.
+      findMany: vi.fn(async (q: { where: { season?: number } }) =>
+        q.where.season !== undefined ? [] : [...Array(12).fill({ series: "WRL" }), ...Array(5).fill({ series: "IMSA" })]
+      ),
     },
   },
 }));

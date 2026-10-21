@@ -110,14 +110,13 @@ landingRouter.get("/", async (_req: Request, res: Response, next: NextFunction) 
       };
     }
     const weekends = await upcomingWeekends(new Date());
-    const bySeries = (await prisma.race.groupBy({ by: ["series"], where: { status: "PUBLISHED" }, _count: { _all: true } })) as {
-      series: string;
-      _count: { _all: number };
-    }[];
+    const published = (await prisma.race.findMany({ where: { status: "PUBLISHED" }, select: { series: true } })) as { series: string }[];
+    const count = new Map<string, number>();
+    for (const r of published) count.set(r.series, (count.get(r.series) ?? 0) + 1);
     const stats = {
-      races: bySeries.reduce((n, s) => n + s._count._all, 0),
+      races: published.length,
       // Most races first.
-      series: bySeries.sort((a, b) => b._count._all - a._count._all || a.series.localeCompare(b.series)).map((s) => s.series),
+      series: [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s),
     };
     res.set("Cache-Control", "public, max-age=300");
     res.json({ latest, next: weekends[0] ?? null, upcoming: weekends.slice(1, 3), stats });
