@@ -189,20 +189,20 @@ export function App() {
           }
         />
 
-        {/* Race routes (public — auth optional for favorites) */}
-        <Route path="/races" element={<RaceListPage />} />
+        {/* Race routes: signed in only (signed out, the home page shows the latest and next race). The alerts-off link from an email works signed out. */}
+        <Route path="/races" element={<ProtectedRoute><RaceListPage /></ProtectedRoute>} />
         <Route path="/alerts/off" element={<AlertsOffPage />} />
-        <Route path="/chart" element={<RaceDetailPage />} />
-        {/* RaceTrace Live (public): WRL sessions still running, by RaceTrace slug */}
-        <Route path="/live" element={<LiveListPage />} />
-        <Route path="/live/next/:id" element={<UpcomingRacePage />} />
-        <Route path="/live/:slug" element={<LiveRacePage />} />
+        <Route path="/chart" element={<ProtectedRoute><RaceDetailPage /></ProtectedRoute>} />
+        {/* RaceTrace Live: WRL sessions still running, by RaceTrace slug (signed in) */}
+        <Route path="/live" element={<ProtectedRoute><LiveListPage /></ProtectedRoute>} />
+        <Route path="/live/next/:id" element={<ProtectedRoute><UpcomingRacePage /></ProtectedRoute>} />
+        <Route path="/live/:slug" element={<ProtectedRoute><LiveRacePage /></ProtectedRoute>} />
         {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
-        <Route path="/races/:id" element={<RaceDetailRedirect />} />
+        <Route path="/races/:id" element={<ProtectedRoute><RaceDetailRedirect /></ProtectedRoute>} />
 
-        {/* Qualifying routes (public — auth optional) */}
-        <Route path="/qualifying" element={<QualifyingListPage />} />
-        <Route path="/qualifying/:id" element={<QualifyingDetailPage />} />
+        {/* Qualifying routes (signed in) */}
+        <Route path="/qualifying" element={<ProtectedRoute><QualifyingListPage /></ProtectedRoute>} />
+        <Route path="/qualifying/:id" element={<ProtectedRoute><QualifyingDetailPage /></ProtectedRoute>} />
 
         {/* Settings (protected, nested layout) */}
         <Route

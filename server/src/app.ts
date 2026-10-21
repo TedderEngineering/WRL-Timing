@@ -21,6 +21,8 @@ import { billingRouter } from "./routes/billing.js";
 import { eventsRouter } from "./routes/events.js";
 import { searchRouter } from "./routes/search.js";
 import { qualifyingRouter } from "./routes/qualifying.js";
+import { landingRouter } from "./routes/landing.js";
+import { requireAuth } from "./middleware/auth.js";
 import { gripRouter } from "./routes/grip.js";
 import { setupRouter } from "./routes/setup.js";
 import { allowedOrigins } from "./services/site.js";
@@ -115,21 +117,24 @@ export function createApp() {
   app.use("/api/health", healthRouter);
   app.use("/api/auth/oauth", oauthRouter);
   app.use("/api/auth", authRouter);
-  app.use("/api/races", racesRouter);
+  // Races, events, search and qualifying are for signed-in users only; signed out, the site shows
+  // its landing page (GET /api/landing), link previews (/api/share) and the live listing.
+  app.use("/api/races", requireAuth, racesRouter);
   app.use("/api/me", meRouter);
   app.use("/api/alerts", alertsRouter);
   app.use("/api/share", shareRouter);
-  app.use("/api/events", eventsRouter);
+  app.use("/api/events", requireAuth, eventsRouter);
+  app.use("/api/landing", landingRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/site-config", siteConfigRouter);
   app.use("/api/support", supportRouter);
-  app.use("/api/search", searchRouter);
+  app.use("/api/search", requireAuth, searchRouter);
   // Machine intake and API tokens (G4). Mounted before the general admin
   // router so its auth runs once; both routers require an admin.
   app.use("/api/admin/intake", intakeRouter);
   app.use("/api/admin/api-tokens", apiTokensRouter);
   app.use("/api/admin", adminRouter);
-  app.use("/api/qualifying", qualifyingRouter);
+  app.use("/api/qualifying", requireAuth, qualifyingRouter);
   app.use("/api/billing", billingRouter);
   app.use("/api/grip", gripRouter);
 

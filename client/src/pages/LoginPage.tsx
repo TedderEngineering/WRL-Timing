@@ -16,10 +16,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from =
-    (location.state as { from?: { pathname: string } })?.from?.pathname ||
-    peekPostAuthRedirect() ||
-    "/dashboard";
+  // Where the visitor was heading, query included (a shared race link: /chart?race=…&car=…).
+  const asked = (location.state as { from?: { pathname: string; search?: string; hash?: string } })?.from;
+  const from = (asked?.pathname ? `${asked.pathname}${asked.search ?? ""}${asked.hash ?? ""}` : null) || peekPostAuthRedirect() || "/dashboard";
 
   const { values, errors, globalError, isSubmitting, handleChange, handleSubmit } =
     useForm({

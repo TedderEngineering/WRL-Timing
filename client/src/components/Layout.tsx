@@ -66,9 +66,11 @@ function MobileMenu() {
                 Dashboard
               </Link>
             )}
-            <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
-              Events
-            </Link>
+            {isAuthenticated && (
+              <Link to="/races" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
+                Events
+              </Link>
+            )}
             {!isAuthenticated && !isFreeMode() && (
               <Link to="/pricing" onClick={() => setOpen(false)} className="py-2 text-gray-700 dark:text-gray-300">
                 Pricing
@@ -171,7 +173,7 @@ export function Layout() {
             {/* Desktop nav links */}
             <div className="hidden lg:flex items-center gap-4">
               {isAuthenticated && <NavItem to="/dashboard" label="Dashboard" />}
-              <NavItem to="/races" label="Events" />
+              {isAuthenticated && <NavItem to="/races" label="Events" />}
               {user?.role === "ADMIN" && <NavItem to="/admin" label="Admin" />}
               {!isAuthenticated && !isFreeMode() && (
                 <Link

@@ -2,7 +2,12 @@
  * RaceTrace Live: a timed session read while it is still running (synthetic
  * fixtures cut off mid-race; no network).
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+// The sign-in checks have their own tests (key.test.ts); here every request is let through.
+vi.mock("../../models/prisma.js", () => ({ prisma: {} }));
+vi.mock("../key.js", async (orig) => ({ ...(await orig<typeof import("../key.js")>()), requireLiveKey: (_q: unknown, _s: unknown, next: () => void) => next() }));
+vi.mock("../../middleware/auth.js", async (orig) => ({ ...(await orig<typeof import("../../middleware/auth.js")>()), requireAuth: (_q: unknown, _s: unknown, next: () => void) => next() }));
+
 import { encode } from "@msgpack/msgpack";
 import express from "express";
 import type { AddressInfo } from "node:net";
