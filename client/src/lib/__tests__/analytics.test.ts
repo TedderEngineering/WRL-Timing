@@ -23,6 +23,7 @@ describe("analytics", () => {
         "checklist_step",
         "coffee_open",
         "coffee_paid",
+        "download_pdf",
         "follow_car",
         "follow_driver",
         "on_target",
