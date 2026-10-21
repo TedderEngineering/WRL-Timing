@@ -69,3 +69,17 @@ describe("driver performance", () => {
     expect(row.clearAirPct).toBe(50);
   });
 });
+
+describe("driver report PDF", () => {
+  it("keeps names printable, splits long classes over pages and names the file after the race", async () => {
+    const { pdfSafe, pageRows, driverReportFileName } = await import("../driverReportPdf");
+    expect(pdfSafe("Marco Sørensen")).toBe("Marco Sørensen");
+    expect(pdfSafe("Jakub Śmiechowski")).toBe("Jakub Smiechowski");
+    expect(pageRows(41).perPage).toBeGreaterThanOrEqual(41);
+    expect(pageRows(120).perPage).toBeLessThan(120);
+    expect(pageRows(5).rowH).toBe(14);
+    expect(driverReportFileName({ raceName: "WRL Sunday 7 Hour — Sebring International Raceway", date: "2026-10-18" })).toBe(
+      "Driver Report - WRL Sunday 7 Hour - Sebring International Raceway - 2026-10-18.pdf",
+    );
+  });
+});
