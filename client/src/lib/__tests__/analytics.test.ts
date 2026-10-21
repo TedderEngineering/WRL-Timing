@@ -24,6 +24,7 @@ describe("analytics", () => {
         "coffee_open",
         "coffee_paid",
         "download_pdf",
+        "pdf_failed",
         "follow_car",
         "follow_driver",
         "on_target",
