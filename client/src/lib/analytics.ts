@@ -28,6 +28,7 @@ export const ANALYTICS_EVENTS = [
   "follow_driver", // { source }
   "open_story",
   "download_pdf", // { tab }: a race-page tab saved as a PDF
+  "pdf_failed", // { tab, reason }: site_updated (reloaded to finish), load or build
   // Finding Grip
   "record_hot",
   "on_target",
