@@ -11,6 +11,7 @@ import proseRulesJson from "./schema/prose-rules.json" with { type: "json" };
 import type { CarStory, FactRef, Prose, RaceAnalysisPackage, RaceSummary, RuleFinding } from "./schema/package-types.js";
 import { buildStoryEvents } from "./engine/story-events.js";
 import { expectedDisplay, formatDuration } from "./validate-package.js";
+import { lapLossFacts } from "./lap-loss.js";
 
 const R: any = proseRulesJson;
 
@@ -33,6 +34,7 @@ export function factIndex(P: RaceAnalysisPackage): (fid: string) => any | null {
   for (let i = 0; i < pr.lap.length; i++) rows.set(`pass:${pr.winner[i]}:${pr.lap[i]}:${pr.loser[i]}`, { lap: pr.lap[i], winner: pr.winner[i], loser: pr.loser[i], mechanism: pr.mechanism[i] });
   const ld = P.positionChanges.lapDowns;
   if (ld) for (let i = 0; i < ld.car.length; i++) rows.set(`lapdown:${ld.car[i]}:${ld.lap[i]}`, { car: ld.car[i], lap: ld.lap[i], lapsDown: ld.lapsDown[i], cause: ld.cause[i] });
+  for (const [car, l] of lapLossFacts(P)) rows.set(`laploss:${car}`, l);
   return (fid) => {
     if (fid.startsWith("lap:")) {
       const p = fid.split(":");
@@ -44,7 +46,7 @@ export function factIndex(P: RaceAnalysisPackage): (fid: string) => any | null {
       for (const [k, v] of Object.entries(cols)) row[k] = (v as unknown[])[i];
       return row;
     }
-    if (fid.startsWith("pass:") || fid.startsWith("lapdown:")) return rows.get(fid) ?? null;
+    if (fid.startsWith("pass:") || fid.startsWith("lapdown:") || fid.startsWith("laploss:")) return rows.get(fid) ?? null;
     return facts.get(fid) ?? null;
   };
 }
@@ -235,10 +237,11 @@ export function classDigest(P: RaceAnalysisPackage, cls: string): string {
   const entries = P.entries.filter((e) => e.class === cls).sort((a, b) => (a.result?.positionClass ?? 999) - (b.result?.positionClass ?? 999));
   const ev = P.events;
   const className = P.metadata.classes.find((c) => c.id === cls)?.name ?? cls;
+  const lapLosses = lapLossFacts(P);
   L.push(`# Class ${cls} (${className}) · ${entries.length} cars · results ${P.metadata.resultsStatus}`);
   L.push("");
   L.push(
-    "Row facts are citable like any other: `pass:<winner>:<lap>:<loser>` (fields lap, winner, loser, mechanism) and `lapdown:<car>:<lap>` (fields lap, lapsDown, cause). Each gainedOn / lostTo entry below names its row in brackets. stats.nMembers counts cars: a car that stopped twice in one cycle is one member."
+    "Row facts are citable like any other: `pass:<winner>:<lap>:<loser>` (fields lap, winner, loser, mechanism) `lapdown:<car>:<lap>` (fields lap, lapsDown, cause) and `laploss:<car>` (how the car lost its laps to the class leader: lapsLost, inPitStops, inGarage, underCaution, onTrack, notExplained, onTrackFirstLap, onTrackLastLap, biggestLap, biggestLaps, biggestCause, finishLapsDown; a car with lapsLost above zero must say how, citing it). Each gainedOn / lostTo entry below names its row in brackets. stats.nMembers counts cars: a car that stopped twice in one cycle is one member."
   );
   L.push("");
   L.push("## Pit cycles in class");
@@ -289,6 +292,12 @@ export function classDigest(P: RaceAnalysisPackage, cls: string): string {
     if (ld) {
       const mine = ld.car.map((c, i) => (c === car ? `lapdown:${c}:${ld.lap[i]} lapsDown=${ld.lapsDown[i]} cause=${ld.cause[i]}` : null)).filter(Boolean);
       if (mine.length) L.push(mine.join("; "));
+    }
+    const lost = lapLosses.get(car);
+    if (lost) {
+      L.push(
+        `laploss:${car} lapsLost=${lost.lapsLost} inPitStops=${lost.inPitStops} inGarage=${lost.inGarage} underCaution=${lost.underCaution} onTrack=${lost.onTrack} notExplained=${lost.notExplained} onTrackFirstLap=${num(lost.onTrackFirstLap)} onTrackLastLap=${num(lost.onTrackLastLap)} biggestLap=${lost.biggestLap} biggestLaps=${lost.biggestLaps} biggestCause=${lost.biggestCause} finishLapsDown=${num(lost.finishLapsDown)}`
+      );
     }
     for (const c of P.ruleChecks.filter((x) => x.car === car && x.status !== "pass" && x.status !== "not_applicable")) {
       L.push(

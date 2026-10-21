@@ -66,8 +66,8 @@
   "units": {
     "s": { "fields": "S$|SumS$", "display": "duration" },
     "pos": { "fields": "^(?:cpos|pos|positionClass|positionOverall|classPosBefore|classPosAfter|overallPosBefore|overallPosAfter|prePenaltyPositionClass|prePenaltyPositionOverall|classPosAtRetirement|startPosition)$", "display": "P" },
-    "lap": { "fields": "^(?:lap|inLap|outLap|beforeLap|afterLap|bestLapNumber|lastCompletedLap|startLap|endLap|issuedLeaderLap|leaderLaps\\[[01]\\]|laps\\[[01]\\])$", "display": "int" },
-    "laps": { "fields": "^(?:laps|lapsDown|lapsDownBefore|lapsDownAfter)$", "display": "int" },
+    "lap": { "fields": "^(?:lap|inLap|outLap|beforeLap|afterLap|bestLapNumber|lastCompletedLap|startLap|endLap|issuedLeaderLap|leaderLaps\\[[01]\\]|laps\\[[01]\\]|onTrackFirstLap|onTrackLastLap|biggestLap)$", "display": "int" },
+    "laps": { "fields": "^(?:laps|lapsDown|lapsDownBefore|lapsDownAfter|lapsLost|inPitStops|inGarage|underCaution|onTrack|notExplained|biggestLaps|finishLapsDown)$", "display": "int" },
     "places": { "fields": "^(?:netClass|netOverall)$", "display": "int" },
     "count": { "fields": "^(?:stats\\.nMembers|timeLostRank|ordinal|stopNumber|driver|.*\\.length)$", "display": "int" },
     "text": { "fields": "^(?:reason|rawText|message|gapFirst|status|kind|penaltyType|where)$", "display": "verbatim" }
