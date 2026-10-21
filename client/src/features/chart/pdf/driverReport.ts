@@ -5,7 +5,8 @@
 import type { jsPDF as JsPDF } from "jspdf";
 import { CLASS_LIMIT, CLEAR_GAP_S, DRIVER_LIMIT, type ClassReport, type DriverRow } from "../driver-performance";
 import { DRIVER_COLUMNS, type DriverColumnId } from "../driver-report-columns";
-import { C, M, axisLapText, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, startPage, stroke, type KeyItem, type PdfMeta } from "./kit";
+import { DEFAULT_SORT, driverMethodText, driverSortNote, type DriverSort } from "../driver-report-view";
+import { C, M, headerText, axisLapText, fill, fit, footer, ink, lapText, newPdf, pagesOf, pdfSafe, rowsThatFit, startPage, stroke, type KeyItem, type PdfMeta } from "./kit";
 
 const GAP = 6;
 
@@ -44,13 +45,10 @@ export const driverKey: KeyItem[] = [
   { label: "Fastest lap", draw: (doc, x, y) => (stroke(doc, C.text), doc.setLineWidth(0.8), doc.rect(x + 1.5, y - 3.5, 3.2, 7, "S")) },
 ];
 
-export const driverMethod =
-  `Drivers are ranked on the average of their fastest laps, at most half of the laps they drove. Lap 1, pit in- and out-laps and laps under caution ` +
-  `don't count, nor do laps over ${Math.round((CLASS_LIMIT - 1) * 100)}% slower than the class's fastest or ${Math.round((DRIVER_LIMIT - 1) * 100)}% slower than the driver's own fastest. ` +
-  `Pace vs class compares each lap with the class's laps from the same part of the race (below 0 is quicker). Clean air and passes come from ` +
-  `timing-line crossings and may miss some passes and traffic between the lines.`;
+export const driverMethod = (sort: DriverSort = DEFAULT_SORT) =>
+  driverMethodText(sort, { classPct: Math.round((CLASS_LIMIT - 1) * 100), driverPct: Math.round((DRIVER_LIMIT - 1) * 100) });
 
-function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[], top: number, rowH: number, pageW: number) {
+function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[], top: number, rowH: number, pageW: number, sort: DriverSort) {
   const xs: number[] = [];
   let x = M;
   for (const c of cols) {
@@ -60,9 +58,11 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   ink(doc, C.head);
+  const sortedLabel = DRIVER_COLUMNS[sort.key].pdf;
   cols.forEach((c, i) => {
     const tx = c.align === "right" ? xs[i] + c.w : c.align === "center" ? xs[i] + c.w / 2 : xs[i];
-    doc.text(c.label, tx, top + 8, { align: c.align });
+    headerText(doc, c.label, tx, top + 8, c.w, c.align, c.label === sortedLabel ? sort.dir : undefined);
+    ink(doc, C.head);
   });
   const y0 = top + 14;
   const span = report.axis.max - report.axis.min || 1;
@@ -148,8 +148,9 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
   doc.text(`${Math.round(report.raceS / 3600)} h`, xs[trackI] + cols[trackI].w, bottom + 10, { align: "right" });
 }
 
-/** `order`: how the rows are sorted, when not on average lap (the table's sort when printed from it). */
-export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta, order?: string): Promise<Blob> {
+/** `sort`: the order the rows are in (the table's, when printed from it): marked on its column and said in the notes. */
+export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta, sort: DriverSort = DEFAULT_SORT): Promise<Blob> {
+  const order = driverSortNote(sort);
   const pdf = await newPdf("landscape", meta);
   let first = true;
   for (const report of reports) {
@@ -161,8 +162,8 @@ export async function driverReportPdf(reports: ClassReport[], meta: PdfMeta, ord
       startPage(pdf, meta, `DRIVER PERFORMANCE REPORT · CLASS ${report.cls}${pages.length > 1 ? ` (${page + 1}/${pages.length})` : ""}`, `Fastest racing laps (at most 50% of each driver's laps)${order ? ` · ${order}` : ""}`, first);
       first = false;
       const { rowH } = rowsThatFit(pdf, top + 14, rows.length);
-      drawRows(pdf.doc, report, cols, rows, top, rowH, pdf.size.w);
-      footer(pdf, meta, driverMethod, driverKey);
+      drawRows(pdf.doc, report, cols, rows, top, rowH, pdf.size.w, sort);
+      footer(pdf, meta, driverMethod(sort), driverKey);
     });
   }
   return pdf.doc.output("blob");

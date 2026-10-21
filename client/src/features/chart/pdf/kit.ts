@@ -238,13 +238,36 @@ export interface Column<R> {
  * A table with a head, banded rows and right-aligned numbers. Returns the column x positions and
  * the bottom of the last row.
  */
+/** A small triangle beside a sorted column's header: up for lowest first (A to Z), down for highest first. */
+export function sortMark(doc: JsPDF, x: number, baseline: number, dir: "asc" | "desc") {
+  fill(doc, C.accent);
+  const s = 2.6;
+  const cy = baseline - 2.6;
+  if (dir === "asc") doc.triangle(x, cy + s * 0.6, x + s * 2, cy + s * 0.6, x + s, cy - s * 0.7, "F");
+  else doc.triangle(x, cy - s * 0.6, x + s * 2, cy - s * 0.6, x + s, cy + s * 0.7, "F");
+}
+
+/** A header label with the sort mark beside it (left of a right-aligned label, right of the rest). */
+export function headerText(doc: JsPDF, label: string, x: number, y: number, w: number, align: "left" | "right" | "center", dir?: "asc" | "desc") {
+  // The full label (the mark sits in the gap beside it), shrunk a little when it would not fit.
+  const size = doc.getFontSize();
+  if (dir && doc.getTextWidth(label) + 8 > w) doc.setFontSize(Math.max(size * 0.85, size * ((w - 8) / doc.getTextWidth(label))));
+  const t = fit(doc, label, dir ? Math.max(w - 8, doc.getTextWidth(label)) : w);
+  doc.text(t, x, y, { align });
+  if (!dir) return;
+  const tw = doc.getTextWidth(t);
+  const mx = align === "right" ? x - tw - 7.5 : align === "center" ? x + tw / 2 + 2 : x + tw + 2;
+  sortMark(doc, mx, y, dir);
+  doc.setFontSize(size);
+}
+
 export function table<R>(
   doc: JsPDF,
   x0: number,
   y0: number,
   cols: Column<R>[],
   rows: R[],
-  opts: { rowH: number; fontSize?: number; gap?: number; width?: number; highlight?: (r: R) => boolean },
+  opts: { rowH: number; fontSize?: number; gap?: number; width?: number; highlight?: (r: R) => boolean; sorted?: { label: string; dir: "asc" | "desc" } },
 ): { xs: number[]; bottom: number } {
   const gap = opts.gap ?? 6;
   const fs = opts.fontSize ?? Math.min(8.5, opts.rowH * 0.72);
@@ -261,7 +284,8 @@ export function table<R>(
   cols.forEach((c, i) => {
     const align = c.align ?? "left";
     const tx = align === "right" ? xs[i] + c.w : align === "center" ? xs[i] + c.w / 2 : xs[i];
-    doc.text(fit(doc, c.label, c.w), tx, y0 + 8, { align });
+    headerText(doc, c.label, tx, y0 + 8, c.w, align, opts.sorted && opts.sorted.label === c.label ? opts.sorted.dir : undefined);
+    ink(doc, C.head);
   });
   const top = y0 + 14;
   rows.forEach((r, ri) => {
