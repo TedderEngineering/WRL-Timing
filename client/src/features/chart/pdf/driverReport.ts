@@ -42,7 +42,7 @@ function columns(hasMake: boolean, pageW: number): Col[] {
 export const driverKey: KeyItem[] = [
   { label: "Clean air", draw: (doc, x, y) => (fill(doc, C.clear), doc.circle(x + 3, y, 2.6, "F")) },
   { label: `Car within ${CLEAR_GAP_S} s ahead`, draw: (doc, x, y) => (fill(doc, C.traffic), doc.lines([[3, 3], [-3, 3], [-3, -3]], x + 3, y - 3, [1, 1], "F", true)) },
-  { label: "Fastest lap", draw: (doc, x, y) => (stroke(doc, C.text), doc.setLineWidth(0.8), doc.rect(x + 1.5, y - 3.5, 3.2, 7, "S")) },
+  { label: "Average lap", draw: (doc, x, y) => (stroke(doc, C.text), doc.setLineWidth(1.2), doc.line(x + 3, y - 3.5, x + 3, y + 3.5)) },
 ];
 
 export const driverMethod = (sort: DriverSort = DEFAULT_SORT) =>
@@ -99,7 +99,7 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
       doc.text(fit(doc, pdfSafe(c.cell(r)), c.w), tx, base, { align: c.align });
     });
 
-    // Distribution: the range, each shown lap, the fastest lap's box.
+    // Distribution: the range, each shown lap, a line at the average lap (what the table ranks on).
     if (r.shown.length) {
       const times = r.shown.map((s) => s.t);
       stroke(doc, C.range);
@@ -116,9 +116,10 @@ function drawRows(doc: JsPDF, report: ClassReport, cols: Col[], rows: DriverRow[
           doc.circle(px, mid, rad * 0.85, "F");
         }
       }
+      // Dark on the PDF's white page (white on the tab).
       stroke(doc, C.text);
-      doc.setLineWidth(0.8);
-      doc.rect(xOf(r.fastLap) - 1.6, mid - rowH * 0.36, 3.2, rowH * 0.72, "S");
+      doc.setLineWidth(1.2);
+      doc.line(xOf(r.avgLap), mid - rowH * 0.38, xOf(r.avgLap), mid + rowH * 0.38);
     }
 
     // Time on track: lighter early, darker late (as on the tab).

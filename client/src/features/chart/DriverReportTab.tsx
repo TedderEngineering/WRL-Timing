@@ -204,7 +204,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
           <svg width="10" height="10" aria-hidden><path d="M5 0.5 L9.5 5 L5 9.5 L0.5 5 Z" fill={S.traffic} /></svg> Car within {CLEAR_GAP_S} s ahead
         </span>
         <span className="flex items-center gap-1.5">
-          <svg width="10" height="12" aria-hidden><rect x="1" y="1" width="8" height="10" fill="none" stroke={S.text} strokeWidth="1.5" /></svg> Fastest lap
+          <svg width="6" height="14" aria-hidden><line x1="3" x2="3" y1="1" y2="13" stroke={S.text} strokeWidth="2" strokeLinecap="round" /></svg> Average lap
         </span>
       </div>
       <p className="mt-2 max-w-4xl text-xs leading-relaxed" style={{ color: S.muted }}>
@@ -239,7 +239,7 @@ function Distribution({ row, report }: { row: DriverRow; report: ClassReport }) 
   const mid = h / 2;
   const times = row.shown.map((s) => s.t);
   return (
-    <svg width={DIST_W} height={h} role="img" aria-label={`${row.shown.length} laps from ${lapText(Math.min(...times))} to ${lapText(Math.max(...times))}`}>
+    <svg width={DIST_W} height={h} role="img" aria-label={`${row.shown.length} laps from ${lapText(Math.min(...times))} to ${lapText(Math.max(...times))}, average ${lapText(row.avgLap)}`}>
       {ticks(report).map((t) => (
         <line key={t} x1={xOf(t, report)} x2={xOf(t, report)} y1={0} y2={h} stroke={S.line} strokeWidth={1} />
       ))}
@@ -258,7 +258,10 @@ function Distribution({ row, report }: { row: DriverRow; report: ClassReport }) 
               </circle>
             );
           })}
-          <rect x={xOf(row.fastLap, report) - 3} y={mid - 6} width={6} height={12} fill="none" stroke={S.text} strokeWidth={1.5} />
+          {/* The average lap (what the table ranks on): a white line across the laps. */}
+          <line x1={xOf(row.avgLap, report)} x2={xOf(row.avgLap, report)} y1={mid - 7} y2={mid + 7} stroke={S.text} strokeWidth={2} strokeLinecap="round">
+            <title>{`Average lap ${lapText(row.avgLap)}`}</title>
+          </line>
         </>
       )}
     </svg>
