@@ -13,7 +13,14 @@ const race = {
 
 vi.mock("../../models/prisma.js", () => ({
   prisma: {
-    race: { findFirst: vi.fn(async () => race), findMany: vi.fn(async () => []) },
+    race: {
+      findFirst: vi.fn(async (q: { where: { id?: string } }) => (q.where.id && q.where.id !== "r1" ? null : race)),
+      findMany: vi.fn(async () => []),
+      groupBy: vi.fn(async () => [
+        { series: "IMSA", _count: { _all: 5 } },
+        { series: "WRL", _count: { _all: 12 } },
+      ]),
+    },
   },
 }));
 vi.mock("../../lib/supabase.js", () => ({ supabase: null, STORAGE_BUCKET: "race-files" }));
@@ -36,12 +43,20 @@ describe("signed out", () => {
     expect(res.body.latest).toMatchObject({ name: race.name, date: "2026-10-18", track: race.track, series: "WRL", official: false, headline: null });
     expect(res.body).toHaveProperty("next");
     expect(Array.isArray(res.body.upcoming)).toBe(true);
+    expect(res.body.stats).toEqual({ races: 17, series: ["WRL", "IMSA"] });
 
     for (const path of ["/api/races", "/api/races/r1", "/api/races/r1/chart-data", "/api/races/r1/stories", "/api/events", "/api/search/cars?q=7", "/api/qualifying"]) {
       const r = await request(app).get(path);
       expect(r.status, path).toBe(401);
       expect(r.body.code, path).toBe("AUTH_REQUIRED");
     }
+  });
+
+  it("can see a published race's name (the log-in page names the race a link leads to)", async () => {
+    const res = await request(app).get("/api/landing/race/r1");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ name: race.name, track: race.track, date: "2026-10-18", series: "WRL" });
+    expect((await request(app).get("/api/landing/race/nope")).status).toBe(404);
   });
 
   it("gets only the cars the headline names", () => {
