@@ -3,6 +3,24 @@ import { api, ApiClientError } from "../../lib/api";
 import { Link } from "react-router-dom";
 import type { RaceChartData } from "@shared/types";
 import { carKey } from "./car-number";
+import { CLASS_COLORS } from "./constants";
+import {
+  DEFAULT_PIT_SORT,
+  PIT_COLORS,
+  PIT_KEY,
+  PIT_KIND_LABEL,
+  PIT_SORTS,
+  isCautionStop,
+  laneTime,
+  pitMethod,
+  pitRow,
+  setPitView,
+  sortPits,
+  stopTone,
+  type PitRow,
+  type PitSort,
+  type PitSortKey,
+} from "./pit-view";
 
 // ─── API response types ─────────────────────────────────────────────────────
 
@@ -114,7 +132,6 @@ interface CarRow {
   stops: PitStop[];
 }
 
-type SortKey = "finishPos" | "carNumber" | "teamName" | "stopCount" | "avgServiceTime" | "avgTimeLost" | "bestTimeLost" | "greenStops";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -137,8 +154,6 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   const data = analysis !== undefined ? analysis : loaded;
   const [loading, setLoading] = useState(analysis === undefined);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("finishPos");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [selectedCar, setSelectedCar] = useState<string | null>(null);
 
   // Fetch pit analysis data
@@ -189,34 +204,30 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
     });
   }, [data]);
 
-  // Sort
-  const sortedRows = useMemo(() => {
-    return [...rows].sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      switch (sortKey) {
-        case "finishPos": return dir * (a.finishPos - b.finishPos);
-        case "carNumber": return dir * (parseInt(a.carNumber) - parseInt(b.carNumber));
-        case "teamName": return dir * a.teamName.localeCompare(b.teamName);
-        case "stopCount": return dir * (a.stopCount - b.stopCount);
-        case "avgServiceTime": return dir * ((a.avgServiceTime ?? 1e6) - (b.avgServiceTime ?? 1e6));
-        case "avgTimeLost": return dir * ((a.avgTimeLost ?? 1e6) - (b.avgTimeLost ?? 1e6));
-        case "bestTimeLost": return dir * ((a.bestTimeLost ?? 1e6) - (b.bestTimeLost ?? 1e6));
-        case "greenStops": return dir * (a.greenStops - b.greenStops);
-        default: return 0;
-      }
+  // The table, one class at a time (as the PDF): each car's stops summed up (pit-view.ts).
+  const pitRows = useMemo<PitRow[]>(() => {
+    if (!data) return [];
+    const cars = Object.values(data.cars);
+    const rankIn = (cls: string, fp: number | null) => 1 + cars.filter((c) => c.carClass === cls && (c.finishPos ?? 999) < (fp ?? 999)).length;
+    return cars.map((c) => {
+      const k = carKey(chart, c.carNumber);
+      const ch = k !== null ? chart?.cars[String(k)] : undefined;
+      const classPos = ch?.finishPosClass || (c.finishPos ? rankIn(c.carClass, c.finishPos) : 999);
+      return pitRow(String(k ?? c.carNumber), c.carNumber, c.teamName, c.carClass, classPos, c.stops);
     });
-  }, [rows, sortKey, sortDir]);
-
+  }, [data, chart]);
+  const classes = useMemo(() => [...new Set(pitRows.map((r) => r.cls))].sort(), [pitRows]);
+  const focusCls = chart?.cars[String(focusNum)]?.cls;
+  const [cls, setCls] = useState<string>("");
+  const activeClass = classes.includes(cls) ? cls : focusCls && classes.includes(focusCls) ? focusCls : (classes[0] ?? "");
+  const [sort, setSort] = useState<PitSort>(DEFAULT_PIT_SORT);
+  const classRows = useMemo(() => sortPits(pitRows.filter((r) => r.cls === activeClass), sort), [pitRows, activeClass, sort]);
+  // The PDF button prints the table as it is now: this class, this order.
+  useEffect(() => {
+    if (chart && activeClass) setPitView(chart, { cls: activeClass, sort });
+  }, [chart, activeClass, sort]);
   const selectedRow = selectedCar ? rows.find((r) => r.carNumber === selectedCar) : null;
-
-  const handleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir(key === "teamName" || key === "carNumber" ? "asc" : "asc");
-    }
-  };
+  const sortBy = (key: PitSortKey) => setSort((x) => (x.key === key ? { key, dir: x.dir === "asc" ? "desc" : "asc" } : { key, dir: PIT_SORTS[key].dir }));
 
   // ── Loading state ─────────────────────────────────────────────
   if (loading) {
@@ -273,166 +284,100 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   }
 
   const facts = data.source === "facts";
-  const columns: { key: SortKey; label: string; width?: string }[] = [
-    { key: "finishPos", label: "Pos", width: "48px" },
-    { key: "carNumber", label: "Car", width: "56px" },
-    { key: "teamName", label: "Team" },
-    { key: "stopCount", label: "Stops", width: "52px" },
-    ...(facts ? [] : [{ key: "avgServiceTime" as SortKey, label: "Avg Service", width: "90px" }]),
-    { key: "avgTimeLost", label: facts ? "Avg Lost (green)" : "Avg Time Lost", width: "100px" },
-    { key: "bestTimeLost", label: facts ? "Best (green)" : "Best Stop", width: "86px" },
-    { key: "greenStops", label: "Green / Caution", width: "110px" },
+  const stopsInClass = classRows.reduce((n, r) => n + r.stops.length, 0);
+  const lostInClass = classRows.flatMap((r) => r.stops.filter((x) => (x.kind ?? "stop") === "stop" && !isCautionStop(x)).map((x) => x.timeLost_s)).filter((v): v is number => typeof v === "number");
+  const avgLostInClass = lostInClass.length ? lostInClass.reduce((a, b) => a + b, 0) / lostInClass.length : null;
+  const maxStops = Math.max(1, ...classRows.map((r) => r.stops.length));
+  const cols: { key: PitSortKey; label: string; align: "left" | "right"; title?: string; wide?: boolean; cell: (r: PitRow) => React.ReactNode }[] = [
+    { key: "classPos", label: "P", align: "right", cell: (r) => <b>{r.classPos >= 999 ? "—" : r.classPos}</b> },
+    { key: "car", label: "Car", align: "left", cell: (r) => <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? P.accent }}>#{r.label}</span> },
+    { key: "team", label: "Team", align: "left", wide: true, cell: (r) => <span className="block max-w-[180px] truncate" title={r.team}>{r.team}</span> },
+    { key: "stops", label: "Stops", align: "right", title: "Service stops (not garage visits or penalties)", cell: (r) => r.serviceStops },
+    { key: "avgLane", label: facts ? "Avg lane" : "Avg service", align: "right", title: facts ? "Average time in the pit lane" : "Average service time", cell: (r) => <span className="font-mono">{fmtTime(r.avgLane)}</span> },
+    { key: "avgLost", label: "Avg lost", align: "right", title: "Average time lost on green-flag stops", cell: (r) => <span className="font-mono">{fmtTime(r.avgLost)}</span> },
+    { key: "best", label: "Best", align: "right", title: "Least time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.gain }}>{fmtTime(r.best)}</span> },
+    { key: "worst", label: "Worst", align: "right", title: "Most time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.loss }}>{fmtTime(r.worst)}</span> },
   ];
 
   return (
-    <div style={{ color: S.txt, fontFamily: "'Outfit', system-ui, sans-serif" }}>
-      {/* ── Summary cards ──────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 20 }}>
-        <CondCard label="Total Stops" value={String(data.summary.totalStops)} color={S.acc} />
-        <CondCard label="Cars" value={String(data.summary.totalCars)} color={S.acc} />
-        {!facts && <CondCard label="Avg Service Time" value={fmtTime(data.summary.avgServiceTime_s)} color={S.pit} mono />}
-        <CondCard label={facts ? "Avg Time Lost (green stops)" : "Avg Time Lost"} value={fmtTime(data.summary.avgTimeLost_s)} color={S.red} mono />
-        {data.trackConfig && (
-          <>
-            <CondCard label="Track" value={data.trackConfig.trackName} color={S.acc2} />
-            <CondCard label="Transit Time" value={fmtTime(data.trackConfig.transitTime_s)} color={S.dim} mono />
-            <CondCard label="Transit Overhead" value={fmtTime(data.trackConfig.transitOverhead_s)} color={S.dim} mono />
-          </>
-        )}
-      </div>
-
-      {/* ── Leaderboard header ─────────────────────────────────── */}
-      <div style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-        Pit Stop Leaderboard
-        <span style={{ fontSize: "0.72rem", color: S.dim, fontWeight: 400 }}>
-          — {sortedRows.length} cars · {data.summary.totalStops} stops
+    <div className="px-2 py-3 sm:px-6" style={{ color: P.text }}>
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="m-0 text-base font-semibold">Pit stops · {activeClass}</h2>
+        <span className="text-sm" style={{ color: P.muted }}>
+          {classRows.length} cars · {stopsInClass} stops{avgLostInClass !== null ? ` · ${fmtTime(avgLostInClass)} lost on an average green-flag stop` : ""}
         </span>
-        <span style={{ flex: 1, height: 1, background: S.bdr }} />
       </div>
 
-      {/* ── Table ──────────────────────────────────────────────── */}
-      <div style={{ overflowX: "auto", marginBottom: 24, borderRadius: 10, border: `1px solid ${S.bdr}` }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+      {classes.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Class">
+          {classes.map((c) => {
+            const active = c === activeClass;
+            const color = CLASS_COLORS[c] ?? P.accent;
+            return (
+              <button
+                key={c}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setCls(c);
+                  setSelectedCar(null);
+                }}
+                className="rounded-md border px-3 py-1 text-xs font-semibold"
+                style={{ borderColor: active ? color : P.border, background: active ? `${color}22` : P.card, color: active ? P.text : P.muted }}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
+        <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr>
-              {columns.map((col) => {
-                const isSorted = sortKey === col.key;
-                return (
-                  <th
-                    key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    style={{
-                      background: S.bg2,
-                      color: isSorted ? S.acc : S.txt2,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      fontSize: "0.68rem",
-                      padding: "10px 12px",
-                      textAlign: "left",
-                      whiteSpace: "nowrap",
-                      borderBottom: `1px solid ${S.bdr2}`,
-                      cursor: "pointer",
-                      userSelect: "none",
-                      width: col.width,
-                      transition: "color .15s",
-                    }}
-                  >
-                    {col.label}
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginLeft: 4,
-                        fontSize: "0.6rem",
-                        opacity: isSorted ? 1 : 0.3,
-                        transition: "opacity .15s, transform .15s",
-                        transform: isSorted && sortDir === "desc" ? "rotate(180deg)" : undefined,
-                      }}
-                    >
-                      ▲
-                    </span>
-                  </th>
-                );
-              })}
+            <tr style={{ borderBottom: `1px solid ${P.border}` }}>
+              {cols.map((c) => (
+                <th
+                  key={c.key}
+                  onClick={() => sortBy(c.key)}
+                  title={c.title}
+                  className={`cursor-pointer select-none whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider${c.wide ? " hidden sm:table-cell" : ""}`}
+                  style={{ color: sort.key === c.key ? P.text : P.muted, textAlign: c.align }}
+                  aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+                >
+                  {c.label}
+                  {sort.key === c.key ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+              <th className="whitespace-nowrap px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: P.muted, minWidth: Math.min(maxStops, 8) * 104 }}>
+                Each stop: lap · pit lane / time lost
+              </th>
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((row) => {
-              const isSelected = row.carNumber === selectedCar;
-              const isFocus = carKey(chart, row.carNumber) === focusNum;
+            {classRows.map((r, i) => {
+              const focus = r.key === String(focusNum);
+              const open = r.label === selectedCar;
               return (
                 <tr
-                  key={row.carNumber}
-                  onClick={() => setSelectedCar(isSelected ? null : row.carNumber)}
-                  style={{
-                    cursor: "pointer",
-                    background: isSelected ? "rgba(74,158,255,0.08)" : isFocus ? "rgba(74,158,255,0.03)" : undefined,
-                    transition: "background .15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) e.currentTarget.style.background = "rgba(74,158,255,0.04)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isSelected ? "rgba(74,158,255,0.08)" : isFocus ? "rgba(74,158,255,0.03)" : "";
-                  }}
+                  key={r.key}
+                  onClick={() => setSelectedCar(open ? null : r.label)}
+                  className="cursor-pointer hover:brightness-125"
+                  style={{ background: focus || open ? P.focus : i % 2 ? P.rowAlt : P.row }}
+                  aria-expanded={open}
                 >
-                  <td style={{ ...tdStyle, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: S.acc, fontSize: "0.9rem" }}>
-                    P{row.finishPos < 999 ? row.finishPos : "—"}
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontWeight: 700,
-                      background: "rgba(74,158,255,0.15)",
-                      color: S.acc,
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      display: "inline-block",
-                    }}>
-                      #{row.carNumber}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {row.teamName}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
-                    {row.stopCount}
-                  </td>
-                  {!facts && (
-                    <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.pit }}>
-                      {fmtTime(row.avgServiceTime)}
+                  {cols.map((c) => (
+                    <td key={c.key} className={`whitespace-nowrap px-2 py-1${c.wide ? " hidden sm:table-cell" : ""}`} style={{ textAlign: c.align }}>
+                      {c.cell(r)}
                     </td>
-                  )}
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.red }}>
-                    {fmtTime(row.avgTimeLost)}
-                  </td>
-                  <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace", color: S.grn }}>
-                    {fmtTime(row.bestTimeLost)}
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{
-                      fontSize: "0.65rem",
-                      padding: "1px 6px",
-                      borderRadius: 4,
-                      fontWeight: 700,
-                      background: "rgba(34,197,94,0.15)",
-                      color: S.grn,
-                      marginRight: 4,
-                    }}>
-                      {row.greenStops}G
-                    </span>
-                    {row.cautionStops > 0 && (
-                      <span style={{
-                        fontSize: "0.65rem",
-                        padding: "1px 6px",
-                        borderRadius: 4,
-                        fontWeight: 700,
-                        background: "rgba(234,179,8,0.15)",
-                        color: S.yel,
-                      }}>
-                        {row.cautionStops}C
-                      </span>
-                    )}
+                  ))}
+                  <td className="px-2 py-1">
+                    <div className="flex gap-1">
+                      {r.stops.map((st, j) => (
+                        <StopCell key={j} s={st} facts={facts} />
+                      ))}
+                    </div>
                   </td>
                 </tr>
               );
@@ -441,20 +386,96 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
         </table>
       </div>
 
-      {/* ── Detail Panel ───────────────────────────────────────── */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: P.muted }}>
+        {facts && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.quick, 0.18), borderColor: rgb(PIT_COLORS.quick) }} /> {PIT_KEY.quick}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.slow, 0.18), borderColor: rgb(PIT_COLORS.slow) }} /> {PIT_KEY.slow}
+            </span>
+          </>
+        )}
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} /> {PIT_KEY.caution}
+        </span>
+        <span>Tap a car for each stop's detail.</span>
+      </div>
+      <p className="mt-1.5 max-w-4xl text-xs leading-relaxed" style={{ color: P.muted }}>
+        {pitMethod(facts)}
+      </p>
+
       {selectedRow && (
-        <DetailPanel
-          row={selectedRow}
-          trackConfig={data.trackConfig}
-          facts={facts}
-          onClose={() => setSelectedCar(null)}
-          onGoToTrace={() => {
-            const k = carKey(chart, selectedRow.carNumber);
-            if (k !== null) setFocusNum(k);
-            onSwitchToTrace();
-          }}
-        />
+        <div className="mt-4">
+          <DetailPanel
+            row={selectedRow}
+            classPos={pitRows.find((r) => r.label === selectedRow.carNumber)?.classPos ?? null}
+            trackConfig={data.trackConfig}
+            facts={facts}
+            onClose={() => setSelectedCar(null)}
+            onGoToTrace={() => {
+              const k = carKey(chart, selectedRow.carNumber);
+              if (k !== null) setFocusNum(k);
+              onSwitchToTrace();
+            }}
+          />
+        </div>
       )}
+    </div>
+  );
+}
+
+// The page's look (as Strategy and the Driver Report).
+const P = {
+  card: "#12122a",
+  row: "#101024",
+  rowAlt: "#141430",
+  line: "#1e1e38",
+  border: "#3a3a5c",
+  text: "#e0e0e8",
+  soft: "#cbd5e1",
+  muted: "#9a9ab4",
+  accent: "#F48C34",
+  gain: "#4ade80",
+  loss: "#f87171",
+  focus: "rgba(244,140,52,0.12)",
+} as const;
+
+const rgb = ([r, g, b]: readonly [number, number, number]) => `rgb(${r},${g},${b})`;
+const tint = ([r, g, b]: readonly [number, number, number], a: number) => `rgba(${r},${g},${b},${a})`;
+
+/** One stop: in-lap (and what it was, if not a service stop), pit-lane time / time lost; coloured against its pit cycle. */
+function StopCell({ s, facts }: { s: PitStop; facts: boolean }) {
+  const tone = stopTone(s);
+  const caution = isCautionStop(s);
+  const color = tone === "quick" ? PIT_COLORS.quick : tone === "slow" ? PIT_COLORS.slow : null;
+  const lost = s.timeLost_s === null ? "—" : `${s.timeLost_s >= 0 ? "+" : "−"}${fmtTime(Math.abs(s.timeLost_s))}`;
+  const title = [
+    `Lap ${s.pitLap}${s.kind && PIT_KIND_LABEL[s.kind] ? ` · ${PIT_KIND_LABEL[s.kind]}` : ""} · ${s.condition}`,
+    `${facts ? "Pit lane" : "Service"}: ${fmtTime(laneTime(s))}`,
+    `Time lost: ${lost}`,
+    s.delta_s !== null && s.delta_s !== undefined ? `Against the class's cycle average: ${fmtDelta(s.delta_s)}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <div
+      className="relative min-w-[98px] shrink-0 overflow-hidden rounded-md border px-2 py-1 text-[11px] leading-tight"
+      style={{
+        background: color ? tint(color, 0.14) : tone === "other" ? "rgba(154,154,180,0.12)" : P.row,
+        borderColor: color ? tint(color, 0.6) : P.line,
+      }}
+      title={title}
+    >
+      {caution && <span className="absolute inset-y-0 left-0 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} aria-label="under caution" />}
+      <div className="flex items-baseline justify-between gap-1">
+        <b>L{s.pitLap}</b>
+        {s.kind && PIT_KIND_LABEL[s.kind] && <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: P.muted }}>{PIT_KIND_LABEL[s.kind]}</span>}
+      </div>
+      <div className="font-mono" style={{ color: P.soft }}>
+        {fmtTime(laneTime(s))} / {lost}
+      </div>
     </div>
   );
 }
@@ -467,36 +488,6 @@ const tdStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-function CondCard({ label, value, color, mono }: { label: string; value: string; color: string; mono?: boolean }) {
-  return (
-    <div style={{
-      background: S.card,
-      border: `1px solid ${S.bdr}`,
-      borderRadius: 10,
-      padding: "12px 16px",
-    }}>
-      <div style={{
-        fontSize: "0.7rem",
-        textTransform: "uppercase",
-        letterSpacing: "0.06em",
-        color: S.txt2,
-        marginBottom: 4,
-        fontWeight: 600,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: "1.4rem",
-        fontWeight: 800,
-        letterSpacing: "-0.02em",
-        color,
-        fontFamily: mono ? "'JetBrains Mono', monospace" : undefined,
-      }}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
@@ -507,8 +498,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DetailPanel({ row, trackConfig, facts, onClose, onGoToTrace }: {
+function DetailPanel({ row, classPos, trackConfig, facts, onClose, onGoToTrace }: {
   row: CarRow;
+  classPos: number | null;
   trackConfig: PitAnalysisResponse["trackConfig"];
   facts: boolean;
   onClose: () => void;
@@ -524,7 +516,7 @@ function DetailPanel({ row, trackConfig, facts, onClose, onGoToTrace }: {
     }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.3rem", fontWeight: 800, color: S.acc }}>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.3rem", fontWeight: 800, color: CLASS_COLORS[row.carClass] ?? "#F48C34" }}>
           #{row.carNumber}
         </span>
         <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{row.teamName}</h3>
@@ -536,7 +528,7 @@ function DetailPanel({ row, trackConfig, facts, onClose, onGoToTrace }: {
           background: "rgba(34,197,94,0.15)",
           color: S.grn,
         }}>
-          P{row.finishPos < 999 ? row.finishPos : "—"} · {row.carClass}
+          {classPos !== null && classPos < 999 ? `P${classPos} in ${row.carClass}` : row.carClass}
         </span>
         <button
           onClick={onGoToTrace}
