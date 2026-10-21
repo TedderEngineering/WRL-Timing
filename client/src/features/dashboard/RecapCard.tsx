@@ -9,6 +9,7 @@ import {
   type ProseContext,
 } from "../../lib/prose";
 import { formatDayRange, resultsLabel } from "./format";
+import { RaceActions, TraceIcon } from "./RaceActions";
 import type { LatestEvent, LatestRace, Recap, RecapMoment } from "./types";
 
 const chartHref = (id: string, tab?: string) =>
@@ -270,12 +271,9 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
             .join(" · ")}
         </span>
         <span className="text-[var(--rt-text-muted)]">Chart only · recap coming</span>
-        <Link
-          to={chartHref(race.id)}
-          className="ml-auto font-semibold text-[var(--rt-accent)]"
-        >
-          Position Trace →
-        </Link>
+        <div className="w-full">
+          <RaceActions trace={chartHref(race.id)} pits={chartHref(race.id, "pitanalysis")} />
+        </div>
       </div>
     );
   }
@@ -326,56 +324,18 @@ function RaceBody({ race, variant }: { race: LatestRace; variant: "hero" | "comp
               </p>
             ))}
           {!hero && <MomentList recap={recap} ctx={ctx} />}
+          <Link to={chartHref(race.id, "story")} className="text-sm font-semibold text-[var(--rt-accent)] hover:underline">
+            Every car&apos;s story →
+          </Link>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <button
-          type="button"
-          onClick={() => setExpanded((x) => !x)}
-          aria-expanded={expanded}
-          className={
-            hero
-              ? "min-h-[40px] rounded-md bg-[var(--rt-accent)] px-3.5 py-2 text-sm font-semibold text-[var(--rt-on-accent)]"
-              : "min-h-[40px] text-sm font-semibold text-[var(--rt-accent)]"
-          }
-        >
-          {expanded ? "Show less" : hero ? "Read the full recap" : "Read the recap →"}
-        </button>
-        <Link
-          to={chartHref(race.id)}
-          className={
-            hero
-              ? "rounded-md border border-[var(--rt-border)] px-3 py-2 text-sm text-[var(--rt-text)]"
-              : "text-sm text-[var(--rt-text-secondary)]"
-          }
-        >
-          Position Trace
-        </Link>
-        <Link
-          to={chartHref(race.id, "story")}
-          className={
-            hero
-              ? "rounded-md border border-[var(--rt-border)] px-3 py-2 text-sm text-[var(--rt-text)]"
-              : "text-sm text-[var(--rt-text-secondary)]"
-          }
-        >
-          Story
-        </Link>
-        <Link
-          to={chartHref(race.id, "pitanalysis")}
-          className={
-            hero
-              ? "rounded-md border border-[var(--rt-border)] px-3 py-2 text-sm text-[var(--rt-text)]"
-              : "text-sm text-[var(--rt-text-secondary)]"
-          }
-        >
-          Pit Stops &amp; Cycles
-        </Link>
-        <span className="ml-auto text-xs text-[var(--rt-text-muted)]">
-          Written from the timing files · every number checked
-        </span>
-      </div>
+      <RaceActions
+        trace={chartHref(race.id)}
+        story={{ expanded, onToggle: () => setExpanded((x) => !x) }}
+        pits={chartHref(race.id, "pitanalysis")}
+        note="Written from the timing files · every number checked"
+      />
     </div>
   );
 }
@@ -389,8 +349,12 @@ function MiniBody({ race }: { race: LatestRace }) {
     <div className="flex items-center gap-2 text-xs">
       <span className="text-[var(--rt-text-secondary)]">{size}</span>
       <span className="text-[var(--rt-text-muted)]">{race.locked ? "🔒" : race.recap ? "Recap ready" : "Chart only"}</span>
-      <Link to={chartHref(race.id)} className="ml-auto whitespace-nowrap font-semibold text-[var(--rt-accent)]">
-        Position Trace →
+      <Link
+        to={chartHref(race.id)}
+        className="ml-auto inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg bg-[var(--rt-accent)] px-3 text-xs font-semibold text-[var(--rt-on-accent)] hover:brightness-110"
+      >
+        <TraceIcon />
+        Position Trace
       </Link>
     </div>
   );

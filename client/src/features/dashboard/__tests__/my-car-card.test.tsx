@@ -47,7 +47,13 @@ describe("your car's latest race", () => {
     expect(t).toContain("P2 → P3 Lost 1");
     // An older server (no stop laps, no drive): the count from the cycles, never "no pit stops".
     expect(t).toContain("2 stops in the pit lane");
-    expect(t).toContain("Position Trace →");
+    expect(t).toContain("Position Trace");
+    // The one filled button: the race's Position Trace, with the car; then Pit stops.
+    const h = renderToStaticMarkup(<MemoryRouter><MyCarCard data={base} /></MemoryRouter>);
+    const primary = (h.match(/<a [^>]*>/g) ?? []).filter((a) => a.includes("bg-[var(--rt-accent)]"));
+    expect(primary).toHaveLength(1);
+    expect(primary[0]).toContain('href="/chart?race=r1&amp;car=68"');
+    expect(h).toContain('href="/chart?race=r1&amp;car=68&amp;tab=pitanalysis"');
     // No chart key from this server: no share.
     expect(t).not.toContain("Share");
   });
