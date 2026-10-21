@@ -108,7 +108,7 @@ describe("RecapCard", () => {
     const tabs = h.match(/<button [^>]*role="tab"[^>]*>[^<]*<\/button>/g) ?? [];
     expect(tabs.map((a) => a.replace(/<[^>]+>/g, ""))).toEqual(["Race 1", "Race 2"]);
     expect(h).toContain('href="/chart?race=r1"');
-    expect(h).toContain(">Position Trace →<");
+    expect(h).toMatch(/<a [^>]*href="\/chart\?race=r1"[^>]*>.*Position Trace<\/a>/s);
   });
 
   it("says when a race has no recap yet", () => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RaceActions } from "./RaceActions";
 import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type ProseContext } from "../../lib/prose";
@@ -160,9 +161,9 @@ export function MyDriverCard({
       <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3">
         <SeriesBadge series={race.series} size="sm" />
         <span className="text-sm font-semibold text-[var(--rt-text)]">{driver.name}</span>
-        <span className="text-sm text-[var(--rt-text-secondary)]">
+        <Link to={chartHref(race.id, car.number)} onClick={open} className="text-sm text-[var(--rt-text-secondary)] hover:text-[var(--rt-text)] hover:underline" title="Open the Position Trace">
           {race.name} · {formatDayRange(race.date, race.date)}
-        </span>
+        </Link>
         <StatusPill status={race.resultsStatus} />
         {earlier && onPickRace && (
           <button
@@ -217,28 +218,23 @@ export function MyDriverCard({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              {story && story.paragraphs.length > 0 && (
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  onClick={() => {
-                    if (!expanded) open();
-                    setExpanded((x) => !x);
-                  }}
-                  className="font-semibold text-[var(--rt-text)]"
-                >
-                  {expanded ? "Show less" : "Read the car's story"}
-                </button>
-              )}
-              <Link to={chartHref(race.id, car.number)} onClick={open} className="font-semibold text-[var(--rt-accent)]">
-                Position Trace →
-              </Link>
-              <Link to={chartHref(race.id, car.number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
-                Pit stops →
-              </Link>
-              <ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null, highlights: data.driverHighlights }} />
-            </div>
+            <RaceActions
+              trace={chartHref(race.id, car.number)}
+              story={
+                story && story.paragraphs.length > 0
+                  ? {
+                      expanded,
+                      onToggle: () => {
+                        if (!expanded) open();
+                        setExpanded((x) => !x);
+                      },
+                    }
+                  : undefined
+              }
+              pits={chartHref(race.id, car.number, "pitanalysis")}
+              onOpen={open}
+              more={<ShareDriverCardButton input={{ driverName: driver.name, race, car, facts: facts ?? null, drive: drive ?? null, highlights: data.driverHighlights }} />}
+            />
           </>
         )}
       </div>

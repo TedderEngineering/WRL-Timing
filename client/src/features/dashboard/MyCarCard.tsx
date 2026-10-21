@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RaceActions } from "./RaceActions";
 import { Link } from "react-router-dom";
 import { SeriesBadge } from "../../components/SeriesBadge";
 import { ProseText, formatDuration, type Prose, type ProseContext } from "../../lib/prose";
@@ -238,9 +239,9 @@ export function MyCarCard({
       <div className="flex flex-wrap items-center gap-2.5 px-5 pt-3">
         <SeriesBadge series={race.series} size="sm" />
         <span className="text-sm font-semibold text-[var(--rt-text)]">{car.label ?? `#${car.number}`}</span>
-        <span className="text-sm text-[var(--rt-text-secondary)]">
+        <Link to={chartHref(race.id, number)} onClick={open} className="text-sm text-[var(--rt-text-secondary)] hover:text-[var(--rt-text)] hover:underline" title="Open the Position Trace">
           {race.name} · {formatDayRange(race.date, race.date)}
-        </span>
+        </Link>
         <StatusPill status={race.resultsStatus} />
         {earlier && onPickRace && (
           <button
@@ -296,35 +297,34 @@ export function MyCarCard({
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-              {story && story.paragraphs.length > 0 && (
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  onClick={() => {
-                    if (!expanded) open();
-                    setExpanded((x) => !x);
-                  }}
-                  className="font-semibold text-[var(--rt-text)]"
-                >
-                  {expanded ? "Show less" : "Read the car's story"}
-                </button>
-              )}
-              <Link to={chartHref(race.id, number)} onClick={open} className="font-semibold text-[var(--rt-accent)]">
-                Position Trace →
-              </Link>
-              <Link to={chartHref(race.id, number, "pitanalysis")} onClick={open} className="text-[var(--rt-accent)]">
-                Pit stops →
-              </Link>
-              {!askNow && facts?.carKey && (
-                <ShareCarCardButton input={{ race, number, team: facts.team, cls: facts.cls, drivers, facts, drive: data.drive ?? null }} />
-              )}
-              {data.carCount > 1 && (
-                <Link to="/settings/cars" className="ml-auto text-[13px] text-[var(--rt-text-muted)]">
-                  {data.carCount} cars followed
-                </Link>
-              )}
-            </div>
+            <RaceActions
+              trace={chartHref(race.id, number)}
+              story={
+                story && story.paragraphs.length > 0
+                  ? {
+                      expanded,
+                      onToggle: () => {
+                        if (!expanded) open();
+                        setExpanded((x) => !x);
+                      },
+                    }
+                  : undefined
+              }
+              pits={chartHref(race.id, number, "pitanalysis")}
+              onOpen={open}
+              more={
+                <>
+                  {!askNow && facts?.carKey && (
+                    <ShareCarCardButton input={{ race, number, team: facts.team, cls: facts.cls, drivers, facts, drive: data.drive ?? null }} />
+                  )}
+                  {data.carCount > 1 && (
+                    <Link to="/settings/cars" className="text-[13px] text-[var(--rt-text-muted)]">
+                      {data.carCount} cars followed
+                    </Link>
+                  )}
+                </>
+              }
+            />
 
             {/* After the peak moment: the one contextual ask, at most every 30 days. */}
             {askNow && <SupportAsk />}
