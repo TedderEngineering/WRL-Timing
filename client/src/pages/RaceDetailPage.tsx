@@ -10,6 +10,7 @@ import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { useTraceView } from "../features/chart/trace-view";
 import { StrategyTab } from "../features/chart/StrategyTab";
+import { DriverReportTab } from "../features/chart/DriverReportTab";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 import { StoryTab } from "../features/chart/StoryTab";
 
@@ -53,9 +54,9 @@ export function RaceDetailPage() {
   // null while the race detail loads.
   const [hasStories, setHasStories] = useState<boolean | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
-  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis">(() => {
+  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers">(() => {
     const t = searchParams.get("tab");
-    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story") return t;
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers") return t;
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
@@ -405,6 +406,7 @@ export function RaceDetailPage() {
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
     { id: "strategy" as const, label: "Strategy", locked: !isTeam },
+    { id: "drivers" as const, label: "Driver Report", locked: !isTeam },
   ];
   const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34" };
 
@@ -606,6 +608,12 @@ export function RaceDetailPage() {
             focusNum={focusNum} setFocusNum={setFocusNum}
             onSwitchToTrace={() => setActiveTab("position")}
           />
+        </div>
+      )}
+
+      {activeTab === "drivers" && (
+        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} />
         </div>
       )}
 
