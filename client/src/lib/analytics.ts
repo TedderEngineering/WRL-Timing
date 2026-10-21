@@ -27,6 +27,7 @@ export const ANALYTICS_EVENTS = [
   "follow_car",
   "follow_driver", // { source }
   "open_story",
+  "download_pdf", // { tab }: a race-page tab saved as a PDF
   // Finding Grip
   "record_hot",
   "on_target",

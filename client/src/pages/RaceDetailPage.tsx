@@ -11,6 +11,7 @@ import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { useTraceView } from "../features/chart/trace-view";
 import { StrategyTab } from "../features/chart/StrategyTab";
 import { DriverReportTab } from "../features/chart/DriverReportTab";
+import { DownloadPdfButton } from "../features/chart/pdf/DownloadPdfButton";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 import { StoryTab } from "../features/chart/StoryTab";
 
@@ -464,6 +465,29 @@ export function RaceDetailPage() {
             className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
             style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
           />
+          {/* The open tab as a PDF; a Team tab only for those who can open it. */}
+          {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && (
+            <DownloadPdfButton
+              tab={activeTab}
+              input={{
+                raceId: id!,
+                data,
+                annotations,
+                focusNum,
+                meta: { raceName: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date), preparedFor: user?.email ?? null },
+              }}
+              choices={
+                activeTab === "story" && focusNum > 0 && data.cars[String(focusNum)]
+                  ? [
+                      { scope: "race", label: "Whole race" },
+                      { scope: "focus", label: `#${data.cars[String(focusNum)].label ?? focusNum} only` },
+                    ]
+                  : undefined
+              }
+              className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
+              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+            />
+          )}
           {focusNum > 0 && data.cars[String(focusNum)] && (
             <FollowCarButton
               raceId={id!}
