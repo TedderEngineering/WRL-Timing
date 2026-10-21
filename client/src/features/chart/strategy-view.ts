@@ -5,26 +5,33 @@
  */
 import type { RaceChartData } from "@shared/types";
 import type { StrategyMetrics } from "./strategy-engine";
+import { TRACE } from "./constants";
 
-/** A stint's colour from its green-flag pace against the class's best: green at the best, red at 4% slower. */
-export function paceRgb(pace: number, best: number): [number, number, number] {
-  if (!(pace > 0) || !(best > 0)) return [200, 200, 214];
+type Rgb = [number, number, number];
+const rgb = (hex: string): Rgb => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+const mix = (a: Rgb, b: Rgb, t: number): Rgb => [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t)) as Rgb;
+
+/** RaceTrace's own colours: gain and loss as on the Position Trace and Lap Times, amber for cautions. */
+export const STINT_FAST = rgb(TRACE.gain);
+export const STINT_SLOW = rgb(TRACE.loss);
+/** Between them, a neutral grey (not the brown a green-to-red blend passes through, nor the cautions' amber). */
+export const STINT_MID: Rgb = [163, 163, 189];
+export const STINT_CAUTION = rgb(TRACE.fcyBar);
+/** The lap count on a bar: dark, as the bars are light. */
+export const STINT_TEXT = "#0b0b18";
+
+/** A stint's colour from its green-flag pace against the class's best: gain green at the best, loss red at 4% slower. */
+export function paceRgb(pace: number, best: number): Rgb {
+  if (!(pace > 0) || !(best > 0)) return [110, 110, 136];
   const f = Math.min(1, Math.max(0, (pace / best - 1) / 0.04));
-  return hsl(140 * (1 - f), 0.62, 0.44);
+  return f <= 0.5 ? mix(STINT_FAST, STINT_MID, f / 0.5) : mix(STINT_MID, STINT_SLOW, (f - 0.5) / 0.5);
 }
 
-export const rgbCss = ([r, g, b]: [number, number, number]) => `rgb(${r},${g},${b})`;
-
-/** HSL (hue in degrees, s and l 0-1) to RGB. */
-function hsl(h: number, s: number, l: number): [number, number, number] {
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
+export const rgbCss = ([r, g, b]: Rgb) => `rgb(${r},${g},${b})`;
 
 export const STRATEGY_KEY = {
   best: "Stint at the class's best pace",
+  mid: "About 2% slower",
   slow: "4% or more slower",
   caution: "Caution laps",
 } as const;
