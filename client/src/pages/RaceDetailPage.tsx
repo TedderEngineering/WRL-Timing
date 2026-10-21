@@ -476,6 +476,14 @@ export function RaceDetailPage() {
                 focusNum,
                 meta: { raceName: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date), preparedFor: user?.email ?? null },
               }}
+              choices={
+                activeTab === "story" && focusNum > 0 && data.cars[String(focusNum)]
+                  ? [
+                      { scope: "race", label: "Whole race" },
+                      { scope: "focus", label: `#${data.cars[String(focusNum)].label ?? focusNum} only` },
+                    ]
+                  : undefined
+              }
               className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
               style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
             />

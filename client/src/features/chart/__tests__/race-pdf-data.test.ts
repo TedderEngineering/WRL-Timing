@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CarData, LapData, RaceChartData } from "@shared/types";
 import { classPlacesGained, finishOrder, finishText, lapStats, racingLaps, stopsOf } from "../pdf/raceData";
 
@@ -48,5 +48,40 @@ describe("race PDF figures", () => {
     expect(finishOrder([c, a, b], "class").map((e) => e.key)).toEqual(["2", "1", "3"]);
     expect(finishText(c.car, "class", 3)).toBe("DNF");
     expect(classPlacesGained(a.car)).toBe(1);
+  });
+});
+
+describe("story PDF", () => {
+  const prose = (text: string) => ({ text, refs: [] });
+  const stories: any = {
+    version: 1,
+    publishedAt: null,
+    recap: {
+      packageId: "p", session: "Race", resultsStatus: "unofficial", totalLaps: 10,
+      headline: prose("{car:7} won."), paragraphs: [], classWinners: [], moments: [], bands: [], postRace: [],
+      cars: { "7": { team: "Team Seven", make: "", drivers: ["Alex Rivera"], driverNumbers: [1] }, "8": { team: "Team Eight", make: "", drivers: [], driverNumbers: [] } },
+      classes: { GTO: "GTO" },
+    },
+    stories: [
+      { car: "7", cls: "GTO", headline: prose("SEVEN-HEADLINE"), paragraphs: [prose("seven text")], positionClass: 1, positionOverall: 1 },
+      { car: "8", cls: "GTO", headline: prose("EIGHT-HEADLINE"), paragraphs: [prose("eight text")], positionClass: 2, positionOverall: 2 },
+    ],
+  };
+  const text = async (b: Blob) => new TextDecoder("latin1").decode(new Uint8Array(await b.arrayBuffer()));
+
+  it("prints one car's story alone, or every car's", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("no network in tests")));
+    const { storyPdf } = await import("../pdf/story");
+    const meta = { raceName: "Test Race", date: "2026-10-18" };
+    // Uncompressed, so the words can be found in the file.
+    const one = await text(await storyPdf(stories, { ...meta, uncompressed: true } as any, "7"));
+    expect(one).toContain("SEVEN-HEADLINE");
+    expect(one).not.toContain("EIGHT-HEADLINE");
+    // PDF strings escape parentheses: "P1 overall \(provisional\)".
+    expect(one).toMatch(/P1 overall \\?\(provisional\\?\)/);
+    const all = await text(await storyPdf(stories, { ...meta, uncompressed: true } as any));
+    expect(all).toContain("SEVEN-HEADLINE");
+    expect(all).toContain("EIGHT-HEADLINE");
+    vi.unstubAllGlobals();
   });
 });

@@ -41,6 +41,8 @@ export interface PdfMeta {
   date?: string;
   /** The signed-in user's email, printed in the footer as on the charts. */
   preparedFor?: string | null;
+  /** Tests: leave the page streams uncompressed so their words can be read. */
+  uncompressed?: boolean;
 }
 
 export interface Assets {
@@ -132,10 +134,10 @@ async function imageData(src: string): Promise<string | null> {
   }
 }
 
-export async function newPdf(orientation: "landscape" | "portrait" = "landscape"): Promise<Pdf> {
+export async function newPdf(orientation: "landscape" | "portrait" = "landscape", meta?: PdfMeta): Promise<Pdf> {
   const { jsPDF } = await import("jspdf");
   const size = orientation === "landscape" ? LANDSCAPE : PORTRAIT;
-  const doc = new jsPDF({ orientation, unit: "pt", format: [size.w, size.h], compress: true });
+  const doc = new jsPDF({ orientation, unit: "pt", format: [size.w, size.h], compress: !meta?.uncompressed });
   const [icon, teLogo] = await Promise.all([imageData("/racetrace-icon-192.png"), imageData("/te-logo-black.png")]);
   return { doc, assets: { icon, teLogo }, size: { ...size } };
 }

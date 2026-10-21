@@ -3,7 +3,7 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { api } from "../../../lib/api";
 import { driverPerformance } from "../driver-performance";
 import type { PitAnalysisResponse } from "../PitAnalysisTab";
-import { loadRaceStories } from "../StoryTab";
+import { loadRaceStories, storyCarFor } from "../StoryTab";
 import { pdfFileName, type PdfMeta } from "./kit";
 
 export type PdfTab = "position" | "story" | "pitanalysis" | "laptimes" | "strategy" | "drivers";
@@ -23,6 +23,8 @@ export interface TabPdfInput {
   annotations: AnnotationData;
   focusNum: number;
   meta: PdfMeta;
+  /** "focus": just the focus car (the Story tab); the whole race otherwise. */
+  scope?: "race" | "focus";
 }
 
 export async function tabPdf(tab: PdfTab, input: TabPdfInput): Promise<{ blob: Blob; name: string }> {
@@ -44,7 +46,9 @@ export async function tabPdf(tab: PdfTab, input: TabPdfInput): Promise<{ blob: B
     case "story": {
       const stories = await loadRaceStories(raceId);
       if (!stories) throw new Error("This race has no published story.");
-      return { blob: await (await import("./story")).storyPdf(stories, meta), name };
+      const car = input.scope === "focus" ? storyCarFor(data, focusNum, stories.stories) : null;
+      const carName = car ? pdfFileName(`${PDF_TITLES.story} - #${car}`, meta) : name;
+      return { blob: await (await import("./story")).storyPdf(stories, meta, car), name: carName };
     }
   }
 }

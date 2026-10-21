@@ -1,7 +1,8 @@
 /**
  * The Story as a PDF, on portrait pages: the race summary, each class's winner, the key moments,
- * post-race penalties, then every car's story class by class in finishing order. The words are
- * the published analysis, as on the Story tab.
+ * post-race penalties, then every car's story class by class in finishing order. Or one car's
+ * story alone: who drove it and where it finished, its story, the key moments it was part of, and
+ * the race and its class in a line each. The words are the published analysis, as on the Story tab.
  */
 import type { RaceStories } from "../StoryTab";
 import { orderStories } from "../StoryTab";
@@ -16,12 +17,13 @@ interface Flow {
   y: number;
   bottom: number;
   page: number;
+  title: string;
 }
 
 function newPage(f: Flow): void {
   footer(f.pdf, f.meta, METHOD);
   f.page++;
-  f.y = startPage(f.pdf, f.meta, `RACE STORY${f.page > 1 ? ` (continued)` : ""}`, "", false) + 6;
+  f.y = startPage(f.pdf, f.meta, `${f.title} (continued)`, "", false) + 6;
 }
 
 /** Write wrapped text, moving to a new page when it runs out of room. */
@@ -53,13 +55,57 @@ function rule(f: Flow, color: [number, number, number] = C.grid): void {
   f.y += 8;
 }
 
-export async function storyPdf(stories: RaceStories, meta: PdfMeta): Promise<Blob> {
-  const pdf = await newPdf("portrait");
+/** `car`: the published car number for one car's story alone; the whole race without it. */
+export async function storyPdf(stories: RaceStories, meta: PdfMeta, car?: string | null): Promise<Blob> {
+  const pdf = await newPdf("portrait", meta);
   const ctx: ProseContext = { cars: stories.recap.cars, classes: stories.recap.classes };
   const t = (p: Parameters<typeof proseToText>[0]) => proseToText(p, ctx);
   const { recap } = stories;
-  const f: Flow = { pdf, meta, y: 0, bottom: pdf.size.h - FOOT_H - 16, page: 1 };
-  f.y = startPage(pdf, meta, "RACE STORY", recap.resultsStatus === "provisional" ? "Provisional results" : "", true) + 6;
+  // Anything short of official results reads "provisional" (never "unofficial").
+  const provisional = recap.resultsStatus !== "official";
+  const story = car ? stories.stories.find((s) => s.car === car) : undefined;
+  if (car && story) {
+    const f: Flow = { pdf, meta, y: 0, bottom: pdf.size.h - FOOT_H - 16, page: 1, title: `RACE STORY · #${car}` };
+    f.y = startPage(pdf, meta, f.title, provisional ? "Provisional results" : "", true) + 6;
+    const info = recap.cars[car];
+    const clsName = recap.classes[story.cls] ?? story.cls;
+    write(f, `#${car} ${info?.team ?? ""} · ${clsName}`, { size: 15, bold: true, after: 2 });
+    if (info?.drivers?.length) write(f, info.drivers.join(", "), { size: 10, color: C.soft, after: 2 });
+    const finish = [story.positionClass ? `P${story.positionClass} in ${clsName}` : "", story.positionOverall ? `P${story.positionOverall} overall` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    if (finish) write(f, `${finish}${provisional ? " (provisional)" : ""}`, { size: 10, bold: true, color: C.head, after: 8 });
+    rule(f, C.accent);
+    write(f, t(story.headline), { size: 13, bold: true, after: 6 });
+    for (const p of story.paragraphs) write(f, t(p), { size: 10, after: 7 });
+
+    const moments = recap.moments.filter((m) => m.cars.includes(car)).sort((a, b) => a.lap - b.lap);
+    if (moments.length) {
+      rule(f);
+      write(f, `KEY MOMENTS FOR #${car}`, { size: 9, bold: true, color: C.head, keep: 30 });
+      for (const m of moments) {
+        const laps = m.lapEnd && m.lapEnd !== m.lap ? `Laps ${m.lap}-${m.lapEnd}` : `Lap ${m.lap}`;
+        write(f, `${laps}: ${t(m.title)}`, { size: 9.5, bold: true, after: 1 });
+        if (m.text) write(f, t(m.text), { size: 9, indent: 10, color: C.soft, after: 5 });
+      }
+    }
+    const penalty = recap.postRace.find((p) => p.car === car);
+    if (penalty) {
+      rule(f);
+      const moved = penalty.before && penalty.after ? `, P${penalty.before} to P${penalty.after} in class` : "";
+      write(f, `AFTER THE RACE: ${penalty.penaltyS} s penalty${moved}`, { size: 9.5, bold: true, color: C.head });
+    }
+    rule(f);
+    write(f, "THE RACE", { size: 9, bold: true, color: C.head, keep: 30 });
+    write(f, t(recap.headline), { size: 9.5, after: 4 });
+    const winner = recap.classWinners.find((w) => w.class === story.cls);
+    if (winner?.summary && winner.car !== car) write(f, `${clsName}: ${t(winner.summary)}`, { size: 9.5, after: 4 });
+    footer(pdf, meta, METHOD);
+    return pdf.doc.output("blob");
+  }
+
+  const f: Flow = { pdf, meta, y: 0, bottom: pdf.size.h - FOOT_H - 16, page: 1, title: "RACE STORY" };
+  f.y = startPage(pdf, meta, f.title, provisional ? "Provisional results" : "", true) + 6;
 
   write(f, t(recap.headline), { size: 14, bold: true, after: 8 });
   for (const p of recap.paragraphs) write(f, t(p), { size: 10, after: 7 });
