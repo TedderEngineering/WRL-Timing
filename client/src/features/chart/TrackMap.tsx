@@ -7,6 +7,7 @@ import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
+import { virtualCars } from "../live/race-laps";
 import { RaceControl } from "./RaceControl";
 import { LiveTrackOrder, trackOrder } from "./LiveTrackOrder";
 import { driversInCars } from "./DriverReportTab";
@@ -79,6 +80,7 @@ export function TrackMap({
   compSet,
   classView,
   flag = null,
+  clock = null,
   annotations = null,
 }: {
   slug: string;
@@ -89,6 +91,8 @@ export function TrackMap({
   classView: string;
   /** The session's flag now ("Yellow", "Code 35"…): under a caution the safety car is shown. */
   flag?: string | null;
+  /** The race clock: time to go (s) at a moment (client clock), frozen under a red flag. For the virtual cars. */
+  clock?: { ttgS: number; at: number; frozen: boolean } | null;
   /** The race's notes (its pit stops), for the running order. */
   annotations?: AnnotationData | null;
 }) {
@@ -432,6 +436,34 @@ export function TrackMap({
       if (vis > 0.5) hits.current.push({ key: d.key, x, y, r: Math.max(r, 10) });
     }
 
+    // The virtual car of each class (race-laps.ts): its leader's last-laps pace, crossing the line
+    // as the clock runs out. A hollow diamond in the class colour.
+    if (clock) {
+      const ttgNow = clock.frozen ? clock.ttgS : clock.ttgS - (t - clock.at) / 1000;
+      for (const v of virtualCars(data, ttgNow, track.len, out)) {
+        if (classView && v.cls !== classView) continue;
+        const [x, y] = px(pointAt(track.pts, track.ds, track.len, v.d));
+        const color = liveClassColor(v.cls);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = color;
+        ctx.fillRect(-6, -6, 12, 12);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([2.5, 2]);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-6, -6, 12, 12);
+        ctx.restore();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "800 8px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("V", x, y + 0.5);
+      }
+    }
+
     // The overall leader: a gold ring round its dot and a P1 tag above it, on top of everything.
     if (leaderAt) {
       const { x, y, r } = leaderAt;
@@ -640,6 +672,11 @@ export function TrackMap({
           </span>
           {leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
         </span>
+        {clock && (
+          <span className="flex items-center gap-1.5" title="Each class's virtual car laps at its class leader's average over its last 3 laps and crosses the line exactly as the clock runs out: a leader ahead of it on the road has one more lap to run.">
+            <span className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-dashed" style={{ borderColor: C.muted }} /> virtual car
+          </span>
+        )}
         <span className="flex items-center gap-1.5" title="A lap or more down on its class leader (the LD column)">
           <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} /> lapped
         </span>
