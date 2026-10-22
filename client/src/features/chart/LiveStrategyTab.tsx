@@ -9,6 +9,7 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { gapClock, lapsAndSeconds } from "./live-gaps";
 import { liveStrategy, type CarStrategy, type LiveStrategy } from "./live-strategy";
+import { lapsDown } from "./laps-down";
 
 const T = { line: "#1e1e38", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", gain: "#4ade80", lose: "#f87171", caution: "#facc15" };
 
@@ -125,6 +126,7 @@ function FocusCards({ s, data }: { s: LiveStrategy; data: RaceChartData }) {
 
 function ClassTable({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data: RaceChartData; focusNum: number; setFocusNum: (n: number) => void }) {
   const leadPace = s.cars[0].pace;
+  const ld = lapsDown(data);
   // Moves are counted among the cars still running (a stopped car ahead is not a place gained).
   const runningRank = new Map(s.cars.filter((c) => c.netPos !== null).map((c, i) => [c.num, i + 1]));
   const head = (label: string, title: string, right = true) => (
@@ -151,6 +153,9 @@ function ClassTable({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data:
           </span>
         </td>
         <td className="px-2 py-1.5 text-right">{c.laps}</td>
+        <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: (ld.get(c.num) ?? 0) > 0 ? T.text : T.muted }}>
+          {ld.get(c.num) ?? "—"}
+        </td>
         <td className="px-2 py-1.5 text-right">{c.stopped ? "—" : behind(c.gapS, leadPace)}</td>
         <td className="px-2 py-1.5 text-right">{c.stops.filter((x) => x.kind !== "drive_through").length}</td>
         <td className="px-2 py-1.5 text-right">{c.stopped ? "—" : c.stintLaps}</td>
@@ -176,6 +181,7 @@ function ClassTable({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data:
             {head("Now", "Class position now")}
             {head("Car", "", false)}
             {head("Laps", "Laps completed")}
+            {head("LD", "Laps down to the class leader, counted when the car last crossed the line (0: on the lead lap)")}
             {head("Behind", "Behind the class leader now (whole laps at the leader's pace, then seconds)")}
             {head("Stops", "Stops made (drive-throughs not counted)")}
             {head("Stint", "Laps since its last stop")}
