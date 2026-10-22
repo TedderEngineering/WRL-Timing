@@ -40,6 +40,7 @@ import { buildLiveChart, FLAG_NAMES, LiveNoLapsError, resultsFromState, type Liv
 import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire.js";
 import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
 import { pitLearnerFor, type PitLane } from "./pits.js";
+import { replaySource, type ReplaySource } from "./replay.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -170,14 +171,14 @@ export function setLiveHttp(h: HttpClient | null) {
  */
 export const feedStates = new EventEmitter();
 
-async function loadState(h: HttpClient, eventId: number, sessionId: number): Promise<{ s: LiveState; raw: unknown } | null> {
+async function loadState(h: HttpClient, eventId: number, sessionId: number, record = true): Promise<{ s: LiveState; raw: unknown } | null> {
   try {
     const res = await h.get(liveUrls.state(eventId), { headers: { Accept: "application/x-msgpack" } });
     const raw = decode(res.body);
     const s = resultsFromState(raw);
     // The state is the event's current session: ignore it when another session is running.
     if (!s || (s.sessionId !== null && s.sessionId !== sessionId)) return null;
-    feedStates.emit("state", eventId, sessionId, raw);
+    if (record) feedStates.emit("state", eventId, sessionId, raw);
     return { s, raw };
   } catch {
     return null;
@@ -199,9 +200,10 @@ class Poller {
   streams = 0;
   /**
    * This poller's run. Versions restart at 1 with every poller (a deploy, or an idle stop), and
-   * the CDN keeps update files forever, so every cacheable URL names the epoch too.
+   * the CDN keeps update files forever, so every cacheable URL names the epoch too. A replay
+   * starting its race again is a new epoch.
    */
-  readonly epoch = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  epoch = newEpoch();
   lastView = Date.now();
   /** The track map (null until the feed has learned it) and every car's latest place on it. */
   track: TrackGeometry | null = null;
@@ -230,13 +232,37 @@ class Poller {
   private lastBuildMs = 0;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
+  /** A replay's run (replay.ts): when it changes, the race starts again. */
+  private cycle: number | null = null;
 
   constructor(
     readonly eventId: number,
     readonly sessionId: number,
     readonly slug: string,
-    private onStop: () => void
+    private onStop: () => void,
+    /** A finished race played again (replay.ts) instead of the timing feed. */
+    private readonly replay: ReplaySource | null = null
   ) {}
+
+  /** A replay starting its race again: forget the race so far (a new epoch, versions from 1). */
+  private restart() {
+    this.epoch = newEpoch();
+    this.snap = { chart: null, v: 0, prefixes: null, waiting: "Starting the replay", updatedAt: null, lastError: null, etag: null, ended: false };
+    this.versions.clear();
+    this.steps.clear();
+    this.charts.clear();
+    this.positions = null;
+    this.lastPlace.clear();
+    this.offTrack.clear();
+    this.laps = [];
+    this.flags = null;
+    this.control = null;
+    this.lastSlow = 0;
+    this.lastLaps = 0;
+    this.needFull = false;
+    this.builtFrom = "";
+    this.lapsPending = false;
+  }
 
   start() {
     this.running = this.tick();
@@ -310,16 +336,23 @@ class Poller {
     this.positions = pos;
     for (const [num, d] of pos.cars) if (d !== null) this.lastPlace.set(num, d);
     // Learned per track (its sessions share it); by event until the track's name is known.
-    const learner = pitLearnerFor(this.meta?.track && this.meta.track !== "Unknown track" ? this.meta.track : `event ${this.eventId}`);
+    const where = this.meta?.track && this.meta.track !== "Unknown track" ? this.meta.track : `event ${this.eventId}`;
+    const learner = pitLearnerFor(this.replay ? `replay ${where}` : where);
     learner.take(pos.cars);
     this.pitLane = learner.lane(this.track!.len);
   }
 
   private async tick(): Promise<void> {
-    const h = http();
+    const h = this.replay ? this.replay.client() : http();
     try {
+      if (this.replay) {
+        await this.replay.load();
+        const c = this.replay.cycle();
+        if (this.cycle !== null && c !== this.cycle) this.restart();
+        this.cycle = c;
+      }
       if (!this.meta || Date.now() - this.lastSlow >= SLOW_MS) await this.loadMeta(h);
-      const read = await loadState(h, this.eventId, this.sessionId);
+      const read = await loadState(h, this.eventId, this.sessionId, !this.replay);
       const state = read?.s ?? null;
       if (!this.track && Date.now() - this.trackAt >= TRACK_RETRY_MS) await this.loadTrack(h);
       if (read && this.track) this.place(read.raw);
@@ -369,6 +402,8 @@ class Poller {
             control: this.control,
             currentFlag: state?.currentFlag ?? null,
             timeToGo: state?.timeToGo ?? null,
+            // A replay closes the open flag at the race's own clock.
+            ...(this.replay ? { now: this.replay.wallNow() } : {}),
           });
       const rebuilt = rebuild;
       if (rebuild) {
@@ -420,6 +455,7 @@ class Poller {
 }
 
 const hashOf = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 20);
+const newEpoch = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** The last chart with the state's flag, race time and time to go (no rebuild). */
 function withStatus(chart: LiveChart, state: LiveState | null): LiveChart {
@@ -467,6 +503,11 @@ const sameIds = (a: { eventId: number; sessionId: number }, b: { eventId: number
 
 /** The feed session behind a slug: one handed out before, or one live now. Null when there is none. */
 export async function resolveLiveSlug(slug: string): Promise<{ eventId: number; sessionId: number } | null> {
+  const replay = replaySource(slug);
+  if (replay) {
+    await replay.load().catch(() => undefined);
+    return replay.loaded ? { eventId: replay.def.eventId, sessionId: replay.sessionId } : null;
+  }
   const known = slugIndex.get(slug);
   if (known) return known;
   await listLiveSessions();
@@ -509,7 +550,9 @@ export function subscribeLive(eventId: number, sessionId: number, slug: string, 
 }
 
 function pollerFor(eventId: number, sessionId: number, slug: string): Poller {
-  const key = `${eventId}/${sessionId}`;
+  const replay = replaySource(slug) ?? null;
+  // A replay has its own poller (never the session's live one).
+  const key = replay ? `replay ${slug}` : `${eventId}/${sessionId}`;
   let p = pollers.get(key);
   if (!p) {
     if (pollers.size >= MAX_POLLERS) {
@@ -518,9 +561,15 @@ function pollerFor(eventId: number, sessionId: number, slug: string): Poller {
       oldest[1].stop();
       pollers.delete(oldest[0]);
     }
-    const created = new Poller(eventId, sessionId, slug, () => {
-      pollers.delete(key);
-    });
+    const created = new Poller(
+      eventId,
+      sessionId,
+      slug,
+      () => {
+        pollers.delete(key);
+      },
+      replay
+    );
     pollers.set(key, created);
     p = created;
     p.start();

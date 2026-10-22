@@ -8,6 +8,16 @@ interface Stats {
   races: Record<string, number>;
 }
 
+/** A RaceTrace Live replay (server live/replay.ts): a finished race played again, open to everyone. */
+interface LiveReplay {
+  slug: string;
+  fromS: number;
+  ready: boolean;
+  endS: number | null;
+}
+
+const hms = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`;
+
 interface AuditEntry {
   id: string;
   action: string;
@@ -23,6 +33,15 @@ export function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentLogs, setRecentLogs] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [replays, setReplays] = useState<LiveReplay[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ replays: LiveReplay[] }>("/admin/live-replays")
+      .then((r) => setReplays(r.replays))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -86,6 +105,47 @@ export function AdminDashboardPage() {
           👥 Manage Users ({stats?.totalUsers ?? 0})
         </Link>
       </div>
+
+      {/* RaceTrace Live replays: not listed with the live races, so their links are here. */}
+      {replays.length > 0 && (
+        <div className="mb-10">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50 mb-1">Live replays</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            Finished races played again on the live page, in real time, then started again. Anyone with the link can watch (no sign-in).
+          </p>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-200 dark:divide-gray-800 overflow-hidden">
+            {replays.map((r) => {
+              const url = `${window.location.origin}/live/${r.slug}`;
+              return (
+                <div key={r.slug} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
+                  <Link to={`/live/${r.slug}`} className="font-medium text-brand-600 dark:text-brand-400 hover:underline break-all">
+                    /live/{r.slug}
+                  </Link>
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {hms(r.fromS)} to {r.endS !== null ? `the finish (${hms(r.endS)})` : "the finish"}
+                  </span>
+                  <span className={r.ready ? "text-green-600 dark:text-green-400" : "text-yellow-600 dark:text-yellow-400"}>
+                    {r.ready ? "Ready" : "Loads on first view"}
+                  </span>
+                  <span className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(url).then(() => {
+                        setCopied(r.slug);
+                        setTimeout(() => setCopied(null), 2000);
+                      });
+                    }}
+                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-900"
+                  >
+                    {copied === r.slug ? "Copied" : "Copy link"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Subscription breakdown */}
       {stats?.subscriptions && Object.keys(stats.subscriptions).length > 0 && (

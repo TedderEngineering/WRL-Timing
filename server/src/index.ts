@@ -4,6 +4,7 @@ import { prisma } from "./models/prisma.js";
 import { STORAGE_BUCKET, supabase } from "./lib/supabase.js";
 import { startLiveRecorder, stopLiveRecorder } from "./live/recorder.js";
 import { startAfterRaceImport } from "./live/after-race.js";
+import { bucketStore, startReplays } from "./live/replay.js";
 
 async function main() {
   // Verify database connection
@@ -26,6 +27,8 @@ async function main() {
 
   // RaceTrace Live: record live WRL sessions for replay (live/recorder.ts; LIVE_RECORD=0 turns it off).
   if (startLiveRecorder(supabase ? supabase.storage.from(STORAGE_BUCKET) : null)) console.log("✓ Live recorder on");
+  // RaceTrace Live replays: load each one (its recording, else its laps) ahead of its first viewer.
+  startReplays(supabase ? bucketStore(supabase.storage.from(STORAGE_BUCKET)) : null);
   // After a WRL race ends: start the GitHub intake import for it (live/after-race.ts; needs GITHUB_DISPATCH_TOKEN).
   if (startAfterRaceImport()) console.log("✓ After-race import on");
 

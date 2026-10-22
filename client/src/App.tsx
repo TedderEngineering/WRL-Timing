@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { IS_GRIP_SITE, gp, stripGripPrefix } from "./lib/site";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./features/auth";
@@ -22,6 +22,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { RaceListPage } from "./pages/RaceListPage";
 import { RaceDetailPage, RaceDetailRedirect } from "./pages/RaceDetailPage";
 import { LiveListPage, LiveRacePage, UpcomingRacePage } from "./pages/LiveRacePage";
+import { isReplaySlug } from "./features/live/liveKey";
 import { QualifyingListPage } from "./pages/QualifyingListPage";
 import { QualifyingDetailPage } from "./pages/QualifyingDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
@@ -147,6 +148,12 @@ function GripSite() {
   );
 }
 
+/** /live/:slug: signed in, except a replay. */
+function LiveRaceRoute() {
+  const { slug } = useParams<{ slug: string }>();
+  return isReplaySlug(slug) ? <LiveRacePage /> : <ProtectedRoute><LiveRacePage /></ProtectedRoute>;
+}
+
 export function App() {
   if (IS_GRIP_SITE) return <GripSite />;
 
@@ -196,7 +203,8 @@ export function App() {
         {/* RaceTrace Live: WRL sessions still running, by RaceTrace slug (signed in) */}
         <Route path="/live" element={<ProtectedRoute><LiveListPage /></ProtectedRoute>} />
         <Route path="/live/next/:id" element={<ProtectedRoute><UpcomingRacePage /></ProtectedRoute>} />
-        <Route path="/live/:slug" element={<ProtectedRoute><LiveRacePage /></ProtectedRoute>} />
+        {/* A replay of a finished race (/live/replay-…) is open to everyone: a link to show RaceTrace Live. */}
+        <Route path="/live/:slug" element={<LiveRaceRoute />} />
         {/* Redirect old bookmarked /races/:id URLs to /chart?race=:id */}
         <Route path="/races/:id" element={<ProtectedRoute><RaceDetailRedirect /></ProtectedRoute>} />
 

@@ -20,6 +20,9 @@ describe("the live key on requests", () => {
     expect(needsLiveKey("/live")).toBe(false);
     expect(needsLiveKey("/live/sebring-2026-sunday/head")).toBe(true);
     expect(needsLiveKey("/live/next/wrl-2026-cota-race-1")).toBe(true);
+    // A replay is open to everyone.
+    expect(needsLiveKey("/live/replay-sebring-international-raceway-2026-sunday-7-hour/head")).toBe(false);
+    expect(needsLiveKey("/live/replay-sebring-international-raceway-2026-sunday-7-hour/events")).toBe(false);
     expect(withLiveKey("/live/x/head", "abc")).toBe("/live/x/head?k=abc");
     expect(withLiveKey("/live/x?enc=2&v=0", "a b")).toBe("/live/x?enc=2&v=0&k=a%20b");
   });

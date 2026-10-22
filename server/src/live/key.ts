@@ -12,6 +12,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
+import { isReplaySlug } from "./replay.js";
 
 export const LIVE_KEY_PERIOD_MS = 3600_000;
 
@@ -36,9 +37,9 @@ export function liveKeyValid(k: unknown, now = Date.now()): boolean {
   });
 }
 
-/** 401 (never cached) unless the request carries a valid key in `k`. */
+/** 401 (never cached) unless the request carries a valid key in `k`. A replay is open to everyone (replay.ts). */
 export function requireLiveKey(req: Request, res: Response, next: NextFunction): void {
-  if (liveKeyValid(req.query.k)) {
+  if (liveKeyValid(req.query.k) || (typeof req.params.slug === "string" && isReplaySlug(req.params.slug))) {
     next();
     return;
   }

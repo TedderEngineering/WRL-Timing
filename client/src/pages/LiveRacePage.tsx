@@ -20,6 +20,8 @@ import { carKey, carNo } from "../features/chart/car-number";
 import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
+import { formatRaceDateLong } from "../lib/race-dates";
+import { isReplaySlug } from "../features/live/liveKey";
 import { fetchLiveSessions, getPublic, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
 import { countdownText, goesLiveText, sessionFor } from "../features/live/banner";
 import type { RaceChartData } from "@shared/types";
@@ -539,6 +541,8 @@ export function LiveListPage() {
 
 export function LiveRacePage() {
   const { slug } = useParams<{ slug: string }>();
+  /** A finished race played again (server live/replay.ts): open to everyone, never "LIVE". */
+  const replay = isReplaySlug(slug);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const chartDefaults = useChartDefaults(isAuthenticated, authLoading);
   const { data, annotations, race, live, checkedAt, clockAt, error, isLoading, saver } = useLiveChartData(slug);
@@ -734,15 +738,29 @@ export function LiveRacePage() {
               {[live?.eventName, live?.eventName?.includes(race.track) ? null : race.track].filter(Boolean).join(" · ")}
             </span>
           </span>
-          <Link
-            to="/live"
-            className="flex items-center gap-2 font-semibold tracking-wider"
-            style={{ color: live?.ended ? RT.muted : RT.live }}
-            title="Positions are as of each completed lap and may change when results are official. The full race analysis follows after the finish."
-          >
-            {!live?.ended && <LiveDot />}
-            {live?.ended ? "FINISHED" : "LIVE"}
-          </Link>
+          {replay ? (
+            <span
+              className="flex items-center gap-2 font-semibold tracking-wider"
+              style={{ color: RT.accent }}
+              title={`A replay of the race run on ${formatRaceDateLong(race.date)}: the timing as it came in live, in real time. It starts again after the finish.`}
+            >
+              <span aria-hidden className="inline-block h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent" style={{ borderLeftColor: RT.accent }} />
+              REPLAY
+              <span className="font-normal tracking-normal" style={{ color: RT.soft }}>
+                {formatRaceDateLong(race.date)}
+              </span>
+            </span>
+          ) : (
+            <Link
+              to="/live"
+              className="flex items-center gap-2 font-semibold tracking-wider"
+              style={{ color: live?.ended ? RT.muted : RT.live }}
+              title="Positions are as of each completed lap and may change when results are official. The full race analysis follows after the finish."
+            >
+              {!live?.ended && <LiveDot />}
+              {live?.ended ? "FINISHED" : "LIVE"}
+            </Link>
+          )}
           <span>
             Lap <b>{st?.leaderLap ?? data.maxLap}</b>
           </span>

@@ -15,6 +15,7 @@ export {
   eventDisplayName,
   eventsFromResponse,
   isWrlEvent,
+  parseSpan,
   plausibleDate,
   sessionClock,
   type RmControlEntry as FeedControlEntry,
