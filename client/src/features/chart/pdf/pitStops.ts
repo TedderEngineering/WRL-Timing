@@ -11,7 +11,7 @@ import { carKey } from "../car-number";
 import { C, M, fit, footer, ink, newPdf, pagesOf, rowsThatFit, secText, startPage, stroke, table, type Column, type KeyItem, type PdfMeta } from "./kit";
 import { classesOf, entriesOf, finishOrder, finishText } from "./raceData";
 import { DEFAULT_PIT_SORT, type PitSortKey } from "../pit-view";
-import { PIT_COLORS, PIT_KEY, PIT_KIND_LABEL, isCautionStop, laneTime, pitMethod, pitRow, pitSortNote, pitView, sortPits, stopTone, type PitRow } from "../pit-view";
+import { PIT_COLORS, PIT_KEY, PIT_KIND_LABEL, isCautionStop, laneTime, pitMethod, pitRow, pitSortNote, pitView, sortPits, stopPlaces, stopTone, type PitRow } from "../pit-view";
 
 type Row = PitRow & { pos: string };
 
@@ -20,10 +20,21 @@ const PIT_PDF_LABELS: Record<PitSortKey, string> = { classPos: "P", car: "CAR", 
 
 const tint = (c: readonly [number, number, number], a: number): [number, number, number] => [0, 1, 2].map((i) => Math.round(255 - (255 - c[i]) * a)) as [number, number, number];
 
+/** A small up or down triangle (the PDF fonts have no arrow glyphs), its tip at (x, y ± s/2). */
+function arrow(doc: JsPDF, x: number, y: number, s: number, up: boolean, color: readonly [number, number, number]) {
+  doc.setFillColor(...color);
+  if (up) doc.triangle(x, y + s / 2, x + s, y + s / 2, x + s / 2, y - s / 2, "F");
+  else doc.triangle(x, y - s / 2, x + s, y - s / 2, x + s / 2, y + s / 2, "F");
+}
+
+/** The kind in three letters, for a cell too narrow for the full word beside the lap and places. */
+const KIND_SHORT: Record<string, string> = { garage: "GAR", stop_and_go: "S+G", penalty_served: "PEN", drive_through: "DT" };
+
 const KEY: KeyItem[] = [
   { label: PIT_KEY.quick, draw: (doc, x, y) => (doc.setFillColor(...tint(PIT_COLORS.quick, 0.35)), doc.rect(x, y - 3, 7, 6, "F")) },
   { label: PIT_KEY.slow, draw: (doc, x, y) => (doc.setFillColor(...tint(PIT_COLORS.slow, 0.35)), doc.rect(x, y - 3, 7, 6, "F")) },
   { label: PIT_KEY.caution, draw: (doc, x, y) => (doc.setFillColor(...PIT_COLORS.caution), doc.rect(x, y - 3, 2.5, 6, "F")) },
+  { label: PIT_KEY.places, draw: (doc, x, y) => (arrow(doc, x, y, 3.2, true, C.good), arrow(doc, x + 3.9, y, 3.2, false, C.bad)) },
 ];
 
 function drawStops(doc: JsPDF, stops: PitStop[], x: number, y: number, w: number, h: number, cellW: number) {
@@ -47,11 +58,34 @@ function drawStops(doc: JsPDF, stops: PitStop[], x: number, y: number, w: number
     doc.setFont("helvetica", "bold");
     doc.setFontSize(fs);
     ink(doc, C.text);
-    doc.text(`L${s.pitLap}`, cx + 4, y + 1.5 + fs + 1);
+    const base = y + 1.5 + fs + 1;
+    doc.text(`L${s.pitLap}`, cx + 4, base);
+    // Top right: class places over the pit cycle (▲2, ▼3, = held), then the kind left of it.
+    let right = cx + cellW - 5;
+    const places = stopPlaces(s);
+    if (places) {
+      const color = places.net > 0 ? C.good : places.net < 0 ? C.bad : C.muted;
+      doc.setFontSize(fs * 0.9);
+      ink(doc, color);
+      const label = places.net === 0 ? "=" : String(Math.abs(places.net));
+      doc.text(label, right, base, { align: "right" });
+      right -= doc.getTextWidth(label) + 0.8;
+      if (places.net !== 0) {
+        const a = fs * 0.55;
+        arrow(doc, right - a, base - fs * 0.33, a, places.net > 0, color);
+        right -= a;
+      }
+      right -= 2.5;
+      doc.setFont("helvetica", "bold");
+    }
     if (s.kind && PIT_KIND_LABEL[s.kind]) {
+      // The kind between the lap and the places: in full when it fits, else short (GAR, PEN).
+      const lapEnd = cx + 4 + doc.getTextWidth(`L${s.pitLap}`) + 3.5;
       doc.setFontSize(fs * 0.8);
       ink(doc, C.traffic);
-      doc.text(PIT_KIND_LABEL[s.kind].toUpperCase(), cx + cellW - 5, y + 1.5 + fs + 1, { align: "right" });
+      const full = PIT_KIND_LABEL[s.kind].toUpperCase();
+      const label = right - doc.getTextWidth(full) >= lapEnd ? full : (KIND_SHORT[s.kind] ?? full.slice(0, 3));
+      if (right - doc.getTextWidth(label) >= lapEnd) doc.text(label, right, base, { align: "right" });
     }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(fs);

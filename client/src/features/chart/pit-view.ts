@@ -74,13 +74,39 @@ export const PIT_KEY = {
   quick: "2 s or more quicker than the class's cars on the same cycle",
   slow: "2 s or more slower",
   caution: "Under caution",
+  places: "Class places gained or lost over the pit cycle",
 } as const;
+
+export interface StopPlaces {
+  /** Places gained (negative = lost). */
+  net: number;
+  before: number | null;
+  after: number | null;
+  over: "cycle" | "stop";
+}
+
+/** A stop's class places, when the race's analysis gives them (not on a later stop in the same cycle). */
+export function stopPlaces(s: PitStop): StopPlaces | null {
+  const net = s.netClass;
+  if (typeof net !== "number" || !Number.isFinite(net)) return null;
+  return { net, before: s.classPosBefore ?? null, after: s.classPosAfter ?? null, over: s.placesOver === "stop" ? "stop" : "cycle" };
+}
+
+/** "Class P5 → P3 over the pit cycle: gained 2". */
+export function placesText(p: StopPlaces): string {
+  const span = p.before !== null && p.after !== null ? `P${p.before} → P${p.after} ` : "";
+  const what = p.net > 0 ? `gained ${p.net}` : p.net < 0 ? `lost ${-p.net}` : "held";
+  return `Class ${span}over the ${p.over === "cycle" ? "pit cycle" : "stop"}: ${what}`;
+}
 
 export function pitMethod(facts: boolean): string {
   return (
     "Each stop: its in-lap, time in the pit lane, and time lost against a racing lap" +
     (facts ? ", coloured against the average of the class's cars on the same pit cycle" : ", against the car's own reference") +
-    ". Averages count service stops only; time lost is averaged over green-flag stops. Garage visits and penalties are shown but not averaged."
+    ". Averages count service stops only; time lost is averaged over green-flag stops. Garage visits and penalties are shown but not averaged." +
+    (facts
+      ? " The arrow on a stop: class places gained or lost, from before the class pit cycle opened to after it closed (on the car's first stop of the cycle; a garage visit or penalty: over the visit)."
+      : "")
   );
 }
 

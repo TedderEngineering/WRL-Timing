@@ -159,4 +159,21 @@ describe("pit facts from the analysis package", () => {
     expect(out.cars["2"].stops[0]).toMatchObject({ condition: "Caution", timeLost_s: -4, refSource: "Cars on track (caution)", pitRoadTime_s: 40.2 });
     expect(out.summary).toEqual({ totalStops: 2, totalCars: 2, avgServiceTime_s: null, avgTimeLost_s: 55.5 });
   });
+
+  it("gives each stop its class places: the cycle's on the first stop of a cycle, a garage visit's own, none for a second stop in the cycle", () => {
+    const p = pkg();
+    p.events.pitPassages.push(
+      { id: "pit:1:2", car: "1", kind: "stop", inLap: 4, outLap: 5, stopNumber: 2, officialPitLaneTimeS: null, fcyContext: "green", timeLost: { valueS: 30, method: "green_reference", refLapS: 100 }, cycleId: "cycle:GTU:1" },
+      { id: "pit:3:2", car: "3", kind: "garage", inLap: 2, outLap: 4, stopNumber: null, officialPitLaneTimeS: null, fcyContext: "green", timeLost: { valueS: 400, method: "green_reference", refLapS: 100 }, cycleId: null, positionEffect: { classPosBefore: 2, classPosAfter: 3, netClass: -1 } } as any
+    );
+    const out = pitStopsFromFacts(extractPitFacts(p), [
+      { carNumber: "1", teamName: "Alpha", carClass: "GTU", carColor: null, finishPos: 2 },
+      { carNumber: "2", teamName: "Bravo", carClass: "GTU", carColor: null, finishPos: 1 },
+      { carNumber: "3", teamName: "Charlie", carClass: "GTU", carColor: null, finishPos: 3 },
+    ]);
+    expect(out.cars["1"].stops[0]).toMatchObject({ classPosBefore: 1, classPosAfter: 2, netClass: -1, placesOver: "cycle" });
+    expect(out.cars["1"].stops[1]).toMatchObject({ classPosBefore: null, classPosAfter: null, netClass: null, placesOver: null });
+    expect(out.cars["2"].stops[0]).toMatchObject({ classPosBefore: 2, classPosAfter: 1, netClass: 1, placesOver: "cycle" });
+    expect(out.cars["3"].stops[0]).toMatchObject({ kind: "garage", classPosBefore: 2, classPosAfter: 3, netClass: -1, placesOver: "stop" });
+  });
 });
