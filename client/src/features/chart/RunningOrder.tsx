@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { AnnotationData, CarData, PitMarker, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { formatLapTime, getCompColor } from "./chart-renderer";
-import { CLASS_COLORS, TRACE } from "./constants";
+import { TRACE, labelOn, liveClassColor } from "./constants";
 import { isCleanLap } from "./gap-math";
 
 const C = {
@@ -21,8 +21,9 @@ const C = {
 };
 
 /** A class's colour (the WRL classes have their own; any other a neutral grey). */
+/** A class's colour on the live page (the map's: GTU grey, GTO blue, GP1 red, GP2 green). */
 export function classColor(cls: string): string {
-  return CLASS_COLORS[cls] ?? "#9a9ab4";
+  return liveClassColor(cls);
 }
 
 /** A car's visit to the pit lane now, as the map saw it. */
@@ -402,7 +403,7 @@ export function RunningOrder({
                     {carNo(data, r.key)}
                   </td>
                   <td className="px-1 py-1 sm:px-1.5">
-                    <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: C.bg }}>
+                    <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
                       {r.cls || "–"}
                     </span>
                   </td>

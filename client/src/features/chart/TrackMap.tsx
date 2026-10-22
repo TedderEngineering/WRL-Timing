@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
+import { labelOn, liveClassColor } from "./constants";
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { PitList } from "./PitList";
 import {
@@ -52,27 +53,6 @@ const C = {
   /** The pit entry tag (the running order's blue P). */
   pit: "#2563eb",
 };
-
-/** Each class's colour on the map (any other class: grey-blue). */
-export const MAP_CLASS_COLORS: Record<string, string> = {
-  GTU: "#9ca3af",
-  GTO: "#3b82f6",
-  GP1: "#ef4444",
-  GP2: "#22c55e",
-};
-const MAP_CLASS_OTHER = "#8b8bb0";
-
-/** A class's colour on the map. */
-export function mapClassColor(cls: string | null | undefined): string {
-  return MAP_CLASS_COLORS[String(cls ?? "").trim().toUpperCase()] ?? MAP_CLASS_OTHER;
-}
-
-/** The car number's colour on a dot of this colour (dark on the light colours). */
-export function labelOn(color: string): string {
-  const n = parseInt(color.slice(1), 16);
-  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
-  return lum > 140 ? "#0b0b18" : "#ffffff";
-}
 
 /**
  * RaceTrace Live: the circuit with every car as a numbered dot moving round it ("marching ants").
@@ -332,7 +312,7 @@ export function TrackMap({
       // The leader is always drawn full size with its number, even when not a compare car.
       const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
       // Every dot in its class colour; the focus car is the large one with a white ring.
-      const color = mapClassColor(data.cars[String(d.key)]?.cls);
+      const color = liveClassColor(data.cars[String(d.key)]?.cls);
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
       // Fading in onto the map, or out into the pit lane.
       const vis = offTrack ? 1 : visibility(d.m, t, track.len);
@@ -517,7 +497,7 @@ export function TrackMap({
           .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
           .map((cls) => (
             <span key={cls} className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: mapClassColor(cls) }} />
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: liveClassColor(cls) }} />
               {cls}
             </span>
           ))}

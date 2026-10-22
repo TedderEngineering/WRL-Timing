@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { labelOn, mapClassColor } from "../TrackMap";
+import { labelOn, liveClassColor as mapClassColor } from "../constants";
+import { classColor } from "../RunningOrder";
 
 describe("the live map's class colours", () => {
   it("colours each class as the owner asked: GTU grey, GTO blue, GP1 red, GP2 green", () => {
@@ -17,5 +18,9 @@ describe("the live map's class colours", () => {
     expect(labelOn(mapClassColor("GP2"))).toBe("#0b0b18");
     expect(labelOn(mapClassColor("GTO"))).toBe("#ffffff");
     expect(labelOn(mapClassColor("GP1"))).toBe("#ffffff");
+  });
+
+  it("colours the running order and pit list the same as the map", () => {
+    for (const cls of ["GTU", "GTO", "GP1", "GP2", "GP3"]) expect(classColor(cls)).toBe(mapClassColor(cls));
   });
 });
