@@ -41,6 +41,7 @@ import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire
 import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
 import { pitLearnerFor, type PitLane } from "./pits.js";
 import { replaySource, type ReplaySource } from "./replay.js";
+import { fixTwelveHour } from "./control-times.js";
 import { currentDrivers } from "./drivers.js";
 
 /** How often a poller wakes (session state). */
@@ -229,6 +230,8 @@ class Poller {
   }
   private lastSlow = 0;
   private lastControl = 0;
+  /** The session's start, track time (ms, read as UTC). */
+  private startLocalMs: number | null = null;
   private lastLaps = 0;
   /** A lap went missing between state reads: re-read the full list on the next tick. */
   private needFull = false;
@@ -322,6 +325,9 @@ class Poller {
       date: plausibleDate(s.st),
     };
     this.snap.ended = !!s.et && s.il === false;
+    // The session's start in track time (for race control's 12-hour times: control-times.ts).
+    const st = feedUtc(s.st);
+    this.startLocalMs = st ? Date.parse(st) + (typeof s.tz === "number" ? s.tz : 0) * 3_600_000 : null;
   }
 
   /** The feed's track map, once it has learned one (404 until then: asked again later). */
@@ -391,7 +397,7 @@ class Poller {
       if (Date.now() - this.lastControl >= CONTROL_MS) {
         this.lastControl = Date.now();
         const control = await h.getJson<FeedControlEntry[]>(feedUrls.control(this.eventId, this.sessionId)).catch(() => null);
-        if (Array.isArray(control)) this.control = control;
+        if (Array.isArray(control)) this.control = fixTwelveHour(control, this.startLocalMs);
       }
       // What else goes into the chart: flags and race control (FCY bands), entry names, and the
       // current flag (an open flag's band runs to "now").

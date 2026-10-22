@@ -20,6 +20,7 @@ import { createHttpClient, type HttpClient, type HttpGetOptions, type HttpRespon
 import { eventDisplayName, feedUrls, paced, parseSpan, plausibleDate, sessionClock, type FeedControlEntry, type FeedFlag, type FeedLap, type FeedResults, type FeedSession } from "./feed.js";
 import { liveSlug, liveUrls } from "./poller.js";
 import { trackFromFeed, type TrackGeometry } from "./track.js";
+import { fixTwelveHour } from "./control-times.js";
 
 export interface ReplayDef {
   /** The replay's address: /live/<slug>. Always starts "replay-". */
@@ -209,6 +210,8 @@ export class ReplaySource {
     const opened = Date.parse(`${String(s.st ?? "").slice(0, 23)}Z`) + this.tz * 3_600_000;
     if (!clock && !Number.isFinite(opened)) throw new Error("the race clock could not be placed");
     this.localZero = clock ? Date.parse(`${clock.date}T00:00:00Z`) + clock.startSec * 1000 : opened;
+    // Race control on a 24-hour clock (control-times.ts), so it is cut at the right moment.
+    this.control = fixTwelveHour(this.control, this.localZero);
     console.log(
       `[live-replay] ${this.def.slug}: ${this.laps.length} laps, ${this.frames.length ? `${this.frames.length} recorded states` : "no recording (cars placed from the laps)"}, finish at ${span(this.endS)}`
     );
