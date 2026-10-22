@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CarData, LapData, RaceChartData } from "@shared/types";
 import type { PitAnalysisResponse, PitStop } from "../PitAnalysisTab";
-import { pitRow, pitSortNote, setPitView, sortPits, stopTone } from "../pit-view";
+import { pitRow, pitSortNote, placesText, setPitView, sortPits, stopPlaces, stopTone } from "../pit-view";
 import { tabPdf } from "../pdf";
 import { api } from "../../../lib/api";
 
@@ -38,6 +38,15 @@ describe("pit rows", () => {
     expect(stopTone(stop(1, 1, 1, { delta_s: 1.9 }))).toBe("even");
     expect(stopTone(stop(1, 1, 1, { delta_s: 3 }))).toBe("slow");
     expect(stopTone(stop(1, 1, 1, { kind: "garage" }))).toBe("other");
+  });
+  it("give a stop's class places when the analysis has them, and say what they span", () => {
+    expect(stopPlaces(stop(1, 1, 1))).toBeNull();
+    expect(stopPlaces(stop(1, 1, 1, { netClass: null }))).toBeNull();
+    const up = stopPlaces(stop(1, 1, 1, { classPosBefore: 5, classPosAfter: 3, netClass: 2, placesOver: "cycle" }))!;
+    expect(up).toEqual({ net: 2, before: 5, after: 3, over: "cycle" });
+    expect(placesText(up)).toBe("Class P5 → P3 over the pit cycle: gained 2");
+    expect(placesText(stopPlaces(stop(1, 1, 1, { classPosBefore: 2, classPosAfter: 6, netClass: -4, placesOver: "stop", kind: "garage" }))!)).toBe("Class P2 → P6 over the stop: lost 4");
+    expect(placesText(stopPlaces(stop(1, 1, 1, { classPosBefore: 1, classPosAfter: 1, netClass: 0, placesOver: "cycle" }))!)).toBe("Class P1 → P1 over the pit cycle: held");
   });
   it("sort as the table does and say so", () => {
     const a = pitRow("1", "1", "A", "GTO", 1, [stop(10, 60, 90)]);

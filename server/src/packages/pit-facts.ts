@@ -48,6 +48,8 @@ export interface PitFacts {
     /** Driver numbers on the in-lap and after the stop (entries[car].drivers). */
     driverIn: number | null;
     driverOut: number | null;
+    /** Class positions before and after a passage outside a pit cycle (garage, penalty: D-CYCLE-POS). */
+    positionEffect?: { classPosBefore: number | null; classPosAfter: number | null; netClass: number | null } | null;
   }[];
   groups: Record<string, { timeLostS: number | null; lossMethod: string; refLapS: number | null; passageIds: string[] }>;
   cycles: Record<string, { cls: string; ordinal: number; members: string[]; passageIds: string[] }>;
@@ -119,6 +121,9 @@ export function extractPitFacts(pkg: any): PitFacts {
     driverChange: typeof p.driverChange === "boolean" ? p.driverChange : null,
     driverIn: num(p.driverIn),
     driverOut: num(p.driverOut),
+    positionEffect: p.positionEffect
+      ? { classPosBefore: num(p.positionEffect.classPosBefore), classPosAfter: num(p.positionEffect.classPosAfter), netClass: num(p.positionEffect.netClass) }
+      : null,
   }));
 
   const groups: PitFacts["groups"] = {};
@@ -479,6 +484,16 @@ export interface PitStopsResponse {
         /** Against the class pit cycle's mean. */
         delta_s: number | null;
         cycle: number | null;
+        /**
+         * Class positions before and after (D-CYCLE-POS): over the whole class pit cycle for a
+         * cycle stop (on the car's first stop of that cycle), over the passage itself for a garage
+         * visit or penalty. netClass: places gained (negative = lost). Null when not known.
+         */
+        classPosBefore: number | null;
+        classPosAfter: number | null;
+        netClass: number | null;
+        /** "cycle" or "stop": what the positions span. */
+        placesOver: "cycle" | "stop" | null;
       }[];
     }
   >;
@@ -518,6 +533,12 @@ export function pitStopsFromFacts(
     const method = group ? (first ? group.lossMethod : "see_group") : p.lossMethod;
     const r = result.get(p.id);
     const cyc = p.cycleId ? facts.cycles[p.cycleId] : undefined;
+    // A cycle stop: its cycle result (only on the car's first stop of the cycle). Any other
+    // passage: its own position effect.
+    const places = r ?? (p.cycleId ? null : p.positionEffect ?? null);
+    const before = places?.classPosBefore ?? null;
+    const after = places?.classPosAfter ?? null;
+    const net = places ? places.netClass ?? (before !== null && after !== null ? before - after : null) : null;
     cars[p.car].stops.push({
       stopNumber: p.stopNumber ?? cars[p.car].stops.length + 1,
       pitLap: p.inLap,
@@ -530,6 +551,10 @@ export function pitStopsFromFacts(
       timeLost_s: lost,
       delta_s: r?.deltaToCycleMeanS ?? null,
       cycle: cyc?.ordinal ?? null,
+      classPosBefore: before,
+      classPosAfter: after,
+      netClass: net,
+      placesOver: net === null ? null : r ? "cycle" : "stop",
     });
     total++;
     if (p.kind === "stop" && p.fcyContext === "green" && typeof lost === "number") green.push(lost);

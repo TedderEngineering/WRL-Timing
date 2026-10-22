@@ -14,12 +14,15 @@ import {
   laneTime,
   pitMethod,
   pitRow,
+  placesText,
   setPitView,
+  stopPlaces,
   sortPits,
   stopTone,
   type PitRow,
   type PitSort,
   type PitSortKey,
+  type StopPlaces,
 } from "./pit-view";
 
 // ─── API response types ─────────────────────────────────────────────────────
@@ -42,6 +45,15 @@ export interface PitStop {
   isCautionContaminated?: boolean;
   kind?: string;
   cycle?: number | null;
+  /**
+   * From the race's analysis: class positions before and after, over the whole class pit cycle
+   * (on the car's first stop of the cycle) or over the visit itself (garage, penalty). netClass:
+   * places gained, negative = lost.
+   */
+  classPosBefore?: number | null;
+  classPosAfter?: number | null;
+  netClass?: number | null;
+  placesOver?: "cycle" | "stop" | null;
 }
 
 export interface CarAnalysis {
@@ -395,6 +407,13 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.slow, 0.18), borderColor: rgb(PIT_COLORS.slow) }} /> {PIT_KEY.slow}
             </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1">
+                <Places p={{ net: 1, before: null, after: null, over: "cycle" }} bare />
+                <Places p={{ net: -1, before: null, after: null, over: "cycle" }} bare />
+              </span>{" "}
+              {PIT_KEY.places}
+            </span>
           </>
         )}
         <span className="flex items-center gap-1.5">
@@ -446,9 +465,27 @@ const rgb = ([r, g, b]: readonly [number, number, number]) => `rgb(${r},${g},${b
 const tint = ([r, g, b]: readonly [number, number, number], a: number) => `rgba(${r},${g},${b},${a})`;
 
 /** One stop: in-lap (and what it was, if not a service stop), pit-lane time / time lost; coloured against its pit cycle. */
+/** ▲2 / ▼3 in RaceTrace's gain and loss colours, = when the car held its class place. */
+function Places({ p, bare = false }: { p: StopPlaces; bare?: boolean }) {
+  const color = p.net > 0 ? P.gain : p.net < 0 ? P.loss : P.muted;
+  return (
+    <span className="inline-flex items-center gap-[2px] font-mono text-[10px] font-bold leading-none" style={{ color }} aria-label={bare ? undefined : placesText(p)}>
+      {p.net === 0 ? (
+        "="
+      ) : (
+        <svg viewBox="0 0 8 7" className="h-[7px] w-[8px]" fill="currentColor" aria-hidden>
+          {p.net > 0 ? <path d="M4 0 8 7H0z" /> : <path d="M4 7 0 0h8z" />}
+        </svg>
+      )}
+      {!bare && p.net !== 0 && Math.abs(p.net)}
+    </span>
+  );
+}
+
 function StopCell({ s, facts }: { s: PitStop; facts: boolean }) {
   const tone = stopTone(s);
   const caution = isCautionStop(s);
+  const places = stopPlaces(s);
   const color = tone === "quick" ? PIT_COLORS.quick : tone === "slow" ? PIT_COLORS.slow : null;
   const lost = s.timeLost_s === null ? "—" : `${s.timeLost_s >= 0 ? "+" : "−"}${fmtTime(Math.abs(s.timeLost_s))}`;
   const title = [
@@ -456,6 +493,7 @@ function StopCell({ s, facts }: { s: PitStop; facts: boolean }) {
     `${facts ? "Pit lane" : "Service"}: ${fmtTime(laneTime(s))}`,
     `Time lost: ${lost}`,
     s.delta_s !== null && s.delta_s !== undefined ? `Against the class's cycle average: ${fmtDelta(s.delta_s)}` : null,
+    places ? placesText(places) : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -471,7 +509,10 @@ function StopCell({ s, facts }: { s: PitStop; facts: boolean }) {
       {caution && <span className="absolute inset-y-0 left-0 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} aria-label="under caution" />}
       <div className="flex items-baseline justify-between gap-1">
         <b>L{s.pitLap}</b>
-        {s.kind && PIT_KIND_LABEL[s.kind] && <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: P.muted }}>{PIT_KIND_LABEL[s.kind]}</span>}
+        <span className="flex items-baseline gap-1.5">
+          {s.kind && PIT_KIND_LABEL[s.kind] && <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: P.muted }}>{PIT_KIND_LABEL[s.kind]}</span>}
+          {places && <Places p={places} />}
+        </span>
       </div>
       <div className="font-mono" style={{ color: P.soft }}>
         {fmtTime(laneTime(s))} / {lost}
@@ -569,7 +610,7 @@ function DetailPanel({ row, classPos, trackConfig, facts, onClose, onGoToTrace }
           <thead>
             <tr>
               {(facts
-                ? ["#", "Lap", "Condition", "Pit Lane", "Time Lost", "Reference", "Measured against", "vs Cycle Avg"]
+                ? ["#", "Lap", "Condition", "Pit Lane", "Time Lost", "Reference", "Measured against", "vs Cycle Avg", "Class places"]
                 : ["#", "Lap", "Condition", "Service", "Pit Road", "Time Lost", "Local Ref", "Ref Source", "Delta"]
               ).map((h) => (
                 <th
@@ -645,6 +686,21 @@ function DetailPanel({ row, classPos, trackConfig, facts, onClose, onGoToTrace }
                   }}>
                     {fmtDelta(stop.delta_s)}
                   </td>
+                  {facts && (
+                    <td style={{ ...tdStyle, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {(() => {
+                        const pl = stopPlaces(stop);
+                        if (!pl) return <span style={{ color: S.dim }}>—</span>;
+                        return (
+                          <span className="inline-flex items-center gap-2" title={placesText(pl)}>
+                            {pl.before !== null && pl.after !== null && <span style={{ color: S.txt2 }}>P{pl.before} → P{pl.after}</span>}
+                            <Places p={pl} />
+                            <span style={{ color: S.dim, fontSize: "0.68rem", fontFamily: "inherit" }}>{pl.over === "cycle" ? "pit cycle" : "this stop"}</span>
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
                 </tr>
               );
             })}
