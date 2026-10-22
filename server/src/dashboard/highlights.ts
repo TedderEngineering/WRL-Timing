@@ -9,6 +9,7 @@
  * dashboard card and the race email list the top three.
  */
 import { normCar } from "../intake/reimport.js";
+import { pitVisitLaps } from "./pit-visits.js";
 import { sameDriver } from "../utils/driverNames.js";
 import { stintAverage, stintsOf } from "./my-driver.js";
 import type { CarFacts } from "./my-car.js";
@@ -193,13 +194,11 @@ export function carHighlights(data: Chart, ann: Ann | null, key: string, f: CarF
     if (rc <= TOP) add("consistency", rc === 1 ? `Most consistent laps in ${cls}` : `${ORD[rc]}-most consistent laps in ${cls}`, strength(rc, eligible.length));
   }
 
-  // Fewest pit stops, among the cars that ran (almost) the full distance.
-  // The race's stops (the pit notes, as the cards count them); else the laps flagged as pit laps. A
-  // visit can flag several laps (WRL: in the pit lane at the line on laps 12-14), so the notes come first.
+  // Fewest pit stops, among the cars that ran (almost) the full distance: counted as every page
+  // counts them (pit-visits.ts: every pit-lane visit; a visit flagged over several laps once).
   const stopsOf = (c: Car) => {
     const k = classCars.find(([, x]) => x === c)?.[0];
-    const notes = k ? ann?.[k]?.pits : undefined;
-    return notes ? new Set(notes.map((p) => p.l)).size : c.laps.filter((l) => l.pit === 1).length;
+    return pitVisitLaps(c.laps, k ? ann?.[k]?.pits : undefined).length;
   };
   const full = classCars.filter(([, c]) => c.laps.length >= leaderLaps - 1);
   if (full.length >= MIN_FIELD && full.some(([k]) => k === key)) {

@@ -599,7 +599,7 @@ export function drawChart(
 
   // ── 6b. Pit-cycle results: a leader from the lap where each cycle settled to its gain or loss ──
   drawSettleLeaders(ctx, {
-    labels: settleLabels(ann.settles || [], laps, classView),
+    labels: settleLabels(ann.settles || [], laps, classView, focusCar?.cls ?? ""),
     x: (l) => xForCar(focusNumStr, l),
     y,
     lapStart,

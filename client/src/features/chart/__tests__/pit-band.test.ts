@@ -59,6 +59,10 @@ describe("pit-cycle leaders", () => {
     expect(settleLabels(settles, laps, "GS")).toEqual([{ lap: 7, pos: 6, title: "Settled P6 in GS", sub: "Was P2 · Lost 4", color: "#f87171" }]);
   });
 
+  it("give the class result in the overall view too, at the car's overall place", () => {
+    expect(settleLabels(settles, laps, "", "GS")).toEqual([{ lap: 7, pos: 12, title: "Settled P6 in GS · P12 overall", sub: "Was P2 · Lost 4", color: "#f87171" }]);
+  });
+
   it("draw a leader to the settle lap with the result, stacked so labels never cover each other", () => {
     const { ctx, texts } = fakeCtx();
     const labels = [
@@ -97,5 +101,21 @@ describe("settle labels with the analysis package's class positions", () => {
     const laps = [{ l: 1, p: 5, cp: 2, lt: "", ltSec: 100, flag: "GF", pit: 0 }, { l: 4, p: 9, cp: 3, lt: "", ltSec: 100, flag: "GF", pit: 0 }];
     const [label] = settleLabels([{ l: 4, p: 9, lb: "Settled P9", su: "Was P5 · Lost 4", c: "#f00", cpBefore: 2, cpAfter: 3 }], laps, "GTU");
     expect(label).toMatchObject({ lap: 4, pos: 3, title: "Settled P3 in GTU", sub: "Was P2 · Lost 1" });
+  });
+
+  it("agrees with the car's card in the overall view (#6 at Road Atlanta)", async () => {
+    const { settleLabels } = await import("../pit-band");
+    const laps = [{ l: 36, p: 42, cp: 29, lt: "", ltSec: 100, flag: "FCY", pit: 0 }, { l: 63, p: 37, cp: 25, lt: "", ltSec: 100, flag: "GF", pit: 0 }];
+    const s = [
+      { l: 36, p: 42, lb: "Settled P42", su: "Was P33 · Lost 9", c: "#f87171", cpBefore: 27, cpAfter: 29 },
+      { l: 63, p: 37, lb: "Settled P37", su: "Was P36 · Lost 1", c: "#f87171", cpBefore: 26, cpAfter: 25 },
+    ];
+    const labels = settleLabels(s, laps, "", "GS");
+    // The card: "1 · lap 29: P27 → P29, Lost 2" and "2 · lap 62: P26 → P25, Gained 1".
+    expect(labels.map((x) => [x.pos, x.title, x.sub])).toEqual([
+      [42, "Settled P29 in GS · P42 overall", "Was P27 · Lost 2"],
+      [37, "Settled P25 in GS · P37 overall", "Was P26 · Gained 1"],
+    ]);
+    expect(labels[1].color).toBe("#4ade80");
   });
 });

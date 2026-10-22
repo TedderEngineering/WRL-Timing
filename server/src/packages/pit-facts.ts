@@ -245,23 +245,38 @@ const COLORS = { stop: "#fbbf24", garage: "#f97316", penalty: "#f87171", red: "#
 
 const MARKED = new Set(["stop", "drive_through", "stop_and_go", "penalty_served", "garage", "retirement", "red_flag_hold"]);
 
-function markerLabel(kind: string, stopNumber: number | null): string {
-  switch (kind) {
-    case "drive_through":
-      return "Drive-through";
-    case "stop_and_go":
-      return "Stop and go";
-    case "penalty_served":
-      return "Penalty served";
-    case "retirement":
-      return "Retired in the pits";
-    case "red_flag_hold":
-      return "Red flag: held in the pit lane";
-    case "garage":
-      return `Pit ${stopNumber ?? ""} (garage)`.replace("  ", " ");
-    default:
-      return stopNumber ? `Pit ${stopNumber}` : "Pit";
-  }
+/**
+ * Every pit-lane visit is a stop, numbered in order (the owner's rule, the same count on every
+ * page: the car's card, the Pit Stops tab, the chart's "Pit N", Lap details): a visit that was
+ * not a service stop says what it was.
+ */
+const VISIT_NOTE: Record<string, string> = {
+  garage: "garage",
+  drive_through: "drive-through",
+  stop_and_go: "stop and go",
+  penalty_served: "penalty",
+  red_flag_hold: "red flag",
+  retirement: "retired",
+};
+
+function markerLabel(kind: string, visit: number): string {
+  return VISIT_NOTE[kind] ? `Pit ${visit} (${VISIT_NOTE[kind]})` : `Pit ${visit}`;
+}
+
+/** What Lap details calls a visit ("Pit stop", "Drive-through"…). */
+const VISIT_WHAT: Record<string, string> = {
+  stop: "Pit stop",
+  garage: "Pit stop (garage)",
+  drive_through: "Drive-through",
+  stop_and_go: "Stop and go",
+  penalty_served: "Penalty served",
+  red_flag_hold: "Red flag: held in the pit lane",
+  retirement: "Retired in the pits",
+};
+
+/** A car's pit-lane visits in order (a pit-lane start is not one): the numbering every page uses. */
+export function visitsOf(passages: PitFacts["passages"]): PitFacts["passages"] {
+  return passages.filter((p) => MARKED.has(p.kind)).sort((a, b) => a.inLap - b.inLap || (a.stopNumber ?? 0) - (b.stopNumber ?? 0));
 }
 
 /**
@@ -313,8 +328,7 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
     // Pit markers, one per passage; driver names kept from the import's marker on the same stop.
     const old = annotations[key]?.pits ?? [];
     const pits: Marker[] = [];
-    for (const p of passagesBy.get(car) ?? []) {
-      if (!MARKED.has(p.kind)) continue;
+    for (const [vi, p] of visitsOf(passagesBy.get(car) ?? []).entries()) {
       const prev = old.find((m) => m.l === p.inLap) ?? old.find((m) => Math.abs(m.l - p.inLap) === 1 && !pits.some((x) => x.l === m.l));
       const group = p.groupId ? facts.groups[p.groupId] : undefined;
       // A back-to-back group reports its time lost once, on its first passage.
@@ -325,11 +339,12 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
       const driverSuffix = typeof prev?.lb === "string" && prev.lb.includes(" · ") ? ` · ${prev.lb.split(" · ").pop()}` : "";
       const marker: Marker = {
         l: p.inLap,
-        lb: markerLabel(p.kind, p.stopNumber) + (p.kind === "stop" || p.kind === "garage" ? driverSuffix : ""),
+        lb: markerLabel(p.kind, vi + 1) + (p.kind === "stop" || p.kind === "garage" ? driverSuffix : ""),
         c: p.kind === "red_flag_hold" ? COLORS.red : p.kind === "garage" ? COLORS.garage : ["drive_through", "stop_and_go", "penalty_served"].includes(p.kind) ? COLORS.penalty : COLORS.stop,
         yo: 0,
         da: 0,
         kind: p.kind,
+        visit: vi + 1,
         ...(p.kind === "garage" ? { isGarage: true } : {}),
       };
       for (const f of ["outDriver", "inDriver", "driverChanged", "stintNumber"]) if (prev && prev[f] !== undefined) marker[f] = prev[f];
@@ -370,26 +385,35 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
 
     // Settles: where each pit cycle closed for this car, with class positions before and after.
     const settles = [];
+    const lastLap = cols.lap.length ? Math.max(...cols.lap) : null;
     for (const r of resultsBy.get(car) ?? []) {
-      if (r.afterLap === null || r.classPosBefore === null || r.classPosAfter === null) continue;
-      const net = r.netClass ?? r.classPosBefore - r.classPosAfter;
-      const i = row.get(r.afterLap);
-      const p = r.overallPosAfter ?? (i !== undefined ? cols.pos[i] : null);
+      if (r.classPosBefore === null) continue;
+      // A cycle that never closed for the car (it retired, or the flag fell first): shown, marked,
+      // to the car's last lap.
+      const open = r.afterLap === null || r.classPosAfter === null;
+      const afterLap = r.afterLap ?? lastLap;
+      if (afterLap === null) continue;
+      const i = row.get(afterLap);
+      const cpAfter = r.classPosAfter ?? (i !== undefined ? cols.cpos[i] ?? null : null);
+      if (cpAfter === null) continue;
+      const net = open ? r.classPosBefore - cpAfter : r.netClass ?? r.classPosBefore - cpAfter;
+      const p = (open ? null : r.overallPosAfter) ?? (i !== undefined ? cols.pos[i] : null);
       if (p === null) continue;
-      const verb = net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held";
+      // lb / su / c are the overall wording older pages read (and my-car.ts finds the lap before the
+      // stop by "Was P"): kept overall throughout, colour included. The class result, which every
+      // panel shows (the chart labels it in class places in every view), is cpBefore / cpAfter.
+      const o = r.overallPosBefore !== null ? r.overallPosBefore - p : net;
       settles.push({
-        l: r.afterLap,
+        l: afterLap,
         p,
         lb: `Settled P${p}`,
-        su: `Was P${r.overallPosBefore ?? "?"} · ${(() => {
-          const o = r.overallPosBefore !== null && r.overallPosAfter !== null ? r.overallPosBefore - r.overallPosAfter : null;
-          return o === null ? verb : o > 0 ? `Gained ${o}` : o < 0 ? `Lost ${-o}` : "Held";
-        })()}`,
-        c: net > 0 ? COLORS.gain : net < 0 ? COLORS.loss : COLORS.held,
+        su: `Was P${r.overallPosBefore ?? "?"} · ${o > 0 ? `Gained ${o}` : o < 0 ? `Lost ${-o}` : "Held"}`,
+        c: o > 0 ? COLORS.gain : o < 0 ? COLORS.loss : COLORS.held,
         cpBefore: r.classPosBefore,
-        cpAfter: r.classPosAfter,
+        cpAfter,
         cycle: r.cycleId,
         stopLap: passageById.get(r.passageId)?.inLap ?? null,
+        ...(open ? { open: true } : {}),
       });
     }
     settles.sort((a, b) => a.l - b.l);
@@ -411,7 +435,7 @@ function reasonsFor(
   keyNum: (car: string) => number | null,
   chart: Chart,
   pits: Marker[],
-  settles: { l: number; cpBefore: number; cpAfter: number; stopLap: number | null }[]
+  settles: { l: number; cpBefore: number; cpAfter: number; stopLap: number | null; open?: boolean }[]
 ): Record<string, string> {
   const name = (c: string) => {
     const n = keyNum(c);
@@ -440,12 +464,14 @@ function reasonsFor(
   }
   for (const m of pits) {
     const s = settles.find((x) => x.stopLap === m.l);
-    const what = m.lb.split(" · ")[0];
+    const what = VISIT_WHAT[String(m.kind)] ?? "Pit stop";
     const net = s ? s.cpBefore - s.cpAfter : null;
-    const cyc = net === null ? "" : net > 0 ? `Gained ${net} in pit cycle` : net < 0 ? `Lost ${-net} in pit cycle` : "Held position in pit cycle";
+    const cyc =
+      (net === null ? "" : net > 0 ? `Gained ${net} in pit cycle` : net < 0 ? `Lost ${-net} in pit cycle` : "Held position in pit cycle") +
+      (net !== null && s?.open ? " (not completed)" : "");
     const others = (m.alsoPittingCars as number[] | undefined)?.map((n) => `#${chart.cars[String(n)]?.label ?? n}`) ?? [];
     const parts = [cyc, others.length ? `also pitting: ${others.join(", ")}` : ""].filter(Boolean);
-    out[String(m.l)] = `${what === "Pit" || /^Pit \d/.test(what) ? "Pit stop" : what}${parts.length ? ` — ${parts.join("; ")}` : ""}`;
+    out[String(m.l)] = `${what}${parts.length ? ` — ${parts.join("; ")}` : ""}`;
   }
   return out;
 }
@@ -494,6 +520,8 @@ export interface PitStopsResponse {
         netClass: number | null;
         /** "cycle" or "stop": what the positions span. */
         placesOver: "cycle" | "stop" | null;
+        /** The pit cycle never closed for the car (it retired, or the flag fell first): after is its last lap's. */
+        cycleOpen?: boolean;
       }[];
     }
   >;
@@ -515,8 +543,13 @@ export function pitStopsFromFacts(
   const cars: PitStopsResponse["cars"] = {};
   const green: number[] = [];
   let total = 0;
+  const visitNo = new Map<string, number>();
+  const byCarP = new Map<string, PitFacts["passages"]>();
+  for (const p of facts.passages) byCarP.set(p.car, [...(byCarP.get(p.car) ?? []), p]);
+  for (const ps of byCarP.values()) visitsOf(ps).forEach((p, i) => visitNo.set(p.id, i + 1));
   for (const p of facts.passages) {
-    if (!["stop", "garage", "stop_and_go", "penalty_served"].includes(p.kind)) continue;
+    // Every pit-lane visit is a stop (the owner's rule; the same numbering as the chart's "Pit N").
+    if (!visitNo.has(p.id)) continue;
     const e = entryFor(p.car);
     const meta = facts.entries[p.car];
     cars[p.car] ??= {
@@ -536,11 +569,17 @@ export function pitStopsFromFacts(
     // A cycle stop: its cycle result (only on the car's first stop of the cycle). Any other
     // passage: its own position effect.
     const places = r ?? (p.cycleId ? null : p.positionEffect ?? null);
+    const open = !!r && (r.afterLap === null || r.classPosAfter === null);
     const before = places?.classPosBefore ?? null;
-    const after = places?.classPosAfter ?? null;
-    const net = places ? places.netClass ?? (before !== null && after !== null ? before - after : null) : null;
+    // An open cycle runs to the car's last lap.
+    const lastCpos = (() => {
+      const c = facts.laps[p.car];
+      return c && c.cpos.length ? c.cpos[c.cpos.length - 1] ?? null : null;
+    })();
+    const after = places?.classPosAfter ?? (open ? lastCpos : null);
+    const net = places ? (open ? null : places.netClass) ?? (before !== null && after !== null ? before - after : null) : null;
     cars[p.car].stops.push({
-      stopNumber: p.stopNumber ?? cars[p.car].stops.length + 1,
+      stopNumber: visitNo.get(p.id)!,
       pitLap: p.inLap,
       kind: p.kind,
       condition: CONDITION[p.fcyContext] ?? p.fcyContext,
@@ -555,6 +594,7 @@ export function pitStopsFromFacts(
       classPosAfter: after,
       netClass: net,
       placesOver: net === null ? null : r ? "cycle" : "stop",
+      ...(open ? { cycleOpen: true } : {}),
     });
     total++;
     if (p.kind === "stop" && p.fcyContext === "green" && typeof lost === "number") green.push(lost);

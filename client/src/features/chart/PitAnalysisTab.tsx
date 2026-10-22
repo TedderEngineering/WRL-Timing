@@ -54,6 +54,8 @@ export interface PitStop {
   classPosAfter?: number | null;
   netClass?: number | null;
   placesOver?: "cycle" | "stop" | null;
+  /** The pit cycle never closed for the car (it retired, or the flag fell first). */
+  cycleOpen?: boolean;
 }
 
 export interface CarAnalysis {
@@ -106,6 +108,7 @@ const KIND_LABEL: Record<string, string> = {
   stop_and_go: "Stop and go",
   penalty_served: "Penalty",
   retirement: "Retired",
+  red_flag_hold: "Red flag hold",
 };
 
 // ─── Format helpers ─────────────────────────────────────────────────────────
@@ -304,7 +307,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
     { key: "classPos", label: "P", align: "right", cell: (r) => <b>{r.classPos >= 999 ? "—" : r.classPos}</b> },
     { key: "car", label: "Car", align: "left", cell: (r) => <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? P.accent }}>#{r.label}</span> },
     { key: "team", label: "Team", align: "left", wide: true, cell: (r) => <span className="block max-w-[180px] truncate" title={r.team}>{r.team}</span> },
-    { key: "stops", label: "Stops", align: "right", title: "Service stops (not garage visits or penalties)", cell: (r) => r.serviceStops },
+    { key: "stops", label: "Stops", align: "right", title: "Every pit-lane visit: stops, garage visits, drive-throughs and penalties", cell: (r) => r.visits },
     { key: "avgLane", label: facts ? "Avg lane" : "Avg service", align: "right", title: facts ? "Average time in the pit lane" : "Average service time", cell: (r) => <span className="font-mono">{fmtTime(r.avgLane)}</span> },
     { key: "avgLost", label: "Avg lost", align: "right", title: "Average time lost on green-flag stops", cell: (r) => <span className="font-mono">{fmtTime(r.avgLost)}</span> },
     { key: "best", label: "Best", align: "right", title: "Least time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.gain }}>{fmtTime(r.best)}</span> },
