@@ -56,3 +56,24 @@ export const TRACE = {
 export const COMPARE_PALETTE = [
   "#3987e5", "#199e70", "#9085e9", "#e05c9a", "#2bb5c8", "#d4b62c", "#e66767", "#8fb8ff",
 ];
+
+/** Each class's colour on RaceTrace Live (map, running order, pit list); any other class: grey-blue. */
+export const LIVE_CLASS_COLORS: Record<string, string> = {
+  GTU: "#9ca3af",
+  GTO: "#3b82f6",
+  GP1: "#ef4444",
+  GP2: "#22c55e",
+};
+const LIVE_CLASS_OTHER = "#8b8bb0";
+
+/** A class's colour on RaceTrace Live. */
+export function liveClassColor(cls: string | null | undefined): string {
+  return LIVE_CLASS_COLORS[String(cls ?? "").trim().toUpperCase()] ?? LIVE_CLASS_OTHER;
+}
+
+/** Text on a fill of this colour: dark on the light colours, white on the dark ones. */
+export function labelOn(color: string): string {
+  const n = parseInt(color.slice(1), 16);
+  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+  return lum > 140 ? "#0b0b18" : "#ffffff";
+}

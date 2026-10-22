@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CarData, PitMarker, RaceChartData } from "@shared/types";
 import { classBestStat, classBests, classColor, lapStat, lapText, lapTimes, nextLapStat, nextPitStat, pitDetail, pitStat, pitStatText, runningOrder, spanText } from "../RunningOrder";
 import { overallLeader, pitVisitsNow } from "../TrackMap";
-import { CLASS_COLORS } from "../constants";
+import { LIVE_CLASS_COLORS } from "../constants";
 
 const car = (num: number, cls: string, finishPos: number, finishPosClass: number, label?: string): CarData => ({
   num,
@@ -47,9 +47,10 @@ describe("runningOrder", () => {
 });
 
 describe("classColor", () => {
-  it("uses each class's own colour, grey for any other", () => {
-    expect(classColor("GTO")).toBe(CLASS_COLORS.GTO);
-    expect(classColor("XYZ")).toBe("#9a9ab4");
+  it("uses each class's live colour (the map's), grey-blue for any other", () => {
+    expect(classColor("GTO")).toBe(LIVE_CLASS_COLORS.GTO);
+    expect(classColor("GTU")).toBe(LIVE_CLASS_COLORS.GTU);
+    expect(classColor("XYZ")).toBe("#8b8bb0");
   });
 });
 
