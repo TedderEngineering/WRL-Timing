@@ -32,7 +32,7 @@
  */
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { Router, type Request, type Response } from "express";
-import { eventEntries, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
+import { eventEntries, getLiveControl, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
 import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
 import { currentLiveKey, requireLiveKey } from "../live/key.js";
@@ -226,6 +226,20 @@ liveRouter.get("/:slug/pos", requireLiveKey, async (req, res, next) => {
     res.set("CDN-Cache-Control", "max-age=2");
     // pit: the pit lane on the lap (where the pit flag comes on and clears, the limiter speed), once learned.
     sendJson(req, res, JSON.stringify({ ageMs: Date.now() - positions.t, cars: positions.cars, pit: pitLane }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Race control's messages, newest first (read every CONTROL_MS); the edge keeps them 5 s. */
+liveRouter.get("/:slug/control", requireLiveKey, async (req, res, next) => {
+  try {
+    const s = await sessionFor(req, res);
+    if (!s) return;
+    const messages = await getLiveControl(s.eventId, s.sessionId, s.slug);
+    res.set("Cache-Control", "public, max-age=3");
+    res.set("CDN-Cache-Control", "max-age=5");
+    sendJson(req, res, JSON.stringify({ messages }));
   } catch (e) {
     next(e);
   }

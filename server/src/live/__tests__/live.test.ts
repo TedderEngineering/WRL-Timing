@@ -358,3 +358,15 @@ describe("live slugs", () => {
     expect(liveSlug("Road Atlanta 2026", "GTO/GTU · Sunday 7 Hour!")).toBe("road-atlanta-2026-gto-gtu-sunday-7-hour");
   });
 });
+
+describe("race control messages for viewers", () => {
+  it("gives the log newest first: time of day, cars as published, what happened, status and action", async () => {
+    const { raceControlMessages } = await import("../poller.js");
+    const m = raceControlMessages(json("control.json"));
+    expect(m).toEqual([
+      { seq: 2, at: "23:47:00", cars: ["11", "7"], corner: "5", note: "Contact", status: "Final", action: "No Penalty" },
+      { seq: 1, at: "23:40:00", cars: [], corner: null, note: "Green Flag", status: null, action: null },
+    ]);
+    expect(raceControlMessages(null)).toEqual([]);
+  });
+});

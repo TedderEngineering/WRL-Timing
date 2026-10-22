@@ -59,6 +59,8 @@ export const REBUILD_COST_FACTOR = 25;
 /** Charts kept for full copies of recent versions (a phone told about version v a few seconds ago). */
 export const KEEP_CHARTS = 3;
 export const SLOW_MS = Number(process.env.LIVE_SLOW_MS || 60_000);
+/** How often the race-control log is re-read: viewers see its messages (the Race control strip). */
+export const CONTROL_MS = Number(process.env.LIVE_CONTROL_MS || 15_000);
 export const IDLE_MS = Number(process.env.LIVE_IDLE_MS || 10 * 60_000);
 const LIST_MS = 60_000;
 const MAX_POLLERS = 4;
@@ -221,7 +223,12 @@ class Poller {
   private laps: FeedLap[] = [];
   private flags: FeedFlag[] | null = null;
   private control: FeedControlEntry[] | null = null;
+  /** The race-control log as last read (viewers see it: getLiveControl). */
+  get controlLog(): FeedControlEntry[] | null {
+    return this.control;
+  }
   private lastSlow = 0;
+  private lastControl = 0;
   private lastLaps = 0;
   /** A lap went missing between state reads: re-read the full list on the next tick. */
   private needFull = false;
@@ -259,6 +266,7 @@ class Poller {
     this.flags = null;
     this.control = null;
     this.lastSlow = 0;
+    this.lastControl = 0;
     this.lastLaps = 0;
     this.needFull = false;
     this.builtFrom = "";
@@ -379,6 +387,9 @@ class Poller {
         this.lastSlow = Date.now();
         const flags = await h.getJson<FeedFlag[]>(feedUrls.flags(this.eventId, this.sessionId)).catch(() => null);
         if (Array.isArray(flags)) this.flags = flags;
+      }
+      if (Date.now() - this.lastControl >= CONTROL_MS) {
+        this.lastControl = Date.now();
         const control = await h.getJson<FeedControlEntry[]>(feedUrls.control(this.eventId, this.sessionId)).catch(() => null);
         if (Array.isArray(control)) this.control = control;
       }
@@ -666,6 +677,48 @@ export async function getLiveTrack(
   p.lastView = Date.now();
   await p.ready();
   return { track: p.trackPublic, positions: p.positions, pitLane: p.pitLane };
+}
+
+/** A race-control message as viewers see it (no timing-system ids). */
+export interface RaceControlMessage {
+  /** Its order in the log. */
+  seq: number;
+  /** Track time of day ("14:05:12"), when the log gives it. */
+  at: string | null;
+  /** Car numbers as published (one or two). */
+  cars: string[];
+  corner: string | null;
+  /** What happened ("Contact", "Green Flag"). */
+  note: string;
+  /** Its status ("Under review", "Final") and the action or penalty ("Drive Through"). */
+  status: string | null;
+  action: string | null;
+}
+
+const txt = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/** The race-control log, newest first. */
+export function raceControlMessages(entries: FeedControlEntry[] | null): RaceControlMessage[] {
+  return (entries ?? [])
+    .map((e, i) => ({
+      seq: typeof e.o === "number" ? e.o : i,
+      at: /T(\d{2}:\d{2}:\d{2})/.exec(String(e.t ?? ""))?.[1] ?? null,
+      cars: [e.c1, e.c2].map(txt).filter((c): c is string => !!c).map((c) => c.replace(/^#/, "")),
+      corner: txt(e.cor),
+      note: txt(e.n) ?? "",
+      status: txt(e.s),
+      action: txt(e.a),
+    }))
+    .filter((m) => m.note || m.action)
+    .sort((a, b) => b.seq - a.seq);
+}
+
+/** A session's race-control messages (starting its poller if needed). */
+export async function getLiveControl(eventId: number, sessionId: number, slug: string): Promise<RaceControlMessage[]> {
+  const p = pollerFor(eventId, sessionId, slug);
+  p.lastView = Date.now();
+  await p.ready();
+  return raceControlMessages(p.controlLog);
 }
 
 /** An entry on the event's list: car number as published, team, class. */

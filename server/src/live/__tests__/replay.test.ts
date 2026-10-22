@@ -158,6 +158,9 @@ describe("live replay pages", () => {
       const body = (await head.json()) as { v: number; live: { sessionName: string } };
       expect(body.v).toBeGreaterThan(0);
       expect(body.live.sessionName).toBe("Saturday 8 Hour");
+      // Race control as it stood at 6:40 of race time: the green flag, not the contact at 23:47.
+      const rc = (await (await fetch(`${base}/${DEF.slug}/control`)).json()) as { messages: { note: string }[] };
+      expect(rc.messages.map((m) => m.note)).toEqual(["Green Flag"]);
       // A live race still needs the key.
       expect((await fetch(`${base}/synthetic-park-2026-saturday-8-hour/head`)).status).toBe(401);
     } finally {
