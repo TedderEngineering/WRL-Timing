@@ -1,5 +1,5 @@
 /**
- * RaceTrace Live: the live running order. Every car on the track in the order it is round the
+ * RaceTrace Live: the Live Crossing Order. Every car on the track in the order it is round the
  * circuit now (from the moving map positions), around a reference car (the focus car): the cars
  * ahead of it on the road above, with the time they are ahead (−), the cars behind below (+),
  * half a lap each way, whatever lap each car is on. As timing screens show it:
@@ -104,7 +104,7 @@ export function LiveTrackOrder({
   if (refMissing || !rows.length) {
     return (
       <p className="m-0 px-3 py-6 text-center text-xs" style={{ color: C.muted }}>
-        The live running order is measured from the focus car&apos;s place on the track, which is not known right now. Pick a car on track with Focus.
+        The Live Crossing Order is measured from the focus car&apos;s place on the track, which is not known right now. Pick a car on track with Focus.
       </p>
     );
   }
