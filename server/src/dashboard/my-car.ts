@@ -7,6 +7,7 @@
  * "possible". A weak result is simply not given a badge: the fastest-lap rank is only stated
  * when it is in the class's top three.
  */
+import { pitVisitLaps } from "./pit-visits.js";
 import type { Prose } from "../analysis/schema/package-types.js";
 import { normCar } from "../intake/reimport.js";
 import { carHighlights, type Highlight } from "./highlights.js";
@@ -44,6 +45,10 @@ interface Settle {
   /** From the race's analysis package: class positions before the stop and after the cycle closed. */
   cpBefore?: number;
   cpAfter?: number;
+  /** The in-lap of the stop the cycle result belongs to. */
+  stopLap?: number | null;
+  /** The cycle never closed for the car (it retired, or the flag fell first). */
+  open?: boolean;
 }
 interface PitMarker {
   l: number;
@@ -63,6 +68,8 @@ export interface PitCycleResult {
   net: number;
   /** The car's stop in this cycle (its in-lap), when one is found. */
   stopLap?: number | null;
+  /** The cycle never closed for the car: after is where it ran on its last lap. */
+  open?: boolean;
   /** The stop was a drive-through, or made under a caution. */
   driveThrough?: boolean;
   caution?: boolean;
@@ -92,6 +99,9 @@ export interface CarFacts {
   /** Only when 1st–3rd in class (no badge for a weak result). */
   bestLapClassRank: number | null;
   pitCycles: PitCycleResult[];
+  /** Pit stops: every pit-lane visit (pit-visits.ts), and their in-laps. */
+  stops: number;
+  stopLaps: number[];
   /**
    * Class benchmarks (engagement plan E), as facts: pit loss and fastest lap ranks in the top
    * three of the class, and places gained over the pit cycles when that is a gain. The same
@@ -132,7 +142,15 @@ export function classPitCycles(laps: LapRow[], settles: Settle[]): PitCycleResul
   const out: PitCycleResult[] = [];
   for (const s of settles) {
     if (typeof s.cpBefore === "number" && typeof s.cpAfter === "number") {
-      out.push({ cycle: out.length + 1, lap: s.l, before: s.cpBefore, after: s.cpAfter, net: s.cpBefore - s.cpAfter });
+      out.push({
+        cycle: out.length + 1,
+        lap: s.l,
+        before: s.cpBefore,
+        after: s.cpAfter,
+        net: s.cpBefore - s.cpAfter,
+        ...(typeof s.stopLap === "number" ? { stopLap: s.stopLap } : {}),
+        ...(s.open ? { open: true } : {}),
+      });
       continue;
     }
     const at = laps.find((l) => l.l === s.l);
@@ -178,7 +196,8 @@ export function withStops(data: ChartData, ann: Annotations | null, key: string,
   const others = classKeys.map((k) => stopsWithTiming(ann, k));
   return cycles.map((c, i) => {
     const after = i > 0 ? cycles[i - 1].lap : 0;
-    const stopLap = [...pitLaps].reverse().find((l) => l < c.lap && l > after) ?? null;
+    // The stop the cycle result belongs to (the package says), else the last pit lap before it settled.
+    const stopLap = c.stopLap ?? [...pitLaps].reverse().find((l) => l < c.lap && l > after) ?? null;
     if (stopLap === null) return { ...c, stopLap: null, quickest: null };
     const m = markers.find((p) => p.l === stopLap);
     const t = m?.pitTiming;
@@ -281,6 +300,10 @@ export function carFacts(data: ChartData, ann: Annotations | null, carNumber: st
     bestLap: best,
     bestLapClassRank,
     pitCycles,
+    ...(() => {
+      const stopLaps = pitVisitLaps(car.laps, ann?.[key]?.pits);
+      return { stops: stopLaps.length, stopLaps };
+    })(),
     benchmarks: classBenchmarks(data, ann, key, pitCycles),
     highlights: [],
   };

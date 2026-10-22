@@ -157,7 +157,7 @@ export function settleLabels(settles: SettleMarker[], laps: LapData[], classView
         lap: sp.l,
         pos: classView ? c.after : sp.p,
         title: `Settled P${c.after} in ${inClass}${classView ? "" : ` · P${sp.p} overall`}`,
-        sub: `Was P${c.before} · ${netText(c.net)}`,
+        sub: `Was P${c.before} · ${netText(c.net)}${sp.open ? " · not completed" : ""}`,
         color: netColor(c.net),
       });
       continue;

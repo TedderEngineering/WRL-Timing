@@ -8,7 +8,10 @@ import type { RaceChartData } from "@shared/types";
 import { TRACE } from "./constants";
 import type { PitStop } from "./PitAnalysisTab";
 
-/** A service stop (not a garage visit, drive-through or penalty). */
+/**
+ * A service stop (not a garage visit, drive-through or penalty): what the averages are over. The
+ * stop count is every pit-lane visit, as every page counts them (the owner's rule).
+ */
 export const isServiceStop = (s: PitStop) => !s.kind || s.kind === "stop";
 /** Made under a caution (in- or out-lap). */
 export const isCautionStop = (s: PitStop) => /caution|fcy|yellow|mixed/i.test(s.condition ?? "") || !!s.isCautionContaminated;
@@ -26,6 +29,8 @@ export interface PitRow {
   /** Class finishing position (999 when unknown). */
   classPos: number;
   stops: PitStop[];
+  /** Pit stops: every pit-lane visit. */
+  visits: number;
   serviceStops: number;
   avgLane: number | null;
   /** Over green-flag service stops (under a caution, time lost is measured differently). */
@@ -45,6 +50,7 @@ export function pitRow(key: string, label: string, team: string, cls: string, cl
     cls,
     classPos,
     stops: sorted,
+    visits: sorted.length,
     serviceStops: service.length,
     avgLane: mean(nums(service.map(laneTime))),
     avgLost: mean(lost),
@@ -68,7 +74,7 @@ export const PIT_COLORS = {
   caution: hex(TRACE.fcyBar),
 } as const;
 
-export const PIT_KIND_LABEL: Record<string, string> = { garage: "Garage", stop_and_go: "Stop + go", penalty_served: "Penalty", drive_through: "Drive-thru" };
+export const PIT_KIND_LABEL: Record<string, string> = { garage: "Garage", stop_and_go: "Stop + go", penalty_served: "Penalty", drive_through: "Drive-thru", red_flag_hold: "Red flag", retirement: "Retired" };
 
 export const PIT_KEY = {
   quick: "2 s or more quicker than the class's cars on the same cycle",
@@ -83,20 +89,22 @@ export interface StopPlaces {
   before: number | null;
   after: number | null;
   over: "cycle" | "stop";
+  /** The cycle never closed for the car: after is its last lap's place. */
+  open?: boolean;
 }
 
 /** A stop's class places, when the race's analysis gives them (not on a later stop in the same cycle). */
 export function stopPlaces(s: PitStop): StopPlaces | null {
   const net = s.netClass;
   if (typeof net !== "number" || !Number.isFinite(net)) return null;
-  return { net, before: s.classPosBefore ?? null, after: s.classPosAfter ?? null, over: s.placesOver === "stop" ? "stop" : "cycle" };
+  return { net, before: s.classPosBefore ?? null, after: s.classPosAfter ?? null, over: s.placesOver === "stop" ? "stop" : "cycle", ...(s.cycleOpen ? { open: true } : {}) };
 }
 
 /** "Class P5 → P3 over the pit cycle: gained 2". */
 export function placesText(p: StopPlaces): string {
   const span = p.before !== null && p.after !== null ? `P${p.before} → P${p.after} ` : "";
   const what = p.net > 0 ? `gained ${p.net}` : p.net < 0 ? `lost ${-p.net}` : "held";
-  return `Class ${span}over the ${p.over === "cycle" ? "pit cycle" : "stop"}: ${what}`;
+  return `Class ${span}over the ${p.over === "cycle" ? "pit cycle" : "stop"}: ${what}${p.open ? " (cycle not completed)" : ""}`;
 }
 
 export function pitMethod(facts: boolean): string {
@@ -121,7 +129,7 @@ export const PIT_SORTS: Record<PitSortKey, { value: (r: PitRow) => number | stri
   classPos: { value: (r) => (r.classPos >= 999 ? null : r.classPos), dir: "asc", name: "position" },
   car: { value: (r) => r.label, dir: "asc", name: "car" },
   team: { value: (r) => r.team, dir: "asc", name: "team" },
-  stops: { value: (r) => r.serviceStops, dir: "asc", name: "stops" },
+  stops: { value: (r) => r.visits, dir: "asc", name: "stops" },
   avgLane: { value: (r) => r.avgLane, dir: "asc", name: "average time in the pit lane" },
   avgLost: { value: (r) => r.avgLost, dir: "asc", name: "average time lost" },
   best: { value: (r) => r.best, dir: "asc", name: "best stop" },

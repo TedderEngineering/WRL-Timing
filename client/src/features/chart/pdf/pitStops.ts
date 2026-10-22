@@ -125,7 +125,7 @@ export async function pitStopsPdf(data: RaceChartData, pits: PitAnalysisResponse
         { label: "P", w: 18, align: "right", cell: (r) => r.pos, bold: true },
         { label: "CAR", w: 32, cell: (r) => `#${r.label}`, bold: true },
         { label: "TEAM", w: 104, cell: (r) => r.team },
-        { label: "STOPS", w: 28, align: "right", cell: (r) => String(r.serviceStops) },
+        { label: "STOPS", w: 28, align: "right", cell: (r) => String(r.visits) },
         { label: "AVG LANE", w: 40, align: "right", cell: (r) => secText(r.avgLane) },
         { label: "AVG LOST", w: 40, align: "right", cell: (r) => secText(r.avgLost) },
         { label: "BEST", w: 34, align: "right", color: () => C.good, cell: (r) => secText(r.best) },

@@ -305,6 +305,8 @@ export interface SettleMarker {
   cycle?: string;
   /** The in-lap of the stop this cycle result belongs to. */
   stopLap?: number | null;
+  /** The cycle never closed for the car (it retired, or the flag fell first): cpAfter is its last lap's. */
+  open?: boolean;
 }
 
 export interface CarAnnotations {

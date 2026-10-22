@@ -50,6 +50,8 @@ export interface PitCycleFact {
   caution?: boolean;
   /** The stop's time lost in the class's same cycle, top three of three or more only. */
   quickest?: { rank: number; of: number } | null;
+  /** The cycle never closed for the car (it retired, or the flag fell first): after is its last lap's place. */
+  open?: boolean;
 }
 
 /** One thing that went right, ranked by its score (server dashboard/highlights.ts). */
@@ -119,6 +121,9 @@ export interface MyCarResponse {
     bestLap: { sec: number; lap: number } | null;
     bestLapClassRank: number | null;
     pitCycles: PitCycleFact[];
+    /** Every pit-lane visit, and their in-laps (absent from older servers). */
+    stops?: number;
+    stopLaps?: number[];
     /** Class benchmarks (plan E), facts in the class top three only. */
     benchmarks?: string[];
     /** What went right, ranked (server dashboard/highlights.ts); absent from older servers. */
@@ -167,7 +172,13 @@ export function finishLine(f: NonNullable<MyCarResponse["facts"]>): string {
 export function pitCycleLine(c: PitCycleFact, cls: string): string {
   const change = c.net > 0 ? `gained ${c.net}` : c.net < 0 ? `lost ${-c.net}` : "held position";
   const stop = c.stopLap ? `stop on lap ${c.stopLap}` : `settled lap ${c.lap}`;
-  return `Pit cycle ${c.cycle} (${stop}): P${c.before} → P${c.after} in ${cls}, ${change}`;
+  return `Pit cycle ${c.cycle} (${stop}): P${c.before} → P${c.after} in ${cls}, ${change}${c.open ? " (cycle not completed)" : ""}`;
+}
+
+/** The car's pit stops: every pit-lane visit (the server counts them); an older server: the stints' splits, else the pit cycles. */
+export function carStops(f: { stops?: number; pitCycles: PitCycleFact[] }, drive: CarDriveFacts | null): number {
+  if (typeof f.stops === "number") return f.stops;
+  return drive && drive.stints.length > 0 ? drive.stints.length - 1 : f.pitCycles.length;
 }
 
 function list(names: string[]): string {
@@ -395,9 +406,9 @@ export function MyCarCard({
 function CarRaceBox({ facts, drive }: { facts: NonNullable<MyCarResponse["facts"]>; drive: CarDriveFacts | null }) {
   const cycles = facts.pitCycles;
   const net = cycles.reduce((a, c) => a + c.net, 0);
-  // Stops: the stints' splits when the timing has them, else the pit cycles.
-  const stops = drive && drive.stints.length > 0 ? drive.stints.length - 1 : cycles.length;
-  const stopLaps = drive && drive.stints.length > 1 ? drive.stints.slice(0, -1).map((s) => s.end) : cycles.map((c) => c.stopLap).filter((l): l is number => !!l);
+  // Stops: every pit-lane visit, as every page counts them (server dashboard/pit-visits.ts).
+  const stops = carStops(facts, drive);
+  const stopLaps = facts.stopLaps ?? (drive && drive.stints.length > 1 ? drive.stints.slice(0, -1).map((s) => s.end) : cycles.map((c) => c.stopLap).filter((l): l is number => !!l));
   const named = !!drive?.known && drive.drivers.length > 0;
   const colorOf = (d: string | null) => {
     if (!d || !drive) return "var(--rt-border)";
@@ -519,6 +530,7 @@ function PitCycles({ cls, cycles }: { cls: string; cycles: PitCycleFact[] }) {
               <span className="text-[12px] font-semibold" style={{ color: tone }}>
                 {c.net > 0 ? `Gained ${c.net}` : c.net < 0 ? `Lost ${-c.net}` : "Held"}
               </span>
+              {c.open && <span className="text-[11px] text-[var(--rt-text-muted)]">Cycle not completed</span>}
               {c.quickest && (
                 <span className="text-[11px]" style={{ color: "var(--rt-good)" }}>
                   {QUICKEST[c.quickest.rank]} stop of {c.quickest.of}

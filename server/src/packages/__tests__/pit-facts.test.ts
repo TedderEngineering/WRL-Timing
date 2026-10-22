@@ -93,7 +93,8 @@ describe("pit facts from the analysis package", () => {
     expect(pits.map((p) => p.l)).toEqual([3]);
     expect(pits[0]).toMatchObject({ lb: "Pit 1", kind: "stop", alsoPittingCars: [2], cycle: { id: "cycle:GTU:1", ordinal: 1, cls: "GTU" } });
     expect(pits[0].pitTiming).toMatchObject({ totalPitLoss: 55.5, context: "green", lossMethod: "green_reference", avgGreenLapTime: 100, isDriveThrough: false, inLapTime: 130, outLapTime: 125 });
-    expect(out.annotations["3"].pits[0]).toMatchObject({ l: 5, lb: "Drive-through", kind: "drive_through" });
+    // Every pit-lane visit is a stop, numbered with the others; one that is not a service stop says what it was.
+    expect(out.annotations["3"].pits[0]).toMatchObject({ l: 5, lb: "Pit 1 (drive-through)", kind: "drive_through", visit: 1 });
     expect((out.annotations["3"].pits[0] as any).pitTiming.isDriveThrough).toBe(true);
   });
 
@@ -163,10 +164,13 @@ describe("pit facts from the analysis package", () => {
       { carNumber: "2", teamName: "Bravo", carClass: "GTU", carColor: "#f00", finishPos: 1 },
     ]);
     expect(out.source).toBe("facts");
-    expect(Object.keys(out.cars)).toEqual(["1", "2"]); // #3's drive-through is not a stop
+    // Every pit-lane visit is a stop: #3's drive-through is its stop 1.
+    expect(Object.keys(out.cars)).toEqual(["1", "2", "3"]);
+    expect(out.cars["3"].stops[0]).toMatchObject({ stopNumber: 1, pitLap: 5, kind: "drive_through" });
     expect(out.cars["1"].stops[0]).toMatchObject({ stopNumber: 1, pitLap: 3, condition: "Full green", timeLost_s: 55.5, refSource: "Green pace", localRef_s: 100, cycle: 1 });
     expect(out.cars["2"].stops[0]).toMatchObject({ condition: "Caution", timeLost_s: -4, refSource: "Cars on track (caution)", pitRoadTime_s: 40.2 });
-    expect(out.summary).toEqual({ totalStops: 2, totalCars: 2, avgServiceTime_s: null, avgTimeLost_s: 55.5 });
+    // The average time lost is still over green service stops.
+    expect(out.summary).toEqual({ totalStops: 3, totalCars: 3, avgServiceTime_s: null, avgTimeLost_s: 55.5 });
   });
 
   it("gives each stop its class places: the cycle's on the first stop of a cycle, a garage visit's own, none for a second stop in the cycle", () => {
@@ -183,6 +187,20 @@ describe("pit facts from the analysis package", () => {
     expect(out.cars["1"].stops[0]).toMatchObject({ classPosBefore: 1, classPosAfter: 2, netClass: -1, placesOver: "cycle" });
     expect(out.cars["1"].stops[1]).toMatchObject({ classPosBefore: null, classPosAfter: null, netClass: null, placesOver: null });
     expect(out.cars["2"].stops[0]).toMatchObject({ classPosBefore: 2, classPosAfter: 1, netClass: 1, placesOver: "cycle" });
-    expect(out.cars["3"].stops[0]).toMatchObject({ kind: "garage", classPosBefore: 2, classPosAfter: 3, netClass: -1, placesOver: "stop" });
+    // #3: the garage visit (lap 2) is its stop 1, the drive-through (lap 5) its stop 2.
+    expect(out.cars["3"].stops.find((x) => x.kind === "garage")).toMatchObject({ stopNumber: 1, classPosBefore: 2, classPosAfter: 3, netClass: -1, placesOver: "stop" });
+    expect(out.cars["3"].stops.find((x) => x.kind === "drive_through")).toMatchObject({ stopNumber: 2 });
+  });
+
+  it("shows a pit cycle that never closed for the car, marked, to its last lap", () => {
+    // Car 1 retired before its cycle closed: no after lap or class position from the engine.
+    const f = { ...facts, cycleResults: facts.cycleResults.map((r) => (r.car === "1" ? { ...r, afterLap: null, classPosAfter: null, netClass: null, overallPosAfter: null } : r)) };
+    const out = applyPitFacts(chart() as any, annotations() as any, f);
+    const s1 = out.annotations["1"].settles[0];
+    // To the car's last lap (6), where it ran P3 in class.
+    expect(s1).toMatchObject({ l: 6, cpBefore: 1, open: true });
+    expect(out.annotations["1"].reasons["3"]).toMatch(/in pit cycle \(not completed\)/);
+    const stops = pitStopsFromFacts(f, [{ carNumber: "1", teamName: "Alpha", carClass: "GTU", carColor: null, finishPos: 2 }]);
+    expect(stops.cars["1"].stops[0]).toMatchObject({ classPosBefore: 1, cycleOpen: true, placesOver: "cycle" });
   });
 });

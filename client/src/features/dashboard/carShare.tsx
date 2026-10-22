@@ -21,7 +21,7 @@ import { isComputer } from "@/features/share/shareImage";
 import { loadRaceChartWithNotes, podiumBadge, primeRaceChart } from "../my-drivers/driverCard";
 import { displayName } from "../my-drivers/api";
 import { driveTimeText } from "../my-drivers/stints";
-import { finishLine, type CarDriveFacts, type MyCarResponse } from "./MyCarCard";
+import { carStops, finishLine, type CarDriveFacts, type MyCarResponse } from "./MyCarCard";
 
 type Facts = NonNullable<MyCarResponse["facts"]>;
 
@@ -68,7 +68,7 @@ export function carCardResult(f: Facts): string {
 export function carCardStats(f: Facts, drive: CarDriveFacts | null): { value: string; sub: string; tone?: "good" | "bad" }[] {
   const cycles = f.pitCycles;
   const net = cycles.reduce((a, c) => a + c.net, 0);
-  const stops = drive && drive.stints.length > 0 ? drive.stints.length - 1 : cycles.length;
+  const stops = carStops(f, drive);
   const out: { value: string; sub: string; tone?: "good" | "bad" }[] = [
     {
       value: f.bestLap ? formatDuration(f.bestLap.sec) : "—",
