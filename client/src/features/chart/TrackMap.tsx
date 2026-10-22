@@ -5,6 +5,7 @@ import { carKey, carNo } from "./car-number";
 import { TRACE, labelOn, liveClassColor } from "./constants";
 import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car";
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
+import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import {
   IN_PIT,
@@ -51,6 +52,8 @@ const C = {
   offTrack: "#f97316",
   /** The ring round a stopped car. */
   stopped: "#ef4444",
+  /** The ring round a car on its out-lap from the pits. */
+  outLap: "#22d3ee",
   /** The pit entry tag (the running order's blue P). */
   pit: "#2563eb",
 };
@@ -96,6 +99,8 @@ export function TrackMap({
   const [pitVisits, setPitVisits] = useState<Map<number, PitVisit>>(() => new Map());
   /** The cars not running (no lap for over 15 minutes): OUT, not drawn on the track. */
   const out = useMemo(() => outCars(data), [data]);
+  /** Laps down to the class leader (the LD column): a lapped car is drawn as a ghost dot. */
+  const lapped = useMemo(() => lapsDown(data), [data]);
   const dataRef = useRef(data);
   dataRef.current = data;
   const [now, setNow] = useState(() => Date.now());
@@ -310,7 +315,8 @@ export function TrackMap({
         const leader = key === leaderKey;
         const followed = !focus && followKeys.has(key);
         const other = inClass !== null && !inClass.has(key) && !focus && !followed && !leader;
-        return { m, key, focus, followed, compared, leader, other, rank: focus ? 4 : followed ? 3 : leader ? 2 : compared ? 1 : 0 };
+        const ghost = (lapped.get(key) ?? 0) > 0;
+        return { m, key, focus, followed, compared, leader, other, ghost, outLap: onOutLap(data, key, pitVisits), rank: focus ? 4 : followed ? 3 : leader ? 2 : compared ? 1 : 0 };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => a.rank - b.rank || (b.other ? 1 : 0) - (a.other ? 1 : 0));
@@ -345,6 +351,17 @@ export function TrackMap({
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.stroke();
+      } else if (d.ghost) {
+        // A lap down or more: a ghost of the dot (see-through, with a thin edge).
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * 0.3;
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.globalAlpha = a * 0.9;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.globalAlpha = a;
       } else {
         ctx.fillStyle = color;
         ctx.fill();
@@ -354,7 +371,16 @@ export function TrackMap({
         ctx.lineWidth = 3;
         ctx.stroke();
       }
-      if (!offTrack && isStopped(d.m, t, track.len)) {
+      const stoppedNow = !offTrack && isStopped(d.m, t, track.len);
+      if (d.outLap && !offTrack && !stoppedNow) {
+        // On its out-lap from the pits: a solid cyan ring.
+        ctx.strokeStyle = C.outLap;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (stoppedNow) {
         // Stopped (frozen fix, next lap overdue): a solid red ring at its last real fix.
         ctx.strokeStyle = C.stopped;
         ctx.lineWidth = 2;
@@ -374,7 +400,7 @@ export function TrackMap({
       }
       if (tracked || d.compared || d.leader) {
         const label = carNo(data, d.key);
-        ctx.fillStyle = hollow ? color : labelOn(color);
+        ctx.fillStyle = hollow || d.ghost ? "#ffffff" : labelOn(color);
         const size = tracked ? (label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11.5) : label.length > 2 ? 7 : 8.5;
         ctx.font = `${tracked ? 700 : 600} ${size}px system-ui, sans-serif`;
         ctx.textAlign = "center";
@@ -530,6 +556,12 @@ export function TrackMap({
           </span>
           {leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
         </span>
+        <span className="flex items-center gap-1.5" title="A lap or more down on its class leader (the LD column)">
+          <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} /> lapped
+        </span>
+        <span className="flex items-center gap-1.5" title="Back on track from a pit stop, on the lap it rejoined">
+          <span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: C.outLap }} /> out-lap
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
         </span>
@@ -562,6 +594,15 @@ export function pitVisitsNow(prev: Map<number, PitVisit>, inPit: string[], data:
 export function overallLeader(data: RaceChartData): number | null {
   for (const [k, c] of Object.entries(data.cars)) if (c.finishPos === 1) return Number(k);
   return null;
+}
+
+/**
+ * A car on its out-lap: its last completed lap is the one it pitted on (the chart's pit flag sits
+ * on the in-lap), and it is out of the pit lane now. Ends when it completes the lap.
+ */
+export function onOutLap(data: RaceChartData, key: number, inPits: Map<number, PitVisit>): boolean {
+  const laps = data.cars[String(key)]?.laps ?? [];
+  return laps.length > 0 && laps[laps.length - 1].pit === 1 && !inPits.has(key);
 }
 
 /** Flags that bring out the safety car (a full-course caution). */
