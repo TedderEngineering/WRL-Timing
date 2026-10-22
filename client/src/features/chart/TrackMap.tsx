@@ -2,10 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
-import { getCompColor } from "./chart-renderer";
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { PitList } from "./PitList";
-import { TRACE } from "./constants";
 import {
   IN_PIT,
   NO_GPS,
@@ -44,11 +42,9 @@ const C = {
   trackIn: "#2e2e54",
   line: "#e0e0e8",
   muted: "#9a9ab4",
-  dim: "#6b6b88",
   text: "#e0e0e8",
-  /** The overall leader's ring and tag, and its dot when it is not a compare car. */
+  /** The overall leader's ring and tag. */
   leader: "#fbbf24",
-  leaderDot: "#d4d4e2",
   /** The dashed ring round a car off the track. */
   offTrack: "#f97316",
   /** The ring round a stopped car. */
@@ -57,10 +53,32 @@ const C = {
   pit: "#2563eb",
 };
 
+/** Each class's colour on the map (any other class: grey-blue). */
+export const MAP_CLASS_COLORS: Record<string, string> = {
+  GTU: "#9ca3af",
+  GTO: "#3b82f6",
+  GP1: "#ef4444",
+  GP2: "#22c55e",
+};
+const MAP_CLASS_OTHER = "#8b8bb0";
+
+/** A class's colour on the map. */
+export function mapClassColor(cls: string | null | undefined): string {
+  return MAP_CLASS_COLORS[String(cls ?? "").trim().toUpperCase()] ?? MAP_CLASS_OTHER;
+}
+
+/** The car number's colour on a dot of this colour (dark on the light colours). */
+export function labelOn(color: string): string {
+  const n = parseInt(color.slice(1), 16);
+  const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+  return lum > 140 ? "#0b0b18" : "#ffffff";
+}
+
 /**
  * RaceTrace Live: the circuit with every car as a numbered dot moving round it ("marching ants").
- * The focus car is the biggest and brightest, compare cars are in their trace colours, the rest
- * small and dim; another class is dimmer still. Beside it, the running order (position, number,
+ * Every dot is in its class colour (GTU grey, GTO blue, GP1 red, GP2 green). The focus car is the
+ * biggest, with a white ring; compare cars are larger, numbered; the rest small; with one class
+ * picked, the other classes are faint. Beside it, the running order (position, number,
  * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a dot
  * or a row makes it the focus car.
  */
@@ -313,7 +331,8 @@ export function TrackMap({
       const [x, y] = offTrack ? px(d.m.offShown ?? d.m.off!) : px(pointAt(track.pts, track.ds, track.len, d.m.shown));
       // The leader is always drawn full size with its number, even when not a compare car.
       const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
-      const color = d.focus ? TRACE.focus : d.compared ? getCompColor(compSet, focusNum, d.key) : d.leader ? C.leaderDot : C.dim;
+      // Every dot in its class colour; the focus car is the large one with a white ring.
+      const color = mapClassColor(data.cars[String(d.key)]?.cls);
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
       // Fading in onto the map, or out into the pit lane.
       const vis = offTrack ? 1 : visibility(d.m, t, track.len);
@@ -355,7 +374,7 @@ export function TrackMap({
       }
       if (d.focus || d.compared || d.leader) {
         const label = carNo(data, d.key);
-        ctx.fillStyle = hollow ? color : d.focus || (d.leader && !d.compared) ? "#0b0b18" : "#ffffff";
+        ctx.fillStyle = hollow ? color : labelOn(color);
         ctx.font = `${d.focus ? 700 : 600} ${label.length > 2 ? (d.focus ? 9 : 7) : d.focus ? 11 : 8.5}px system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -494,6 +513,14 @@ export function TrackMap({
           </span>
         )}
         {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
+        {Object.keys(data.classGroups)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+          .map((cls) => (
+            <span key={cls} className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: mapClassColor(cls) }} />
+              {cls}
+            </span>
+          ))}
         <span className="flex items-center gap-1.5">
           <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
             P1
