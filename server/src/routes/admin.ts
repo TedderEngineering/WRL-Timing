@@ -14,6 +14,7 @@ import { env } from "../config/env.js";
 import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
 import { adminPackageReviewRouter, adminPackagesRouter } from "./packages.js";
+import { listReplays } from "../live/replay.js";
 
 export const adminRouter = Router();
 
@@ -24,6 +25,15 @@ adminRouter.use(requireAuth, requireAdmin);
 adminRouter.use("/races/:id/packages", adminPackagesRouter);
 // Every draft (or other state) across races, for the review page
 adminRouter.use("/packages", adminPackageReviewRouter);
+
+// ─── GET /api/admin/live-replays — RaceTrace Live replays (live/replay.ts) ────
+//
+// Finished races played again on a live race page for demos: open to everyone at
+// /live/<slug>, never listed with the live races, so the admin page lists them.
+
+adminRouter.get("/live-replays", (_req: Request, res: Response) => {
+  res.json({ replays: listReplays() });
+});
 
 // ─── GET /api/admin/formats — List available data format parsers ─────────────
 

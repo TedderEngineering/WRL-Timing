@@ -320,15 +320,18 @@ export function useLiveChartData(slug: string | undefined): UseLiveChartData {
     const open = async () => {
       if (mode.current === "legacy") return;
       errors = 0;
-      let k: string;
-      try {
-        k = await liveKey();
-      } catch {
-        stop(15_000); // no key yet (signed out, offline): polling carries on, the stream tries again
-        return;
+      const path = `/live/${encodeURIComponent(slug)}/events`;
+      let k: string | null = null;
+      if (needsLiveKey(path)) {
+        try {
+          k = await liveKey();
+        } catch {
+          stop(15_000); // no key yet (signed out, offline): polling carries on, the stream tries again
+          return;
+        }
       }
       if (closed) return;
-      es = new EventSource(`${LIVE_API_BASE}${withLiveKey(`/live/${encodeURIComponent(slug)}/events`, k)}`);
+      es = new EventSource(`${LIVE_API_BASE}${k === null ? path : withLiveKey(path, k)}`);
       lastMessage = Date.now();
       es.addEventListener("head", (ev) => {
         lastMessage = Date.now();

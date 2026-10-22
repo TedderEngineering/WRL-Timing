@@ -23,9 +23,14 @@ export function liveKey(fresh = false): Promise<string> {
   return pending;
 }
 
-/** A live race URL (anything under /live/ but the listing itself) takes the key. */
+/** A replay of a finished race (server live/replay.ts): open to everyone, signed in or not. */
+export function isReplaySlug(slug: string | undefined | null): boolean {
+  return !!slug && slug.startsWith("replay-");
+}
+
+/** A live race URL (anything under /live/ but the listing itself and replays) takes the key. */
 export function needsLiveKey(path: string): boolean {
-  return /^\/live\/[^?]/.test(path);
+  return /^\/live\/(?!replay-)[^?]/.test(path);
 }
 
 export function withLiveKey(path: string, k: string): string {
