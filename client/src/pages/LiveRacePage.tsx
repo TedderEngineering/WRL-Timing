@@ -21,6 +21,7 @@ import { carKey, carNo } from "../features/chart/car-number";
 import { gapClock, lapsAndSeconds, leaderGaps, type LeaderGap } from "../features/chart/live-gaps";
 import { LiveClockContext, LiveRaceContext } from "../features/chart/live-zoom";
 import { hasTeamAccess } from "../lib/utils";
+import { greenRun, lapsToGo } from "../features/live/race-laps";
 import { formatRaceDateLong } from "../lib/race-dates";
 import { isReplaySlug } from "../features/live/liveKey";
 import { fetchLiveSessions, getPublic, useLiveChartData, type LiveListing, type LiveSessionListing, type UpcomingListed } from "../hooks/useLiveChartData";
@@ -776,6 +777,31 @@ export function LiveRacePage() {
             </span>
           )}
           <RaceClock run={st?.runningRaceTime} ttg={live?.ended ? null : st?.timeToGo} at={clockAt} frozen={!!live?.ended || flag === "Red" || flag === "Checkered"} />
+          {!live?.ended && flag !== "Checkered" && (() => {
+            const lap = st?.leaderLap ?? data.maxLap;
+            const run = greenRun(data, lap, !!flag && CAUTION_FLAGS.has(flag));
+            const togo = lapsToGo(data, timeToGoS);
+            return (
+              <>
+                <span title={run.caution ? "Laps under this caution (the leader's)" : "Leader laps since the last caution ended (or since the start)"}>
+                  {run.caution ? (
+                    <>
+                      Caution lap <b>{run.laps}</b>
+                    </>
+                  ) : (
+                    <>
+                      <b>{run.laps}</b> lap{run.laps === 1 ? "" : "s"} since green
+                    </>
+                  )}
+                </span>
+                {togo !== null && (
+                  <span title="The time to go at the overall leader's average lap so far (stops and cautions included)">
+                    ≈<b>{togo}</b> lap{togo === 1 ? "" : "s"} to go
+                  </span>
+                )}
+              </>
+            );
+          })()}
           <span>{st?.carCount ?? Object.keys(data.cars).length} cars</span>
           <LeaderGapBadge data={data} focusNum={focusNum} flag={flag} drift={drift} />
           <span className="flex-1" />
@@ -838,7 +864,17 @@ export function LiveRacePage() {
         {tab === "map" && (
           <div className="flex flex-col md:min-h-0 md:flex-1">
             <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
-            <TrackMap slug={slug} data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} flag={flag} annotations={annotations} />
+            <TrackMap
+              slug={slug}
+              data={data}
+              focusNum={focusNum}
+              setFocusNum={setFocusNum}
+              compSet={compSet}
+              classView={classView}
+              flag={flag}
+              annotations={annotations}
+              clock={!live?.ended && ttgAt !== null && clockAt !== null ? { ttgS: ttgAt, at: clockAt, frozen: flag === "Red" || flag === "Checkered" } : null}
+            />
           </div>
         )}
         {tab === "pitanalysis" && (
