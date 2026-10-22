@@ -120,48 +120,53 @@ export interface SettleLabel {
 }
 
 /**
- * The pit-cycle results the import computed (annotations `settles`, the existing RaceTrace logic):
- * where the car ran before the cycle (the pre-pit baseline, from the start of the cycle) and
- * where it settled once the class's stops in that cycle were done. In a class view the same
- * marker is given in class positions: the class position at the settle lap, and at the last lap
- * before the stop where the car held its pre-cycle overall position.
+ * A pit cycle's result in class positions: from the analysis package (cpBefore / cpAfter), else
+ * worked out from the laps: the class position on the last lap before the stop where the car held
+ * its pre-cycle overall position ("Was P5"), and the class position on the settle lap. Null when
+ * neither is known. Every panel that shows a pit cycle reads it through this (the card's server
+ * copy: dashboard/my-car.ts classPitCycles).
  */
-export function settleLabels(settles: SettleMarker[], laps: LapData[], classView: string): SettleLabel[] {
+export function classCycle(sp: SettleMarker, laps: LapData[]): { before: number; after: number; net: number } | null {
+  if (typeof sp.cpBefore === "number" && typeof sp.cpAfter === "number") return { before: sp.cpBefore, after: sp.cpAfter, net: sp.cpBefore - sp.cpAfter };
+  const at = laps.find((l) => l.l === sp.l);
+  const was = Number(/Was P(\d+)/.exec(sp.su)?.[1]);
+  const stop = [...laps].reverse().find((l) => l.l < sp.l && l.pit === 1);
+  const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;
+  return at && before ? { before: before.cp, after: at.cp, net: before.cp - at.cp } : null;
+}
+
+const netText = (net: number) => (net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held");
+const netColor = (net: number) => (net > 0 ? TRACE.gain : net < 0 ? TRACE.loss : "#888888");
+
+/**
+ * Each pit cycle's result for the chart. A pit cycle is a class's: its places are always class
+ * places, in every view, so the chart says what the car's card, Lap details and the Pit Stops tab
+ * say. Overall places over a cycle are not its result (other classes' cars are part way through
+ * their own cycles), so the overall view only adds where the car settled overall, beside the
+ * class result, and draws the leader to that point on its overall line. A cycle with no class
+ * positions (an old import without them) keeps the import's overall wording.
+ */
+export function settleLabels(settles: SettleMarker[], laps: LapData[], classView: string, cls = ""): SettleLabel[] {
   const out: SettleLabel[] = [];
+  const inClass = classView || cls;
   for (const sp of settles) {
     const at = laps.find((l) => l.l === sp.l);
+    const c = classCycle(sp, laps);
+    if (c && inClass) {
+      out.push({
+        lap: sp.l,
+        pos: classView ? c.after : sp.p,
+        title: `Settled P${c.after} in ${inClass}${classView ? "" : ` · P${sp.p} overall`}`,
+        sub: `Was P${c.before} · ${netText(c.net)}`,
+        color: netColor(c.net),
+      });
+      continue;
+    }
     if (!classView) {
       out.push({ lap: sp.l, pos: sp.p, title: sp.lb, sub: sp.su, color: sp.c });
       continue;
     }
-    if (!at) continue;
-    if (typeof sp.cpBefore === "number" && typeof sp.cpAfter === "number") {
-      // From the analysis package: class positions before the stop and when the cycle closed.
-      const net = sp.cpBefore - sp.cpAfter;
-      out.push({
-        lap: sp.l,
-        pos: sp.cpAfter,
-        title: `Settled P${sp.cpAfter} in ${classView}`,
-        sub: `Was P${sp.cpBefore} · ${net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held"}`,
-        color: net > 0 ? TRACE.gain : net < 0 ? TRACE.loss : "#888888",
-      });
-      continue;
-    }
-    const was = Number(/Was P(\d+)/.exec(sp.su)?.[1]);
-    const stop = [...laps].reverse().find((l) => l.l < sp.l && l.pit === 1);
-    const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;
-    if (!before) {
-      out.push({ lap: sp.l, pos: at.cp, title: `Settled P${at.cp} in ${classView}`, sub: `${sp.su} (overall)`, color: sp.c });
-      continue;
-    }
-    const net = before.cp - at.cp;
-    out.push({
-      lap: sp.l,
-      pos: at.cp,
-      title: `Settled P${at.cp} in ${classView}`,
-      sub: `Was P${before.cp} · ${net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held"}`,
-      color: net > 0 ? TRACE.gain : net < 0 ? TRACE.loss : "#888888",
-    });
+    if (at) out.push({ lap: sp.l, pos: at.cp, title: `Settled P${at.cp} in ${classView}`, sub: `${sp.su} (overall)`, color: sp.c });
   }
   return out;
 }

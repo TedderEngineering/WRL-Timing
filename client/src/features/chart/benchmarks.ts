@@ -13,7 +13,8 @@
  * they gained places overall. The server's "Your car" card uses the same rules
  * (server/src/dashboard/my-car.ts).
  */
-import type { AnnotationData, LapData, RaceChartData } from "@shared/types";
+import type { AnnotationData, LapData, RaceChartData, SettleMarker } from "@shared/types";
+import { classCycle } from "./pit-band";
 import { stopsOf } from "./pit-stops";
 import { isGreenFlag } from "./flags";
 
@@ -77,19 +78,12 @@ export function classCycleNets(laps: LapData[], settles: { l: number; su: string
   return classCycleResults(laps, settles).map((r) => r.net);
 }
 
-/** The same, with the lap each cycle settled on. */
-export function classCycleResults(laps: LapData[], settles: { l: number; su: string; cpBefore?: number; cpAfter?: number }[]): { net: number; l: number }[] {
+/** The same, with the lap each cycle settled on (pit-band.ts classCycle, as the chart labels them). */
+export function classCycleResults(laps: LapData[], settles: { l: number; p?: number; lb?: string; c?: string; su: string; cpBefore?: number; cpAfter?: number }[]): { net: number; l: number }[] {
   const out: { net: number; l: number }[] = [];
   for (const s of settles) {
-    if (typeof s.cpBefore === "number" && typeof s.cpAfter === "number") {
-      out.push({ net: s.cpBefore - s.cpAfter, l: s.l });
-      continue;
-    }
-    const at = laps.find((l) => l.l === s.l);
-    const was = Number(/Was P(\d+)/.exec(s.su)?.[1]);
-    const stop = [...laps].reverse().find((l) => l.l < s.l && l.pit === 1);
-    const before = stop && Number.isFinite(was) ? [...laps].reverse().find((l) => l.l < stop.l && l.p === was) : undefined;
-    if (at && before) out.push({ net: before.cp - at.cp, l: s.l });
+    const c = classCycle({ p: 0, lb: "", c: "", ...s } as SettleMarker, laps);
+    if (c) out.push({ net: c.net, l: s.l });
   }
   return out;
 }

@@ -376,16 +376,16 @@ export function applyPitFacts(chart: Chart, annotations: Annotations, facts: Pit
       const i = row.get(r.afterLap);
       const p = r.overallPosAfter ?? (i !== undefined ? cols.pos[i] : null);
       if (p === null) continue;
-      const verb = net > 0 ? `Gained ${net}` : net < 0 ? `Lost ${-net}` : "Held";
+      // lb / su / c are the overall wording older pages read (and my-car.ts finds the lap before the
+      // stop by "Was P"): kept overall throughout, colour included. The class result, which every
+      // panel shows (the chart labels it in class places in every view), is cpBefore / cpAfter.
+      const o = r.overallPosBefore !== null && r.overallPosAfter !== null ? r.overallPosBefore - r.overallPosAfter : net;
       settles.push({
         l: r.afterLap,
         p,
         lb: `Settled P${p}`,
-        su: `Was P${r.overallPosBefore ?? "?"} · ${(() => {
-          const o = r.overallPosBefore !== null && r.overallPosAfter !== null ? r.overallPosBefore - r.overallPosAfter : null;
-          return o === null ? verb : o > 0 ? `Gained ${o}` : o < 0 ? `Lost ${-o}` : "Held";
-        })()}`,
-        c: net > 0 ? COLORS.gain : net < 0 ? COLORS.loss : COLORS.held,
+        su: `Was P${r.overallPosBefore ?? "?"} · ${o > 0 ? `Gained ${o}` : o < 0 ? `Lost ${-o}` : "Held"}`,
+        c: o > 0 ? COLORS.gain : o < 0 ? COLORS.loss : COLORS.held,
         cpBefore: r.classPosBefore,
         cpAfter: r.classPosAfter,
         cycle: r.cycleId,

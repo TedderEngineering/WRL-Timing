@@ -119,6 +119,15 @@ describe("pit facts from the analysis package", () => {
     expect(out.annotations["1"].reasons["2"]).toBeUndefined();
   });
 
+  it("keeps the overall wording and its colour together when class and overall disagree", () => {
+    // #6 at Road Atlanta, cycle 2: P36 to P37 overall (lost 1) but P26 to P25 in GS (gained 1).
+    const f = { ...facts, cycleResults: facts.cycleResults.map((r) => (r.car === "1" ? { ...r, classPosBefore: 26, classPosAfter: 25, netClass: 1, overallPosBefore: 36, overallPosAfter: 37 } : r)) };
+    const out = applyPitFacts(chart() as any, annotations() as any, f);
+    expect(out.annotations["1"].settles[0]).toMatchObject({ p: 37, lb: "Settled P37", su: "Was P36 · Lost 1", c: "#f87171", cpBefore: 26, cpAfter: 25 });
+    // The class result is what the car's card shows.
+    expect(carFacts(out.data as any, out.annotations as any, "1")!.pitCycles[0]).toMatchObject({ before: 26, after: 25, net: 1 });
+  });
+
   it("Your car counts pit cycles in class and ranks only green stops", () => {
     const out = applyPitFacts(chart() as any, annotations() as any, facts);
     const f = carFacts(out.data as any, out.annotations as any, "1")!;
