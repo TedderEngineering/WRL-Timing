@@ -4,6 +4,7 @@ import { carNo } from "./car-number";
 import { formatLapTime, getCompColor } from "./chart-renderer";
 import { TRACE, labelOn, liveClassColor } from "./constants";
 import { isCleanLap } from "./gap-math";
+import { lapsDown } from "./laps-down";
 
 const C = {
   bg: "#0b0b18",
@@ -297,6 +298,7 @@ export function RunningOrder({
   out: Set<number>;
 }) {
   const rows = runningOrder(data);
+  const ld = lapsDown(data);
   const [stat, setStat] = useState<LapStat>(loadStat);
   const cycleStat = () => {
     const n = nextLapStat(stat);
@@ -327,6 +329,9 @@ export function RunningOrder({
               <th className={th}>Class</th>
               <th className={`${th} text-right`} title="Position in class">
                 PIC
+              </th>
+              <th className={`${th} text-right`} title="Laps down to the class leader, counted when the car last crossed the line (0: on the lead lap)">
+                LD
               </th>
               <th className={`${th} text-right`}>Last</th>
               <th className={`${th} text-right`}>
@@ -410,6 +415,9 @@ export function RunningOrder({
                   <td className="px-1 py-1 sm:px-1.5 text-right font-semibold" style={{ color }}>
                     {r.posClass ?? "–"}
                   </td>
+                  <td className="px-1 py-1 text-right tabular-nums sm:px-1.5" style={{ color: (ld.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
+                    {ld.get(r.key) ?? "–"}
+                  </td>
                   <td
                     className="px-1 py-1 sm:px-1.5 text-right"
                     style={{ color: last !== null && last === best ? C.personal : C.text }}
@@ -440,7 +448,7 @@ export function RunningOrder({
                     style={rowStyle}
                   >
                     <td className="p-0" style={{ borderLeft: `5px solid ${color}` }} />
-                    <td colSpan={8} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
+                    <td colSpan={9} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
                       {pitDetail(carPits, visit)}
                     </td>
                   </tr>
