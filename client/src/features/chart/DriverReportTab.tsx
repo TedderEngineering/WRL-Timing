@@ -1,13 +1,17 @@
 /**
  * Driver Report: every driver of a class ranked on the average of their fastest racing laps
  * (driver-performance.ts), with the spread of those laps, a z-score against the class at the same
- * time, clear air, cars passed, laps driven and when in the race they drove.
+ * time, clear air, cars passed, laps driven and when in the race they drove. On RaceTrace Live
+ * (`live`), the race so far, with the driver in each running car marked IN CAR.
  */
 import { useEffect, useMemo, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
 import { InfoTip } from "../../components/InfoTip";
 import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
+import { sameDriver } from "../my-drivers/api";
+import { stintsOf } from "../my-drivers/stints";
+import { outCars } from "./RunningOrder";
 import { DEFAULT_SORT, SORT_COLUMNS as COLUMNS, driverMethodText, setDriverReportView, sortDriverRows, type DriverSort, type SortKey } from "./driver-report-view";
 import {
   CLASS_LIMIT,
@@ -58,10 +62,30 @@ export interface DriverReportTabProps {
   annotations: AnnotationData;
   focusNum: number;
   setFocusNum: (n: number) => void;
+  /** RaceTrace Live: the race so far (through the leader's lap), with each running car's driver marked IN CAR. */
+  live?: { lap: number };
 }
 
-export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: DriverReportTabProps) {
+/**
+ * RaceTrace Live: the driver in each running car now, by chart key: the driver of its latest
+ * stint (its stops name who drove; RunningOrder outCars are not running).
+ */
+export function driversInCars(data: RaceChartData, annotations: AnnotationData): Map<string, string> {
+  const out = outCars(data);
+  const now = new Map<string, string>();
+  for (const [key, car] of Object.entries(data.cars)) {
+    if (out.has(Number(key))) continue;
+    const sole = car.drivers?.length === 1 ? car.drivers[0] : null;
+    const stints = stintsOf(car.laps, annotations?.[key]?.pits, sole, car.drivers ?? []);
+    const d = stints[stints.length - 1]?.driver;
+    if (d) now.set(key, d);
+  }
+  return now;
+}
+
+export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live }: DriverReportTabProps) {
   const reports = useMemo(() => driverPerformance(data, annotations), [data, annotations]);
+  const inCar = useMemo(() => (live ? driversInCars(data, annotations) : null), [live, data, annotations]);
   const focusCls = data.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState<string>(() => (focusCls && reports.some((r) => r.cls === focusCls) ? focusCls : reports[0]?.cls ?? ""));
   const [sort, setSort] = useState<DriverSort>(DEFAULT_SORT);
@@ -105,7 +129,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className="m-0 text-base font-semibold">Driver performance</h2>
         <span className="text-sm" style={{ color: S.muted }}>
-          Fastest racing laps (at most half of each driver's laps) · {report.cls} · {report.rows.length} drivers
+          {live ? `The race so far, through lap ${live.lap} · ` : ""}Fastest racing laps (at most half of each driver's laps) · {report.cls} · {report.rows.length} drivers
         </span>
       </div>
 
@@ -154,6 +178,11 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
                   {/* The driver stays in view while the row scrolls sideways on a phone. */}
                   <td className="sticky left-0 z-10 whitespace-nowrap px-2 font-medium" style={{ background: focus ? "#2a1d1a" : i % 2 ? S.rowAlt : S.row }}>
                     {r.driver ?? <span style={{ color: S.muted }}>Driver not named</span>}
+                    {r.driver && inCar?.get(r.carKey) && sameDriver(inCar.get(r.carKey)!, r.driver) && (
+                      <span className="ml-1.5 rounded px-1 align-middle text-[9px] font-bold" style={{ background: S.clear, color: S.bg }} title="Driving the car now">
+                        IN CAR
+                      </span>
+                    )}
                   </td>
                   <td className="max-w-[220px] truncate whitespace-nowrap px-2" title={`#${r.carLabel} ${r.team}`}>
                     <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? S.accent }}>#{r.carLabel}</span>{" "}
@@ -172,7 +201,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
                   <Num v={String(r.shown.length)} />
                   <Num v={`${r.laps} (${Math.round(r.lapsPct)}%)`} />
                   <td className="px-2 py-0.5">
-                    <TimeOnTrack row={r} raceS={report.raceS} />
+                    <TimeOnTrack row={r} raceS={report.raceS} live={!!live} />
                   </td>
                 </tr>
               );
@@ -188,7 +217,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum }: Dr
               <td className="px-2 pb-2 pt-1">
                 <div className="flex justify-between text-[10px]" style={{ color: S.muted, width: TRACK_W }}>
                   <span>Start</span>
-                  <span>{Math.round(report.raceS / 3600)} h</span>
+                  <span>{live ? "Now" : `${Math.round(report.raceS / 3600)} h`}</span>
                 </div>
               </td>
             </tr>
@@ -281,7 +310,7 @@ function AxisLabels({ report }: { report: ClassReport }) {
 }
 
 /** The race from start to flag, the driver's stints shaded lighter early and darker late. */
-function TimeOnTrack({ row, raceS }: { row: DriverRow; raceS: number }) {
+function TimeOnTrack({ row, raceS, live = false }: { row: DriverRow; raceS: number; live?: boolean }) {
   const h = ROW_H - 6;
   const x = (s: number) => (raceS > 0 ? (s / raceS) * TRACK_W : 0);
   const shade = (s: number) => {
@@ -299,7 +328,8 @@ function TimeOnTrack({ row, raceS }: { row: DriverRow; raceS: number }) {
       ))}
       {row.stoppedAtS !== null && (
         <text x={Math.min(x(row.stoppedAtS) + 3, TRACK_W - 24)} y={h - 5} fontSize={9} fontWeight={700} fill="#ef4444">
-          DNF
+          {/* Live: not running now (it may yet come back out of the garage). */}
+          {live ? "OUT" : "DNF"}
         </text>
       )}
     </svg>

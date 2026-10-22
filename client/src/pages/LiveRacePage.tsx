@@ -9,6 +9,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import { LapChart } from "../features/chart/LapChart";
 import { LapTimeChart } from "../features/chart/LapTimeChart";
 import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
+import { DriverReportTab } from "../features/chart/DriverReportTab";
 import { LiveStrategyTab } from "../features/chart/LiveStrategyTab";
 import { TrackMap } from "../features/chart/TrackMap";
 import { LiveGapsPanel } from "../features/chart/LiveGapsPanel";
@@ -199,7 +200,7 @@ function PreRaceLayout({
 }) {
   const now = useNow(1000);
   const data = useMemo(() => entriesChart(entries), [entries]);
-  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes">("position");
+  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes" | "drivers">("position");
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
   const [focusNum, setFocusNumRaw] = useState(0);
   const [compSet, setCompSet] = useState<Set<number>>(new Set());
@@ -227,6 +228,7 @@ function PreRaceLayout({
     { id: "map" as const, label: "Track Map" },
     { id: "pitanalysis" as const, label: "Pit Stops" },
     { id: "laptimes" as const, label: "Lap Times" },
+    { id: "drivers" as const, label: "Driver Report" },
   ];
   const panel = "rounded-lg border p-4 text-sm";
   const waitText = (what: string) => (
@@ -294,6 +296,8 @@ function PreRaceLayout({
         )
       ) : tab === "pitanalysis" ? (
         waitText("Pit stops fill in from the first stop: time lost, the class pit cycles and the leaderboard.")
+      ) : tab === "drivers" ? (
+        waitText("The driver report fills in as the race runs: each class's drivers ranked on their fastest racing laps, with consistency, clean air, cars passed and when they drove.")
       ) : (
         <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
           <div className="flex min-w-0 flex-1 flex-col px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
@@ -561,7 +565,7 @@ export function LiveRacePage() {
     };
   }, [slug, eventNameNow]);
   const now = useNow();
-  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes" | "strategy">("position");
+  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes" | "strategy" | "drivers">("position");
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
@@ -697,6 +701,7 @@ export function LiveRacePage() {
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
     { id: "strategy" as const, label: "Strategy", locked: !isTeam },
+    { id: "drivers" as const, label: "Driver Report", locked: !isTeam },
   ];
   // Time to go now: the timing's last value, counted down since it arrived (held under a red flag).
   const ttgAt = spanSec(st?.timeToGo);
@@ -829,6 +834,11 @@ export function LiveRacePage() {
             <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
               <LiveStrategyTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} flag={flag} timeToGoS={timeToGoS} />
             </div>
+          </div>
+        )}
+        {tab === "drivers" && (
+          <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+            <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} live={{ lap: data.maxLap }} />
           </div>
         )}
         {tab === "laptimes" && (
