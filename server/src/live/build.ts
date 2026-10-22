@@ -15,6 +15,7 @@
  * parsed by the Speedhive parser, exactly as `intake push` does for a
  * finished WRL session.
  */
+import { nameDriverChanges } from "./drivers.js";
 import {
   buildAllLapsCsv,
   buildControlCsv,
@@ -69,6 +70,8 @@ export interface LiveInputs {
   timeToGo?: string | null;
   /** Wall clock, for closing the open flag (default Date.now()). */
   now?: number;
+  /** Who is in each car now, by car number (the state's driver names; drivers.ts). */
+  currentDrivers?: Record<string, string>;
 }
 
 export interface LiveStatus {
@@ -128,6 +131,8 @@ export async function buildLiveChart(inp: LiveInputs): Promise<LiveChart> {
   const { input, placeholders } = parserInput(speedhiveParser, files);
   const parsed = await speedhiveParser.parse(input);
   const data = raceDataJsonSchema.parse(parsed.data);
+  // Each pit stop's driver in and out, from the laps' driver names (the parser names nobody).
+  if (parsed.annotations) nameDriverChanges(parsed.annotations as Record<string, unknown>, data, laps, inp.currentDrivers);
   const warnings = [...parsed.warnings];
   if (!clock) warnings.push("No race-clock start yet: Time of Day is missing.");
   for (const k of placeholders) warnings.push(`No ${k} yet: FCY comes from lap status.`);

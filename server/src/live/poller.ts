@@ -41,6 +41,7 @@ import { encodeDelta, lapPrefixes, summarize, type VersionSummary } from "./wire
 import { positionsFromState, publicTrack, trackFromFeed, type Positions, type PublicTrack, type TrackGeometry } from "./track.js";
 import { pitLearnerFor, type PitLane } from "./pits.js";
 import { replaySource, type ReplaySource } from "./replay.js";
+import { currentDrivers } from "./drivers.js";
 
 /** How often a poller wakes (session state). */
 export const TICK_MS = Number(process.env.LIVE_TICK_MS || 5_000);
@@ -387,6 +388,8 @@ class Poller {
         hashOf(JSON.stringify(this.flags) + JSON.stringify(this.control)),
         hashOf(JSON.stringify(state?.results.eventEntries ?? null)),
         state?.currentFlag ?? "",
+        // A driver change shows on the stop's driver out before the out-lap is done.
+        hashOf(JSON.stringify(currentDrivers(state?.laps ?? []))),
       ].join("|");
       if (lapsChanged) this.lapsPending = true;
       const lapsDue = this.lapsPending && Date.now() - this.lastBuildAt >= Math.max(TICK_MS, this.lastBuildMs * REBUILD_COST_FACTOR) - 50;
@@ -404,6 +407,7 @@ class Poller {
             timeToGo: state?.timeToGo ?? null,
             // A replay closes the open flag at the race's own clock.
             ...(this.replay ? { now: this.replay.wallNow() } : {}),
+            currentDrivers: currentDrivers(state?.laps ?? []),
           });
       const rebuilt = rebuild;
       if (rebuild) {
