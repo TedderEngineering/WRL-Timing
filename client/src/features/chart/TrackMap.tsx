@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { getPublic } from "../../hooks/useLiveChartData";
 import { carKey, carNo } from "./car-number";
-import { labelOn, liveClassColor } from "./constants";
+import { TRACE, labelOn, liveClassColor } from "./constants";
+import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car";
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { PitList } from "./PitList";
 import {
@@ -59,8 +60,9 @@ const C = {
  * Every dot is in its class colour (GTU grey, GTO blue, GP1 red, GP2 green). The focus car is the
  * biggest, with a white ring; compare cars are larger, numbered; the rest small; with one class
  * picked, the other classes are faint. Beside it, the running order (position, number,
- * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a dot
- * or a row makes it the focus car.
+ * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a row
+ * makes it the focus car; tapping a dot follows that car (or stops following it). Followed cars are
+ * drawn like the focus car, large with a glow and a ring, so several cars can be tracked at once.
  */
 export function TrackMap({
   slug,
@@ -101,6 +103,14 @@ export function TrackMap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hits = useRef<{ key: number; x: number; y: number; r: number }[]>([]);
+  /** The cars this viewer follows on the map (published numbers), kept per race on this device. */
+  const [followed, setFollowed] = useState<string[]>(() => readFollowedCars(slug));
+  useEffect(() => setFollowed(readFollowedCars(slug)), [slug]);
+  const follow = (cars: string[]) => {
+    setFollowed(cars);
+    saveFollowedCars(slug, cars);
+  };
+  const followKeys = useMemo(() => new Set(followed.map((n) => carKey(data, n)).filter((k): k is number => k !== null)), [followed, data]);
 
   // The outline: once, and again every minute until the timing has learned the circuit.
   useEffect(() => {
@@ -298,8 +308,9 @@ export function TrackMap({
         const focus = key === focusNum;
         const compared = !focus && compSet.has(key);
         const leader = key === leaderKey;
-        const other = inClass !== null && !inClass.has(key) && !focus && !leader;
-        return { m, key, focus, compared, leader, other, rank: focus ? 3 : leader ? 2 : compared ? 1 : 0 };
+        const followed = !focus && followKeys.has(key);
+        const other = inClass !== null && !inClass.has(key) && !focus && !followed && !leader;
+        return { m, key, focus, followed, compared, leader, other, rank: focus ? 4 : followed ? 3 : leader ? 2 : compared ? 1 : 0 };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => a.rank - b.rank || (b.other ? 1 : 0) - (a.other ? 1 : 0));
@@ -310,15 +321,24 @@ export function TrackMap({
       const offTrack = !!d.m.off;
       const [x, y] = offTrack ? px(d.m.offShown ?? d.m.off!) : px(pointAt(track.pts, track.ds, track.len, d.m.shown));
       // The leader is always drawn full size with its number, even when not a compare car.
-      const r = d.focus ? 12 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
-      // Every dot in its class colour; the focus car is the large one with a white ring.
+      const tracked = d.focus || d.followed;
+      const r = tracked ? 13 : d.compared || d.leader ? (many && !d.leader ? 8 : 9) : 5;
+      // Every dot in its class colour; the focus car and followed cars are the large ones, with a
+      // glow and a ring (orange on the focus car, white on the followed ones).
       const color = liveClassColor(data.cars[String(d.key)]?.cls);
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
       // Fading in onto the map, or out into the pit lane.
       const vis = offTrack ? 1 : visibility(d.m, t, track.len);
       if (vis < 0.02) continue;
       if (d.leader && vis > 0.5) leaderAt = { x, y, r };
-      ctx.globalAlpha = (d.other ? 0.3 : d.compared || d.focus || d.leader ? 1 : 0.7) * vis;
+      if (tracked) {
+        ctx.globalAlpha = 0.3 * vis;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = (d.other ? 0.3 : d.compared || tracked || d.leader ? 1 : 0.7) * vis;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       if (hollow) {
@@ -329,9 +349,9 @@ export function TrackMap({
         ctx.fillStyle = color;
         ctx.fill();
       }
-      if (d.focus) {
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 2.5;
+      if (tracked) {
+        ctx.strokeStyle = d.focus ? TRACE.focus : "#ffffff";
+        ctx.lineWidth = 3;
         ctx.stroke();
       }
       if (!offTrack && isStopped(d.m, t, track.len)) {
@@ -352,10 +372,11 @@ export function TrackMap({
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (d.focus || d.compared || d.leader) {
+      if (tracked || d.compared || d.leader) {
         const label = carNo(data, d.key);
         ctx.fillStyle = hollow ? color : labelOn(color);
-        ctx.font = `${d.focus ? 700 : 600} ${label.length > 2 ? (d.focus ? 9 : 7) : d.focus ? 11 : 8.5}px system-ui, sans-serif`;
+        const size = tracked ? (label.length > 3 ? 8 : label.length > 2 ? 9.5 : 11.5) : label.length > 2 ? 7 : 8.5;
+        ctx.font = `${tracked ? 700 : 600} ${size}px system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(label, x, y + 0.5);
@@ -439,7 +460,8 @@ export function TrackMap({
     const y = e.clientY - r.top;
     // The top-most dot under the tap (the focus car is drawn last).
     const hit = [...hits.current].reverse().find((h) => Math.hypot(h.x - x, h.y - y) <= h.r);
-    if (hit) setFocusNum(hit.key);
+    // Follow the car tapped, or stop following it (the focus car is always shown large).
+    if (hit && hit.key !== focusNum) follow(toggleFollow(followed, carNo(data, hit.key)));
   };
 
   const age = readingAt !== null ? now - readingAt : null;
@@ -464,7 +486,7 @@ export function TrackMap({
             ref={canvasRef}
             onClick={onClick}
             role="img"
-            aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to focus it.`}
+            aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to follow it.`}
             className="absolute inset-0 cursor-pointer"
           />
           {!track && (
@@ -474,6 +496,7 @@ export function TrackMap({
           )}
         </div>
         {/* Directly under the map (above the running order on a phone). */}
+        <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
         <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         </div>
         <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} annotations={annotations} pits={pitVisits} out={out} />
@@ -605,4 +628,58 @@ export function stepSafetyCar(sc: SafetyCarState, target: number | null, v: numb
   const gap = signedGap(sc.d, target, len);
   if (Math.abs(gap) > SC_RESET_M) return { d: target, active: true };
   return { d: move(Math.max(1 - SC_NUDGE, Math.min(1 + SC_NUDGE, 1 + gap / 600))), active: true };
+}
+
+/** Under the map: the cars followed (tap × to stop following one), or how to follow one. */
+function FollowBar({
+  data,
+  focusNum,
+  followed,
+  out,
+  onChange,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  followed: string[];
+  out: Set<number>;
+  onChange: (cars: string[]) => void;
+}) {
+  const cars = followed.filter((n) => {
+    const k = carKey(data, n);
+    return k !== null && !!data.cars[String(k)] && k !== focusNum;
+  });
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
+      <span className="mr-1 font-semibold" style={{ color: C.text }}>
+        Following
+      </span>
+      {focusNum > 0 && (
+        <span className="rounded-full border-2 px-2 py-0.5 font-bold tabular-nums" style={{ borderColor: TRACE.focus, color: C.text }} title="The focus car (change it with Focus or by tapping a row)">
+          #{carNo(data, focusNum)}
+        </span>
+      )}
+      {cars.map((n) => {
+        const k = carKey(data, n)!;
+        return (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(followed.filter((c) => c !== n))}
+            className="flex items-center gap-1 rounded-full border-2 border-white px-2 py-0.5 font-bold tabular-nums hover:bg-white/10"
+            style={{ color: out.has(k) ? C.muted : C.text, background: `${liveClassColor(data.cars[String(k)]?.cls)}33` }}
+            aria-label={`Stop following #${n}`}
+          >
+            #{n} <span aria-hidden>×</span>
+          </button>
+        );
+      })}
+      {cars.length > 0 ? (
+        <button type="button" onClick={() => onChange([])} className="ml-1 underline hover:text-white">
+          Clear
+        </button>
+      ) : (
+        <span>Tap cars on the map to follow them.</span>
+      )}
+    </div>
+  );
 }
