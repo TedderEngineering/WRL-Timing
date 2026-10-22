@@ -287,6 +287,8 @@ export function RunningOrder({
   out,
   followed,
   onRowTap,
+  above,
+  swap,
 }: {
   data: RaceChartData;
   annotations: AnnotationData | null;
@@ -302,6 +304,10 @@ export function RunningOrder({
   followed?: Set<number>;
   /** Tapping a row: follow the car or stop (the track map); without it, the row sets the focus car. */
   onRowTap?: (key: number) => void;
+  /** Above the table (the track map's view tabs). */
+  above?: React.ReactNode;
+  /** Shown in the table's place (the live running order). */
+  swap?: React.ReactNode;
 }) {
   const tap = (key: number) => (onRowTap ? onRowTap(key) : setFocusNum(key));
   const rows = runningOrder(data);
@@ -323,11 +329,12 @@ export function RunningOrder({
   const th = "px-1 py-2 font-semibold sm:px-1.5";
   return (
     <div className="flex flex-col px-2 pb-3 pt-1 sm:px-3 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
+      {above}
       <div
         className="custom-scroll overflow-x-auto rounded-lg border text-xs md:min-h-0 md:flex-1 md:overflow-y-auto"
         style={{ background: C.card, borderColor: C.line, color: C.text }}
       >
-        <table className="w-full border-collapse tabular-nums">
+        {swap ?? <table className="w-full border-collapse tabular-nums">
           <thead className="sticky top-0 z-10" style={{ background: C.head, color: C.muted }}>
             <tr className="text-left">
               <th className="w-5 p-0 sm:w-6" aria-label="In the pits" />
@@ -472,7 +479,7 @@ export function RunningOrder({
               return cells;
             })}
           </tbody>
-        </table>
+        </table>}
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
+import { LiveTrackOrder, trackOrder } from "./LiveTrackOrder";
+import { driversInCars } from "./DriverReportTab";
 import {
   IN_PIT,
   NO_GPS,
@@ -102,6 +104,23 @@ export function TrackMap({
   const out = useMemo(() => outCars(data), [data]);
   /** Laps down to the class leader (the LD column): a lapped car is drawn as a ghost dot. */
   const lapped = useMemo(() => lapsDown(data), [data]);
+  /** Beside the map: the running order (timing) or the live running order (on the road now). */
+  const [orderView, setOrderView] = useState<"timing" | "live">(() => {
+    try {
+      return localStorage.getItem(ORDER_VIEW_KEY) === "live" ? "live" : "timing";
+    } catch {
+      return "timing";
+    }
+  });
+  const pickOrderView = (v: "timing" | "live") => {
+    setOrderView(v);
+    try {
+      localStorage.setItem(ORDER_VIEW_KEY, v);
+    } catch {
+      /* private window: for this visit only */
+    }
+  };
+  const drivers = useMemo(() => (orderView === "live" ? driversInCars(data, annotations ?? {}) : new Map<string, string>()), [orderView, data, annotations]);
   const dataRef = useRef(data);
   dataRef.current = data;
   const [now, setNow] = useState(() => Date.now());
@@ -527,6 +546,55 @@ export function TrackMap({
         <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         </div>
         <RunningOrder
+          above={
+            <div role="tablist" aria-label="Running order view" className="mb-1.5 flex gap-1 text-xs">
+              {(
+                [
+                  ["timing", "Running order"],
+                  ["live", "Live running order"],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={orderView === v}
+                  onClick={() => pickOrderView(v)}
+                  className="rounded-md px-2.5 py-1 font-semibold"
+                  style={{ background: orderView === v ? "#2a2a48" : "transparent", color: orderView === v ? C.text : C.muted }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+          swap={
+            orderView === "live" && track ? (
+              (() => {
+                const places = [...motions.current.values()].flatMap((m) => {
+                  const k = carKey(data, m.num);
+                  if (k === null || !data.cars[String(k)] || out.has(k)) return [];
+                  return [{ key: k, d: m.shown, inPit: (m.flags & IN_PIT) !== 0 || pitVisits.has(k) }];
+                });
+                const refM = [...motions.current.values()].find((m) => carKey(data, m.num) === focusNum);
+                const speed = refM && refM.base > 0 ? refM.base : typicalSpeed;
+                const rows = trackOrder(places, focusNum, track.len, speed);
+                return (
+                  <LiveTrackOrder
+                    data={data}
+                    rows={rows}
+                    lapsDown={lapped}
+                    drivers={drivers}
+                    followed={followKeys}
+                    refMissing={!refM}
+                    onRowTap={(k) => {
+                      if (k !== focusNum) follow(toggleFollow(followed, carNo(data, k)));
+                    }}
+                  />
+                );
+              })()
+            ) : undefined
+          }
           data={data}
           focusNum={focusNum}
           setFocusNum={setFocusNum}
@@ -618,6 +686,9 @@ export function onOutLap(data: RaceChartData, key: number, inPits: Map<number, P
   const laps = data.cars[String(key)]?.laps ?? [];
   return laps.length > 0 && laps[laps.length - 1].pit === 1 && !inPits.has(key);
 }
+
+/** The view beside the map, kept on this device. */
+const ORDER_VIEW_KEY = "rt.live.orderView";
 
 /** Flags that bring out the safety car (a full-course caution). */
 const CAUTION_FLAGS = new Set(["Yellow", "Code 35", "Code 60", "FCY"]);
