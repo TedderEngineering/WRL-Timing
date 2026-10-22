@@ -63,9 +63,10 @@ const C = {
  * Every dot is in its class colour (GTU grey, GTO blue, GP1 red, GP2 green). The focus car is the
  * biggest, with a white ring; compare cars are larger, numbered; the rest small; with one class
  * picked, the other classes are faint. Beside it, the running order (position, number,
- * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a row
- * makes it the focus car; tapping a dot follows that car (or stops following it). Followed cars are
- * drawn like the focus car, large with a glow and a ring, so several cars can be tracked at once.
+ * place in class, by class colour); cars in the pit lane are listed under the map. Tapping a dot or
+ * a row follows that car (or stops following it); the focus car is set with Focus. Followed cars
+ * are drawn like the focus car, large with a glow and a ring, so several cars can be tracked at
+ * once, and their rows are highlighted.
  */
 export function TrackMap({
   slug,
@@ -525,7 +526,20 @@ export function TrackMap({
         <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
         <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         </div>
-        <RunningOrder data={data} focusNum={focusNum} setFocusNum={setFocusNum} compSet={compSet} classView={classView} annotations={annotations} pits={pitVisits} out={out} />
+        <RunningOrder
+          data={data}
+          focusNum={focusNum}
+          setFocusNum={setFocusNum}
+          compSet={compSet}
+          classView={classView}
+          annotations={annotations}
+          pits={pitVisits}
+          out={out}
+          followed={followKeys}
+          onRowTap={(k) => {
+            if (k !== focusNum) follow(toggleFollow(followed, carNo(data, k)));
+          }}
+        />
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
         {label(unplaced) && <span>No position: {label(unplaced)}</span>}
@@ -695,7 +709,7 @@ function FollowBar({
         Following
       </span>
       {focusNum > 0 && (
-        <span className="rounded-full border-2 px-2 py-0.5 font-bold tabular-nums" style={{ borderColor: TRACE.focus, color: C.text }} title="The focus car (change it with Focus or by tapping a row)">
+        <span className="rounded-full border-2 px-2 py-0.5 font-bold tabular-nums" style={{ borderColor: TRACE.focus, color: C.text }} title="The focus car (change it with Focus)">
           #{carNo(data, focusNum)}
         </span>
       )}
@@ -719,7 +733,7 @@ function FollowBar({
           Clear
         </button>
       ) : (
-        <span>Tap cars on the map to follow them.</span>
+        <span>Tap cars on the map or in the table to follow them.</span>
       )}
     </div>
   );

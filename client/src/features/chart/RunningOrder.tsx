@@ -285,6 +285,8 @@ export function RunningOrder({
   classView,
   pits,
   out,
+  followed,
+  onRowTap,
 }: {
   data: RaceChartData;
   annotations: AnnotationData | null;
@@ -296,7 +298,12 @@ export function RunningOrder({
   pits: Map<number, PitVisit>;
   /** The cars not running (outCars). */
   out: Set<number>;
+  /** The cars followed on the map (highlighted rows). */
+  followed?: Set<number>;
+  /** Tapping a row: follow the car or stop (the track map); without it, the row sets the focus car. */
+  onRowTap?: (key: number) => void;
 }) {
+  const tap = (key: number) => (onRowTap ? onRowTap(key) : setFocusNum(key));
   const rows = runningOrder(data);
   const ld = lapsDown(data);
   const [stat, setStat] = useState<LapStat>(loadStat);
@@ -365,6 +372,7 @@ export function RunningOrder({
             {rows.map((r) => {
               const focus = r.key === focusNum;
               const compared = !focus && compSet.has(r.key);
+              const isFollowed = !focus && !!followed?.has(r.key);
               const other = !!classView && r.cls !== classView && !focus;
               const color = classColor(r.cls);
               const isOut = out.has(r.key);
@@ -377,15 +385,17 @@ export function RunningOrder({
               const rowStyle = {
                 borderColor: C.line,
                 opacity: other ? 0.35 : isOut ? 0.55 : 1,
-                background: focus ? "rgba(244,140,52,0.16)" : `${color}26`,
+                background: focus ? "rgba(244,140,52,0.16)" : isFollowed ? `linear-gradient(rgba(255,255,255,0.09), rgba(255,255,255,0.09)), ${color}26` : `${color}26`,
               };
               const cells = [
                 <tr
                   key={r.key}
-                  onClick={() => setFocusNum(r.key)}
+                  onClick={() => tap(r.key)}
                   className={`cursor-pointer hover:bg-white/5 ${visit ? "" : "border-b"}`}
                   style={rowStyle}
                   aria-current={focus ? "true" : undefined}
+                  aria-pressed={onRowTap && !focus ? isFollowed : undefined}
+                  title={onRowTap ? (focus ? "The focus car (change it with Focus)" : isFollowed ? "Following on the map: tap to stop" : "Tap to follow on the map") : undefined}
                 >
                   <td className="px-0.5 py-1 text-center sm:px-1" style={{ borderLeft: `5px solid ${color}` }}>
                     {isOut ? (
@@ -405,7 +415,13 @@ export function RunningOrder({
                     className="px-1 py-1 sm:px-1.5 font-bold"
                     style={{ color: focus ? TRACE.focus : compared ? getCompColor(compSet, focusNum, r.key) : C.text }}
                   >
-                    {carNo(data, r.key)}
+                    {isFollowed ? (
+                      <span className="-mx-1 rounded-full border-2 border-white px-1" title="Following on the map">
+                        {carNo(data, r.key)}
+                      </span>
+                    ) : (
+                      carNo(data, r.key)
+                    )}
                   </td>
                   <td className="px-1 py-1 sm:px-1.5">
                     <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
@@ -443,7 +459,7 @@ export function RunningOrder({
                 cells.push(
                   <tr
                     key={`${r.key}-pit`}
-                    onClick={() => setFocusNum(r.key)}
+                    onClick={() => tap(r.key)}
                     className="cursor-pointer border-b"
                     style={rowStyle}
                   >
