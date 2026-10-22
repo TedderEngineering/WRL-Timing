@@ -118,6 +118,15 @@ export class ReplaySource {
     readonly clock: () => number = Date.now
   ) {}
 
+  /** RaceTrace's names for the race (no timing-system ids). */
+  names(): { eventName: string; sessionName: string; date: string | null } {
+    return {
+      eventName: eventDisplayName(String((this.event as { n?: unknown } | null)?.n ?? ""), this.def.eventId),
+      sessionName: (this.session?.n ?? "").trim(),
+      date: plausibleDate(this.session?.st) ?? null,
+    };
+  }
+
   /** Load the race (once; again after a failure, at most every RETRY_MS). */
   load(): Promise<void> {
     if (this.loaded) return Promise.resolve();
@@ -461,6 +470,17 @@ export function setReplayFeed(h: HttpClient | null, s: ReplayStore | null = null
   store = s;
   sources.clear();
   if (clock) for (const r of REPLAYS) sources.set(r.slug, new ReplaySource(r, defaultFeed, s, clock));
+}
+
+/** The replay offered as a demo where the live race normally sits (home page, live listing): the first one ready. */
+export function replayDemo(): { slug: string; eventName: string; sessionName: string; date: string | null } | null {
+  for (const r of REPLAYS) {
+    const s = replaySource(r.slug)!;
+    if (s.loaded) return { slug: r.slug, ...s.names() };
+    // Not loaded yet (start-up, or a failed load): start it, for the next ask.
+    void s.load().catch(() => undefined);
+  }
+  return null;
 }
 
 /** For the admin page: each replay's address, where it starts, and whether it is ready. */

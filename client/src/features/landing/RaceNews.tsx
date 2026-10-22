@@ -189,6 +189,20 @@ export function RaceNews() {
                 {new Date(nextLive.startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
               </p>
             )}
+            {!liveRace && live?.demo && (
+              <Link
+                to={`/live/${live.demo.slug}`}
+                className="mt-5 flex items-center gap-3 rounded-lg border border-brand-500/50 bg-brand-500/10 px-4 py-3 hover:bg-brand-500/20"
+              >
+                <span aria-hidden className="inline-block h-0 w-0 border-y-[7px] border-l-[11px] border-y-transparent border-l-brand-400" />
+                <span className="flex flex-col">
+                  <span className="text-sm font-semibold text-white">Watch the live demo</span>
+                  <span className="text-xs text-gray-400">
+                    {shortEvent(live.demo.eventName, "")} · {live.demo.sessionName}, replayed as it ran live. No sign-up needed.
+                  </span>
+                </span>
+              </Link>
+            )}
             {cta(liveRace ? `/live/${liveRace.slug}` : "/live", liveRace ? "Watch it live" : "See what's on")}
           </article>
         </div>
