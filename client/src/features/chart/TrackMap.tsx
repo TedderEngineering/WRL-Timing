@@ -584,7 +584,7 @@ export function TrackMap({
             <div role="tablist" aria-label="Running order view" className="mb-1.5 flex gap-1 text-xs">
               {(
                 [
-                  ["timing", "Running order"],
+                  ["timing", "Running Order"],
                   ["live", "Live Crossing Order"],
                 ] as const
               ).map(([v, label]) => (
