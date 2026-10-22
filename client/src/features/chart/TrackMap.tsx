@@ -105,7 +105,7 @@ export function TrackMap({
   const out = useMemo(() => outCars(data), [data]);
   /** Laps down to the class leader (the LD column): a lapped car is drawn as a ghost dot. */
   const lapped = useMemo(() => lapsDown(data), [data]);
-  /** Beside the map: the running order (timing) or the live running order (on the road now). */
+  /** Beside the map: the running order (timing) or the Live Crossing Order (on the road now). */
   const [orderView, setOrderView] = useState<"timing" | "live">(() => {
     try {
       return localStorage.getItem(ORDER_VIEW_KEY) === "live" ? "live" : "timing";
@@ -553,7 +553,7 @@ export function TrackMap({
               {(
                 [
                   ["timing", "Running order"],
-                  ["live", "Live running order"],
+                  ["live", "Live Crossing Order"],
                 ] as const
               ).map(([v, label]) => (
                 <button

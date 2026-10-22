@@ -306,7 +306,7 @@ export function RunningOrder({
   onRowTap?: (key: number) => void;
   /** Above the table (the track map's view tabs). */
   above?: React.ReactNode;
-  /** Shown in the table's place (the live running order). */
+  /** Shown in the table's place (the Live Crossing Order). */
   swap?: React.ReactNode;
 }) {
   const tap = (key: number) => (onRowTap ? onRowTap(key) : setFocusNum(key));
