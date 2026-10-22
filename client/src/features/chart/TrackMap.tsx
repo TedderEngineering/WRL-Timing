@@ -8,6 +8,7 @@ import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import { virtualCars } from "../live/race-laps";
+import { RaceControl } from "./RaceControl";
 import { LiveTrackOrder, trackOrder } from "./LiveTrackOrder";
 import { driversInCars } from "./DriverReportTab";
 import {
@@ -576,6 +577,7 @@ export function TrackMap({
         {/* Directly under the map (above the running order on a phone). */}
         <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
         <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
+        <RaceControl slug={slug} data={data} focusNum={focusNum} followed={followKeys} />
         </div>
         <RunningOrder
           above={

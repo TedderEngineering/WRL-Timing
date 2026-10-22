@@ -16,6 +16,7 @@
  * finished WRL session.
  */
 import { nameDriverChanges } from "./drivers.js";
+import { setPitLaneTimes } from "./pit-lane.js";
 import {
   buildAllLapsCsv,
   buildControlCsv,
@@ -133,6 +134,8 @@ export async function buildLiveChart(inp: LiveInputs): Promise<LiveChart> {
   const data = raceDataJsonSchema.parse(parsed.data);
   // Each pit stop's driver in and out, from the laps' driver names (the parser names nobody).
   if (parsed.annotations) nameDriverChanges(parsed.annotations as Record<string, unknown>, data, laps, inp.currentDrivers);
+  // Pit-lane times from the timing (the parser has none and would show the time lost there).
+  if (parsed.annotations) setPitLaneTimes(parsed.annotations as Record<string, unknown>, data, laps);
   const warnings = [...parsed.warnings];
   if (!clock) warnings.push("No race-clock start yet: Time of Day is missing.");
   for (const k of placeholders) warnings.push(`No ${k} yet: FCY comes from lap status.`);

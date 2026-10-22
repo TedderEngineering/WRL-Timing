@@ -48,3 +48,11 @@ describe("pitAnalysisFromChart", () => {
     expect(pitAnalysisFromChart(data, {}).summary.totalStops).toBe(0);
   });
 });
+
+describe("pitAnalysisFromChart pit-lane time", () => {
+  it("does not show the time lost as the pit-lane time (the parser's stand-in)", () => {
+    const same = { "119": { reasons: {}, settles: [], pits: [pit(10, timing(125.2, { pitRoadTime: 125.2 }))] } } as unknown as AnnotationData;
+    const a = pitAnalysisFromChart(data, same);
+    expect(a.cars["119"].stops[0]).toMatchObject({ pitRoadTime_s: null, timeLost_s: 125.2 });
+  });
+});

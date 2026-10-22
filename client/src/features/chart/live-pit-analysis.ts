@@ -64,7 +64,8 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
         localRef_s: t?.avgGreenLapTime ?? null,
         refSource: t?.avgGreenLapTime ? "Green pace" : "Not measurable",
         serviceTime_s: null,
-        pitRoadTime_s: t?.pitRoadTime ?? null,
+        // The import's "total_only" timing repeats the time lost as the pit-lane time: not one.
+        pitRoadTime_s: t?.pitRoadTime != null && !(t.decompositionLevel === "total_only" && t.pitRoadTime === t.totalPitLoss) ? t.pitRoadTime : null,
         timeLost_s: lost,
         delta_s: t?.cycleComparison?.deltaTotalLoss ?? null,
         cycle: m.cycle?.ordinal ?? t?.cycleComparison?.cycleId ?? null,
