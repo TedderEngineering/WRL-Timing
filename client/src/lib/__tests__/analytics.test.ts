@@ -33,6 +33,7 @@ describe("analytics", () => {
         "share_card",
         "share_app",
         "share_arrival",
+        "visit",
       ].sort()
     );
   });
@@ -128,5 +129,57 @@ describe("PostHog sender", () => {
   it("knows the agreed event names", () => {
     for (const e of ["alert_open", "checklist_step", "coffee_paid"])
       expect(ANALYTICS_EVENTS).toContain(e);
+  });
+});
+
+describe("visits", () => {
+  it("name their source from the link's tag, else the referring site, never an address", async () => {
+    const { visitSource } = await import("../analytics");
+    expect(visitSource("https://racetrace.tedderengineering.com/?from=instagram", "")).toBe("instagram");
+    expect(visitSource("https://racetrace.tedderengineering.com/chart?race=x&from=Email", "https://www.google.com/")).toBe("email");
+    expect(visitSource("https://racetrace.tedderengineering.com/?from=me@example.com", "")).toBe("other_tag");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "https://www.google.co.uk/search?q=wrl+sebring")).toBe("google");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "https://l.facebook.com/l.php?u=x")).toBe("facebook");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "https://t.co/abc")).toBe("x");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "https://findinggrip.tedderengineering.com/")).toBe("internal");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "https://forum.example.org/thread/12")).toBe("other_site");
+    expect(visitSource("https://racetrace.tedderengineering.com/", "")).toBe("direct");
+  });
+
+  it("are recorded once per page load with a page-type code", async () => {
+    const { noteVisit, __resetVisitForTests, recentEvents } = await import("../analytics");
+    __resetVisitForTests();
+    const replaced: string[] = [];
+    vi.stubGlobal("window", {
+      location: { href: "https://racetrace.tedderengineering.com/chart?race=r1&from=instagram", hostname: "racetrace.tedderengineering.com" },
+      history: { state: null, replaceState: (_s: unknown, _t: string, u: string) => replaced.push(u) },
+    });
+    const before = recentEvents().length;
+    noteVisit((path) => (path === "/chart" ? "race" : "other"));
+    noteVisit(() => "race");
+    const sent = recentEvents().slice(before);
+    expect(sent.map((e) => e.event)).toEqual(["visit"]);
+    expect(sent[0].details).toEqual({ source: "instagram", landing: "race" });
+    // The tag goes, so a reload doesn't count it again; the race stays.
+    expect(replaced).toEqual(["/chart?race=r1"]);
+  });
+
+  it("leave the share and alert tags to their own handlers", async () => {
+    const { noteVisit, __resetVisitForTests } = await import("../analytics");
+    __resetVisitForTests();
+    const replaced: string[] = [];
+    vi.stubGlobal("window", {
+      location: { href: "https://racetrace.tedderengineering.com/?from=share", hostname: "racetrace.tedderengineering.com" },
+      history: { state: null, replaceState: (_s: unknown, _t: string, u: string) => replaced.push(u) },
+    });
+    noteVisit(() => "home");
+    expect(replaced).toEqual([]);
+  });
+
+  it("know the page types", async () => {
+    const { landingCode } = await import("../visit-landing");
+    expect(["/", "/chart", "/live/sebring", "/races", "/dashboard", "/login", "/settings/cars", "/x"].map(landingCode)).toEqual([
+      "home", "race", "live", "events", "dashboard", "sign_in", "settings", "other",
+    ]);
   });
 });

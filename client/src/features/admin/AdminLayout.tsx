@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/admin/races/new", label: "Upload Race", icon: "⬆️", end: true },
   { to: "/admin/qualifying/new", label: "Upload Qualifying", icon: "⏱️", end: true },
   { to: "/admin/users", label: "Users", icon: "👥", end: false },
+  { to: "/admin/engagement", label: "Engagement", icon: "📈", end: true },
   { to: "/admin/audit-log", label: "Audit Log", icon: "📋", end: false },
   { to: "/admin/api-tokens", label: "API Tokens", icon: "🔑", end: false },
 ];

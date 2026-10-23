@@ -4,6 +4,11 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "./features/auth";
 import { App } from "./App";
 import "./styles/globals.css";
+import { noteVisit } from "./lib/analytics";
+import { landingCode } from "./lib/visit-landing";
+
+// One anonymous visit per page load, with where it came from (lib/analytics.ts noteVisit).
+noteVisit(landingCode);
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isLoading } = useAuth();

@@ -15,6 +15,7 @@ import { analyzeRacePitStops } from "../services/pitStopAnalysis.service.js";
 import { parseQualifyingCsv } from "../utils/parsers/qualifying.js";
 import { adminPackageReviewRouter, adminPackagesRouter } from "./packages.js";
 import { listReplays } from "../live/replay.js";
+import { loadEngagement } from "../services/engagement.js";
 
 export const adminRouter = Router();
 
@@ -892,6 +893,21 @@ adminRouter.post(
         },
       });
       res.json({ eventId, published });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ─── GET /api/admin/engagement — the engagement plan's measures (services/engagement.ts) ─
+
+adminRouter.get(
+  "/engagement",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const asked = Number(req.query.days);
+      const days = [7, 30, 90, 365].includes(asked) ? asked : 30;
+      res.json(await loadEngagement(days));
     } catch (err) {
       next(err);
     }

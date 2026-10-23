@@ -92,7 +92,12 @@ export function PrivacyPage() {
             or Do Not Track, we record nothing. We use PostHog to count these events and
             keep them for 12 months. A shared link carries a tag saying it came from a share,
             so we can count visits from shares; the tag is the same for everyone and never
-            says who shared it.
+            says who shared it. We also count each visit and where it came from: the tag on
+            the link that was opened (for example one from our Instagram post or an email), or
+            otherwise the name of the site that linked here, such as a search engine or social
+            network, and the kind of page opened (home, a race, live timing). We never record
+            the address of the page you came from, what you searched for, or which race you
+            opened.
           </p>
 
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50 mt-10">

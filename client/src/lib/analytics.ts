@@ -18,6 +18,11 @@
  *  - no cookies or storage; events are posted directly, without PostHog's
  *    script, so there is no click capture or session recording.
  * Return visits are measured from our own database, not from analytics.
+ *
+ * Visits: `visit { source, landing }` once per page load. `source` is the link's `?from=` tag
+ * (instagram, email, share…) or, without one, the kind of site that linked here (google,
+ * facebook, other_site, direct), never the page or search that sent the visitor; `landing` is a
+ * short code for the page type. See `noteVisit`.
  */
 import { IS_GRIP_SITE } from "./site";
 
@@ -41,6 +46,7 @@ export const ANALYTICS_EVENTS = [
   "checklist_step", // { step }
   "coffee_open", // { from }
   "coffee_paid", // { coffees }, on the thank-you page
+  "visit", // { source, landing }: a page load, and where it came from (noteVisit)
 ] as const;
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
 
@@ -174,4 +180,91 @@ if (POSTHOG_KEY && typeof window !== "undefined") {
 if (typeof window !== "undefined") {
   (window as Window & { __teAnalytics?: () => readonly SentEvent[] }).__teAnalytics =
     recentEvents;
+}
+
+// ─── Visits ──────────────────────────────────────────────────────────────────
+
+/**
+ * The address and referrer the page was opened with, read when this module first loads (before
+ * any arrival handler takes its `?from=` tag out of the address bar).
+ */
+const OPENED_WITH =
+  typeof window !== "undefined"
+    ? { href: window.location.href, referrer: typeof document !== "undefined" ? document.referrer : "" }
+    : null;
+
+/** Referrer hosts named by their site; anything else is "other_site". */
+const REFERRERS: [RegExp, string][] = [
+  [/(^|\.)google\./, "google"],
+  [/(^|\.)bing\.com$/, "bing"],
+  [/(^|\.)duckduckgo\.com$/, "duckduckgo"],
+  [/(^|\.)yahoo\./, "yahoo"],
+  [/(^|\.)(facebook\.com|fb\.com|fb\.me|messenger\.com)$/, "facebook"],
+  [/(^|\.)instagram\.com$/, "instagram"],
+  [/(^|\.)(t\.co|x\.com|twitter\.com)$/, "x"],
+  [/(^|\.)reddit\.com$/, "reddit"],
+  [/(^|\.)(youtube\.com|youtu\.be)$/, "youtube"],
+  [/(^|\.)(linkedin\.com|lnkd\.in)$/, "linkedin"],
+  [/(^|\.)whatsapp\.(com|net)$/, "whatsapp"],
+  [/(^|\.)tedderengineering\.com$/, "internal"],
+];
+
+/**
+ * Where a visit came from: the address's `?from=` tag when it has one (lower case, letters,
+ * digits, - and _, at most 24 characters; anything else is "other_tag"), else the referring
+ * site's name, "other_site", or "direct" without a referrer. Never a page address or search.
+ */
+export function visitSource(href: string, referrer: string): string {
+  try {
+    const tag = new URL(href).searchParams.get("from");
+    if (tag !== null) {
+      const t = tag.trim().toLowerCase();
+      return /^[a-z0-9_-]{1,24}$/.test(t) ? t : "other_tag";
+    }
+  } catch {
+    // not a URL: fall through to the referrer
+  }
+  if (!referrer) return "direct";
+  try {
+    const host = new URL(referrer).hostname.toLowerCase();
+    if (typeof window !== "undefined" && host === window.location.hostname) return "internal";
+    for (const [re, name] of REFERRERS) if (re.test(host)) return name;
+    return "other_site";
+  } catch {
+    return "other_site";
+  }
+}
+
+let visitNoted = false;
+
+/**
+ * Once per page load: send `visit { source, landing }`. `landing(path)` gives a short code for
+ * the page type (home, race, live…); the address itself is never sent. A `?from=` tag other
+ * than the ones their own handlers read (share, alert) is then taken out of the address bar,
+ * so a reload or bookmark doesn't count it again.
+ */
+export function noteVisit(landing: (path: string) => string): void {
+  const at =
+    OPENED_WITH ??
+    (typeof window !== "undefined"
+      ? { href: window.location.href, referrer: typeof document !== "undefined" ? document.referrer : "" }
+      : null);
+  if (visitNoted || !at) return;
+  visitNoted = true;
+  try {
+    const opened = new URL(at.href);
+    track("visit", { source: visitSource(at.href, at.referrer), landing: landing(opened.pathname) });
+    const now = new URL(window.location.href);
+    const tag = now.searchParams.get("from");
+    if (tag !== null && tag !== "share" && tag !== "alert") {
+      now.searchParams.delete("from");
+      window.history.replaceState(window.history.state, "", `${now.pathname}${now.search}${now.hash}`);
+    }
+  } catch {
+    // never break the page for analytics
+  }
+}
+
+export function __resetVisitForTests(): void {
+  visitNoted = false;
 }
