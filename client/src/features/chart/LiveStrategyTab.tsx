@@ -58,7 +58,6 @@ function FocusCards({ s, data }: { s: LiveStrategy; data: RaceChartData }) {
   const f = s.focus!;
   const c = f.car;
   const num = carNo(data, c.num);
-  const lead = s.cars[0];
   const stint = (
     <Note>
       {c.lastStopLap > 0 ? `${c.stintLaps} laps since its stop on lap ${c.lastStopLap}` : `${c.stintLaps} laps, no stop yet`}
@@ -114,15 +113,40 @@ function FocusCards({ s, data }: { s: LiveStrategy; data: RaceChartData }) {
         ) : (
           <>
             <Big>P{c.projPos} in class</Big>
-            <Note>
-              {c.projPos === 1 ? "First in class at the flag at today's paces" : `${behind(c.projGapS, lead.pace)} behind the class's first at the flag`}
-              {c.netPos !== null ? `; P${c.netPos} once every car has made the stops it owes.` : "."}
-            </Note>
+            <Note>{projectedNote(s, data)}</Note>
           </>
         )}
       </Card>
     </div>
   );
+}
+
+/** A gap in words with its unit: "1.1 s", "12.3 s (+1L)". */
+function gapWords(sec: number, pace: number | null): string {
+  const t = pace ? lapsAndSeconds(sec / pace, pace) : gapClock(sec);
+  return /\bs\b/.test(t) ? t : t.replace(/^([\d.]+)/, "$1 s");
+}
+
+/**
+ * The focus car's projected finish in words, naming the car it is measured against: "1.1 s behind
+ * #119, projected to win GTO." or "Projected to win GTO, 1.1 s ahead of #120.", then its place once
+ * every car has made the stops it owes.
+ */
+export function projectedNote(s: LiveStrategy, data: RaceChartData): string {
+  const c = s.focus!.car;
+  const pace = s.cars[0]?.pace ?? null;
+  const winner = s.cars.find((x) => x.projPos === 1);
+  const second = s.cars.find((x) => x.projPos === 2);
+  let first: string;
+  if (c.projPos === 1) {
+    first = second && second.projGapS !== null ? `Projected to win ${s.cls}, ${gapWords(second.projGapS, pace)} ahead of #${carNo(data, second.num)}.` : `Projected to win ${s.cls}.`;
+  } else {
+    first =
+      winner && c.projGapS !== null
+        ? `${gapWords(c.projGapS, pace)} behind #${carNo(data, winner.num)}, projected to win ${s.cls}.`
+        : `P${c.projPos} in ${s.cls} at the flag.`;
+  }
+  return c.netPos !== null ? `${first} P${c.netPos} once every car has made the stops it owes.` : first;
 }
 
 /** A lap time: "2:19.2". */

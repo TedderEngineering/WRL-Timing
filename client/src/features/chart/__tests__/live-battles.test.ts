@@ -59,3 +59,18 @@ describe("battles with the cars around the focus car", () => {
     expect(sameTeam("TCB Racing", "STAK Racing")).toBe(false);
   });
 });
+
+describe("the projected finish in words", () => {
+  const d = { cars: { "119": { label: undefined }, "120": {}, "99": {} } } as unknown as RaceChartData;
+  const c = (num: number, projPos: number, projGapS: number, netPos: number) => ({ num, projPos, projGapS, netPos, pace: 140 }) as unknown as CarStrategy;
+  const cars = [c(119, 1, 0, 1), c(120, 2, 1.1, 2), c(99, 3, 160, 3)];
+
+  it("names the car projected to win, behind it or ahead of the next", async () => {
+    const { projectedNote } = await import("../LiveStrategyTab");
+    const s = (focus: number) => ({ cls: "GTO", cars, focus: { car: cars.find((x) => x.num === focus)! } }) as unknown as LiveStrategy;
+    expect(projectedNote(s(120), d)).toBe("1.1 s behind #119, projected to win GTO. P2 once every car has made the stops it owes.");
+    expect(projectedNote(s(119), d)).toBe("Projected to win GTO, 1.1 s ahead of #120. P1 once every car has made the stops it owes.");
+    // A lap and more behind: whole laps, then seconds.
+    expect(projectedNote(s(99), d)).toBe("20.0 s (+1L) behind #119, projected to win GTO. P3 once every car has made the stops it owes.");
+  });
+});
