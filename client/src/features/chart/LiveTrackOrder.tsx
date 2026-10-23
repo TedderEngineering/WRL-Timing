@@ -6,7 +6,9 @@
  *
  *   - a square on the lead lap of its class, a circle a lap or more down (laps-down.ts), in the
  *     class colour; a thin bar in the class colour over the class leader;
- *   - car number, the driver in the car now, laps in the stint, and the gap on the road.
+ *   - car number, the driver in the car now, laps in the stint, the gap on the road, and whether
+ *     the reference car is gaining or losing time to the car now (its pace against the car's, over
+ *     each one's last 5 green laps, as the Strategy tab's Δ pace).
  *
  * The gap is the distance between the two cars on the lap at the reference car's pace: how long
  * it takes the reference car to reach where the other car is now (or the other car to reach it).
@@ -15,8 +17,9 @@
 import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { liveClassColor } from "./constants";
+import { recentPace } from "./live-battles";
 
-const C = { card: "#10101f", head: "#15152c", line: "#22223f", text: "#e0e0e8", muted: "#9a9ab4", focus: "#F48C34", pit: "#2563eb" };
+const C = { card: "#10101f", head: "#15152c", line: "#22223f", text: "#e0e0e8", muted: "#9a9ab4", focus: "#F48C34", pit: "#2563eb", gain: "#4ade80", lose: "#f87171" };
 
 /** A car's place on the map now. */
 export interface TrackPlace {
@@ -79,6 +82,31 @@ function classLeaders(data: RaceChartData): Set<number> {
   return s;
 }
 
+/**
+ * Seconds a lap the reference car is gaining (+) or losing (−) to another car now: the other car's
+ * pace less the reference car's, each over its last 5 green laps. Null when either has none.
+ */
+export function gainPerLap(data: RaceChartData, refKey: number, key: number): number | null {
+  const ref = recentPace(data, refKey).now;
+  const other = recentPace(data, key).now;
+  return ref === null || other === null ? null : other - ref;
+}
+
+/** Gaining: green ▲, losing: red ▼, under 0.05 s a lap: "=". */
+function Trend({ s }: { s: number | null }) {
+  if (s === null) return <span style={{ color: C.muted }}>—</span>;
+  if (Math.abs(s) < 0.05) return <span style={{ color: C.muted }}>=</span>;
+  const up = s > 0;
+  return (
+    <span className="inline-flex items-center justify-end gap-1" style={{ color: up ? C.gain : C.lose }}>
+      <svg viewBox="0 0 8 7" className="h-[7px] w-[8px]" fill="currentColor" aria-hidden>
+        {up ? <path d="M4 0 8 7H0z" /> : <path d="M4 7 0 0h8z" />}
+      </svg>
+      {Math.abs(s).toFixed(1)}
+    </span>
+  );
+}
+
 const gapText = (g: number) => (Math.abs(g) < 0.05 ? "0.0" : `${g < 0 ? "−" : "+"}${Math.abs(g).toFixed(1)}`);
 
 export function LiveTrackOrder({
@@ -101,6 +129,8 @@ export function LiveTrackOrder({
   refMissing: boolean;
 }) {
   const leaders = classLeaders(data);
+  const ref = rows.find((r) => r.isRef)?.key;
+  const trend = new Map(ref === undefined ? [] : rows.filter((r) => !r.isRef).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
   if (refMissing || !rows.length) {
     return (
       <p className="m-0 px-3 py-6 text-center text-xs" style={{ color: C.muted }}>
@@ -112,7 +142,7 @@ export function LiveTrackOrder({
   return (
     <table className="w-full border-collapse tabular-nums">
       <caption className="px-2 pb-1 pt-2 text-left text-[11px]" style={{ color: C.muted }}>
-        On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace.
+        On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace. Trend: the time the focus car is gaining (▲) or losing (▼) to each car a lap.
       </caption>
       <thead className="sticky top-0 z-10" style={{ background: C.head, color: C.muted }}>
         <tr className="text-left">
@@ -124,6 +154,12 @@ export function LiveTrackOrder({
           </th>
           <th className={`${th} text-right`} title="Seconds ahead (−) or behind (+) the focus car on the road">
             Gap
+          </th>
+          <th
+            className={`${th} text-right`}
+            title="Seconds a lap the focus car is gaining (▲) or losing (▼) to the car now: their pace over each one's last 5 green laps"
+          >
+            Trend
           </th>
         </tr>
       </thead>
@@ -174,6 +210,7 @@ export function LiveTrackOrder({
                   gapText(r.gapS!)
                 )}
               </td>
+              <td className="py-1 pl-1.5 pr-2 text-right text-xs font-semibold">{r.isRef ? "" : <Trend s={trend.get(r.key) ?? null} />}</td>
             </tr>
           );
         })}
