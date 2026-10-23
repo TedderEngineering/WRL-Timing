@@ -24,12 +24,15 @@ export function PitList({
   out,
   focusNum,
   setFocusNum,
+  className = "",
 }: {
   data: RaceChartData;
   pits: Map<number, PitVisit>;
   out: Set<number>;
   focusNum: number;
   setFocusNum: (n: number) => void;
+  /** Placement (the track map puts it beside the map on a wide screen). */
+  className?: string;
 }) {
   const stopping = inOrder(data, [...pits.keys()].filter((k) => !out.has(k)));
   const notRunning = inOrder(data, out);
@@ -57,21 +60,25 @@ export function PitList({
       {text}
     </span>
   );
-  // One row: the cars in the pits, then the cars not running (wrapping on a narrow screen).
+  // One row: the cars in the pits, then the cars not running (wrapping on a narrow screen). Beside
+  // the map on a wide screen: a column, each group under its heading.
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: C.line, color: C.muted }}>
+    <div
+      className={`custom-scroll flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6 xl:w-44 xl:shrink-0 xl:content-start xl:overflow-y-auto xl:border-l xl:border-t-0 xl:px-2 ${className}`}
+      style={{ borderColor: C.line, color: C.muted }}
+    >
       {stopping.length > 0 && (
         <>
-          <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
+          <span className="mr-1 flex items-center gap-1.5 font-semibold xl:w-full" style={{ color: C.text }}>
             {tag("PIT", C.pit)} In the pits ({stopping.length})
           </span>
           {stopping.map((k) => chip(k, false))}
         </>
       )}
-      {stopping.length > 0 && notRunning.length > 0 && <span aria-hidden className="mx-1.5 h-4 w-px" style={{ background: C.chip }} />}
+      {stopping.length > 0 && notRunning.length > 0 && <span aria-hidden className="mx-1.5 h-4 w-px xl:hidden" style={{ background: C.chip }} />}
       {notRunning.length > 0 && (
         <span className="contents" title="Not running: no lap for over 15 minutes (retired, in the garage, parked)">
-          <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
+          <span className="mr-1 flex items-center gap-1.5 font-semibold xl:mt-2 xl:w-full" style={{ color: C.text }}>
             {tag("OUT", C.out)} Not running ({notRunning.length})
           </span>
           {notRunning.map((k) => chip(k, true))}

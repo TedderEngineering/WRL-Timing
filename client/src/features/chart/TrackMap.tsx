@@ -572,7 +572,10 @@ export function TrackMap({
     <div className="flex flex-col md:min-h-0 md:flex-1">
       <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
         <div className="flex flex-col md:min-h-0 md:min-w-0 md:flex-1">
-        <div ref={wrapRef} className="relative h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1" style={{ background: C.bg }}>
+        {/* The map, with its key and the pit / not-running cars: beside it on a wide screen (key left,
+            pits right), under it otherwise. */}
+        <div className="flex flex-col md:min-h-0 md:flex-1 xl:flex-row">
+        <div ref={wrapRef} className="relative order-1 h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1 xl:order-2" style={{ background: C.bg }}>
           <canvas
             ref={canvasRef}
             onClick={onClick}
@@ -586,8 +589,8 @@ export function TrackMap({
             </p>
           )}
         </div>
-        {/* Directly under the map (above the running order on a phone): its key, each chip showing or hiding its part. */}
         <MapKey
+          className="order-2 xl:order-1"
           classes={Object.keys(data.classGroups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))}
           hidden={hidden}
           onToggle={toggleLayer}
@@ -601,8 +604,9 @@ export function TrackMap({
             age !== null && age > OLD_MS ? `Positions ${Math.round(age / 1000)} s old` : "",
           ].filter(Boolean)}
         />
+        <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} className="order-3" />
+        </div>
         <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
-        <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         <RaceControl slug={slug} data={data} focusNum={focusNum} followed={followKeys} />
         </div>
         <RunningOrder
@@ -727,6 +731,7 @@ function saveHiddenLayers(s: Set<string>) {
  * cannot place right now (no position, stopped, off track).
  */
 function MapKey({
+  className = "",
   classes,
   hidden,
   onToggle,
@@ -735,6 +740,7 @@ function MapKey({
   leaderNote,
   status,
 }: {
+  className?: string;
   classes: string[];
   hidden: Set<string>;
   onToggle: (k: string) => void;
@@ -764,7 +770,10 @@ function MapKey({
   };
   const dot = (bg: string, extra = "") => <span className={`inline-block h-2.5 w-2.5 rounded-full ${extra}`} style={{ background: bg }} />;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
+    <div
+      className={`custom-scroll flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6 xl:w-44 xl:shrink-0 xl:flex-col xl:flex-nowrap xl:items-stretch xl:overflow-y-auto xl:border-r xl:border-t-0 xl:px-2 ${className}`}
+      style={{ borderColor: "#1e1e38", color: C.muted }}
+    >
       {classes.map((cls) => chip(`cls:${cls}`, dot(liveClassColor(cls)), cls, `${cls} cars.`))}
       {chip(
         "leader",
@@ -793,7 +802,7 @@ function MapKey({
           "safety car"
         )}
       {status.map((t) => (
-        <span key={t} className="ml-1">
+        <span key={t} className="ml-1 xl:ml-0 xl:mt-1">
           {t}
         </span>
       ))}
