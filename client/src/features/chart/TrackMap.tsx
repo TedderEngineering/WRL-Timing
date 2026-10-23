@@ -11,7 +11,7 @@ import { mapFlag } from "./flags";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
 import { RaceControl } from "./RaceControl";
-import { LiveTrackOrder, trackOrder } from "./LiveTrackOrder";
+import { LiveTrackOrder, leaderOrder, leaderRef, trackOrder } from "./LiveTrackOrder";
 import { driversInCars } from "./DriverReportTab";
 import {
   IN_PIT,
@@ -135,6 +135,22 @@ export function TrackMap({
     setOrderView(v);
     try {
       localStorage.setItem(ORDER_VIEW_KEY, v);
+    } catch {
+      /* private window: for this visit only */
+    }
+  };
+  /** The Live Crossing Order from the focus car (the cars round it) or from the leader (on top), kept on this device. */
+  const [crossFrom, setCrossFrom] = useState<"focus" | "leader">(() => {
+    try {
+      return localStorage.getItem(CROSS_FROM_KEY) === "leader" ? "leader" : "focus";
+    } catch {
+      return "focus";
+    }
+  });
+  const pickCrossFrom = (f: "focus" | "leader") => {
+    setCrossFrom(f);
+    try {
+      localStorage.setItem(CROSS_FROM_KEY, f);
     } catch {
       /* private window: for this visit only */
     }
@@ -720,9 +736,32 @@ export function TrackMap({
                   if (k === null || !data.cars[String(k)] || out.has(k)) return [];
                   return [{ key: k, d: m.shown, inPit: (m.flags & IN_PIT) !== 0 || pitVisits.has(k) }];
                 });
-                const refM = [...motions.current.values()].find((m) => carKey(data, m.num) === focusNum);
-                const speed = refM && refM.base > 0 ? refM.base : typicalSpeed;
-                const rows = trackOrder(places, focusNum, track.len, speed);
+                // Every car in the pit lane, also the ones the map no longer moves (it drops a car
+                // once it is in the pits).
+                for (const k of pitVisits.keys()) if (!out.has(k) && !places.some((p) => p.key === k)) places.push({ key: k, d: 0, inPit: true });
+                const motionOf = (k: number | null) => [...motions.current.values()].find((m) => carKey(data, m.num) === k);
+                const onTrack = (k: number | null) => places.some((p) => p.key === k && !p.inPit);
+                // From the leader when the viewer picks it, and for now when the focus car is in the
+                // pits or has no place on the map (the list from the focus car needs its place).
+                const focusAway = !onTrack(focusNum);
+                const fromLeader = crossFrom === "leader" || focusAway;
+                const leaderK = overallLeader(data);
+                let rows;
+                let speed = typicalSpeed;
+                if (fromLeader) {
+                  const place = (k: number) => data.cars[String(k)]?.finishPos ?? 0;
+                  const m = motionOf(leaderRef(places, leaderK, place));
+                  speed = m && m.base > 0 ? m.base : typicalSpeed;
+                  rows = leaderOrder(places, leaderK, place, track.len, speed);
+                } else {
+                  const m = motionOf(focusNum);
+                  speed = m && m.base > 0 ? m.base : typicalSpeed;
+                  rows = trackOrder(places, focusNum, track.len, speed);
+                }
+                const note =
+                  crossFrom === "focus" && focusAway
+                    ? `#${carNo(data, focusNum)} ${out.has(focusNum) ? "is not running" : pitVisits.has(focusNum) ? "is in the pits" : "has no place on the track right now"}: from the leader${out.has(focusNum) ? "" : " until it is back on track"}.`
+                    : null;
                 return (
                   <LiveTrackOrder
                     data={data}
@@ -730,7 +769,12 @@ export function TrackMap({
                     lapsDown={lapped}
                     drivers={drivers}
                     followed={followKeys}
-                    refMissing={!refM}
+                    refMissing={!rows.length}
+                    focusKey={focusNum}
+                    leaderKey={leaderK}
+                    from={fromLeader ? "leader" : "focus"}
+                    onFrom={pickCrossFrom}
+                    note={note}
                     onRowTap={(k) => {
                       if (k !== focusNum) follow(toggleFollow(followed, carNo(data, k)));
                     }}
@@ -955,6 +999,9 @@ function TurnButtons({ angle, readout, onTurn }: { angle: number; readout: React
     </div>
   );
 }
+
+/** Where the Live Crossing Order is measured from, kept on this device. */
+const CROSS_FROM_KEY = "rt.live.crossingFrom";
 
 /** The view beside the map, kept on this device. */
 const ORDER_VIEW_KEY = "rt.live.orderView";

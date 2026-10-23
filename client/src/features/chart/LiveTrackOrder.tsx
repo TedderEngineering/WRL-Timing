@@ -66,6 +66,39 @@ export function trackOrder(places: TrackPlace[], refKey: number, len: number, sp
   return [...onTrack, ...pits];
 }
 
+/**
+ * The cars round the circuit from the overall leader, as a timing screen lists them: the leader
+ * first, then every car on track in the order it follows the leader on the road (the whole lap),
+ * each with how far behind it is (+, at `speed`); the pit lane after. With the leader in the pit
+ * lane (or not placed), it still heads the list (in the pits), and the road is measured from the
+ * best-placed car on track (`place`: the running order). Returns no rows with no car on track.
+ */
+export function leaderOrder(places: TrackPlace[], leaderKey: number | null, place: (key: number) => number, len: number, speed: number): TrackOrderRow[] {
+  if (!(len > 0) || !(speed > 0)) return [];
+  const onTrack = places.filter((p) => !p.inPit);
+  const refKey = leaderRef(places, leaderKey, place);
+  const ref = onTrack.find((p) => p.key === refKey);
+  if (!ref) return [];
+  const rows: TrackOrderRow[] = onTrack.map((p) => {
+    const behind = (((ref.d - p.d) % len) + len) % len;
+    return { key: p.key, gapS: p.key === ref.key ? 0 : behind / speed, inPit: false, isRef: p.key === ref.key };
+  });
+  rows.sort((a, b) => a.gapS! - b.gapS! || a.key - b.key);
+  const pits = places
+    .filter((p) => p.inPit && p.key !== leaderKey)
+    .sort((a, b) => a.key - b.key)
+    .map((p) => ({ key: p.key, gapS: null, inPit: true, isRef: false }));
+  const leaderAway = leaderKey !== null && ref.key !== leaderKey ? [{ key: leaderKey, gapS: null, inPit: true, isRef: false }] : [];
+  return [...leaderAway, ...rows, ...pits];
+}
+
+/** The car the leader's list is measured from: the leader on track, else the best-placed car on track (null: none). */
+export function leaderRef(places: TrackPlace[], leaderKey: number | null, place: (key: number) => number): number | null {
+  const onTrack = places.filter((p) => !p.inPit);
+  if (onTrack.some((p) => p.key === leaderKey)) return leaderKey;
+  return [...onTrack].sort((a, b) => (place(a.key) || 1e6) - (place(b.key) || 1e6) || a.key - b.key)[0]?.key ?? null;
+}
+
 /** Laps since the car's last stop (its laps when it has not stopped). */
 export function stintLaps(data: RaceChartData, key: number): number {
   const laps = data.cars[String(key)]?.laps ?? [];
@@ -117,6 +150,11 @@ export function LiveTrackOrder({
   followed,
   onRowTap,
   refMissing,
+  focusKey,
+  leaderKey,
+  from,
+  onFrom,
+  note = null,
 }: {
   data: RaceChartData;
   rows: TrackOrderRow[];
@@ -125,24 +163,72 @@ export function LiveTrackOrder({
   drivers: Map<string, string>;
   followed: Set<number>;
   onRowTap: (key: number) => void;
-  /** The reference car is not placed on the map now. */
+  /** No car to measure from is placed on the map now. */
   refMissing: boolean;
+  /** The focus car: highlighted wherever it is in the list. */
+  focusKey: number;
+  /** The overall leader. */
+  leaderKey: number | null;
+  /** Measured from the focus car (the cars round it) or from the leader (the leader on top). */
+  from: "focus" | "leader";
+  /** The viewer's choice (the list may be from the leader for now: see `note`). */
+  onFrom?: (f: "focus" | "leader") => void;
+  /** Why the list is not what the viewer chose ("#246 is in the pits: …"). */
+  note?: string | null;
 }) {
   const leaders = classLeaders(data);
   const ref = rows.find((r) => r.isRef)?.key;
   const trend = new Map(ref === undefined ? [] : rows.filter((r) => !r.isRef).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
+  const fromLeader = from === "leader";
+  const who = fromLeader ? "the leader" : "the focus car";
+  const picker = onFrom && (
+    <span className="ml-auto inline-flex shrink-0 overflow-hidden rounded-md border" role="radiogroup" aria-label="Measure the order from" style={{ borderColor: C.line }}>
+      {(
+        [
+          ["focus", "Focus car"],
+          ["leader", "Leader"],
+        ] as const
+      ).map(([f, label]) => (
+        <button
+          key={f}
+          type="button"
+          role="radio"
+          aria-checked={from === f && !note}
+          onClick={() => onFrom(f)}
+          className="px-2 py-0.5 text-[11px] font-semibold"
+          style={{ background: from === f && !note ? "#2a2a48" : "transparent", color: from === f && !note ? C.text : C.muted }}
+        >
+          {label}
+        </button>
+      ))}
+    </span>
+  );
   if (refMissing || !rows.length) {
     return (
-      <p className="m-0 px-3 py-6 text-center text-xs" style={{ color: C.muted }}>
-        The Live Crossing Order is measured from the focus car&apos;s place on the track, which is not known right now. Pick a car on track with Focus.
-      </p>
+      <div className="px-2 pt-2">
+        <div className="flex items-center gap-2 text-[11px]" style={{ color: C.muted }}>
+          From {picker}
+        </div>
+        <p className="m-0 px-1 py-6 text-center text-xs" style={{ color: C.muted }}>
+          The Live Crossing Order is measured from the cars&apos; places on the track, which are not known right now.
+        </p>
+      </div>
     );
   }
   const th = "px-1.5 py-2 font-semibold";
   return (
     <table className="w-full border-collapse tabular-nums">
       <caption className="px-2 pb-1 pt-2 text-left text-[11px]" style={{ color: C.muted }}>
-        On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace. Trend: the time the focus car is gaining (▲) or losing (▼) to each car a lap.
+        <span className="mb-1 flex items-center gap-2">From {picker}</span>
+        {note && (
+          <span className="mb-1 block font-semibold" style={{ color: "#fab219" }}>
+            {note}
+          </span>
+        )}
+        {fromLeader
+          ? "On the road round the circuit now, the overall leader on top: every car behind it on the road (+), the whole lap, in seconds at its pace."
+          : "On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace."}{" "}
+        Trend: the time {who} is gaining (▲) or losing (▼) to each car a lap.
       </caption>
       <thead className="sticky top-0 z-10" style={{ background: C.head, color: C.muted }}>
         <tr className="text-left">
@@ -152,12 +238,12 @@ export function LiveTrackOrder({
           <th className={`${th} text-right`} title="Laps since the car's last stop">
             Stint
           </th>
-          <th className={`${th} text-right`} title="Seconds ahead (−) or behind (+) the focus car on the road">
+          <th className={`${th} text-right`} title={fromLeader ? "Seconds behind the leader on the road" : "Seconds ahead (−) or behind (+) the focus car on the road"}>
             Gap
           </th>
           <th
             className={`${th} text-right`}
-            title="Seconds a lap the focus car is gaining (▲) or losing (▼) to the car now: their pace over each one's last 5 green laps"
+            title={`Seconds a lap ${who} is gaining (▲) or losing (▼) to the car now: their pace over each one's last 5 green laps`}
           >
             Trend
           </th>
@@ -169,7 +255,8 @@ export function LiveTrackOrder({
           if (!car) return null;
           const color = liveClassColor(car.cls);
           const lapped = (lapsDown.get(r.key) ?? 0) > 0;
-          const isFollowed = !r.isRef && followed.has(r.key);
+          const isFocus = r.key === focusKey;
+          const isFollowed = !isFocus && followed.has(r.key);
           const leader = leaders.has(r.key);
           return (
             <tr
@@ -178,11 +265,11 @@ export function LiveTrackOrder({
               className="cursor-pointer hover:bg-white/5"
               style={{
                 borderTop: leader ? `2px solid ${color}` : `1px solid ${C.line}`,
-                background: r.isRef ? "rgba(37,99,235,0.45)" : isFollowed ? "rgba(255,255,255,0.08)" : undefined,
+                background: isFocus ? "rgba(37,99,235,0.45)" : isFollowed ? "rgba(255,255,255,0.08)" : undefined,
               }}
-              aria-current={r.isRef ? "true" : undefined}
-              aria-pressed={r.isRef ? undefined : isFollowed}
-              title={r.isRef ? "The focus car (change it with Focus)" : isFollowed ? "Following on the map: tap to stop" : "Tap to follow on the map"}
+              aria-current={isFocus ? "true" : undefined}
+              aria-pressed={isFocus ? undefined : isFollowed}
+              title={isFocus ? "The focus car (change it with Focus)" : isFollowed ? "Following on the map: tap to stop" : "Tap to follow on the map"}
             >
               <td className="p-0 text-center" title={`${car.cls}${leader ? " leader" : ""} · ${lapped ? `${lapsDown.get(r.key)} down` : "lead lap"}`}>
                 <span
@@ -190,27 +277,27 @@ export function LiveTrackOrder({
                   style={{ background: color, transform: lapped ? "scale(0.8)" : undefined }}
                 />
               </td>
-              <td className="px-1.5 py-1 font-bold" style={{ color: r.isRef ? "#ffffff" : C.text }}>
+              <td className="px-1.5 py-1 font-bold" style={{ color: isFocus ? "#ffffff" : C.text }}>
                 {isFollowed ? <span className="-mx-1 rounded-full border-2 border-white px-1">{carNo(data, r.key)}</span> : carNo(data, r.key)}
               </td>
-              <td className="max-w-[160px] truncate px-1.5 py-1" style={{ color: r.isRef ? "#ffffff" : C.text }} title={drivers.get(String(r.key)) ?? car.team}>
+              <td className="max-w-[160px] truncate px-1.5 py-1" style={{ color: isFocus ? "#ffffff" : C.text }} title={drivers.get(String(r.key)) ?? car.team}>
                 {drivers.get(String(r.key)) ?? <span style={{ color: C.muted }}>{car.team}</span>}
               </td>
               <td className="px-1.5 py-1 text-right" style={{ color: C.muted }}>
                 {stintLaps(data, r.key)}
               </td>
               <td className="px-1.5 py-1 text-right font-semibold">
-                {r.isRef ? (
-                  ""
-                ) : r.inPit ? (
+                {r.inPit ? (
                   <span className="rounded px-1 text-[10px] font-bold text-white" style={{ background: C.pit }}>
                     PIT
                   </span>
+                ) : r.isRef ? (
+                  fromLeader && r.key === leaderKey ? <span style={{ color: C.muted }}>Leader</span> : ""
                 ) : (
                   gapText(r.gapS!)
                 )}
               </td>
-              <td className="py-1 pl-1.5 pr-2 text-right text-xs font-semibold">{r.isRef ? "" : <Trend s={trend.get(r.key) ?? null} />}</td>
+              <td className="py-1 pl-1.5 pr-2 text-right text-xs font-semibold">{r.isRef || r.inPit ? "" : <Trend s={trend.get(r.key) ?? null} />}</td>
             </tr>
           );
         })}
