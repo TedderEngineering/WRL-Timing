@@ -572,10 +572,10 @@ export function TrackMap({
     <div className="flex flex-col md:min-h-0 md:flex-1">
       <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
         <div className="flex flex-col md:min-h-0 md:min-w-0 md:flex-1">
-        {/* The map, with its key and the pit / not-running cars: beside it on a wide screen (key left,
-            pits right), under it otherwise. */}
-        <div className="flex flex-col md:min-h-0 md:flex-1 xl:flex-row">
-        <div ref={wrapRef} className="relative order-1 h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1 xl:order-2" style={{ background: C.bg }}>
+        {/* The map, with its key and the pit / not-running cars: on a wide screen as chips floating
+            over the map (key left, pits right) so the map runs edge to edge, under it otherwise. */}
+        <div className="flex flex-col md:min-h-0 md:flex-1 xl:relative">
+        <div ref={wrapRef} className="relative h-[80vw] max-h-[560px] min-h-[300px] md:h-auto md:max-h-none md:min-h-0 md:min-w-0 md:flex-1" style={{ background: C.bg }}>
           <canvas
             ref={canvasRef}
             onClick={onClick}
@@ -590,7 +590,6 @@ export function TrackMap({
           )}
         </div>
         <MapKey
-          className="order-2 xl:order-1"
           classes={Object.keys(data.classGroups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))}
           hidden={hidden}
           onToggle={toggleLayer}
@@ -604,7 +603,7 @@ export function TrackMap({
             age !== null && age > OLD_MS ? `Positions ${Math.round(age / 1000)} s old` : "",
           ].filter(Boolean)}
         />
-        <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} className="order-3" />
+        <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         </div>
         <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
         <RaceControl slug={slug} data={data} focusNum={focusNum} followed={followKeys} />
@@ -758,8 +757,8 @@ function MapKey({
         aria-pressed={!off}
         onClick={() => onToggle(k)}
         title={`${title ? `${title} ` : ""}${off ? "Hidden: tap to show it on the map." : "Tap to hide it on the map."}`}
-        className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 hover:bg-white/5"
-        style={{ borderColor: off ? "#2a2a48" : "#3a3a5c", color: off ? "#5c5c78" : C.text, textDecoration: off ? "line-through" : undefined }}
+        className="pointer-events-auto flex w-fit items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 hover:bg-white/5 xl:backdrop-blur-sm"
+        style={{ borderColor: off ? "#2a2a48" : "#3a3a5c", color: off ? "#5c5c78" : C.text, textDecoration: off ? "line-through" : undefined, background: OVER_BG }}
       >
         <span className="flex items-center" style={{ opacity: off ? 0.35 : 1 }}>
           {swatch}
@@ -771,7 +770,7 @@ function MapKey({
   const dot = (bg: string, extra = "") => <span className={`inline-block h-2.5 w-2.5 rounded-full ${extra}`} style={{ background: bg }} />;
   return (
     <div
-      className={`custom-scroll flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6 xl:w-44 xl:shrink-0 xl:flex-col xl:flex-nowrap xl:items-stretch xl:overflow-y-auto xl:border-r xl:border-t-0 xl:px-2 ${className}`}
+      className={`custom-scroll flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6 xl:pointer-events-none xl:absolute xl:left-2 xl:top-2 xl:max-h-[calc(100%-1rem)] xl:flex-col xl:flex-nowrap xl:items-start xl:overflow-y-auto xl:border-0 xl:p-0 ${className}`}
       style={{ borderColor: "#1e1e38", color: C.muted }}
     >
       {classes.map((cls) => chip(`cls:${cls}`, dot(liveClassColor(cls)), cls, `${cls} cars.`))}
@@ -802,13 +801,16 @@ function MapKey({
           "safety car"
         )}
       {status.map((t) => (
-        <span key={t} className="ml-1 xl:ml-0 xl:mt-1">
+        <span key={t} className="ml-1 xl:ml-0 xl:max-w-44 xl:rounded xl:px-1.5 xl:py-0.5" style={{ background: OVER_BG }}>
           {t}
         </span>
       ))}
     </div>
   );
 }
+
+/** Behind a chip floating over the map on a wide screen: the map's ground, mostly opaque. */
+const OVER_BG = "rgba(11,11,24,0.82)";
 
 /** The view beside the map, kept on this device. */
 const ORDER_VIEW_KEY = "rt.live.orderView";
