@@ -64,6 +64,11 @@ export interface DriverReportTabProps {
   setFocusNum: (n: number) => void;
   /** RaceTrace Live: the race so far (through the leader's lap), with each running car's driver marked IN CAR. */
   live?: { lap: number };
+  /**
+   * RaceTrace Live: the class picked in the page's shared controls ("" = all classes: the focus
+   * car's class here, a driver report is one class's). Given, the tab's own class buttons are left off.
+   */
+  classView?: string;
 }
 
 /**
@@ -83,13 +88,14 @@ export function driversInCars(data: RaceChartData, annotations: AnnotationData):
   return now;
 }
 
-export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live }: DriverReportTabProps) {
+export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live, classView }: DriverReportTabProps) {
   const reports = useMemo(() => driverPerformance(data, annotations), [data, annotations]);
   const inCar = useMemo(() => (live ? driversInCars(data, annotations) : null), [live, data, annotations]);
   const focusCls = data.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState<string>(() => (focusCls && reports.some((r) => r.cls === focusCls) ? focusCls : reports[0]?.cls ?? ""));
   const [sort, setSort] = useState<DriverSort>(DEFAULT_SORT);
-  const report = reports.find((r) => r.cls === cls) ?? reports[0];
+  const shared = classView !== undefined;
+  const report = (shared ? reports.find((r) => r.cls === (classView || focusCls)) : reports.find((r) => r.cls === cls)) ?? reports[0];
 
   const rows = useMemo(() => (report ? sortDriverRows(report.rows, sort) : []), [report, sort]);
   // The PDF button prints the table as it is now: this class, this order.
@@ -133,6 +139,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live
         </span>
       </div>
 
+      {!shared && (
       <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Class">
         {reports.map((r) => {
           const active = r.cls === report.cls;
@@ -152,6 +159,7 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live
           );
         })}
       </div>
+      )}
 
       <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: S.line, background: S.card }}>
         <table className="w-full border-collapse text-[13px]">

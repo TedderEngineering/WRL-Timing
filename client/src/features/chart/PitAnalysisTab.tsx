@@ -160,11 +160,16 @@ interface PitAnalysisTabProps {
   focusNum: number;
   setFocusNum: React.Dispatch<React.SetStateAction<number>>;
   onSwitchToTrace: () => void;
+  /**
+   * RaceTrace Live: the class picked in the page's shared controls ("" = all classes: the focus
+   * car's class here, a pit-stop table is one class's). Given, the tab's own class buttons are left off.
+   */
+  classView?: string;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum, onSwitchToTrace }: PitAnalysisTabProps) {
+export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum, onSwitchToTrace, classView }: PitAnalysisTabProps) {
   const [loaded, setData] = useState<PitAnalysisResponse | null>(null);
   const data = analysis !== undefined ? analysis : loaded;
   const [loading, setLoading] = useState(analysis === undefined);
@@ -234,7 +239,9 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   const classes = useMemo(() => [...new Set(pitRows.map((r) => r.cls))].sort(), [pitRows]);
   const focusCls = chart?.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState<string>("");
-  const activeClass = classes.includes(cls) ? cls : focusCls && classes.includes(focusCls) ? focusCls : (classes[0] ?? "");
+  const shared = classView !== undefined;
+  const picked = shared ? classView : cls;
+  const activeClass = classes.includes(picked) ? picked : focusCls && classes.includes(focusCls) ? focusCls : (classes[0] ?? "");
   const [sort, setSort] = useState<PitSort>(DEFAULT_PIT_SORT);
   const classRows = useMemo(() => sortPits(pitRows.filter((r) => r.cls === activeClass), sort), [pitRows, activeClass, sort]);
   // The PDF button prints the table as it is now: this class, this order.
@@ -323,7 +330,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
         </span>
       </div>
 
-      {classes.length > 1 && (
+      {classes.length > 1 && !shared && (
         <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Class">
           {classes.map((c) => {
             const active = c === activeClass;

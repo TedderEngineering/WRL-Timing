@@ -879,8 +879,11 @@ export function LiveRacePage() {
           </div>
         )}
         {tab === "pitanalysis" && (
-          <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
-            <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} />
+          <div className="flex flex-col md:min-h-0 md:flex-1">
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+            <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+              <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} classView={classView} />
+            </div>
           </div>
         )}
         {tab === "strategy" && (
@@ -892,8 +895,11 @@ export function LiveRacePage() {
           </div>
         )}
         {tab === "drivers" && (
-          <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
-            <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} live={{ lap: data.maxLap }} />
+          <div className="flex flex-col md:min-h-0 md:flex-1">
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+            <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+              <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} live={{ lap: data.maxLap }} classView={classView} />
+            </div>
           </div>
         )}
         {tab === "laptimes" && (
