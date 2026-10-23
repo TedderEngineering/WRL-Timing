@@ -45,7 +45,13 @@ const fake = vi.hoisted(() => {
           .filter((r) => where.raceId.in.includes(r.id))
           .flatMap((r) => Array.from({ length: r.pitLaps ?? 0 }, () => ({ raceId: r.id }))),
     },
-    raceAnalysisPackage: { findUnique: async ({ where }: Row) => state.packages.find((p) => p.id === where.id) ?? null },
+    raceAnalysisPackage: {
+      findUnique: async ({ where }: Row) => state.packages.find((p) => p.id === where.id) ?? null,
+      findMany: async ({ where }: Row) => state.packages.filter((p) => where.id.in.includes(p.id)),
+    },
+    // Pit laps counted per race (SELECT race_id, COUNT(*) … GROUP BY race_id): races may carry `pitLaps`.
+    $queryRaw: async (_sql: TemplateStringsArray, ids: string[]) =>
+      state.races.filter((r) => ids.includes(r.id) && (r.pitLaps ?? 0) > 0).map((r) => ({ race_id: r.id, n: r.pitLaps })),
     subscription: { findUnique: async ({ where }: Row) => state.subs.get(where.userId) ?? null },
     userRaceView: {
       findFirst: async ({ where }: Row) => state.views.find((v) => v.userId === where.userId && v.raceId === where.raceId) ?? null,
@@ -141,6 +147,17 @@ describe("GET /api/dashboard/latest", () => {
     const ev = res.body.events[0];
     expect(ev.races.map((r: any) => r.id)).toEqual(["gt4r1", "gt4r2"]);
     expect([ev.startDate, ev.endDate]).toEqual(["2026-10-10", "2026-10-11"]);
+  });
+
+  it("reads every recap's package row in one query, not one per race", async () => {
+    const one = vi.spyOn(fake.prisma.raceAnalysisPackage, "findUnique");
+    const many = vi.spyOn(fake.prisma.raceAnalysisPackage, "findMany");
+    const res = await request(app).get("/api/dashboard/latest").set("Authorization", bearer(users.pro));
+    expect(res.status).toBe(200);
+    expect(one).not.toHaveBeenCalled();
+    expect(many).toHaveBeenCalledTimes(1);
+    one.mockRestore();
+    many.mockRestore();
   });
 
   it("serves no recap while packages are switched off", async () => {
@@ -297,6 +314,17 @@ describe("GET /api/dashboard/season-recap", () => {
     expect(res.status).toBe(200);
     expect(res.body.recaps).toHaveLength(1);
     expect(res.body.recaps[0]).toMatchObject({ seriesId: "imsa-mpc", number: "67", races: 2, classWins: 1, podiums: 2, best: { finishClass: 1, raceId: "ra" } });
+  });
+
+  it("loads a race's chart once: the next recap comes from the cached facts", async () => {
+    fake.state.cars = [{ id: "c1", userId: "u_pro", number: "67", series: "imsa", teamName: null, season: null, label: null, carClass: null }];
+    const spy = vi.spyOn(fake.prisma.race, "findUnique");
+    const first = await request(app).get("/api/dashboard/season-recap").set("Authorization", bearer(users.pro));
+    const loads = spy.mock.calls.length;
+    const again = await request(app).get("/api/dashboard/season-recap").set("Authorization", bearer(users.pro));
+    expect(again.body).toEqual(first.body);
+    expect(spy.mock.calls.length).toBe(loads);
+    spy.mockRestore();
   });
 
   it("is empty without followed cars", async () => {

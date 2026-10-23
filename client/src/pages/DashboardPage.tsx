@@ -104,31 +104,39 @@ export function DashboardPage() {
   };
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
+  // Your car and your driver arrive together (the tabs between them need both).
+  const [yoursLoaded, setYoursLoaded] = useState(false);
+  const [hadYours] = useState(() => !!readUi().hadYours);
+
+  // Each part shows as soon as its own request answers: a slow one (a season recap, the
+  // latest races after a deploy) never holds up the rest of the page.
   useEffect(() => {
     let alive = true;
-    (async () => {
-      const [latestRes, seasonRes, recentRes, favRes, myCarRes, recapRes, myDriverRes] = await Promise.allSettled([
-        api.get<{ events: LatestEvent[] }>("/dashboard/latest?limit=10"),
-        api.get<SeasonResponse>("/dashboard/season"),
-        api.get<{ races: RaceItem[] }>("/races/recently-viewed?limit=1"),
-        api.get<{ races: RaceItem[] }>("/races/favorites?limit=8"),
-        api.get<MyCarResponse>("/dashboard/my-car"),
-        api.get<{ recaps: SeasonRecap[] }>("/dashboard/season-recap"),
-        api.get<MyDriverResponse>("/dashboard/my-driver"),
-      ]);
+    const load = <T,>(path: string, ok: (v: T) => void, fail?: () => void) =>
+      api.get<T>(path).then(
+        (v) => alive && ok(v),
+        () => alive && fail?.()
+      );
+    load<{ events: LatestEvent[] }>("/dashboard/latest?limit=10", (v) => setEvents(v.events), () => {
+      setEvents([]);
+      setFailed(true);
+    });
+    load<SeasonResponse>("/dashboard/season", setSeason);
+    load<{ races: RaceItem[] }>("/races/recently-viewed?limit=1", (v) => setRecent(v.races));
+    load<{ races: RaceItem[] }>("/races/favorites?limit=8", (v) => setFavorites(v.races));
+    load<{ recaps: SeasonRecap[] }>("/dashboard/season-recap", (v) => setRecaps(v.recaps));
+    let car: MyCarResponse | null = null;
+    let driver: MyDriverResponse | null = null;
+    Promise.allSettled([
+      load<MyCarResponse>("/dashboard/my-car", (v) => (car = v)),
+      load<MyDriverResponse>("/dashboard/my-driver", (v) => (driver = v)),
+    ]).then(() => {
       if (!alive) return;
-      if (latestRes.status === "fulfilled") setEvents(latestRes.value.events);
-      else {
-        setEvents([]);
-        setFailed(true);
-      }
-      if (seasonRes.status === "fulfilled") setSeason(seasonRes.value);
-      if (recentRes.status === "fulfilled") setRecent(recentRes.value.races);
-      if (favRes.status === "fulfilled") setFavorites(favRes.value.races);
-      if (myCarRes.status === "fulfilled") setMyCar(myCarRes.value);
-      if (recapRes.status === "fulfilled") setRecaps(recapRes.value.recaps);
-      if (myDriverRes.status === "fulfilled") setMyDriver(myDriverRes.value);
-    })();
+      setMyCar(car);
+      setMyDriver(driver);
+      setYoursLoaded(true);
+      writeUi({ hadYours: !!(car as MyCarResponse | null)?.car || !!(driver as MyDriverResponse | null)?.driver });
+    });
     return () => {
       alive = false;
     };
@@ -274,6 +282,12 @@ export function DashboardPage() {
         {/* Latest races */}
         <main className="flex min-w-0 flex-[999_1_640px] flex-col gap-4">
           {/* Your car (the peak moment), then the first steps until they are done. */}
+          {!yoursLoaded && hadYours && (
+            <div className="flex flex-col gap-2.5" aria-busy="true" aria-label="Loading your car">
+              <div className="h-8 w-48 animate-pulse rounded-md bg-[var(--rt-surface)]" />
+              <div className="h-56 animate-pulse rounded-xl bg-[var(--rt-surface)]" />
+            </div>
+          )}
           {view && (
             <section aria-labelledby="yours" className="flex flex-col gap-2.5">
               {/* One row: cars or drivers (when both), the car or driver tabs, the settings link. */}

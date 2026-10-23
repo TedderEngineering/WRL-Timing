@@ -27,6 +27,8 @@ import { gripRouter } from "./routes/grip.js";
 import { setupRouter } from "./routes/setup.js";
 import { allowedOrigins } from "./services/site.js";
 
+/** API requests slower than this are logged (see "Slow requests" below). */
+const SLOW_REQUEST_MS = 1500;
 const PACKAGE_UPLOAD_PATH = /^\/api\/admin\/races\/[^/]+\/packages\/?$/;
 
 export function createApp() {
@@ -64,6 +66,19 @@ export function createApp() {
       ],
     })
   );
+
+  // ─── Slow requests ─────────────────────────────────────────────────────────
+  // One line in the server log for any API request over 1.5 s (path only, no query or user),
+  // so a slow page can be traced to its request: "[slow] GET /api/dashboard/latest 200 4210 ms".
+  app.use((req, res, next) => {
+    if (!req.path.startsWith("/api/") || req.path.startsWith("/api/live/")) return next();
+    const t0 = process.hrtime.bigint();
+    res.on("finish", () => {
+      const ms = Number((process.hrtime.bigint() - t0) / 1_000_000n);
+      if (ms >= SLOW_REQUEST_MS) console.warn(`[slow] ${req.method} ${req.path} ${res.statusCode} ${ms} ms`);
+    });
+    next();
+  });
 
   // ─── Body Parsing ──────────────────────────────────────────────────────────
   // 1 MB for everything (forms, settings, follows, Setup Sheet edits). Larger bodies only where a
