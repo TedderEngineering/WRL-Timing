@@ -32,8 +32,13 @@ export const STINT_SHARE = 0.8;
 export const STINT_SLACK = 0.15;
 /** At least this many such stints in the class before stops to go are estimated. */
 export const MIN_STINTS = 3;
-/** A stop losing less than this is a pass through the pit lane (no fuel), not a stop. */
+/**
+ * A stop losing less than this is a pass through the pit lane (no fuel), not a stop: unless it
+ * comes late in the car's stint (see markSplashes), where it is a splash of fuel.
+ */
 export const DRIVE_THROUGH_S = 45;
+/** A splash of fuel spends at least this much longer in the pit lane than a pass through it (s). */
+export const SPLASH_STOPPED_S = 8;
 /** Without a stop under caution yet, one is taken to lose this share of a green stop. */
 export const CAUTION_SHARE = 0.35;
 /** Pace for the projection: the median of the car's last this many green laps (steadier than the last few). */
@@ -51,6 +56,12 @@ export interface Stop {
   lostS: number | null;
   caution: boolean;
   kind: "stop" | "garage" | "drive_through";
+  /** A drive-through only for its short time lost (the timing did not say so). */
+  short?: boolean;
+  /** A short visit late in the stint: a splash of fuel, so a stop (markSplashes). */
+  splash?: boolean;
+  /** Time in the pit lane (s), when the timing measured it. */
+  laneS?: number | null;
 }
 
 export interface CarStrategy {
@@ -166,7 +177,11 @@ export function stopsOf(data: RaceChartData, annotations: AnnotationData | null,
         const under = ctx ? ctx !== "green" : caution(m.l);
         // Under a caution: against the cars on track, unless the race's analysis measured it so.
         const lostS = under && m.pitTiming?.lossMethod !== "fcy_neighbours" && m.pitTiming?.lossMethod !== "fcy_lap_field" ? cautionLoss(data, key, m.l, clock) : lost;
-        return { lap: m.l, lostS: kind === "stop" ? lostS : lost, caution: under, kind };
+        const short = kind === "drive_through" && m.kind !== "drive_through" && !m.pitTiming?.isDriveThrough;
+        // The import's "total_only" timing repeats the time lost as the pit-lane time: not one.
+        const t = m.pitTiming;
+        const laneS = t?.pitRoadTime != null && t.pitRoadTime > 0 && !(t.decompositionLevel === "total_only" && t.pitRoadTime === t.totalPitLoss) ? t.pitRoadTime : null;
+        return { lap: m.l, lostS: kind === "stop" ? lostS : lost, caution: under, kind, laneS, ...(short ? { short } : {}) };
       })
       .sort((a, b) => a.lap - b.lap);
   }
@@ -177,6 +192,74 @@ export function stopsOf(data: RaceChartData, annotations: AnnotationData | null,
     if (d.pit !== 1 || d.l <= 1 || (i > 0 && laps[i - 1].pit === 1)) continue;
     const under = caution(d.l);
     out.push({ lap: d.l, lostS: under ? cautionLoss(data, key, d.l, clock) : null, caution: under, kind: d.ltSec >= LONG_STOP_S ? "garage" : "stop" });
+  }
+  return out;
+}
+
+/**
+ * Short visits that were fuel stops. A visit losing under DRIVE_THROUGH_S is a pass through the
+ * pit lane, unless the car came in at least STINT_SHARE of a class stint after its last stop: then
+ * it is a splash of fuel near the end of its range (Sebring 2026: #119's 40 s stop 27 laps into a
+ * stint, with 5 laps to go), which ends the stint like any stop. A drive-through penalty comes
+ * whenever it is given, mostly early in a stint. The class stint here is the median of its long
+ * stints between the plain stops (as liveStrategy's stint length), from MIN_STINTS of them.
+ * Fuel takes time stopped: when the timing measured the visit's time in the pit lane and the
+ * race's other short visits give the time to pass through it (their median, `passLaneS`), a splash
+ * spent SPLASH_STOPPED_S longer in it (Sebring: passes 10.6-13.6 s, #119's splash 41 s; #64's
+ * 13.6 s visit late in its stint stays a pass).
+ * Returns the stops with those visits made stops (splash: true), by car.
+ */
+export function markSplashes(stopsBy: Map<string, Stop[]>, keys: string[], passLaneS: number | null = null): Map<string, Stop[]> {
+  const stints = keys.flatMap((k) => {
+    const out: number[] = [];
+    let from = 0;
+    for (const s of stopsBy.get(k) ?? []) {
+      if (s.kind === "drive_through") continue;
+      if (s.lap > from) out.push(s.lap - from);
+      from = s.lap;
+    }
+    return out;
+  });
+  const longest = Math.max(0, ...stints);
+  const long = stints.filter((x) => x >= longest * STINT_SHARE);
+  const out = new Map(stopsBy);
+  if (long.length < MIN_STINTS) return out;
+  const reach = median(long)! * STINT_SHARE;
+  for (const k of keys) {
+    let from = 0;
+    out.set(
+      k,
+      (stopsBy.get(k) ?? []).map((s) => {
+        let t = s;
+        const stopped = passLaneS === null || s.laneS == null || s.laneS >= passLaneS + SPLASH_STOPPED_S;
+        if (s.kind === "drive_through" && s.short && s.lap - from >= reach && stopped) t = { ...s, kind: "stop", splash: true };
+        if (t.kind !== "drive_through") from = t.lap;
+        return t;
+      })
+    );
+  }
+  return out;
+}
+
+/** The time to pass through the pit lane: the median pit-lane time of the race's short visits (null without one). */
+export function passLane(stopsBy: Map<string, Stop[]>): number | null {
+  return median([...stopsBy.values()].flatMap((st) => st.filter((s) => s.kind === "drive_through" && s.laneS != null).map((s) => s.laneS!)));
+}
+
+/** Each car's fuel splashes (markSplashes), by chart key: the laps of its short visits that were stops. */
+export function splashLaps(data: RaceChartData, annotations: AnnotationData | null): Map<string, Set<number>> {
+  const clock = raceClock(data);
+  const all = new Map(Object.keys(data.cars).map((k) => [k, stopsOf(data, annotations, k, clock)]));
+  const pass = passLane(all);
+  const byClass = new Map<string, string[]>();
+  for (const [k, c] of Object.entries(data.cars)) byClass.set(c.cls, [...(byClass.get(c.cls) ?? []), k]);
+  const out = new Map<string, Set<number>>();
+  for (const keys of byClass.values()) {
+    const marked = markSplashes(all, keys, pass);
+    for (const [k, st] of marked) {
+      const laps = st.filter((s) => s.splash).map((s) => s.lap);
+      if (laps.length) out.set(k, new Set(laps));
+    }
   }
   return out;
 }
@@ -252,14 +335,17 @@ export function liveStrategy({ data, annotations, focusNum, flag, timeToGoS }: L
   // The race's stops, all classes: a green stop's and a caution stop's time lost.
   const greenLost: number[] = [];
   const cautionLost: number[] = [];
-  const stopsBy = new Map<string, Stop[]>();
+  let stopsBy = new Map<string, Stop[]>();
   const clock = raceClock(data);
-  for (const k of Object.keys(data.cars)) {
-    const st = stopsOf(data, annotations, k, clock);
-    stopsBy.set(k, st);
-    for (const s of st) if (s.kind === "stop" && s.lostS !== null) (s.caution ? cautionLost : greenLost).push(s.lostS);
-  }
-  const clsGreen = keys.flatMap((k) => (stopsBy.get(k) ?? []).filter((s) => s.kind === "stop" && !s.caution && s.lostS !== null).map((s) => s.lostS!));
+  for (const k of Object.keys(data.cars)) stopsBy.set(k, stopsOf(data, annotations, k, clock));
+  // A short visit late in a stint was a splash of fuel: a stop, ending the stint.
+  const byClass = new Map<string, string[]>();
+  for (const k of stopsBy.keys()) byClass.set(data.cars[k].cls, [...(byClass.get(data.cars[k].cls) ?? []), k]);
+  const pass = passLane(stopsBy);
+  for (const ks of byClass.values()) stopsBy = new Map([...stopsBy, ...markSplashes(stopsBy, ks, pass)]);
+  // A splash is a short stop: not what a stop the car owes will cost.
+  for (const st of stopsBy.values()) for (const s of st) if (s.kind === "stop" && !s.splash && s.lostS !== null) (s.caution ? cautionLost : greenLost).push(s.lostS);
+  const clsGreen = keys.flatMap((k) => (stopsBy.get(k) ?? []).filter((s) => s.kind === "stop" && !s.splash && !s.caution && s.lostS !== null).map((s) => s.lostS!));
   const greenStopS = median(clsGreen.length >= 3 ? clsGreen : greenLost);
   const measuredCaution = median(cautionLost);
   const cautionStopS = measuredCaution ?? (greenStopS !== null ? greenStopS * CAUTION_SHARE : null);
