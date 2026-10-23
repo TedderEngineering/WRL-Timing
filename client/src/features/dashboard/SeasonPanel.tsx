@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LiveDemoCard } from "../live/LiveDemoCard";
 import { Link } from "react-router-dom";
 import { formatDayRange, whenLabel } from "./format";
 import { whenText } from "../live/banner";
@@ -266,7 +267,13 @@ export function SeasonPanel({ data }: { data: SeasonResponse | null }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [picking]);
 
-  if (!data || !data.season) return null;
+  // No season (loading, or not reachable): the live demo still has its place on wide screens.
+  if (!data || !data.season)
+    return (
+      <div className="hidden lg:block">
+        <LiveDemoCard />
+      </div>
+    );
   const order = data.suggested?.length ? data.suggested : data.series.map((s) => s.id);
   const ids = (chosen ?? order).filter((id) => data.series.some((s) => s.id === id));
   const visible = ids.map((id) => data.series.find((s) => s.id === id)!).filter(Boolean);
@@ -330,6 +337,9 @@ export function SeasonPanel({ data }: { data: SeasonResponse | null }) {
           <NextUp next={next} today={data.today} />
         </div>
       )}
+      <div className="hidden lg:block">
+        <LiveDemoCard />
+      </div>
 
       {visible.map((s) => (
         <SeriesCard

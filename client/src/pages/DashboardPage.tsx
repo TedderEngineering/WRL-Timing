@@ -15,6 +15,7 @@ import { readUi, writeUi } from "../features/dashboard/ui-state";
 import { reorderCars } from "../features/my-cars/api";
 import { reorderDrivers } from "../features/my-drivers/api";
 import { NextUp, SeasonPanel, nextFor } from "../features/dashboard/SeasonPanel";
+import { LiveDemoCard } from "../features/live/LiveDemoCard";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
 import { SupportCard } from "../features/support/SupportPrompts";
@@ -237,6 +238,10 @@ export function DashboardPage() {
           </div>
         ) : null;
       })()}
+      {/* With no race live: the live timing demo, beside the next round (wide screens: the season column). */}
+      <div className="mb-5 lg:hidden">
+        <LiveDemoCard />
+      </div>
 
       {isFree && !bannerDismissed && (
         <div
