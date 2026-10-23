@@ -12,6 +12,7 @@ import "../lib/install";
 import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { noteShareArrival } from "../features/share/shareLink";
 import { noteAlertArrival } from "../features/my-cars/alerts";
+import { FullscreenButton, useFullscreen } from "../lib/fullscreen";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {
@@ -146,12 +147,15 @@ export function Layout() {
   // no footer) and each part scrolls on its own.
   const { pathname } = useLocation();
   const appPage = pathname === "/chart" || pathname.startsWith("/live/") || pathname.startsWith("/qualifying/");
+  // Full screen: the browser's bars and the taskbar hidden, and this top bar and the live banner too.
+  const full = useFullscreen();
 
   return (
     <SupportProvider>
     <div className={appPage ? "h-dvh flex flex-col overflow-hidden" : "min-h-screen flex flex-col"}>
       {/* Navigation */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+      {full && <FullscreenButton on floating />}
+      <header className={`${full ? "hidden " : ""}sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800`}>
         <nav className="container-page flex items-center justify-between h-16 gap-2 sm:gap-3" aria-label="Main">
           {/* The same brand block as Finding Grip's header (GripLayout.tsx): Tedder logo | app mark + name.
               Phones get a smaller Tedder logo and tighter spacing so the name and coffee button fit. */}
@@ -188,6 +192,7 @@ export function Layout() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Below 1024px, as on Finding Grip: the compact header with the coffee entry as an icon. */}
+            <FullscreenButton on={full} />
             <CoffeeIconButton className="lg:hidden" />
             {/* Desktop auth */}
             <div className="hidden lg:flex items-center gap-3">
@@ -216,7 +221,7 @@ export function Layout() {
           </div>
         </nav>
       </header>
-      <LiveBanner />
+      {!full && <LiveBanner />}
 
       {/* Page content */}
       <main className={appPage ? "flex-1 min-h-0" : "flex-1"}>
