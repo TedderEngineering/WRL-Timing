@@ -171,6 +171,24 @@ describe("live replay pages", () => {
     }
   });
 
+  it("offers the demo by its configured names while it is still loading, not after a failed load", async () => {
+    const { replayDemo } = await import("../replay.js");
+    const named = { ...DEF, names: { eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", date: "2026-05-02" } };
+    const others = REPLAYS.splice(0, REPLAYS.length);
+    REPLAYS.push(named);
+    try {
+      setReplayFeed(fakeHttp(routes()), null, () => showing(400));
+      expect(replayDemo()).toEqual({ slug: DEF.slug, eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour", date: "2026-05-02" });
+      // A feed that cannot be read: once the load has failed, no demo.
+      setReplayFeed(fakeHttp({}), null, () => showing(400));
+      replayDemo();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(replayDemo()).toBeNull();
+    } finally {
+      REPLAYS.splice(0, REPLAYS.length, ...others);
+    }
+  });
+
   it("starts the race again as a new epoch", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {

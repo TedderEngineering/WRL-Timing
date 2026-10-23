@@ -31,6 +31,8 @@ export interface ReplayDef {
   eventId: number;
   /** Race time the replay starts at (s). */
   fromS: number;
+  /** RaceTrace's names for the race, for the demo link before the replay has loaded. */
+  names?: { eventName: string; sessionName: string; date: string };
 }
 
 export const REPLAYS: ReplayDef[] = [
@@ -39,6 +41,7 @@ export const REPLAYS: ReplayDef[] = [
     source: "sebring-international-raceway-2026-sunday-7-hour",
     eventId: 485,
     fromS: 5 * 3600,
+    names: { eventName: "Sebring International Raceway 2026", sessionName: "Sunday 7 Hour", date: "2026-10-18" },
   },
 ];
 
@@ -109,6 +112,10 @@ export class ReplaySource {
   private loading: Promise<void> | null = null;
   private failedAt = 0;
   loaded = false;
+  /** The last load failed and none is running. */
+  get failed(): boolean {
+    return !this.loaded && !this.loading && this.failedAt > 0;
+  }
 
   constructor(
     readonly def: ReplayDef,
@@ -477,8 +484,15 @@ export function replayDemo(): { slug: string; eventName: string; sessionName: st
   for (const r of REPLAYS) {
     const s = replaySource(r.slug)!;
     if (s.loaded) return { slug: r.slug, ...s.names() };
-    // Not loaded yet (start-up, or a failed load): start it, for the next ask.
+  }
+  for (const r of REPLAYS) {
+    const s = replaySource(r.slug)!;
+    // Still loading after a restart (a recording takes a while): offered by its configured names,
+    // the page waits for it; started here if it is not running. A replay whose last load failed
+    // is not offered.
+    const failed = s.failed;
     void s.load().catch(() => undefined);
+    if (!failed && r.names) return { slug: r.slug, ...r.names };
   }
   return null;
 }
