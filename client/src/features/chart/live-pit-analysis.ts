@@ -5,12 +5,15 @@
  * no service time, time lost against green pace, delta against the class pit cycle's mean, and the
  * averages over green-flag stops (not drive-throughs or garage visits). Without the package's
  * stop kinds, a stop losing 5 minutes or more counts as a garage visit and one losing under
- * PIT_LANE_PASS_S as a drive-through.
+ * PIT_LANE_PASS_S as a drive-through. The class places a stop gained or lost (the arrow on its
+ * card) are the chart's own: each settle marker's class result (pit-band.ts classCycle, as the
+ * Position Trace labels it) on the stop it follows.
  */
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { isGreenFlag } from "./flags";
 import { LONG_STOP_S } from "./long-stops";
+import { classCycle } from "./pit-band";
 import type { PitAnalysisResponse, PitStop } from "./PitAnalysisTab";
 
 const CONDITION = { green: "Full green", fcy: "Caution", mixed: "Green and caution" } as const;
@@ -42,6 +45,16 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
     const car = data.cars[key];
     if (!car || !ann?.pits?.length) continue;
     const num = Number(key);
+    // Each settle's class result, on the stop it follows (the last pit marker before it), as the
+    // Position Trace shows it: one per stop, the first settle after it.
+    const places = new Map<number, { before: number; after: number; net: number; open: boolean }>();
+    const pitLaps = ann.pits.map((m) => m.l).sort((a, b) => a - b);
+    for (const sp of [...(ann.settles ?? [])].sort((a, b) => a.l - b.l)) {
+      const stopLap = sp.stopLap ?? [...pitLaps].reverse().find((l) => l < sp.l);
+      if (stopLap === undefined || places.has(stopLap)) continue;
+      const c = classCycle(sp, car.laps);
+      if (c) places.set(stopLap, { ...c, open: !!sp.open });
+    }
     const stops: PitStop[] = ann.pits.map((m, i) => {
       const t = m.pitTiming;
       const context = t?.context ?? contextOf(data, num, m.l);
@@ -56,6 +69,7 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
             ? "drive_through"
             : "stop");
       if (kind === "stop" && context === "green" && lost !== null) green.push(lost);
+      const pl = places.get(m.l);
       return {
         stopNumber: i + 1,
         pitLap: m.l,
@@ -69,6 +83,7 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
         timeLost_s: lost,
         delta_s: t?.cycleComparison?.deltaTotalLoss ?? null,
         cycle: m.cycle?.ordinal ?? t?.cycleComparison?.cycleId ?? null,
+        ...(pl ? { classPosBefore: pl.before, classPosAfter: pl.after, netClass: pl.net, placesOver: "cycle" as const, ...(pl.open ? { cycleOpen: true } : {}) } : {}),
       };
     });
     total += stops.length;
