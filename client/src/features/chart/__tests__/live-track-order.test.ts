@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { stintLaps, trackOrder } from "../LiveTrackOrder";
+import { gainPerLap, stintLaps, trackOrder } from "../LiveTrackOrder";
 
 describe("the live running order", () => {
   // A 6000 m lap at 40 m/s (150 s laps). The focus car (65) is 1000 m past the line.
@@ -35,5 +35,16 @@ describe("the live running order", () => {
   it("counts the stint from the last stop", () => {
     const data = { cars: { "65": { laps: [1, 2, 3, 4, 5].map((l) => ({ l, pit: l === 2 ? 1 : 0 })) } } } as unknown as RaceChartData;
     expect(stintLaps(data, 65)).toBe(3);
+  });
+
+  it("says how much a lap the focus car is gaining (+) or losing (−) to a car, over each one's last green laps", () => {
+    const run = (sec: number) => Array.from({ length: 10 }, (_, i) => ({ l: i + 1, p: 1, cp: 1, lt: "", ltSec: i === 0 ? 200 : sec, flag: "GREEN", pit: 0 }));
+    const d = {
+      maxLap: 10, totalCars: 3, greenPaceCutoff: 180, fcy: [],
+      cars: { "1": { laps: run(140) }, "2": { laps: run(140.8) }, "3": { laps: run(139.5) }, "4": { laps: [] } },
+    } as unknown as RaceChartData;
+    expect(gainPerLap(d, 1, 2)).toBeCloseTo(0.8, 6); // gaining on the slower car
+    expect(gainPerLap(d, 1, 3)).toBeCloseTo(-0.5, 6); // losing to the quicker one
+    expect(gainPerLap(d, 1, 4)).toBeNull();
   });
 });
