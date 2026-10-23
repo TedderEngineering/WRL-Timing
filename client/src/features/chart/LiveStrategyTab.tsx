@@ -93,10 +93,11 @@ function FocusCards({ s, data }: { s: LiveStrategy; data: RaceChartData }) {
       </Card>
 
       {f.pitNow && (
-        <Card title={f.pitNow.caution ? "Stop now, under the caution" : "Stop now"} tone={f.pitNow.caution ? "caution" : undefined}>
-          <Big>Rejoins P{f.pitNow.rejoinPos} in class</Big>
+        // What a stop this lap would do, not advice to make one: the car may not need a stop at all.
+        <Card title={f.pitNow.caution ? "If it pitted this lap, under the caution" : "If it pitted this lap"} tone={f.pitNow.caution ? "caution" : undefined}>
+          <Big>Would rejoin P{f.pitNow.rejoinPos} in class</Big>
           <Note>
-            Loses about {gapClock(f.pitNow.lostS)}
+            A stop now would lose about {gapClock(f.pitNow.lostS)}
             {f.pitNow.savesS !== null && f.pitNow.savesS > 0 ? `, ${gapClock(f.pitNow.savesS)} less than a green-flag stop` : ""}
             {f.pitNow.measured ? " (this race's stops)" : " (estimated: no stop under a caution yet)"}.
             {f.pitNow.caution ? " Cars around it may stop too." : ""}
