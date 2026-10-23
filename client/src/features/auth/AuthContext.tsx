@@ -1,4 +1,5 @@
 import { setSignedOutNotice } from "../../lib/signedOutNotice";
+import { resetLiveKey } from "../live/liveKey";
 import {
   createContext,
   useContext,
@@ -181,6 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Logout even if request fails
     }
     api.setAccessToken(null);
+    // The live-timing key kept on this device goes with the session.
+    resetLiveKey();
     if (refreshTimer) clearTimeout(refreshTimer);
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }, [refreshTimer]);

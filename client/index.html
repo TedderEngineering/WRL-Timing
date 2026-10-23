@@ -43,6 +43,41 @@
         }
       })();
     </script>
+    <script>
+      // A live race page: ask for the race now, while the app is still loading (useLiveChartData
+      // takes these over). A live race needs the hour's key, kept from an earlier visit
+      // (features/live/liveKey.ts); a replay needs none. Anything missing: the app asks itself.
+      (function() {
+        try {
+          var m = /^\/live\/([^\/?#]+)\/?$/.exec(location.pathname);
+          if (!m || !window.fetch) return;
+          var slug = m[1];
+          var k = null;
+          if (slug.indexOf('replay-') !== 0) {
+            var s = JSON.parse(localStorage.getItem('rt.live.key') || 'null');
+            if (!s || typeof s.k !== 'string' || !(Date.now() < s.renewAt)) return;
+            k = s.k;
+          }
+          var early = (window.__rtEarly = {});
+          var get = function(path) {
+            var url = '/api' + path + (k ? (path.indexOf('?') < 0 ? '?' : '&') + 'k=' + encodeURIComponent(k) : '');
+            var p = fetch(url, { credentials: 'omit' })
+              .then(function(r) {
+                if (!r.ok) return { ok: false };
+                var age = Number(r.headers.get('Age')) || 0;
+                return r.json().then(function(body) { return { ok: true, body: body, age: age }; });
+              })
+              .catch(function() { return { ok: false }; });
+            var e = (early[path] = { at: Date.now(), p: p });
+            p.then(function() { e.doneAt = Date.now(); });
+            return p;
+          };
+          get('/live/' + slug + '/head').then(function(h) {
+            if (h.ok && h.body && h.body.epoch && h.body.v > 0) get('/live/' + slug + '/full/' + h.body.epoch + '/' + h.body.v);
+          });
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
     <div id="root"></div>
