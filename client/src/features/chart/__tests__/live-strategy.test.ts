@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationData, RaceChartData } from "@shared/types";
-import { CAUTION_SHARE, liveStrategy, markSplashes, passLane, STINT_SLACK, type Stop } from "../live-strategy";
+import { CAUTION_SHARE, liveStrategy, markSplashes, passLane, reachToFlag, STINT_SLACK, type CarStrategy, type Stop } from "../live-strategy";
 
 /**
  * A class of cars at `pace` s/lap with a stop (a 100 s longer in-lap) at each lap in `stops`.
@@ -153,5 +153,22 @@ describe("a short visit late in a stint is a splash of fuel", () => {
     const named = new Map(stopsBy);
     named.set("119", [stop(27, "stop"), stop(54, "stop"), stop(81, "drive_through", null, false)]);
     expect(markSplashes(named, ["119", "120", "678"]).get("119")![2].kind).toBe("drive_through");
+  });
+});
+
+describe("reaching the flag", () => {
+  const car = (over: Partial<CarStrategy>): CarStrategy =>
+    ({ num: 119, cls: "GTO", team: "", posClass: 2, laps: 168, pace: 140, stops: [], lastStopLap: 143, stintLaps: 27, longestStint: 27, stintCap: 27, stopsToGo: 0, stopped: false, gapS: 0, netGapS: null, projGapS: null, netPos: null, projPos: null, ...over }) as CarStrategy;
+
+  it("says the laps to the flag, the stint they make, how far a last stint stretches and the laps to spare", () => {
+    // 3 laps to go at 140 s: a 30-lap stint; 27 laps stretch to 31 (15 %): 1 to spare, tight.
+    expect(reachToFlag(car({}), 3 * 140)).toEqual({ toFlag: 3, stint: 30, reach: 31, spare: 1, tight: true });
+    // 10 laps since the stop: 13-lap stint, 18 to spare.
+    expect(reachToFlag(car({ stintLaps: 10 }), 3 * 140)).toMatchObject({ stint: 13, spare: 18, tight: false });
+  });
+  it("is not given for a car that owes a stop, or without its pace or the time to go", () => {
+    expect(reachToFlag(car({ stopsToGo: 1 }), 420)).toBeNull();
+    expect(reachToFlag(car({ pace: null }), 420)).toBeNull();
+    expect(reachToFlag(car({}), null)).toBeNull();
   });
 });

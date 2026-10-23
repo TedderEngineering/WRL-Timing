@@ -323,6 +323,23 @@ function elapsedAt(laps: Lap[]): Map<number, number> {
 
 const isCaution = (flag: string | null) => !!flag && CAUTION_FLAGS.has(flag);
 
+/** With this many laps to spare or fewer, reaching the flag is tight (Sebring 2026: #119 had about 1 and splashed). */
+export const TIGHT_LAPS = 2;
+
+/**
+ * For a car that can reach the flag (no stops to go): the laps to the flag at its pace, the stint
+ * that makes, the most laps a last stint can run (its stint cap with STINT_SLACK, as stops to go
+ * reckons it), and the laps to spare. Null when it owes a stop or any figure is not known.
+ */
+export function reachToFlag(c: CarStrategy, timeToGoS: number | null): { toFlag: number; stint: number; reach: number; spare: number; tight: boolean } | null {
+  if (c.stopsToGo !== 0 || c.stintCap === null || c.pace === null || !(c.pace > 0) || timeToGoS === null) return null;
+  const toFlag = Math.ceil(Math.max(0, timeToGoS) / c.pace);
+  const reach = Math.floor(c.stintCap * (1 + STINT_SLACK));
+  const stint = c.stintLaps + toFlag;
+  const spare = reach - stint;
+  return { toFlag, stint, reach, spare, tight: spare <= TIGHT_LAPS };
+}
+
 export function liveStrategy({ data, annotations, focusNum, flag, timeToGoS }: LiveStrategyInput): LiveStrategy | null {
   const focus = data.cars[String(focusNum)];
   if (!focus) return null;

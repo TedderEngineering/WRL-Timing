@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { gapClock, lapsAndSeconds } from "./live-gaps";
-import { liveStrategy, type CarStrategy, type LiveStrategy } from "./live-strategy";
+import { liveStrategy, reachToFlag, type CarStrategy, type LiveStrategy } from "./live-strategy";
 import { liveBattles, recentPace, type Battle } from "./live-battles";
 import { lapsDown } from "./laps-down";
 
@@ -64,15 +64,32 @@ function FocusCards({ s, data }: { s: LiveStrategy; data: RaceChartData }) {
       {s.stintLength !== null ? ` · ${s.cls} stints run about ${s.stintLength} laps` : ""}.
     </Note>
   );
+  // Reaching the flag: how many laps it needs and how many it has to spare (tight: the caution colour).
+  const reach = !c.stopped ? reachToFlag(c, s.timeToGoS) : null;
   return (
     <div className="flex flex-wrap gap-3">
-      <Card title={`Pit window · #${num}`}>
+      <Card title={`Pit window · #${num}`} tone={reach?.tight ? "caution" : undefined}>
         {c.stopped ? (
           <Big>Stopped</Big>
         ) : c.stopsToGo === null ? (
           <>
             <Big>Not known yet</Big>
             <Note>{s.stintLength === null ? `Waits for the ${s.cls} cars to run a few full stints.` : "Waits for the car's green-flag pace and the time to go."}</Note>
+          </>
+        ) : c.stopsToGo === 0 && reach ? (
+          <>
+            <Big>Can reach the flag</Big>
+            <Note>
+              {c.lastStopLap > 0 ? `${c.stintLaps} laps since its stop on lap ${c.lastStopLap}` : `${c.stintLaps} laps without a stop`}, and {reach.toFlag} to the flag: {article(reach.stint)}{" "}
+              {reach.stint}-lap stint.
+            </Note>
+            <Note>
+              {s.stintLength !== null ? `${s.cls} stints run about ${s.stintLength} laps; ` : ""}a last stint can stretch to about {reach.reach}.
+            </Note>
+            <p className="m-0 text-sm font-semibold" style={{ color: reach.tight ? T.caution : T.text }}>
+              {reach.tight ? "Tight: " : ""}
+              {reach.spare > 0 ? `${lapsWord(reach.spare)} to spare.` : "no lap to spare."}
+            </p>
           </>
         ) : c.stopsToGo === 0 ? (
           <>
@@ -153,6 +170,8 @@ export function projectedNote(s: LiveStrategy, data: RaceChartData): string {
 /** A lap time: "2:19.2". */
 const lapClock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 const perLap = (s: number) => `${Math.abs(s).toFixed(1)} s/lap`;
+/** "a" or "an" before a number said aloud: an 8-, 11-, 18- or 80-something-lap stint. */
+const article = (n: number) => (n === 11 || n === 18 || /^8/.test(String(n)) ? "an" : "a");
 const lapsWord = (n: number) => `${n} lap${n === 1 ? "" : "s"}`;
 
 const BATTLE: Record<Battle["kind"], { label: string; color: string; bg: string }> = {
