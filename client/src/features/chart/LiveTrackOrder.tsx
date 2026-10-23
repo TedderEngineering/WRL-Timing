@@ -247,6 +247,9 @@ export function LiveTrackOrder({
           <th className={`${th} text-right`} title="Laps since the car's last stop">
             Stint
           </th>
+          <th className={`${th} text-right`} title="Laps down to the class leader, counted when the car last crossed the line (0: on the lead lap)">
+            LD
+          </th>
           <th className={`${th} text-right`} title={fromLeader ? "Seconds behind the leader on the road" : "Seconds ahead (−) or behind (+) the focus car on the road"}>
             Gap
           </th>
@@ -294,6 +297,9 @@ export function LiveTrackOrder({
               </td>
               <td className="px-1.5 py-1 text-right" style={{ color: C.muted }}>
                 {stintLaps(data, r.key)}
+              </td>
+              <td className="px-1.5 py-1 text-right" style={{ color: (lapsDown.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
+                {lapsDown.get(r.key) ?? "–"}
               </td>
               <td className="px-1.5 py-1 text-right font-semibold">
                 {r.inPit ? (
