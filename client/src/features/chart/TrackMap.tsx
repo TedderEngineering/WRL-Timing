@@ -7,6 +7,7 @@ import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
+import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
 import { RaceControl } from "./RaceControl";
 import { LiveTrackOrder, trackOrder } from "./LiveTrackOrder";
@@ -82,6 +83,7 @@ export function TrackMap({
   flag = null,
   clock = null,
   annotations = null,
+  trackName = "",
 }: {
   slug: string;
   data: RaceChartData;
@@ -95,6 +97,8 @@ export function TrackMap({
   clock?: { ttgS: number; at: number; frozen: boolean } | null;
   /** The race's notes (its pit stops), for the running order. */
   annotations?: AnnotationData | null;
+  /** The circuit's name: the angle the viewer turns the map to is kept per circuit. */
+  trackName?: string;
 }) {
   const [track, setTrack] = useState<TrackOutline | null>(null);
   const [trackMissing, setTrackMissing] = useState(false);
@@ -142,6 +146,27 @@ export function TrackMap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hits = useRef<{ key: number; x: number; y: number; r: number }[]>([]);
+  // The map turned to suit the viewer (map-rotate.ts): dragged with the mouse, or 45° at a time
+  // with the buttons on the map. Drawn from the ref (a drag redraws without re-rendering the page);
+  // the state is for the buttons' readout.
+  const circuit = trackName || slug;
+  const [angle, setAngle] = useState(() => readMapAngle(circuit));
+  const angleRef = useRef(angle);
+  useEffect(() => {
+    const a = readMapAngle(circuit);
+    angleRef.current = a;
+    setAngle(a);
+  }, [circuit]);
+  const turnTo = (deg: number) => {
+    angleRef.current = deg;
+    setAngle(deg);
+    saveMapAngle(circuit, deg);
+  };
+  const readout = useRef<HTMLSpanElement>(null);
+  const drag = useRef<{ id: number; startA: number; base: number; x: number; y: number; moved: boolean } | null>(null);
+  /** A drag ends with a click on the canvas: not a tap on a car. */
+  const dragged = useRef(false);
+  const fit = useRef<{ k: string; px: (p: [number, number]) => [number, number] } | null>(null);
   /** The cars this viewer follows on the map (published numbers), kept per race on this device. */
   const [followed, setFollowed] = useState<string[]>(() => readFollowedCars(slug));
   useEffect(() => setFollowed(readFollowedCars(slug)), [slug]);
@@ -269,11 +294,12 @@ export function TrackMap({
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    // The outline turned to the viewer's angle and fitted to the space (worked out again only when
+    // the angle, the size or the outline changes).
     const pad = 28;
-    const scale = Math.min((W - 2 * pad) / track.w, (H - 2 * pad) / track.h);
-    const ox = (W - track.w * scale) / 2;
-    const oy = (H - track.h * scale) / 2;
-    const px = ([x, y]: [number, number]): [number, number] => [ox + x * scale, oy + y * scale];
+    const k = `${angleRef.current}|${W}|${H}|${track.pts.length}|${track.w}|${track.h}`;
+    if (fit.current?.k !== k) fit.current = { k, px: rotatedFit(track.pts, track.w, track.h, angleRef.current, W, H, pad) };
+    const px = fit.current.px;
 
     // The circuit.
     ctx.lineJoin = "round";
@@ -545,12 +571,56 @@ export function TrackMap({
     return () => cancelAnimationFrame(raf);
   }, [track]);
 
-  const onClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Turning the map: press and drag round its centre with the mouse (or a pen). Snaps to every
+  // 45° within SNAP_DEG; Shift turns it freely. Touch screens use the buttons (a finger drag
+  // scrolls the page).
+  const centreAngle = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return (Math.atan2(e.clientY - r.top - r.height / 2, e.clientX - r.left - r.width / 2) * 180) / Math.PI;
+  };
+  const hitAt = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - r.left;
     const y = e.clientY - r.top;
+    return [...hits.current].reverse().find((h) => Math.hypot(h.x - x, h.y - y) <= h.r);
+  };
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    drag.current = { id: e.pointerId, startA: centreAngle(e), base: angleRef.current, x: e.clientX, y: e.clientY, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = drag.current;
+    const el = e.currentTarget;
+    if (!d || d.id !== e.pointerId) {
+      if (e.pointerType !== "touch") el.style.cursor = hitAt(e) ? "pointer" : "grab";
+      return;
+    }
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
+      d.moved = true;
+      el.setPointerCapture(e.pointerId);
+      el.style.cursor = "grabbing";
+    }
+    angleRef.current = snapDeg(d.base + centreAngle(e) - d.startA, e.shiftKey);
+    if (readout.current) readout.current.textContent = `${Math.round(angleRef.current)}°`;
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    drag.current = null;
+    if (!d.moved) return;
+    dragged.current = true;
+    e.currentTarget.style.cursor = "grab";
+    turnTo(angleRef.current);
+  };
+
+  const onClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragged.current) {
+      dragged.current = false;
+      return;
+    }
     // The top-most dot under the tap (the focus car is drawn last).
-    const hit = [...hits.current].reverse().find((h) => Math.hypot(h.x - x, h.y - y) <= h.r);
+    const hit = hitAt(e);
     // Follow the car tapped, or stop following it (the focus car is always shown large).
     if (hit && hit.key !== focusNum) follow(toggleFollow(followed, carNo(data, hit.key)));
   };
@@ -579,10 +649,15 @@ export function TrackMap({
           <canvas
             ref={canvasRef}
             onClick={onClick}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
             role="img"
-            aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to follow it.`}
-            className="absolute inset-0 cursor-pointer"
+            aria-label={`Track map: every car's place on the circuit, ${focusNum ? `focus car #${carNo(data, focusNum)} highlighted` : ""}. Tap a car to follow it; drag to turn the map.`}
+            className="absolute inset-0 cursor-grab"
           />
+          {track && <TurnButtons angle={angle} readout={readout} onTurn={turnTo} />}
           {!track && (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
               {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
@@ -811,6 +886,39 @@ function MapKey({
 
 /** Behind a chip floating over the map on a wide screen: the map's ground, mostly opaque. */
 const OVER_BG = "rgba(11,11,24,0.82)";
+
+/**
+ * On the map, bottom right: turn it 45° either way, and the angle now (tap to put it back
+ * upright). With the mouse the map also turns by dragging it.
+ */
+function TurnButtons({ angle, readout, onTurn }: { angle: number; readout: React.RefObject<HTMLSpanElement | null>; onTurn: (deg: number) => void }) {
+  useEffect(() => {
+    if (readout.current) readout.current.textContent = `${Math.round(angle)}°`;
+  }, [angle, readout]);
+  const btn = "pointer-events-auto flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold hover:bg-white/10";
+  const style = { borderColor: "#3a3a5c", color: C.text, background: OVER_BG };
+  return (
+    <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1" role="group" aria-label="Turn the map">
+      <button type="button" className={btn} style={style} onClick={() => onTurn(stepDeg(angle, -1))} title="Turn the map 45° anticlockwise" aria-label="Turn the map 45° anticlockwise">
+        ↺
+      </button>
+      <button
+        type="button"
+        className={`${btn} tabular-nums`}
+        style={{ ...style, color: angle ? C.text : C.muted }}
+        onClick={() => onTurn(0)}
+        title="The map's angle: drag the map with the mouse to turn it (it snaps every 45°; hold Shift to turn it freely). Tap to put it back."
+        aria-label={`Map turned ${Math.round(angle)}°: put it back`}
+      >
+        {/* Written here and by a drag (which turns the map without re-rendering): never by React. */}
+        <span ref={readout} />
+      </button>
+      <button type="button" className={btn} style={style} onClick={() => onTurn(stepDeg(angle, 1))} title="Turn the map 45° clockwise" aria-label="Turn the map 45° clockwise">
+        ↻
+      </button>
+    </div>
+  );
+}
 
 /** The view beside the map, kept on this device. */
 const ORDER_VIEW_KEY = "rt.live.orderView";

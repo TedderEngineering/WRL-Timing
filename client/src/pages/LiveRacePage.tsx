@@ -873,6 +873,7 @@ export function LiveRacePage() {
               classView={classView}
               flag={flag}
               annotations={annotations}
+              trackName={race?.track ?? live?.track ?? ""}
               clock={!live?.ended && ttgAt !== null && clockAt !== null ? { ttgS: ttgAt, at: clockAt, frozen: flag === "Red" || flag === "Checkered" } : null}
             />
           </div>
