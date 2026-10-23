@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RaceChartData } from "@shared/types";
-import { gainPerLap, stintLaps, trackOrder } from "../LiveTrackOrder";
+import { gainPerLap, leaderOrder, leaderRef, stintLaps, trackOrder } from "../LiveTrackOrder";
 
 describe("the live running order", () => {
   // A 6000 m lap at 40 m/s (150 s laps). The focus car (65) is 1000 m past the line.
@@ -46,5 +46,36 @@ describe("the live running order", () => {
     expect(gainPerLap(d, 1, 2)).toBeCloseTo(0.8, 6); // gaining on the slower car
     expect(gainPerLap(d, 1, 3)).toBeCloseTo(-0.5, 6); // losing to the quicker one
     expect(gainPerLap(d, 1, 4)).toBeNull();
+  });
+});
+
+describe("the live crossing order from the leader", () => {
+  // A 6000 m lap at 40 m/s. Running order: 40 leads, then 36, 65, 80, 13; 52 is in the pits.
+  const place = (k: number) => ({ 40: 1, 36: 2, 65: 3, 80: 4, 13: 5, 52: 6 })[k] ?? 0;
+  const places = [
+    { key: 65, d: 1000, inPit: false },
+    { key: 80, d: 988, inPit: false },
+    { key: 36, d: 1136, inPit: false },
+    { key: 40, d: 2200, inPit: false },
+    { key: 13, d: 5000, inPit: false },
+    { key: 52, d: 0, inPit: true },
+  ];
+
+  it("puts the leader on top, then every car behind it on the road over the whole lap, the pit lane last", () => {
+    const rows = leaderOrder(places, 40, place, 6000, 40);
+    expect(rows.map((r) => r.key)).toEqual([40, 36, 65, 80, 13, 52]);
+    // 36 is 1064 m behind (26.6 s); 13 is 3200 m behind, past half a lap (80.0 s).
+    expect(rows.map((r) => (r.gapS === null ? null : Number(r.gapS.toFixed(1))))).toEqual([0, 26.6, 30, 30.3, 80, null]);
+    expect(rows[0].isRef).toBe(true);
+  });
+
+  it("keeps the leader on top in the pits, measured from the best-placed car on track", () => {
+    const inPits = places.map((p) => (p.key === 40 ? { ...p, inPit: true } : p));
+    expect(leaderRef(inPits, 40, place)).toBe(36);
+    const rows = leaderOrder(inPits, 40, place, 6000, 40);
+    // From 36 (1136 m): 65 136 m behind, 80 148 m, 13 2136 m; the leader pinned on top, 52 in the pits last.
+    expect(rows.map((r) => r.key)).toEqual([40, 36, 65, 80, 13, 52]);
+    expect(rows[0]).toMatchObject({ key: 40, inPit: true, gapS: null });
+    expect(rows[1]).toMatchObject({ key: 36, isRef: true, gapS: 0 });
   });
 });
