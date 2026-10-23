@@ -243,6 +243,14 @@ class Poller {
   private lastBuildMs = 0;
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
+  /** A tick has finished since this poller started (or a replay started again): viewers need not wait. */
+  private settled = false;
+  /**
+   * While a replay's first tick of its new run is building (a new epoch, from scratch, which can
+   * take seconds), viewers keep being served the run they were watching: held here until that
+   * tick ends.
+   */
+  private held: Served | null = null;
   /** A replay's run (replay.ts): when it changes, the race starts again. */
   private cycle: number | null = null;
 
@@ -257,6 +265,9 @@ class Poller {
 
   /** A replay starting its race again: forget the race so far (a new epoch, versions from 1). */
   private restart() {
+    // Keep serving the run so far until the new one is built (this tick).
+    this.held = this.snap.chart ? { ...this.servedNow(), versions: new Map(this.versions), steps: new Map(this.steps), charts: new Map(this.charts) } : null;
+    this.settled = false;
     this.epoch = newEpoch();
     this.snap = { chart: null, v: 0, prefixes: null, waiting: "Starting the replay", updatedAt: null, lastError: null, etag: null, ended: false };
     this.versions.clear();
@@ -281,9 +292,24 @@ class Poller {
     return this.running;
   }
 
-  /** First chart, or whatever the first tick produced (a viewer waits at most one tick). */
-  ready() {
+  /**
+   * Wait for the first tick's result (the first chart, or what went wrong), and only that: once a
+   * tick has finished, a viewer is answered at once from the last result, not held up by the tick
+   * running now (a feed read and a rebuild can take seconds). A replay starting again keeps
+   * serving the run so far meanwhile (`held`).
+   */
+  ready(): Promise<void> {
+    if (this.settled || this.held) return Promise.resolve();
     return this.running ?? Promise.resolve();
+  }
+
+  /** What viewers are served now: the latest result, or the held run while a replay's new run builds. */
+  served(): Served {
+    return this.held ?? this.servedNow();
+  }
+
+  private servedNow(): Served {
+    return { snap: this.snap, versions: this.versions, steps: this.steps, charts: this.charts, epoch: this.epoch, positions: this.positions, control: this.control, pitLane: this.pitLane };
   }
 
   private schedule() {
@@ -470,9 +496,24 @@ class Poller {
         this.snap = { ...this.snap, lastError: msg, waiting: this.snap.chart ? null : "The timing is not answering yet" };
       }
     } finally {
+      // The tick is done: its result is what viewers get from now on (the held run is let go).
+      this.held = null;
+      this.settled = true;
       this.schedule();
     }
   }
+}
+
+/** A session as viewers are served it (Poller.served). */
+interface Served {
+  snap: LiveSnapshot;
+  versions: ReadonlyMap<number, VersionSummary>;
+  steps: ReadonlyMap<number, string>;
+  charts: ReadonlyMap<number, LiveChart>;
+  epoch: string;
+  positions: Positions | null;
+  control: FeedControlEntry[] | null;
+  pitLane: PitLane | null;
 }
 
 const hashOf = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 20);
@@ -552,7 +593,8 @@ export async function getLiveSnapshot(
   const p = pollerFor(eventId, sessionId, slug);
   p.lastView = Date.now();
   await p.ready();
-  return { ...p.snap, meta: p.meta, versions: p.versions, steps: p.steps, charts: p.charts, epoch: p.epoch };
+  const s = p.served();
+  return { ...s.snap, meta: p.meta, versions: s.versions, steps: s.steps, charts: s.charts, epoch: s.epoch };
 }
 
 /**
@@ -682,7 +724,8 @@ export async function getLiveTrack(
   const p = pollerFor(eventId, sessionId, slug);
   p.lastView = Date.now();
   await p.ready();
-  return { track: p.trackPublic, positions: p.positions, pitLane: p.pitLane };
+  const s = p.served();
+  return { track: p.trackPublic, positions: s.positions, pitLane: s.pitLane };
 }
 
 /** A race-control message as viewers see it (no timing-system ids). */
@@ -724,7 +767,7 @@ export async function getLiveControl(eventId: number, sessionId: number, slug: s
   const p = pollerFor(eventId, sessionId, slug);
   p.lastView = Date.now();
   await p.ready();
-  return raceControlMessages(p.controlLog);
+  return raceControlMessages(p.served().control);
 }
 
 /** An entry on the event's list: car number as published, team, class. */

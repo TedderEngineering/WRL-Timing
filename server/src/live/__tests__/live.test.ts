@@ -166,6 +166,42 @@ describe("live poller and routes", () => {
     expect(h2.calls.length).toBe(calls);
   });
 
+  it("answers a viewer at once while the next tick is still reading the feed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // Its own session (8), so no other test's poller is in the way.
+      const r: Record<string, string | Buffer> = { ...routes(upTo(3)) };
+      r[feedUrls.sessions(9001)] = JSON.stringify([{ sid: 8, eid: 9001, n: "Sunday 8 Hour", st: "2026-05-02T23:40:00", et: null, tz: -6, il: true }]);
+      r[liveUrls.sessionLaps(9001, 8)] = JSON.stringify(upTo(3));
+      r[feedUrls.flags(9001, 8)] = JSON.stringify([{ f: 1, s: "2026-05-02T23:40:00", e: null }]);
+      r[feedUrls.control(9001, 8)] = "[]";
+      const h = fakeHttp(r);
+      // The same client throughout (swapping it would start the poller again), slowed on demand.
+      let gate: Promise<void> | null = null;
+      const slowed = {
+        get: async (u: string, o?: object) => ((gate && (await gate)), h.get(u, o)),
+        getText: async (u: string, o?: object) => ((gate && (await gate)), h.getText(u, o)),
+        getJson: async (u: string, o?: object) => ((gate && (await gate)), h.getJson(u, o)),
+      };
+      setLiveHttp(slowed as never);
+      const a = await getLiveSnapshot(9001, 8, "synthetic-park-2026-sunday-8-hour");
+      expect(a.chart?.data.maxLap).toBe(3);
+      // The next tick's feed reads hang (a slow timing feed).
+      let release!: () => void;
+      gate = new Promise<void>((res) => (release = res));
+      await vi.advanceTimersByTimeAsync(5_000);
+      // A viewer arriving now gets the last chart straight away, not after the tick.
+      const answered = await Promise.race([
+        getLiveSnapshot(9001, 8, "synthetic-park-2026-sunday-8-hour").then((s) => s.v),
+        new Promise<string>((res) => setImmediate(() => res("waited"))),
+      ]);
+      expect(answered).toBe(a.v);
+      release();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("lists only live WRL sessions", async () => {
     setLiveHttp(fakeHttp(routes([])));
     const xs = await listLiveSessions();
