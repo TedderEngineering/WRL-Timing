@@ -55,4 +55,16 @@ describe("pitAnalysisFromChart pit-lane time", () => {
     const a = pitAnalysisFromChart(data, same);
     expect(a.cars["119"].stops[0]).toMatchObject({ pitRoadTime_s: null, timeLost_s: 125.2 });
   });
+
+  it("puts the chart's class result for each stop on its card: the settle after it, as the Position Trace labels it", () => {
+    // #282: P2 in class before its lap-12 stop (overall P3), settled on lap 15 at class P1.
+    const laps = Array.from({ length: 30 }, (_, i) => ({ ...lap(i + 1, "GREEN", i + 1 === 12 ? 1 : 0), p: i + 1 < 12 ? 3 : 2, cp: i + 1 < 12 ? 2 : 1 }));
+    const d = { ...data, cars: { ...data.cars, "282": { ...data.cars["282"], laps } } } as unknown as RaceChartData;
+    const settle = { l: 15, p: 2, lb: "Settled P2", su: "Was P3 · Gained 1", c: "#0f0" };
+    const a2 = pitAnalysisFromChart(d, { ...ann, "282": { ...ann["282"], settles: [settle] } } as AnnotationData);
+    expect(a2.cars["282"].stops[0]).toMatchObject({ classPosBefore: 2, classPosAfter: 1, netClass: 1, placesOver: "cycle" });
+    // No settle after it yet: no arrow.
+    expect(a2.cars["282"].stops[1].netClass).toBeUndefined();
+    expect(a2.cars["119"].stops[0].netClass).toBeUndefined();
+  });
 });
