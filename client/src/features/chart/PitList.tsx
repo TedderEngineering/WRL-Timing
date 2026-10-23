@@ -57,23 +57,25 @@ export function PitList({
       {text}
     </span>
   );
+  // One row: the cars in the pits, then the cars not running (wrapping on a narrow screen).
   return (
-    <div className="flex flex-col gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: C.line, color: C.muted }}>
+    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: C.line, color: C.muted }}>
       {stopping.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <>
           <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
             {tag("PIT", C.pit)} In the pits ({stopping.length})
           </span>
           {stopping.map((k) => chip(k, false))}
-        </div>
+        </>
       )}
+      {stopping.length > 0 && notRunning.length > 0 && <span aria-hidden className="mx-1.5 h-4 w-px" style={{ background: C.chip }} />}
       {notRunning.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5" title="Not running: no lap for over 15 minutes (retired, in the garage, parked)">
+        <span className="contents" title="Not running: no lap for over 15 minutes (retired, in the garage, parked)">
           <span className="mr-1 flex items-center gap-1.5 font-semibold" style={{ color: C.text }}>
             {tag("OUT", C.out)} Not running ({notRunning.length})
           </span>
           {notRunning.map((k) => chip(k, true))}
-        </div>
+        </span>
       )}
     </div>
   );
