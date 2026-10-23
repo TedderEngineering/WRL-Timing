@@ -17,7 +17,7 @@ import { getServedGzip, gunzip } from "../packages/store.js";
 import { withPitFacts } from "../packages/race-pit-facts.js";
 import { extractRecap, type Recap } from "../dashboard/recap.js";
 import { groupIntoWeekends, sessionLabel, weekendLabels, weekendOrder, type LatestRaceRow } from "../dashboard/latest.js";
-import { carFacts, extractCarStory, type CarStory } from "../dashboard/my-car.js";
+import { carFacts, extractCarStory, type CarFacts, type CarStory } from "../dashboard/my-car.js";
 import { cardCar, driverCardData, entryDrivers } from "../dashboard/driver-card.js";
 import { carDrive } from "../dashboard/my-driver.js";
 import { displayName } from "../services/driver-search.js";
@@ -35,13 +35,62 @@ export const dashboardRouter = Router();
 const recapCache = new Map<string, Recap | null>();
 const RECAP_CACHE_MAX = 200;
 
+type PackageRow = { id: string; storagePath: string; sha256: string; status: string };
+
 /** A published package's recap (cached by content); also the landing page's headline. */
 export async function recapFor(packageId: string): Promise<Recap | null> {
   const row = (await prisma.raceAnalysisPackage.findUnique({
     where: { id: packageId },
-    select: { storagePath: true, sha256: true, status: true },
-  })) as { storagePath: string; sha256: string; status: string } | null;
-  if (!row || row.status !== "PUBLISHED") return null;
+    select: { id: true, storagePath: true, sha256: true, status: true },
+  })) as PackageRow | null;
+  return row ? recapOfRow(row) : null;
+}
+
+/** Runs fn over items, at most `limit` at a time (package downloads: bounded memory). */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/** The recaps of several packages: one query for their rows, then each from cache or storage. */
+async function recapsFor(packageIds: string[]): Promise<Map<string, Recap | null>> {
+  const ids = [...new Set(packageIds)];
+  if (ids.length === 0) return new Map();
+  const rows = (await prisma.raceAnalysisPackage.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, storagePath: true, sha256: true, status: true },
+  })) as PackageRow[];
+  const recaps = await mapLimit(rows, 8, recapOfRow);
+  return new Map(rows.map((r, i) => [r.id, recaps[i]]));
+}
+
+/**
+ * After a deploy the recap cache is empty, and the first dashboard would wait for every recent
+ * package to download. Fill it in the background at start-up: the newest published races'
+ * recaps (what "Latest races" and the landing page show).
+ */
+export async function warmDashboardRecaps(races = 100): Promise<number> {
+  const rows = (await prisma.race.findMany({
+    where: { status: "PUBLISHED", currentPackageId: { not: null } },
+    orderBy: [{ date: "desc" }, { name: "asc" }],
+    take: races,
+    select: { currentPackageId: true },
+  })) as { currentPackageId: string | null }[];
+  const recaps = await recapsFor(rows.map((r) => r.currentPackageId).filter((id): id is string => !!id));
+  return [...recaps.values()].filter(Boolean).length;
+}
+
+async function recapOfRow(row: PackageRow): Promise<Recap | null> {
+  const packageId = row.id;
+  if (row.status !== "PUBLISHED") return null;
   if (recapCache.has(row.sha256)) return recapCache.get(row.sha256) ?? null;
   try {
     // "norules": the dashboard never shows rule flags.
@@ -57,6 +106,10 @@ export async function recapFor(packageId: string): Promise<Recap | null> {
 }
 
 const storyCache = new Map<string, CarStory | null>();
+
+/** A followed car's facts in one race, for the season recap, by race version and car. */
+const seasonFacts = new Map<string, CarFacts | null>();
+const SEASON_FACTS_MAX = 2000;
 
 async function storyFor(packageId: string, carNumber: string): Promise<CarStory | null> {
   const row = (await prisma.raceAnalysisPackage.findUnique({
@@ -112,27 +165,32 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
       },
     })) as Row[];
 
-    const viewed = new Set(
-      (
-        await prisma.userRaceView.findMany({
-          where: { userId: req.user!.userId, raceId: { in: rows.map((r) => r.id) } },
-          select: { raceId: true },
-          distinct: ["raceId"],
-        })
-      ).map((v: { raceId: string }) => v.raceId)
-    );
-
     const groups = groupIntoWeekends(rows).slice(0, limit);
-    // Feature races first in each weekend: count the pit laps of the races shown.
-    const shown = groups.flatMap((g) => g.races.map((r) => r.id));
-    // Pit laps are a small share of all laps, so counting them here is cheap and keeps the
-    // query free of Prisma's groupBy generics (which failed the build's type check).
-    const pitLaps = await prisma.raceLap.findMany({
-      where: { raceId: { in: shown }, pitStop: true },
-      select: { raceId: true },
-    });
-    const pitCount = new Map<string, number>();
-    for (const l of pitLaps) pitCount.set(l.raceId, (pitCount.get(l.raceId) ?? 0) + 1);
+    const shownRows = groups.flatMap((g) => g.races);
+    const shown = shownRows.map((r) => r.id);
+    // Which races open, and so which recaps to send (no query while RaceTrace is free).
+    const access = new Map(
+      await Promise.all(shownRows.map(async (r) => [r.id, await canUserAccessRace(r, viewer.plan, viewer.role)] as const))
+    );
+    const packageIds = shownRows
+      .filter((r) => access.get(r.id)?.accessible && r.currentPackageId && packagesEnabledFor(r))
+      .map((r) => r.currentPackageId as string);
+    // Each database round trip costs the page, so the three lookups go together: races viewed,
+    // pit laps per race (feature races first in each weekend), and the recaps (one query for
+    // the package rows, then each from cache or storage, a few at a time).
+    const [views, pitRows, recaps] = await Promise.all([
+      prisma.userRaceView.findMany({
+        where: { userId: req.user!.userId, raceId: { in: shown } },
+        select: { raceId: true },
+        distinct: ["raceId"],
+      }) as Promise<{ raceId: string }[]>,
+      shown.length
+        ? (prisma.$queryRaw`SELECT race_id, COUNT(*)::int AS n FROM race_laps WHERE race_id = ANY(${shown}) AND pit_stop GROUP BY race_id` as Promise<{ race_id: string; n: number }[]>)
+        : Promise.resolve([] as { race_id: string; n: number }[]),
+      recapsFor(packageIds),
+    ]);
+    const viewed = new Set(views.map((v) => v.raceId));
+    const pitCount = new Map(pitRows.map((r) => [r.race_id, Number(r.n)]));
     for (const g of groups) {
       for (const r of g.races) r.pitStops = pitCount.get(r.id) ?? 0;
       g.races = weekendOrder(g.races);
@@ -150,9 +208,8 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
       const last = byDate[byDate.length - 1];
       const races: ({ session: string } & Record<string, unknown>)[] = [];
       for (const r of g.races) {
-        const access = await canUserAccessRace(r, viewer.plan, viewer.role);
-        const recap =
-          access.accessible && r.currentPackageId && packagesEnabledFor(r) ? await recapFor(r.currentPackageId) : null;
+        const open = access.get(r.id) ?? { accessible: false };
+        const recap = open.accessible && r.currentPackageId && packagesEnabledFor(r) ? recaps.get(r.currentPackageId) ?? null : null;
         races.push({
           id: r.id,
           name: r.name,
@@ -161,8 +218,8 @@ dashboardRouter.get("/latest", requireAuth, async (req: Request, res: Response, 
           totalCars: r.totalCars,
           maxLap: r.maxLap,
           resultsStatus: recap?.resultsStatus ?? r.resultsStatus ?? null,
-          locked: !access.accessible,
-          lockReason: access.accessible ? null : access.reason ?? null,
+          locked: !open.accessible,
+          lockReason: open.accessible ? null : open.reason ?? null,
           recap,
         });
       }
@@ -327,15 +384,15 @@ dashboardRouter.get("/my-car", requireAuth, async (req: Request, res: Response, 
       res.json({ ...base, car, race: raceOut, drivers: driversOut, facts: null, drive: null, story: null, viewed: false });
       return;
     }
-    const [data, viewed] = await Promise.all([
+    const [data, viewed, story] = await Promise.all([
       prisma.race
         .findUnique({ where: { id: race.id }, select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true } })
         .then((r: any) => (r?.chartData ? withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null)) as Promise<any>,
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
+      race.currentPackageId && packagesEnabledFor(race) ? storyFor(race.currentPackageId, carNumber) : Promise.resolve(null),
     ]);
     const facts = data ? carFacts(data.data, data.annotations ?? null, carNumber) : null;
     const drive = data && facts ? carDrive(data.data.cars[facts.carKey], data.annotations?.[facts.carKey]?.pits, drivers) : null;
-    const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, carNumber) : null;
     res.json({ ...base, car, race: raceOut, drivers: driversOut, facts, drive, story, viewed: !!viewed });
   } catch (err) {
     next(err);
@@ -409,11 +466,11 @@ dashboardRouter.get("/my-driver", requireAuth, async (req: Request, res: Respons
       res.json({ ...base, isLatest, race: raceOut, car, facts: null, driverFacts: null, story: null, viewed: false });
       return;
     }
-    const [card, viewed] = await Promise.all([
+    const [card, viewed, story] = await Promise.all([
       driverCardData(race.id, latest.carNumber, driver.name, latest.driverNames),
       prisma.userRaceView.findFirst({ where: { userId, raceId: race.id }, select: { id: true } }),
+      race.currentPackageId && packagesEnabledFor(race) ? storyFor(race.currentPackageId, latest.carNumber) : Promise.resolve(null),
     ]);
-    const story = race.currentPackageId && packagesEnabledFor(race) ? await storyFor(race.currentPackageId, latest.carNumber) : null;
     res.json({ ...base, isLatest, race: raceOut, car, facts: card.facts, driverFacts: card.driverFacts, driverHighlights: card.driverHighlights, story, viewed: !!viewed });
   } catch (err) {
     next(err);
@@ -435,7 +492,11 @@ dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Resp
     const numbers = [...new Set(cars.flatMap((c) => [c.number, normCar(c.number)]))];
     const published = (await prisma.race.findMany({
       where: { status: "PUBLISHED", season },
-      select: { id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true, entries: { where: { carNumber: { in: numbers } }, select: { carNumber: true, teamName: true } } },
+      select: {
+        id: true, name: true, date: true, track: true, series: true, subSeries: true, season: true,
+        updatedAt: true, currentPackageId: true,
+        entries: { where: { carNumber: { in: numbers } }, select: { carNumber: true, teamName: true } },
+      },
     })) as any[];
 
     // Each followed car's races this season, grouped by calendar series.
@@ -454,25 +515,37 @@ dashboardRouter.get("/season-recap", requireAuth, async (req: Request, res: Resp
     }
     const today = new Date();
     const done = [...groups.values()].filter((g) => seasonOver(cal, g.seriesId, published, today));
-    const ids = [...new Set(done.flatMap((g) => g.races.map((r) => r.race.id)))];
-    const charts = new Map(
-      await Promise.all(
-        ((await prisma.race.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true },
-        })) as any[]).map(async (r) => {
-          const c = r.chartData ? await withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null;
-          return [r.id, { chartData: c?.data ?? null, annotationData: c?.annotations ?? null }] as const;
-        })
-      )
-    );
+    // Each race's facts for the followed car, from cache: a whole season's chart data is many
+    // megabytes, so only races not seen since they last changed are loaded, a few at a time.
+    const factKey = (race: any, carNumber: string) =>
+      `${race.id}:${race.updatedAt instanceof Date ? race.updatedAt.getTime() : race.updatedAt ?? ""}:${race.currentPackageId ?? ""}:${normCar(carNumber)}`;
+    const want = new Map<string, { race: any; numbers: Set<string> }>();
+    for (const g of done) {
+      for (const { race, carNumber } of g.races) {
+        if (seasonFacts.has(factKey(race, carNumber))) continue;
+        if (!want.has(race.id)) want.set(race.id, { race, numbers: new Set() });
+        want.get(race.id)!.numbers.add(carNumber);
+      }
+    }
+    await mapLimit([...want.values()], 3, async ({ race, numbers }) => {
+      const r = (await prisma.race.findUnique({
+        where: { id: race.id },
+        select: { id: true, chartData: true, annotationData: true, currentPackageId: true, packagesDisabled: true },
+      })) as any;
+      const c = r?.chartData ? await withPitFacts(r, { data: r.chartData, annotations: r.annotationData ?? {} }) : null;
+      for (const n of numbers) {
+        if (seasonFacts.size >= SEASON_FACTS_MAX) seasonFacts.delete(seasonFacts.keys().next().value as string);
+        seasonFacts.set(factKey(race, n), c ? carFacts(c.data, c.annotations ?? null, n) : null);
+      }
+    });
     const recaps = [];
     for (const g of done) {
       const races: RecapRaceIn[] = g.races.map(({ race, carNumber }) => ({
         ...race,
         carNumber,
-        chartData: charts.get(race.id)?.chartData ?? null,
-        annotationData: charts.get(race.id)?.annotationData ?? null,
+        chartData: null,
+        annotationData: null,
+        facts: seasonFacts.get(factKey(race, carNumber)) ?? null,
       }));
       const r = buildRecap(cal, g.car, season, g.seriesId, races);
       if (r) recaps.push(r);

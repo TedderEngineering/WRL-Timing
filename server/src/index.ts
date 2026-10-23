@@ -5,6 +5,7 @@ import { STORAGE_BUCKET, supabase } from "./lib/supabase.js";
 import { startLiveRecorder, stopLiveRecorder } from "./live/recorder.js";
 import { startAfterRaceImport } from "./live/after-race.js";
 import { bucketStore, startReplays } from "./live/replay.js";
+import { warmDashboardRecaps } from "./routes/dashboard.js";
 
 async function main() {
   // Verify database connection
@@ -31,6 +32,13 @@ async function main() {
   startReplays(supabase ? bucketStore(supabase.storage.from(STORAGE_BUCKET)) : null);
   // After a WRL race ends: start the GitHub intake import for it (live/after-race.ts; needs GITHUB_DISPATCH_TOKEN).
   if (startAfterRaceImport()) console.log("✓ After-race import on");
+  // The dashboard's race recaps, loaded ahead of the first visitor after a deploy.
+  if (env.NODE_ENV !== "test") {
+    const t0 = Date.now();
+    warmDashboardRecaps()
+      .then((n) => console.log(`✓ Dashboard recaps warm: ${n} in ${Date.now() - t0} ms`))
+      .catch((err) => console.error("[dashboard] warm-up failed:", (err as Error).message));
+  }
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

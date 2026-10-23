@@ -14,6 +14,8 @@ export interface UiState {
   recapsHidden?: string[];
   /** Cars or drivers shown first on the Dashboard, when the user follows both. */
   yoursTab?: "cars" | "drivers";
+  /** The Dashboard had a "Your car / driver" card last time: hold its place while it loads. */
+  hadYours?: boolean;
 }
 
 export function readUi(): UiState {

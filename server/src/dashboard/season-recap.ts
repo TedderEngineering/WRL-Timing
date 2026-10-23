@@ -30,6 +30,8 @@ export interface RecapRaceIn {
   carNumber: string;
   chartData: any;
   annotationData: any;
+  /** The car's facts in this race, when the caller has them already (cached); else from chartData. */
+  facts?: CarFacts | null;
 }
 
 export interface SeasonRecap {
@@ -96,7 +98,7 @@ export function buildRecap(
   const finale = s.rounds[s.rounds.length - 1];
   const rows: { race: RecapRaceIn; f: CarFacts }[] = [];
   for (const race of [...races].sort((a, b) => a.date.getTime() - b.date.getTime())) {
-    const f = race.chartData ? carFacts(race.chartData, race.annotationData ?? null, race.carNumber) : null;
+    const f = race.facts !== undefined ? race.facts : race.chartData ? carFacts(race.chartData, race.annotationData ?? null, race.carNumber) : null;
     if (f) rows.push({ race, f });
   }
   if (rows.length === 0) return null;
