@@ -201,6 +201,7 @@ describe("live replay pages", () => {
       now = showing(DEF.fromS + 2, 1001);
       await vi.advanceTimersByTimeAsync(5_000);
       const b = await getLiveSnapshot(9001, 7, DEF.slug);
+      // Once the new run's first tick is done, viewers are on the new run (the held one is let go).
       expect(b.epoch).not.toBe(a.epoch);
       expect(b.v).toBe(1);
       expect(b.chart?.data.maxLap).toBe(2);
