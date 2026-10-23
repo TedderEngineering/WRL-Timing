@@ -161,6 +161,9 @@ describe("live replay pages", () => {
       // Race control as it stood at 6:40 of race time: the green flag, not the contact at 23:47.
       const rc = (await (await fetch(`${base}/${DEF.slug}/control`)).json()) as { messages: { note: string }[] };
       expect(rc.messages.map((m) => m.note)).toEqual(["Green Flag"]);
+      // Offered as the demo where the live race sits (the home page), with RaceTrace's names.
+      const list = (await (await fetch(base)).json()) as { demo: { slug: string; eventName: string; sessionName: string } | null };
+      expect(list.demo).toMatchObject({ slug: DEF.slug, eventName: "Synthetic Park 2026", sessionName: "Saturday 8 Hour" });
       // A live race still needs the key.
       expect((await fetch(`${base}/synthetic-park-2026-saturday-8-hour/head`)).status).toBe(401);
     } finally {

@@ -31,6 +31,8 @@ export interface LiveListing {
   sessions: LiveListed[];
   upcoming?: UpcomingListed[];
   recent?: LiveListed[];
+  /** A finished race replayed on a live page (open to everyone): offered when nothing is live. */
+  demo?: { slug: string; eventName: string; sessionName: string; date: string | null } | null;
 }
 
 export interface Banner {

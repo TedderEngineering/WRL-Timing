@@ -35,6 +35,7 @@ import { Router, type Request, type Response } from "express";
 import { eventEntries, getLiveControl, getLiveEntries, getLiveSnapshot, getLiveTrack, listLiveSessions, listRecentSessions, liveStatusOf, publicListing, resolveLiveSlug, subscribeLive } from "../live/poller.js";
 import { LIVE_SCHEDULE, upcomingSessions } from "../live/schedule.js";
 import { encodeDelta, encodeFull } from "../live/wire.js";
+import { replayDemo } from "../live/replay.js";
 import { currentLiveKey, requireLiveKey } from "../live/key.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -345,7 +346,8 @@ liveRouter.get("/", async (_req, res, next) => {
     const upcoming = upcomingSessions(Date.now(), [...live, ...recent]);
     res.set("Cache-Control", "public, max-age=30");
     res.set("CDN-Cache-Control", "max-age=30");
-    res.json({ sessions, upcoming, recent: recent.map(publicListing) });
+    // A finished race replayed (live/replay.ts), offered where the live race sits when none is on.
+    res.json({ sessions, upcoming, recent: recent.map(publicListing), demo: replayDemo() });
   } catch (e) {
     next(e);
   }
