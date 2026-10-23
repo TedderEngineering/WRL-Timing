@@ -16,6 +16,7 @@
  */
 import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
+import { InfoTip } from "../../components/InfoTip";
 import { liveClassColor } from "./constants";
 import { recentPace } from "./live-battles";
 
@@ -219,16 +220,24 @@ export function LiveTrackOrder({
   return (
     <table className="w-full border-collapse tabular-nums">
       <caption className="px-2 pb-1 pt-2 text-left text-[11px]" style={{ color: C.muted }}>
-        <span className="mb-1 flex items-center gap-2">From {picker}</span>
+        {/* What the list shows, behind an (i); the note when it is not what the viewer chose stays in view. */}
+        <span className="flex items-center gap-1">
+          From
+          <InfoTip
+            label="Live Crossing Order"
+            text={`${
+              fromLeader
+                ? "On the road round the circuit now, the overall leader on top: every car behind it on the road (+), the whole lap, in seconds at its pace."
+                : "On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace."
+            } Trend: the time ${who} is gaining (▲) or losing (▼) to each car a lap.`}
+          />
+          {picker}
+        </span>
         {note && (
-          <span className="mb-1 block font-semibold" style={{ color: "#fab219" }}>
+          <span className="mt-1 block font-semibold" style={{ color: "#fab219" }}>
             {note}
           </span>
         )}
-        {fromLeader
-          ? "On the road round the circuit now, the overall leader on top: every car behind it on the road (+), the whole lap, in seconds at its pace."
-          : "On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace."}{" "}
-        Trend: the time {who} is gaining (▲) or losing (▼) to each car a lap.
       </caption>
       <thead className="sticky top-0 z-10" style={{ background: C.head, color: C.muted }}>
         <tr className="text-left">
