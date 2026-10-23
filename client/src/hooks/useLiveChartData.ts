@@ -31,8 +31,32 @@ interface LiveHead {
  */
 export const LIVE_API_BASE: string = import.meta.env.VITE_LIVE_API_URL || "/api";
 
+/**
+ * A live page's first requests, started by index.html before the app loaded (the head, then the
+ * full chart it names), by path. The head is shared while fresh (the app asks for it from two
+ * places as it starts; the edge keeps a head HEAD_FRESH_MS): until then, or until it answers. A
+ * full chart never changes (its path names the version): shared for EARLY_MS. One that failed
+ * is asked again.
+ */
+type Early = { at: number; doneAt?: number; p: Promise<{ ok: boolean; body?: unknown; age?: number }> };
+const EARLY_MS = 15_000;
+const HEAD_FRESH_MS = 2_000;
+
+function takeEarly(path: string): Early["p"] | null {
+  if (LIVE_API_BASE !== "/api" || typeof window === "undefined") return null;
+  const e = (window as Window & { __rtEarly?: Record<string, Early> }).__rtEarly?.[path];
+  if (!e || Date.now() - e.at >= EARLY_MS) return null;
+  if (path.endsWith("/head") && e.doneAt !== undefined && Date.now() - e.doneAt >= HEAD_FRESH_MS) return null;
+  return e.p;
+}
+
 /** A public request without the login, so every phone asks the same question and the CDN can answer. */
 export async function getPublic<T>(path: string): Promise<{ body: T; edgeAgeMs: number }> {
+  const early = takeEarly(path);
+  if (early) {
+    const r = await early;
+    if (r.ok) return { body: r.body as T, edgeAgeMs: r.age && r.age > 0 ? r.age * 1000 : 0 };
+  }
   // A live race URL takes the hour's key (signed in only); a 401 means the key turned over.
   const keyed = needsLiveKey(path);
   let res = await fetch(`${LIVE_API_BASE}${keyed ? withLiveKey(path, await liveKey()) : path}`, { credentials: "omit" });
