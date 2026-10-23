@@ -12,6 +12,7 @@ import { PitAnalysisTab } from "../features/chart/PitAnalysisTab";
 import { DriverReportTab } from "../features/chart/DriverReportTab";
 import { LiveStrategyTab } from "../features/chart/LiveStrategyTab";
 import { TrackMap } from "../features/chart/TrackMap";
+import { LIVE_FLAG_COLORS } from "../features/chart/flags";
 import { LiveGapsPanel } from "../features/chart/LiveGapsPanel";
 import { TraceControls } from "../features/chart/TraceControls";
 import { pitAnalysisFromChart } from "../features/chart/live-pit-analysis";
@@ -31,16 +32,7 @@ import { readLiveCar, saveLiveCar } from "../features/live/my-car";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
-const FLAG_COLORS: Record<string, string> = {
-  Green: "#22c55e",
-  Yellow: "#facc15",
-  "Code 35": "#a855f7",
-  "Code 60": "#a855f7",
-  Red: "#ef4444",
-  White: "#e5e7eb",
-  Checkered: "#e5e7eb",
-  Black: "#9ca3af",
-};
+const FLAG_COLORS = LIVE_FLAG_COLORS;
 
 function ago(ms: number | null, now: number): string {
   if (ms === null) return "";

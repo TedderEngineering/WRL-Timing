@@ -7,6 +7,7 @@ import { readFollowedCars, saveFollowedCars, toggleFollow } from "../live/my-car
 import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
+import { mapFlag } from "./flags";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
 import { RaceControl } from "./RaceControl";
@@ -311,9 +312,13 @@ export function TrackMap({
       else ctx.moveTo(x, y);
     });
     ctx.closePath();
-    ctx.strokeStyle = C.track;
+    // Under a caution or a red flag, the track's edge in the flag's colour (flags.ts mapFlag).
+    const fl = mapFlag(flag);
+    ctx.strokeStyle = fl?.tint ? fl.color : C.track;
+    ctx.globalAlpha = fl?.tint ? 0.8 : 1;
     ctx.lineWidth = 16;
     ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = C.trackIn;
     ctx.lineWidth = 10;
     ctx.stroke();
@@ -658,6 +663,7 @@ export function TrackMap({
             className="absolute inset-0 cursor-grab"
           />
           {track && <TurnButtons angle={angle} readout={readout} onTurn={turnTo} />}
+          {track && <FlagBadge flag={flag} />}
           {!track && (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
               {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
@@ -886,6 +892,36 @@ function MapKey({
 
 /** Behind a chip floating over the map on a wide screen: the map's ground, mostly opaque. */
 const OVER_BG = "rgba(11,11,24,0.82)";
+
+/**
+ * On the map, top centre: the session's flag when it is not green (flags.ts mapFlag): a caution,
+ * a red flag, the white flag, the checkered flag.
+ */
+function FlagBadge({ flag }: { flag: string | null }) {
+  const f = mapFlag(flag);
+  if (!f) return null;
+  return (
+    <div
+      role="status"
+      aria-label={f.label}
+      className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider shadow-lg"
+      style={{ background: f.color, color: f.ink, border: f.checkered ? "1px solid #e5e7eb" : undefined }}
+    >
+      {f.checkered ? (
+        <span
+          aria-hidden
+          className="inline-block h-3 w-4 rounded-[1px]"
+          style={{ backgroundImage: "repeating-conic-gradient(#ffffff 0% 25%, #0b0b18 0% 50%)", backgroundSize: "6px 6px" }}
+        />
+      ) : (
+        <svg viewBox="0 0 12 14" className="h-3.5 w-3" fill="currentColor" aria-hidden>
+          <path d="M1 0h1.5v14H1zM3 1h8l-2 3 2 3H3z" />
+        </svg>
+      )}
+      {f.label}
+    </div>
+  );
+}
 
 /**
  * On the map, bottom right: turn it 45° either way, and the angle now (tap to put it back
