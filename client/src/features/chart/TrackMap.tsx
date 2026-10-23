@@ -109,6 +109,15 @@ export function TrackMap({
   const out = useMemo(() => outCars(data), [data]);
   /** Laps down to the class leader (the LD column): a lapped car is drawn as a ghost dot. */
   const lapped = useMemo(() => lapsDown(data), [data]);
+  /** What the map leaves out, picked with the key's chips under it (kept on this device). */
+  const [hidden, setHidden] = useState<Set<string>>(readHiddenLayers);
+  const toggleLayer = (k: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(k)) next.add(k);
+      saveHiddenLayers(next);
+      return next;
+    });
   /** Beside the map: the running order (timing) or the Live Crossing Order (on the road now). */
   const [orderView, setOrderView] = useState<"timing" | "live">(() => {
     try {
@@ -341,6 +350,8 @@ export function TrackMap({
         const followed = !focus && followKeys.has(key);
         const other = inClass !== null && !inClass.has(key) && !focus && !followed && !leader;
         const ghost = (lapped.get(key) ?? 0) > 0;
+        // Left out with the key's chips (the focus car and followed cars are always drawn).
+        if (!focus && !followed && (hidden.has(`cls:${data.cars[String(key)].cls}`) || (ghost && hidden.has("lapped")))) return null;
         return { m, key, focus, followed, compared, leader, other, ghost, outLap: onOutLap(data, key, pitVisits), rank: focus ? 4 : followed ? 3 : leader ? 2 : compared ? 1 : 0 };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
@@ -358,10 +369,11 @@ export function TrackMap({
       // glow and a ring (orange on the focus car, white on the followed ones).
       const color = liveClassColor(data.cars[String(d.key)]?.cls);
       const hollow = (d.m.flags & (NO_GPS | STALE)) !== 0 || isFrozen(d.m, t);
+      if (hollow && !tracked && hidden.has("faint")) continue;
       // Fading in onto the map, or out into the pit lane.
       const vis = offTrack ? 1 : visibility(d.m, t, track.len);
       if (vis < 0.02) continue;
-      if (d.leader && vis > 0.5) leaderAt = { x, y, r };
+      if (d.leader && vis > 0.5 && !hidden.has("leader")) leaderAt = { x, y, r };
       if (tracked) {
         ctx.globalAlpha = 0.3 * vis;
         ctx.fillStyle = color;
@@ -397,7 +409,7 @@ export function TrackMap({
         ctx.stroke();
       }
       const stoppedNow = !offTrack && isStopped(d.m, t, track.len);
-      if (d.outLap && !offTrack && !stoppedNow) {
+      if (d.outLap && !offTrack && !stoppedNow && !hidden.has("outLap")) {
         // On its out-lap from the pits: a solid cyan ring.
         ctx.strokeStyle = C.outLap;
         ctx.lineWidth = 2;
@@ -438,10 +450,10 @@ export function TrackMap({
 
     // The virtual car of each class (race-laps.ts): its leader's last-laps pace, crossing the line
     // as the clock runs out. A hollow diamond in the class colour.
-    if (clock) {
+    if (clock && !hidden.has("virtual")) {
       const ttgNow = clock.frozen ? clock.ttgS : clock.ttgS - (t - clock.at) / 1000;
       for (const v of virtualCars(data, ttgNow, track.len, out)) {
-        if (classView && v.cls !== classView) continue;
+        if ((classView && v.cls !== classView) || hidden.has(`cls:${v.cls}`)) continue;
         const [x, y] = px(pointAt(track.pts, track.ds, track.len, v.d));
         const color = liveClassColor(v.cls);
         ctx.save();
@@ -498,7 +510,7 @@ export function TrackMap({
       scState.current = stepSafetyCar(scState.current, scTarget(motions.current, data, track.len), scSpeed(motions.current), dt, track.len);
       if (scState.current.active) sc = { d: scState.current.d, estimated: true };
     }
-    if (sc) {
+    if (sc && !hidden.has("sc")) {
       const [x, y] = px(pointAt(track.pts, track.ds, track.len, sc.d));
       ctx.fillStyle = "#fab219";
       ctx.strokeStyle = "#0b0b18";
@@ -574,7 +586,21 @@ export function TrackMap({
             </p>
           )}
         </div>
-        {/* Directly under the map (above the running order on a phone). */}
+        {/* Directly under the map (above the running order on a phone): its key, each chip showing or hiding its part. */}
+        <MapKey
+          classes={Object.keys(data.classGroups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))}
+          hidden={hidden}
+          onToggle={toggleLayer}
+          virtual={!!clock}
+          caution={isCaution(flag)}
+          leaderNote={leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
+          status={[
+            label(unplaced) ? `No position: ${label(unplaced)}` : "",
+            label(stopped) ? `Stopped: ${label(stopped)}` : "",
+            label(offTrack) ? `Off track: ${label(offTrack)}` : "",
+            age !== null && age > OLD_MS ? `Positions ${Math.round(age / 1000)} s old` : "",
+          ].filter(Boolean)}
+        />
         <FollowBar data={data} focusNum={focusNum} followed={followed} out={out} onChange={follow} />
         <PitList data={data} pits={pitVisits} out={out} focusNum={focusNum} setFocusNum={setFocusNum} />
         <RaceControl slug={slug} data={data} focusNum={focusNum} followed={followKeys} />
@@ -643,58 +669,6 @@ export function TrackMap({
           }}
         />
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
-        {label(unplaced) && <span>No position: {label(unplaced)}</span>}
-        {label(stopped) && (
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px]" style={{ borderColor: C.stopped }} />
-            Stopped: {label(stopped)}
-          </span>
-        )}
-        {label(offTrack) && (
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-dashed" style={{ borderColor: C.offTrack }} />
-            Off track: {label(offTrack)}
-          </span>
-        )}
-        {age !== null && age > OLD_MS && <span>Positions {Math.round(age / 1000)} s old</span>}
-        {Object.keys(data.classGroups)
-          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-          .map((cls) => (
-            <span key={cls} className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: liveClassColor(cls) }} />
-              {cls}
-            </span>
-          ))}
-        <span className="flex items-center gap-1.5">
-          <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
-            P1
-          </span>
-          {leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
-        </span>
-        {clock && (
-          <span className="flex items-center gap-1.5" title="Each class's virtual car laps at its class leader's average over its last 3 laps and crosses the line exactly as the clock runs out: a leader ahead of it on the road has one more lap to run.">
-            <span className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-dashed" style={{ borderColor: C.muted }} /> virtual car
-          </span>
-        )}
-        <span className="flex items-center gap-1.5" title="A lap or more down on its class leader (the LD column)">
-          <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} /> lapped
-        </span>
-        <span className="flex items-center gap-1.5" title="Back on track from a pit stop, on the lap it rejoined">
-          <span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: C.outLap }} /> out-lap
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} /> faint signal
-        </span>
-        {isCaution(flag) && (
-          <span className="flex items-center gap-1.5" style={{ color: "#fab219" }}>
-            <span className="rounded px-1 text-[10px] font-bold" style={{ background: "#fab219", color: "#0b0b18" }}>
-              SC
-            </span>
-            safety car
-          </span>
-        )}
-      </div>
     </div>
   );
 }
@@ -724,6 +698,107 @@ export function overallLeader(data: RaceChartData): number | null {
 export function onOutLap(data: RaceChartData, key: number, inPits: Map<number, PitVisit>): boolean {
   const laps = data.cars[String(key)]?.laps ?? [];
   return laps.length > 0 && laps[laps.length - 1].pit === 1 && !inPits.has(key);
+}
+
+/** What the map leaves out (the key's chips), kept on this device. */
+const HIDDEN_KEY = "rt.live.mapHidden";
+function readHiddenLayers(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]");
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveHiddenLayers(s: Set<string>) {
+  try {
+    if (s.size) localStorage.setItem(HIDDEN_KEY, JSON.stringify([...s]));
+    else localStorage.removeItem(HIDDEN_KEY);
+  } catch {
+    /* private window: for this visit only */
+  }
+}
+
+/**
+ * The map's key, under the map: a chip for each class and each marker, like the compare chips.
+ * Tapping one hides it on the map (the chip dims) or shows it again. A class's cars, lapped cars and
+ * cars with a faint signal are left off the map (the focus car and followed cars always stay); the
+ * P1 tag, the virtual cars, the out-lap rings and the safety car are left off. Then what the map
+ * cannot place right now (no position, stopped, off track).
+ */
+function MapKey({
+  classes,
+  hidden,
+  onToggle,
+  virtual,
+  caution,
+  leaderNote,
+  status,
+}: {
+  classes: string[];
+  hidden: Set<string>;
+  onToggle: (k: string) => void;
+  virtual: boolean;
+  caution: boolean;
+  leaderNote: string;
+  status: string[];
+}) {
+  const chip = (k: string, swatch: React.ReactNode, text: string, title?: string) => {
+    const off = hidden.has(k);
+    return (
+      <button
+        key={k}
+        type="button"
+        aria-pressed={!off}
+        onClick={() => onToggle(k)}
+        title={`${title ? `${title} ` : ""}${off ? "Hidden: tap to show it on the map." : "Tap to hide it on the map."}`}
+        className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 hover:bg-white/5"
+        style={{ borderColor: off ? "#2a2a48" : "#3a3a5c", color: off ? "#5c5c78" : C.text, textDecoration: off ? "line-through" : undefined }}
+      >
+        <span className="flex items-center" style={{ opacity: off ? 0.35 : 1 }}>
+          {swatch}
+        </span>
+        {text}
+      </button>
+    );
+  };
+  const dot = (bg: string, extra = "") => <span className={`inline-block h-2.5 w-2.5 rounded-full ${extra}`} style={{ background: bg }} />;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2 text-xs sm:px-6" style={{ borderColor: "#1e1e38", color: C.muted }}>
+      {classes.map((cls) => chip(`cls:${cls}`, dot(liveClassColor(cls)), cls, `${cls} cars.`))}
+      {chip(
+        "leader",
+        <span className="rounded-full border-[1.5px] bg-white px-1.5 text-[9.5px] font-extrabold leading-[13px]" style={{ borderColor: C.leader, color: C.bg }}>
+          P1
+        </span>,
+        leaderNote,
+        "The overall leader's tag."
+      )}
+      {virtual &&
+        chip(
+          "virtual",
+          <span className="inline-block h-2.5 w-2.5 rotate-45 border-2 border-dashed" style={{ borderColor: C.muted }} />,
+          "virtual car",
+          "Each class's virtual car laps at its class leader's average over its last 3 laps and crosses the line exactly as the clock runs out: a leader ahead of it on the road has one more lap to run."
+        )}
+      {chip("lapped", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} />, "lapped", "A lap or more down on its class leader (the LD column).")}
+      {chip("outLap", <span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: C.outLap }} />, "out-lap", "Back on track from a pit stop, on the lap it rejoined.")}
+      {chip("faint", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} />, "faint signal", "No fresh position from the car.")}
+      {caution &&
+        chip(
+          "sc",
+          <span className="rounded px-1 text-[10px] font-bold" style={{ background: "#fab219", color: "#0b0b18" }}>
+            SC
+          </span>,
+          "safety car"
+        )}
+      {status.map((t) => (
+        <span key={t} className="ml-1">
+          {t}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** The view beside the map, kept on this device. */
