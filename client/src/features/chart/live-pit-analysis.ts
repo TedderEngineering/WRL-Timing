@@ -5,7 +5,8 @@
  * no service time, time lost against green pace, delta against the class pit cycle's mean, and the
  * averages over green-flag stops (not drive-throughs or garage visits). Without the package's
  * stop kinds, a stop losing 5 minutes or more counts as a garage visit and one losing under
- * PIT_LANE_PASS_S as a drive-through. The class places a stop gained or lost (the arrow on its
+ * PIT_LANE_PASS_S as a drive-through, unless it came late in its stint (a splash of fuel: the
+ * Strategy tab's live-strategy.ts markSplashes, so both tabs count it as a stop). The class places a stop gained or lost (the arrow on its
  * card) are the chart's own: each settle marker's class result (pit-band.ts classCycle, as the
  * Position Trace labels it) on the stop it follows.
  */
@@ -14,6 +15,7 @@ import { carNo } from "./car-number";
 import { isGreenFlag } from "./flags";
 import { LONG_STOP_S } from "./long-stops";
 import { classCycle } from "./pit-band";
+import { splashLaps } from "./live-strategy";
 import type { PitAnalysisResponse, PitStop } from "./PitAnalysisTab";
 
 const CONDITION = { green: "Full green", fcy: "Caution", mixed: "Green and caution" } as const;
@@ -41,6 +43,7 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
   const cars: PitAnalysisResponse["cars"] = {};
   const green: number[] = [];
   let total = 0;
+  const splashes = splashLaps(data, annotations);
   for (const [key, ann] of Object.entries(annotations ?? {})) {
     const car = data.cars[key];
     if (!car || !ann?.pits?.length) continue;
@@ -61,14 +64,16 @@ export function pitAnalysisFromChart(data: RaceChartData, annotations: Annotatio
       const lost = typeof t?.totalPitLoss === "number" ? t.totalPitLoss : null;
       // A garage visit or a long stop (repairs: LONG_STOP_S, as the red notes), or a pass through
       // the pit lane, is not an ordinary stop: shown, but out of the green-stop averages.
+      const splash = !m.kind && !t?.isDriveThrough && !!splashes.get(key)?.has(m.l);
       const kind =
         m.kind ??
         (m.isGarage || (lost !== null && lost >= LONG_STOP_S)
           ? "garage"
-          : t?.isDriveThrough || (lost !== null && lost < PIT_LANE_PASS_S)
+          : t?.isDriveThrough || (!splash && lost !== null && lost < PIT_LANE_PASS_S)
             ? "drive_through"
             : "stop");
-      if (kind === "stop" && context === "green" && lost !== null) green.push(lost);
+      // A splash is a short stop: out of the average a green stop costs.
+      if (kind === "stop" && !splash && context === "green" && lost !== null) green.push(lost);
       const pl = places.get(m.l);
       return {
         stopNumber: i + 1,

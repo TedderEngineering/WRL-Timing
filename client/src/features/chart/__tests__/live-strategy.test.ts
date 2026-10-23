@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationData, RaceChartData } from "@shared/types";
-import { CAUTION_SHARE, liveStrategy, STINT_SLACK } from "../live-strategy";
+import { CAUTION_SHARE, liveStrategy, markSplashes, passLane, STINT_SLACK, type Stop } from "../live-strategy";
 
 /**
  * A class of cars at `pace` s/lap with a stop (a 100 s longer in-lap) at each lap in `stops`.
@@ -123,5 +123,35 @@ describe("liveStrategy", () => {
     const r = race([car(1, 10, 100, [1]), car(2, 10, 100, [])]);
     const x = liveStrategy({ ...r, focusNum: 1, flag: "Green", timeToGoS: 1000 })!;
     expect(x.cars.find((c) => c.num === 1)!.stops).toEqual([]);
+  });
+});
+
+describe("a short visit late in a stint is a splash of fuel", () => {
+  const stop = (lap: number, kind: "stop" | "drive_through", laneS: number | null = null, short = kind === "drive_through") => ({ lap, lostS: kind === "stop" ? 100 : 30, caution: false, kind, laneS, ...(short ? { short } : {}) });
+  // GTO stints of about 27 laps; #119 comes in for 40 s, 27 laps into a stint (Sebring 2026, lap 170).
+  const stopsBy = new Map<string, Stop[]>([
+    ["119", [stop(27, "stop", 60), stop(54, "stop", 60), stop(81, "drive_through", 41)]],
+    ["120", [stop(11, "drive_through", 11), stop(28, "stop", 60), stop(55, "stop", 60)]],
+    ["678", [stop(26, "stop", 60), stop(53, "stop", 60), stop(80, "drive_through", 13)]],
+  ]);
+
+  it("makes a stop of a short visit late in the stint, and keeps an early one a drive-through", () => {
+    const m = markSplashes(stopsBy, ["119", "120", "678"]);
+    expect(m.get("119")![2]).toMatchObject({ kind: "stop", splash: true });
+    expect(m.get("120")![0].kind).toBe("drive_through");
+  });
+
+  it("needs time stopped in the pit lane when the race's passes give the time to pass through it", () => {
+    const pass = passLane(stopsBy);
+    expect(pass).toBe(13);
+    const m = markSplashes(stopsBy, ["119", "120", "678"], pass);
+    expect(m.get("119")![2].kind).toBe("stop"); // 41 s in the lane: stopped for fuel
+    expect(m.get("678")![2].kind).toBe("drive_through"); // 13 s: passed through
+  });
+
+  it("leaves a drive-through the timing named one", () => {
+    const named = new Map(stopsBy);
+    named.set("119", [stop(27, "stop"), stop(54, "stop"), stop(81, "drive_through", null, false)]);
+    expect(markSplashes(named, ["119", "120", "678"]).get("119")![2].kind).toBe("drive_through");
   });
 });
