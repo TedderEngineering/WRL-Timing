@@ -165,48 +165,73 @@ const BATTLE: Record<Battle["kind"], { label: string; color: string; bg: string 
   caution: { label: "Caution", color: T.caution, bg: "rgba(250,204,21,0.08)" },
 };
 
-/** One battle in words: the headline and the line under it. */
-export function battleText(b: Battle, num: string): { big: string; note: string } {
+/** The lap time a battle needs, shown large in its card: the time and what it does. */
+export interface BattleTarget {
+  /** "2:18.6" */
+  lap: string;
+  /** "or faster to finish ahead" */
+  why: string;
+  /** "0.8 s/lap quicker than now", when the car isn't already on it. */
+  delta: string | null;
+}
+
+/** One battle in words: the headline, the target lap (when there is one) and the line under it. */
+export function battleText(b: Battle, num: string): { big: string; note: string; target: BattleTarget | null } {
   const gap = gapClock(b.gapS);
   const until = `${b.until} (${lapsWord(b.horizon)})`;
+  const target = (why: string): BattleTarget | null =>
+    b.targetS === null
+      ? null
+      : {
+          lap: lapClock(b.targetS),
+          why,
+          delta: b.paceS !== null && b.paceS - b.targetS >= 0.05 ? `${perLap(b.paceS - b.targetS)} quicker than now` : null,
+        };
   switch (b.kind) {
     case "push":
       return {
         big: `On its tail by lap ${b.onLap}`,
-        note: `Catching ${num} by ${perLap(b.closingS!)}: ${lapsWord(b.inLaps!)}, ${lapsWord(Math.max(0, b.horizon - b.inLaps!))} before ${b.until}. Keep ${lapClock(b.targetS!)} or faster.`,
+        note: `Catching ${num} by ${perLap(b.closingS!)}: ${lapsWord(b.inLaps!)}, ${lapsWord(Math.max(0, b.horizon - b.inLaps!))} before ${b.until}.`,
+        target: target("or faster to keep catching"),
       };
     case "push_harder":
       return {
-        big: `Needs ${lapClock(b.targetS!)}`,
-        note: `${num} is ${gap} ahead. Run ${lapClock(b.targetS!)} or faster${b.paceS !== null ? ` (${perLap(b.paceS - b.targetS!)} quicker than now)` : ""} to catch it before ${until}.`,
+        big: `Catch it before ${b.until}`,
+        note: `${num} is ${gap} ahead, with ${lapsWord(b.horizon)} until ${b.until}.`,
+        target: target(`or faster to catch it before ${b.until}`),
       };
     case "out_of_reach":
       return {
         big: "Out of reach this stint",
         note: `${num} is ${gap} ahead${b.closingS !== null ? (b.closingS > 0 ? `, catching by ${perLap(b.closingS)}` : `, pulling away by ${perLap(b.closingS)}`) : ""}: catching it before ${until} takes more pace than you've run lately.`,
+        target: null,
       };
     case "defend":
       return {
         big: `Caught by lap ${b.onLap}`,
-        note: `${num} is ${gap} behind and closing at ${perLap(b.closingS!)}: on your tail in ${lapsWord(b.inLaps!)}. Run ${lapClock(b.targetS!)} or faster to stay clear until ${until}.`,
+        note: `${num} is ${gap} behind and closing at ${perLap(b.closingS!)}: on your tail in ${lapsWord(b.inLaps!)}.`,
+        target: target(`or faster to stay clear until ${until}`),
       };
     case "safe":
       return {
         big: "Safe",
         note: `${num} is ${gap} behind${b.closingS !== null ? (b.closingS > 0 ? `, closing at ${perLap(b.closingS)}, but not before ${until}` : `, ${perLap(b.closingS)} slower`) : ""}.`,
+        target: null,
       };
     case "passes_in_pits":
       return {
         big: "Passes in the pits",
         note: `${num} has a stop more to make: you're ahead once it stops${b.netS !== null ? `, by ${gapClock(b.netS)}` : ""}. No need to fight it on track.`,
+        target: null,
       };
     case "net_rival":
       return {
         big: "Ahead after the stops",
-        note: `${num} has a stop fewer: it's ahead once both have stopped${b.netS !== null ? `, by ${gapClock(-b.netS)}` : ""}.${b.targetS !== null ? ` To finish ahead, gain that by the flag: ${lapClock(b.targetS)} or faster.` : ""}`,
+        note: `${num} has a stop fewer: it's ahead once both have stopped${b.netS !== null ? `, by ${gapClock(-b.netS)}` : ""}.${b.targetS !== null ? " Gain that back by the flag." : ""}`,
+        target: target("or faster to finish ahead"),
       };
     case "caution":
-      return { big: "Caution", note: "Gaps are held under the caution and the field bunches up: targets come back at the green." };
+      return { big: "Caution", note: "Gaps are held under the caution and the field bunches up: targets come back at the green.", target: null };
   }
 }
 
@@ -240,6 +265,22 @@ function Battles({ battles, data }: { battles: Battle[]; data: RaceChartData }) 
               )}
             </h3>
             <Big>{t.big}</Big>
+            {t.target && (
+              // The lead: the lap time to run, large, with what it does beside it.
+              <div className="my-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5" data-testid="battle-target">
+                <span className="text-4xl font-bold leading-none tabular-nums" style={{ color: st.color }} title="Target lap time">
+                  {t.target.lap}
+                </span>
+                <span className="text-sm font-semibold leading-tight" style={{ color: T.text }}>
+                  {t.target.why}
+                  {t.target.delta && (
+                    <span className="block text-xs font-normal" style={{ color: T.muted }}>
+                      {t.target.delta}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
             <Note>{t.note}</Note>
           </section>
         );

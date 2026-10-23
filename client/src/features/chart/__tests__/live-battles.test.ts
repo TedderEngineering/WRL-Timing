@@ -27,7 +27,11 @@ describe("battles with the cars around the focus car", () => {
     expect(behind).toMatchObject({ kind: "defend", rival: 678, side: "behind", teammate: false, inLaps: 3, onLap: 153 });
     // To stay clear to the flag: 139.2 + 3 s over 21 laps.
     expect(behind.targetS).toBeCloseTo(139.2 + 3 / 21, 6);
-    expect(battleText(behind, "#678").note).toBe("#678 is 4.0 s behind and closing at 0.8 s/lap: on your tail in 3 laps. Run 2:19.3 or faster to stay clear until the flag (21 laps).");
+    const text = battleText(behind, "#678");
+    expect(text.note).toBe("#678 is 4.0 s behind and closing at 0.8 s/lap: on your tail in 3 laps.");
+    // The target lap is its own, prominent part of the card.
+    expect(text.target).toEqual({ lap: "2:19.3", why: "or faster to stay clear until the flag (21 laps)", delta: "0.7 s/lap quicker than now" });
+    expect(battleText(ahead, "#120").target).toEqual({ lap: "2:20.0", why: "or faster to keep catching", delta: null });
   });
 
   it("knows a car ahead with a stop more to make passes in the pits, and a car behind with a stop fewer is the net rival", () => {
