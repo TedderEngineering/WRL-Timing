@@ -180,3 +180,7 @@ Driver Report, Pits and Strategy all use `RankedMetrics.tsx` (rows are drivers, 
   stops. A row's tap opens the stint map, each stint and each stop; the class insights sit under the
   list.
 - Equal values share a rank and a percentile; a metric no car in the class has is left out.
+- **Qualifying stats:** Best lap, Theo. best, Left on table, Consistency, S1, S2, S3, over the cars
+  compared. A row's tap opens its sectors (best, average, spread). The class chips above are slim.
+- **Live Strategy:** under the focus car's cards, the class ranked by Projected, After stops, Now,
+  Pace, Behind, Stops to go and Stops (each update re-ranks it); a tap follows the car.

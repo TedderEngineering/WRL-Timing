@@ -11,6 +11,8 @@ import { gapClock, lapsAndSeconds } from "./live-gaps";
 import { liveStrategy, reachToFlag, type CarStrategy, type LiveStrategy } from "./live-strategy";
 import { liveBattles, recentPace, type Battle } from "./live-battles";
 import { lapsDown } from "./laps-down";
+import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
+import { RankedMetrics, type RankedItem, type RankedMetric } from "./RankedMetrics";
 
 const T = { line: "#1e1e38", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", gain: "#4ade80", lose: "#f87171", caution: "#facc15" };
 
@@ -335,9 +337,7 @@ function ClassTable({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data:
           <span className="font-mono font-semibold" style={{ color: focus ? T.accent : T.text }}>
             #{carNo(data, c.num)}
           </span>{" "}
-          <span className="hidden sm:inline" style={{ color: T.muted }}>
-            {c.team}
-          </span>
+          <span style={{ color: T.muted }}>{c.team}</span>
         </td>
         <td className="px-2 py-1.5 text-right">{c.laps}</td>
         <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: (ld.get(c.num) ?? 0) > 0 ? T.text : T.muted }}>
@@ -366,7 +366,8 @@ function ClassTable({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data:
     );
   };
   return (
-    <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: T.line }}>
+    // Sideways on a phone: the full table, scrolling sideways inside its own box.
+    <div data-wide-table className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: T.line }}>
       <table className="w-full min-w-[640px] text-sm" style={{ color: T.text }}>
         <caption className="px-3 pb-1 pt-2.5 text-left text-xs" style={{ color: T.muted }}>
           {s.cls}: tap a car to follow it.
@@ -411,12 +412,18 @@ export function LiveStrategyTab({
   timeToGoS: number | null;
 }) {
   const s = liveStrategy({ data, annotations, focusNum, flag, timeToGoS });
+  const compact = useIsCompact();
+  const landscape = useIsLandscapePhone();
   if (!s || !s.focus) return <p style={{ color: T.muted }}>Pick a car to see its strategy.</p>;
   return (
     <div className="flex flex-col gap-4" style={{ color: T.text }}>
       <FocusCards s={s} data={data} />
       <Battles battles={liveBattles(s, data)} data={data} />
-      <ClassTable s={s} data={data} focusNum={focusNum} setFocusNum={setFocusNum} />
+      {compact && !landscape ? (
+        <RankedClass s={s} data={data} focusNum={focusNum} setFocusNum={setFocusNum} />
+      ) : (
+        <ClassTable s={s} data={data} focusNum={focusNum} setFocusNum={setFocusNum} />
+      )}
       <p className="m-0 max-w-3xl text-xs leading-relaxed" style={{ color: T.muted }}>
         Estimates from this race so far, updated with each lap. Stops to go come from the long stints {s.cls} has run
         {s.stintLength !== null ? ` (about ${s.stintLength} laps)` : ""}, with a little to spare for a stretched last stint.
@@ -424,6 +431,46 @@ export function LiveStrategyTab({
         {s.cautionStopS !== null ? `, a stop under a caution about ${gapClock(s.cautionStopS)}${s.cautionMeasured ? "" : " (estimated)"}` : ""}
         {s.greenStopS !== null ? "." : ""} The projection carries today's gaps and each car's pace over its last ten green-flag laps to the flag; cautions, repairs and penalties change it.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Phones upright: the class ranked on one number at a time (RankedMetrics) in place of the
+ * 12-column table; a tap follows the car, as on the table.
+ */
+function RankedClass({ s, data, focusNum, setFocusNum }: { s: LiveStrategy; data: RaceChartData; focusNum: number; setFocusNum: (n: number) => void }) {
+  const leadPace = s.cars[0]?.pace ?? null;
+  const ld = lapsDown(data);
+  const pace = new Map(s.cars.map((c) => [c.num, recentPace(data, c.num).now]));
+  const metrics: RankedMetric<CarStrategy>[] = [
+    { key: "proj", label: "Projected", better: "low", value: (c) => c.projPos, format: (v) => `P${v}`, note: "Class position at the flag, projected" },
+    { key: "net", label: "After stops", better: "low", value: (c) => c.netPos, format: (v) => `P${v}`, note: "Once every car has made the stops it owes" },
+    { key: "now", label: "Now", better: "low", value: (c) => c.posClass, format: (v) => `P${v}`, note: "Class position now" },
+    { key: "pace", label: "Pace", better: "low", value: (c) => (c.stopped ? null : (pace.get(c.num) ?? null)), format: lapClock, note: "Its last 5 green-flag laps" },
+    { key: "behind", label: "Behind", better: "low", value: (c) => (c.stopped ? null : c.gapS), format: (v) => behind(v, leadPace), note: "Behind the class leader now" },
+    { key: "toGo", label: "Stops to go", better: "low", value: (c) => (c.stopped ? null : c.stopsToGo), format: (v) => String(v), note: "Stops still needed to reach the flag" },
+    { key: "stops", label: "Stops", better: "low", value: (c) => c.stops.length, format: (v) => String(v), note: "Stops made so far" },
+  ];
+  const items: RankedItem<CarStrategy>[] = s.cars.map((c) => {
+    const down = ld.get(c.num) ?? 0;
+    return {
+      id: String(c.num),
+      row: c,
+      title: `#${carNo(data, c.num)} ${c.team}`,
+      sub: c.stopped ? "Stopped" : `P${c.posClass} now · ${c.laps} laps${down > 0 ? ` (${down} down)` : ""} · stint ${c.stintLaps}`,
+      mine: c.num === focusNum,
+    };
+  });
+  return (
+    <div className="-mx-2">
+      <RankedMetrics
+        items={items}
+        metrics={metrics}
+        title={`${s.cls}, live`}
+        subtitle={`${s.cars.length} cars · tap one to follow it`}
+        onOpen={(it) => setFocusNum(it.row.num)}
+      />
     </div>
   );
 }
