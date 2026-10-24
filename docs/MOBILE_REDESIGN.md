@@ -54,7 +54,13 @@ double-tap, pinch and tap with real touch events at every width.
 
 ## Race views row
 
-On a phone the race views (Trace · Story · Pits · Laps · Strategy · Drivers) sit in one row that scrolls
+On a phone the race views (Trace · Story · Pits · Laps · Gaps · Head-to-head · Strategy · Drivers) sit in one row that scrolls
 sideways (`client/src/components/PhoneViewTabs.tsx`); there is no More menu. The edge with more views
 fades out, the open view is kept in sight, and on a first visit, when the row is wider than the screen,
 it glides to the end and back once (remembered in `localStorage`, skipped with reduced motion).
+
+Gaps and Head-to-head are views of their own on a phone only (`PhoneAnalysisTab.tsx`): the car pill,
+one line `‹ At lap 124 of 249 ›` (the race page's selected lap, shared with the charts; with none picked,
+the last lap another car in the class also ran), and the panel filling the screen. A lap's "Gap
+evolution" and "Head-to-head" links and a pass card's head-to-head open these views. Wider than a
+phone they stay beside the chart, and `?tab=gaps|h2h` falls back to the trace.

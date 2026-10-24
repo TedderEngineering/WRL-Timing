@@ -29,7 +29,7 @@ const opt = (name) => {
 const ASSERT = args.includes("--assert");
 const WIDTHS = (opt("--widths") ?? "320,360,375,390,430").split(",").map(Number);
 const HEIGHT = 812;
-const TABS = ["position", "laptimes", "pitanalysis", "strategy", "drivers"];
+const TABS = ["position", "laptimes", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
   { name: "home", path: "/", bar: true },
   { name: "me", path: "/me", bar: true },

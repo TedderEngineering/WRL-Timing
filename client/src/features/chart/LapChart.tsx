@@ -51,6 +51,8 @@ interface LapChartProps {
   view: TraceView;
   /** The bottom axis to start with (the user's chart defaults). */
   defaultAxis?: "laps" | "hours" | "both";
+  /** Phones: Gaps and Head-to-head are views of their own; a lap's links go there (and a pass card's rival). */
+  onOpenView?: (view: "gaps" | "h2h", rival?: number) => void;
   /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
   live?: boolean;
   /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
@@ -65,7 +67,7 @@ export const FOLLOW_AFTER_MS = 60_000;
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null,
+  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null, onOpenView,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -513,6 +515,10 @@ export function LapChart({
       setSheet((l) => (l === "peek" ? "half" : l));
       return;
     }
+    if (isMobile && onOpenView && (panel === "gap" || panel === "h2h")) {
+      onOpenView(panel === "gap" ? "gaps" : "h2h");
+      return;
+    }
     h2hDefaultCarRef.current = undefined;
     setSidePanel(panel);
     // A panel needs the room: the sheet goes to full height on a phone.
@@ -573,6 +579,7 @@ export function LapChart({
                     annotations={annotations}
                     activeLap={activeLap}
                     onOpenH2H={(carNum) => {
+                      if (isMobile && onOpenView) return onOpenView("h2h", carNum);
                       h2hDefaultCarRef.current = carNum;
                       setSidePanel("h2h");
                     }}

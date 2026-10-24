@@ -21,6 +21,7 @@ import EventSidebar from "../components/EventSidebar";
 import { Sheet } from "../components/Sheet";
 import { PhoneViewTabs } from "../components/PhoneViewTabs";
 import { ChartGestureSheet } from "../features/chart/ChartGestureHelp";
+import { PhoneAnalysisTab } from "../features/chart/PhoneAnalysisTab";
 import { useIsCompact } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
@@ -62,9 +63,10 @@ export function RaceDetailPage() {
   // null while the race detail loads.
   const [hasStories, setHasStories] = useState<boolean | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
-  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers">(() => {
+  // Gaps and Head-to-head are views of their own on a phone only (PhoneAnalysisTab).
+  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers" | "gaps" | "h2h">(() => {
     const t = searchParams.get("tab");
-    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers") return t;
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers" || t === "gaps" || t === "h2h") return t;
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
@@ -73,6 +75,11 @@ export function RaceDetailPage() {
   const navigate = useNavigate();
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
   const [gesturesOpen, setGesturesOpen] = useState(false);
+  const [h2hRival, setH2hRival] = useState<number | undefined>(undefined);
+  // Wider than a phone, Gaps and Head-to-head open beside the chart instead.
+  useEffect(() => {
+    if (!compact && (activeTab === "gaps" || activeTab === "h2h")) setActiveTab("position");
+  }, [compact, activeTab]);
   // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
   const tabChosen = useRef(!!searchParams.get("tab"));
 
@@ -414,6 +421,12 @@ export function RaceDetailPage() {
     ...(hasStories ? [{ id: "story" as const, label: "Story", locked: false }] : []),
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
+    ...(compact
+      ? [
+          { id: "gaps" as const, label: "Gaps", locked: !isTeam },
+          { id: "h2h" as const, label: "Head-to-head", locked: !isTeam },
+        ]
+      : []),
     { id: "strategy" as const, label: "Strategy", locked: !isTeam },
     { id: "drivers" as const, label: "Driver Report", locked: !isTeam },
   ];
@@ -437,8 +450,8 @@ export function RaceDetailPage() {
     }, { replace: true });
   };
 
-  // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Laps ·
-  // Strategy · Drivers), with short names so most fit; the row nudges once on a first visit.
+  // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Laps · Gaps ·
+  // Head-to-head · Strategy · Drivers), with short names; the row nudges once on a first visit.
   const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps", drivers: "Drivers" };
   const phoneTabs = tabs.map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label }));
 
@@ -456,7 +469,8 @@ export function RaceDetailPage() {
     <>
       <ShareRaceButton raceId={id!} raceName={raceMeta.name} className={actionClass} style={actionStyle} />
       {/* The open tab as a PDF; a Team tab only for those who can open it. */}
-      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && (
+      {/* Gaps and Head-to-head (phone views) have no PDF of their own. */}
+      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && activeTab !== "gaps" && activeTab !== "h2h" && (
         <DownloadPdfButton
           tab={activeTab}
           input={{
@@ -680,6 +694,10 @@ export function RaceDetailPage() {
           activeLap={activeLap} setActiveLap={setActiveLap}
           view={traceView}
           defaultAxis={chartDefaults.axis}
+          onOpenView={(v, rival) => {
+            setH2hRival(rival);
+            selectTab(v);
+          }}
         />
       </div>
 
@@ -716,6 +734,19 @@ export function RaceDetailPage() {
             classView={classView}
             activeLap={activeLap} setActiveLap={setActiveLap}
             view={traceView}
+          />
+        </div>
+      )}
+
+      {compact && (activeTab === "gaps" || activeTab === "h2h") && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <PhoneAnalysisTab
+            kind={activeTab}
+            data={data} annotations={annotations}
+            focusNum={focusNum} setFocusNum={handleFocusChange}
+            compSet={compSet} classView={classView} view={traceView}
+            activeLap={activeLap} setActiveLap={setActiveLap}
+            h2hRival={activeTab === "h2h" ? h2hRival : undefined}
           />
         </div>
       )}
