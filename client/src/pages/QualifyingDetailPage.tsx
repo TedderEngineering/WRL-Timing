@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useIsCompact } from "../lib/breakpoint";
+import { PhoneViewTabs } from "../components/PhoneViewTabs";
+import { Sheet } from "../components/Sheet";
+import { CollapsingBars, useHideOnScroll } from "../lib/hideOnScroll";
+import { ChipRow } from "../features/chart/phone-cards";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { CHART_STYLE, COMP_PALETTE } from "../features/chart/constants";
 import { StatsTable } from "../features/qualifying/StatsTable";
@@ -30,6 +35,12 @@ export function QualifyingDetailPage() {
   const [classView, setClassView] = useState("");
   const [compSet, setCompSet] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"trace" | "stats">("stats");
+  // Phones (mobile redesign, step 7): the race page's shell, class chips, and the cars to compare
+  // in a sheet instead of a wall of chips.
+  const compact = useIsCompact();
+  const navigate = useNavigate();
+  const [carsOpen, setCarsOpen] = useState(false);
+  const { hidden: chromeHidden, onScrollCapture: onChromeScroll } = useHideOnScroll();
 
   // ── Fetch data ──────────────────────────────────────────────────
   useEffect(() => {
@@ -121,6 +132,89 @@ export function QualifyingDetailPage() {
     { id: "stats" as const, label: "Stats Table" },
     { id: "trace" as const, label: "Sector Trace" },
   ];
+
+  if (compact) {
+    const carChip = (car: (typeof visibleCars)[number], idx: number) => {
+      const isOn = compSet.has(car.num);
+      const col = isOn ? COMP_PALETTE[idx % COMP_PALETTE.length] : undefined;
+      return (
+        <button
+          key={car.num}
+          type="button"
+          onClick={() => toggleCar(car.num)}
+          aria-pressed={isOn}
+          className="min-h-[44px] min-w-[56px] rounded-lg border px-2.5 font-mono text-[13px]"
+          style={{ borderColor: col || CHART_STYLE.border, background: col ? `${col}33` : "transparent", color: isOn ? "#fff" : CHART_STYLE.muted }}
+          title={`${car.team} · ${car.driver} (${car.cls})`}
+        >
+          #{car.num}
+        </button>
+      );
+    };
+    return (
+      <div className="flex h-full flex-col overflow-hidden" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }} onScrollCapture={onChromeScroll}>
+        <CollapsingBars hidden={chromeHidden}>
+        <section data-phone-shell="race-header" className="flex min-h-[48px] shrink-0 items-center gap-1 pl-1 pr-3" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+          <button
+            type="button"
+            onClick={() => ((window.history.state as { idx?: number } | null)?.idx ? navigate(-1) : navigate("/races"))}
+            aria-label="Back"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="m-0 min-w-0 flex-1 truncate text-base font-semibold">{meta.name}</h1>
+          <span className="shrink-0 text-[12px]" style={{ color: CHART_STYLE.muted }}>
+            {data.cars.length} cars
+          </span>
+        </section>
+        <PhoneViewTabs
+          tabs={[
+            { id: "stats", label: "Stats", locked: false },
+            { id: "trace", label: "Sector trace", locked: false },
+          ]}
+          active={activeTab}
+          onSelect={(t) => setActiveTab(t as "stats" | "trace")}
+        />
+        </CollapsingBars>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-2">
+          <p className="m-0 mb-2 text-[13px]" style={{ color: CHART_STYLE.muted }}>
+            {meta.track} · {dateStr}
+          </p>
+          {data.classes.length > 1 && (
+            <ChipRow
+              label="Class"
+              items={[{ key: "", label: `All (${data.cars.length})` }, ...data.classes.map((c) => ({ key: c, label: `${c} (${data.cars.filter((x) => x.cls === c).length})` }))]}
+              value={classView}
+              onChange={setClassView}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setCarsOpen(true)}
+            aria-haspopup="dialog"
+            className="mt-2 flex min-h-[44px] w-full items-center justify-between rounded-full border px-4 text-[14px]"
+            style={{ borderColor: "#F48C34", background: CHART_STYLE.card }}
+          >
+            <span>Cars compared</span>
+            <span style={{ color: CHART_STYLE.muted }}>{compSet.size} ▾</span>
+          </button>
+          <div className="mt-3">
+            {activeTab === "stats" && <StatsTable data={data} compSet={compSet} classView={classView} />}
+            {activeTab === "trace" && <SectorTrace data={data} compSet={compSet} classView={classView} />}
+          </div>
+        </div>
+        <Sheet open={carsOpen} onClose={() => setCarsOpen(false)} title="Cars compared">
+          <button type="button" onClick={() => setCompSet(new Set())} className="mb-2 min-h-[44px] text-[14px]" style={{ color: "#F48C34" }}>
+            Clear all
+          </button>
+          <div className="flex flex-wrap gap-1.5">{visibleCars.map(carChip)}</div>
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full px-2 sm:px-4 py-1 sm:py-1.5 overflow-y-auto custom-scroll" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>

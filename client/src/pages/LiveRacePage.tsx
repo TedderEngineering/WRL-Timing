@@ -29,6 +29,10 @@ import { fetchLiveSessions, getPublic, useLiveChartData, type LiveListing, type 
 import { countdownText, goesLiveText, sessionFor } from "../features/live/banner";
 import type { RaceChartData } from "@shared/types";
 import { readLiveCar, saveLiveCar } from "../features/live/my-car";
+import { useIsCompact, useIsLandscapePhone } from "../lib/breakpoint";
+import { PhoneViewTabs } from "../components/PhoneViewTabs";
+import { Sheet } from "../components/Sheet";
+import { CollapsingBars, useHideOnScroll } from "../lib/hideOnScroll";
 
 const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34", live: "#ef4444" };
 
@@ -67,6 +71,15 @@ function RaceClock({ run, ttg, at, frozen }: { run: string | null | undefined; t
       {ttgSec !== null && <span style={{ color: RT.soft }}>{hms(ttgSec - elapsed)} to go</span>}
     </>
   );
+}
+
+/** Phone status line: time to go, counting down between updates. */
+function ToGo({ ttg, at, frozen }: { ttg: string | null | undefined; at: number | null; frozen: boolean }) {
+  const now = useNow(1000);
+  const ttgSec = spanSec(ttg);
+  if (ttgSec === null) return null;
+  const elapsed = !frozen && at !== null ? Math.max(0, (now - at) / 1000) : 0;
+  return <span>{hms(ttgSec - elapsed)} to go</span>;
 }
 
 function useNow(every = 5000) {
@@ -562,7 +575,23 @@ export function LiveRacePage() {
     };
   }, [slug, eventNameNow]);
   const now = useNow();
-  const [tab, setTab] = useState<"position" | "map" | "pitanalysis" | "laptimes" | "strategy" | "drivers">("position");
+  type LiveTab = "position" | "map" | "pitanalysis" | "laptimes" | "strategy" | "drivers";
+  // ?tab= opens a view directly (a shared link, the phone check).
+  const [tab, setTab] = useState<LiveTab>(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "map" || t === "pitanalysis" || t === "laptimes" || t === "strategy" || t === "drivers" ? t : "position";
+  });
+  // Phones (mobile redesign, step 7): the race page's shell. One-line header with back, LIVE and
+  // ⋯ (the full status), one status line, the views row, and the view filling the rest. Sideways,
+  // back, views, car pill and ⋯ share one row.
+  const compact = useIsCompact();
+  const landscape = useIsLandscapePhone() && compact;
+  const [carSlot, setCarSlot] = useState<HTMLElement | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
+  // The bars slide away while a view scrolls down (lib/hideOnScroll.tsx).
+  const { hidden: chromeHidden, onScrollCapture: onChromeScroll, show: showChrome } = useHideOnScroll();
+  useEffect(() => showChrome(), [tab, showChrome]);
+  const navigate = useNavigate();
   /** The tab row's slot for the focus car and class picker (TraceControls, wider than a phone). */
   const [headSlot, setHeadSlot] = useState<HTMLDivElement | null>(null);
 
@@ -628,7 +657,7 @@ export function LiveRacePage() {
   const holdGaps = !!live?.ended || (!!flagNow && CAUTION_FLAGS.has(flagNow));
   const drift = useCallback(() => (holdGaps || !data ? null : Math.min(90, (Date.now() - dataAt) / 1000)), [holdGaps, data, dataAt]);
 
-  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, raceKey: slug });
+  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, raceKey: slug, defaultCompare: compact ? "rivals" : "all" });
 
   // Before the first lap: the entry list and the scheduled start, for the full layout.
   const [preRace, setPreRace] = useState<{ entries: Entry[]; startsAt: string | null; sessionName: string | null } | null>(null);
@@ -704,24 +733,8 @@ export function LiveRacePage() {
   const ttgAt = spanSec(st?.timeToGo);
   const timeToGoS = live?.ended ? 0 : ttgAt === null ? null : Math.max(0, ttgAt - (clockAt !== null && flag !== "Red" ? (now - clockAt) / 1000 : 0));
 
-  return (
-    // No RaceMetaContext: the race-card share image describes a finished result.
-    <LiveRaceContext.Provider value={!live?.ended}>
-    <LiveClockContext.Provider value={drift}>
-      <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
-        {otherLive && (
-          <Link
-            to={`/live/${otherLive.slug}`}
-            className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-3 py-2 text-sm hover:brightness-125 sm:px-6"
-            style={{ background: "rgba(239,68,68,0.12)", borderColor: RT.line, color: RT.text }}
-          >
-            <LiveDot /> <b>{otherLive.sessionName}</b> is live now.
-            <span className="font-semibold" style={{ color: RT.accent }}>
-              Go to the live race ›
-            </span>
-          </Link>
-        )}
-        {/* One line: series, race, event, then the live status (wraps on a phone). */}
+  // One line: series, race, event, then the live status (in the ⋯ sheet on a phone).
+  const statusSection = (
         <section
           className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-3 pb-1.5 pt-2.5 text-sm sm:px-6 sm:pt-3"
           role="status"
@@ -803,7 +816,113 @@ export function LiveRacePage() {
             checked {ago(checkedAt, now)}
           </span>
         </section>
+  );
+  const pane = compact ? "flex min-h-0 flex-1 flex-col" : "flex flex-col md:min-h-0 md:flex-1";
+  const scrollPane = compact ? "min-h-0 flex-1 overflow-y-auto" : "md:min-h-0 md:flex-1 md:overflow-y-auto";
+  const PHONE_LABEL: Record<string, string> = { position: "Trace", map: "Map", pitanalysis: "Pits", laptimes: "Times", drivers: "Drivers" };
+  const phoneTabs = tabs.map((t) => ({ id: t.id, label: PHONE_LABEL[t.id] ?? t.label, locked: t.locked }));
+  const pickTab = (id: LiveTab) => {
+    if (tabs.find((t) => t.id === id)?.locked) return;
+    setTab(id);
+  };
+  const leaderLap = st?.leaderLap ?? data.maxLap;
+  const stateLabel = replay ? "REPLAY" : live?.ended ? "FINISHED" : "LIVE";
+  // Phone (mobile redesign, step 7): header, one status line, the views.
+  const phoneTop = (
+    <>
+      <CollapsingBars hidden={chromeHidden}>
+      <section data-phone-shell="race-header" className="flex min-h-[48px] shrink-0 items-center gap-1 pl-1 pr-1" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <button
+          type="button"
+          onClick={() => ((window.history.state as { idx?: number } | null)?.idx ? navigate(-1) : navigate("/live"))}
+          aria-label="Back"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ color: RT.text }}
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        {landscape ? (
+          <>
+            <h1 className="sr-only">{live?.sessionName ?? race.name}</h1>
+            <div className="min-w-0 flex-1">
+              <PhoneViewTabs tabs={phoneTabs} active={tab} onSelect={pickTab} />
+            </div>
+            <div ref={setCarSlot} className="flex min-w-0 max-w-[34%] shrink-0 items-center" />
+          </>
+        ) : (
+          <h1 className="m-0 min-w-0 flex-1 truncate text-base font-semibold">{live?.sessionName ?? race.name}</h1>
+        )}
+        <span className="flex shrink-0 items-center gap-1.5 px-1 text-[12px] font-bold tracking-wider" style={{ color: replay ? RT.accent : live?.ended ? RT.muted : RT.live }}>
+          {!replay && !live?.ended && <LiveDot />}
+          {landscape && !replay ? null : stateLabel}
+        </span>
+        <button
+          type="button"
+          onClick={() => setStatusOpen(true)}
+          aria-label="Race status and details"
+          aria-haspopup="dialog"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ color: RT.text }}
+        >
+          <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="19" cy="12" r="1.8" />
+          </svg>
+        </button>
+      </section>
+      {/* One status line: the lap, the flag, time to go (the rest is under ⋯). */}
+      <div data-live-status className="flex h-8 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap px-3 text-[13px]" style={{ color: RT.soft }} role="status" aria-live="polite">
+        <span>
+          Lap <b style={{ color: RT.text }}>{leaderLap}</b>
+        </span>
+        {flag && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: FLAG_COLORS[flag] ?? RT.muted }} aria-hidden />
+            {flag}
+          </span>
+        )}
+        {!live?.ended && <ToGo ttg={st?.timeToGo} at={clockAt} frozen={flag === "Red" || flag === "Checkered"} />}
+        {delayed && <span style={{ color: "#fab219" }}>Feed delayed</span>}
+      </div>
+      {!landscape && <PhoneViewTabs tabs={phoneTabs} active={tab} onSelect={pickTab} />}
+      </CollapsingBars>
+      <Sheet open={statusOpen} onClose={() => setStatusOpen(false)} title={live?.sessionName ?? race.name}>
+        <div className="-mx-3 [&>section]:flex-col [&>section]:items-start [&>section]:gap-y-2">{statusSection}</div>
+        <Link to="/live" className="mt-3 flex min-h-[48px] items-center rounded-lg border px-4 text-[15px]" style={{ borderColor: RT.border, background: RT.card, color: RT.text }}>
+          Every live session
+        </Link>
+      </Sheet>
+    </>
+  );
 
+  return (
+    // No RaceMetaContext: the race-card share image describes a finished result.
+    <LiveRaceContext.Provider value={!live?.ended}>
+    <LiveClockContext.Provider value={drift}>
+      <div
+        className={compact ? "flex h-full flex-col overflow-hidden" : "flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden"}
+        style={{ background: "#0b0b18", color: RT.text }}
+        onScrollCapture={compact ? onChromeScroll : undefined}
+      >
+        {otherLive && (
+          <Link
+            to={`/live/${otherLive.slug}`}
+            className="flex min-h-[44px] shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b px-3 py-2 text-sm hover:brightness-125 sm:min-h-0 sm:px-6"
+            style={{ background: "rgba(239,68,68,0.12)", borderColor: RT.line, color: RT.text }}
+          >
+            <LiveDot /> <b>{otherLive.sessionName}</b> is live now.
+            <span className="font-semibold" style={{ color: RT.accent }}>
+              Go to the live race ›
+            </span>
+          </Link>
+        )}
+        {compact ? phoneTop : statusSection}
+
+        {!compact && (
+          <>
         {/* The tabs, and (wider than a phone) the focus car and class picker on the same row. */}
         <div className="mt-0.5 flex shrink-0 flex-wrap items-stretch gap-x-4 border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
         <nav aria-label="Race views" className="no-scrollbar flex min-w-0 items-end gap-1 overflow-x-auto">
@@ -832,7 +951,10 @@ export function LiveRacePage() {
         <div ref={setHeadSlot} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-1.5 empty:hidden" />
         </div>
 
-        <div className={tab !== "position" ? "hidden" : "flex flex-col md:min-h-0 md:flex-1"}>
+          </>
+        )}
+
+        <div className={tab !== "position" ? "hidden" : pane}>
           <LapChart
             data={data}
             annotations={annotations}
@@ -851,11 +973,12 @@ export function LiveRacePage() {
             defaultAxis="hours"
             live
             headSlot={tab === "position" ? headSlot : null}
+            phoneSlot={landscape && tab === "position" ? carSlot : null}
           />
         </div>
         {tab === "map" && (
-          <div className="flex flex-col md:min-h-0 md:flex-1">
-            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
+          <div className={compact ? "min-h-0 flex-1 overflow-y-auto" : pane}>
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} phoneSlot={landscape ? carSlot : null} />
             <TrackMap
               slug={slug}
               data={data}
@@ -871,31 +994,31 @@ export function LiveRacePage() {
           </div>
         )}
         {tab === "pitanalysis" && (
-          <div className="flex flex-col md:min-h-0 md:flex-1">
-            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
-            <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <div className={pane}>
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} phoneSlot={landscape ? carSlot : null} />
+            <div className={`custom-scroll px-2 py-3 sm:px-6 ${scrollPane}`}>
               <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} classView={classView} />
             </div>
           </div>
         )}
         {tab === "strategy" && (
-          <div className="flex flex-col md:min-h-0 md:flex-1">
-            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
-            <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <div className={pane}>
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} phoneSlot={landscape ? carSlot : null} />
+            <div className={`custom-scroll px-2 py-3 sm:px-6 ${scrollPane}`}>
               <LiveStrategyTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} flag={flag} timeToGoS={timeToGoS} />
             </div>
           </div>
         )}
         {tab === "drivers" && (
-          <div className="flex flex-col md:min-h-0 md:flex-1">
-            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} />
-            <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+          <div className={pane}>
+            <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} phoneSlot={landscape ? carSlot : null} />
+            <div className={`custom-scroll ${scrollPane}`}>
               <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} live={{ lap: data.maxLap }} classView={classView} />
             </div>
           </div>
         )}
         {tab === "laptimes" && (
-          <div className="flex flex-col md:min-h-0 md:flex-1">
+          <div className={pane}>
             <LapTimeChart
               data={data}
               annotations={annotations}
@@ -909,6 +1032,7 @@ export function LiveRacePage() {
               view={traceView}
               live
               headSlot={headSlot}
+              phoneSlot={landscape ? carSlot : null}
             />
           </div>
         )}

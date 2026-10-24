@@ -134,3 +134,23 @@ On a phone the race row has **Race cards** right after Story (`features/share/Ra
 - **From the lap details:** "Share race cards", and each driver's **Share** button, open this view on
   that card through `RaceCardsContext`. On laptops and RaceTrace Live the old share links stay.
 - **Sideways:** the card sits on the left and the buttons on the right.
+
+## Live, Qualifying and the sideways lap rail (step 7)
+
+- **Live on a phone** (`LiveRacePage.tsx`): the race page's shell.
+  - One-line header: back, the session, LIVE / FINISHED / REPLAY, and ⋯ (the full status, in a sheet).
+  - One status line: lap, flag, time to go.
+  - The views row: Trace · Map · Pits · Times · Strategy · Drivers.
+  - The view fills the rest; the map tab scrolls as one.
+  - Compare opens on class rivals, and `?tab=` opens a view.
+  - The live banner gives way to the bottom bar's Live place on phones.
+  - Map-tab controls are 44 px.
+  - Under 360 px the running order drops the Class column (the row's stripe is its colour).
+- **Qualifying on a phone:**
+  - Header and views (Stats · Sector trace), class chips.
+  - Cars compared in a sheet rather than a wall of chips.
+  - Stats as cards for now; they will follow whatever the race tables move to.
+- **Sideways (M7):** the lap details open as a rail on the right (`RAIL_WIDTH`), beside the chart, which
+  narrows to make room. Closed, the one-line peek stays at the bottom.
+- **Race screens:** live sessions and qualifying sessions count as race screens: no site bar or bottom
+  bar, and their bars slide away on scroll.

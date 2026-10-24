@@ -47,7 +47,7 @@ export function PitList({
         key={key}
         type="button"
         onClick={() => setFocusNum(key)}
-        className="pointer-events-auto w-fit rounded-md border px-1.5 py-0.5 font-bold tabular-nums hover:bg-white/5 xl:backdrop-blur-sm"
+        className="pointer-events-auto min-h-[44px] w-fit rounded-md border px-2.5 font-bold tabular-nums hover:bg-white/5 sm:min-h-0 sm:px-1.5 sm:py-0.5 xl:backdrop-blur-sm"
         style={{
           background: OVER_BG,
           borderColor: focus ? C.focus : C.chip,

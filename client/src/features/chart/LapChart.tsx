@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { useLapZoomOnGrow } from "./live-zoom";
-import { useIsCompact } from "../../lib/breakpoint";
+import { COMPACT_QUERY, useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
 import { LiveGapsPanel } from "./LiveGapsPanel";
 import { hasFullAccess } from "../../lib/utils";
 import type {
@@ -18,11 +18,10 @@ import {
 } from "./chart-renderer";
 import { useChartGestures } from "./chart-gestures";
 import { readPhoneAxis, writePhoneAxis, type AxisMode } from "./phone-axis";
-import { COMPACT_QUERY } from "../../lib/breakpoint";
 import { ChartHintBubble } from "./ChartGestureHelp";
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
-import { LapSheet, PEEK_PX, type SheetLevel } from "./LapSheet";
+import { LapSheet, PEEK_PX, RAIL_WIDTH, type SheetLevel } from "./LapSheet";
 import { settleLabels } from "./pit-band";
 import { AxisToggle, TraceControls } from "./TraceControls";
 import type { TraceView } from "./trace-view";
@@ -121,6 +120,8 @@ export function LapChart({
 
   // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
   const isMobile = useIsCompact();
+  // Sideways (M7): the lap details open as a rail beside the chart, which narrows to make room.
+  const railMode = useIsLandscapePhone() && isMobile;
   // The user's default, also when it arrives after the chart opened (first visit on this device).
   const startAxis = isMobile ? readPhoneAxis() : defaultAxis;
   useEffect(() => {
@@ -614,7 +615,7 @@ export function LapChart({
                     role="tab"
                     aria-selected={liveTab === t}
                     onClick={() => setLiveTab(t)}
-                    className="px-3 py-2 text-[13px]"
+                    className="min-h-[44px] px-3 text-[13px] sm:min-h-0 sm:py-2"
                     style={{ color: liveTab === t ? "#e0e0e8" : TRACE.axis, fontWeight: liveTab === t ? 600 : 400, borderBottom: `2px solid ${liveTab === t ? TRACE.focus : "transparent"}`, marginBottom: -1 }}
                   >
                     {t === "details" ? "Lap details" : "Gaps"}
@@ -731,12 +732,20 @@ export function LapChart({
           headSlot={headSlot}
           phoneSlot={phoneSlot}
         />
-        <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
+        <div
+          className="flex min-h-0 flex-1 flex-col px-2 pt-2"
+          style={
+            railMode && sheet !== "peek"
+              ? { paddingRight: `calc(${RAIL_WIDTH} + 8px)`, paddingBottom: "calc(8px + env(safe-area-inset-bottom))" }
+              : { paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }
+          }
+        >
           {figure}
         </div>
         <LapSheet
           level={sheet}
           setLevel={setSheet}
+          rail={railMode}
           label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
           summary={summary}
           onPrev={navPrev}

@@ -720,7 +720,7 @@ export function TrackMap({
                   role="tab"
                   aria-selected={orderView === v}
                   onClick={() => pickOrderView(v)}
-                  className="rounded-md px-2.5 py-1 font-semibold"
+                  className="min-h-[44px] rounded-md px-3 text-[13px] font-semibold sm:min-h-0 sm:px-2.5 sm:py-1 sm:text-xs"
                   style={{ background: orderView === v ? "#2a2a48" : "transparent", color: orderView === v ? C.text : C.muted }}
                 >
                   {label}
@@ -882,7 +882,7 @@ function MapKey({
         aria-pressed={!off}
         onClick={() => onToggle(k)}
         title={`${title ? `${title} ` : ""}${off ? "Hidden: tap to show it on the map." : "Tap to hide it on the map."}`}
-        className="pointer-events-auto flex w-fit items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 hover:bg-white/5 xl:backdrop-blur-sm"
+        className="pointer-events-auto flex min-h-[44px] w-fit items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 hover:bg-white/5 sm:min-h-0 sm:px-2 sm:py-0.5 xl:backdrop-blur-sm"
         style={{ borderColor: off ? "#2a2a48" : "#3a3a5c", color: off ? "#5c5c78" : C.text, textDecoration: off ? "line-through" : undefined, background: OVER_BG }}
       >
         <span className="flex items-center" style={{ opacity: off ? 0.35 : 1 }}>
@@ -1107,7 +1107,7 @@ function FollowBar({
             key={n}
             type="button"
             onClick={() => onChange(followed.filter((c) => c !== n))}
-            className="flex items-center gap-1 rounded-full border-2 border-white px-2 py-0.5 font-bold tabular-nums hover:bg-white/10"
+            className="flex min-h-[44px] items-center gap-1 rounded-full border-2 border-white px-2.5 font-bold tabular-nums hover:bg-white/10 sm:min-h-0 sm:px-2 sm:py-0.5"
             style={{ color: out.has(k) ? C.muted : C.text, background: `${liveClassColor(data.cars[String(k)]?.cls)}33` }}
             aria-label={`Stop following #${n}`}
           >
@@ -1116,7 +1116,7 @@ function FollowBar({
         );
       })}
       {cars.length > 0 ? (
-        <button type="button" onClick={() => onChange([])} className="ml-1 underline hover:text-white">
+        <button type="button" onClick={() => onChange([])} className="ml-1 min-h-[44px] underline hover:text-white sm:min-h-0">
           Clear
         </button>
       ) : (

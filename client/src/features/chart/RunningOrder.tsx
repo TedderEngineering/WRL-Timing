@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMediaQuery } from "../../lib/breakpoint";
 import type { AnnotationData, CarData, PitMarker, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { formatLapTime, getCompColor } from "./chart-renderer";
@@ -325,13 +326,18 @@ export function RunningOrder({
     setPStat(n);
     savePitStat(n);
   };
+  // Phones under 400 px drop the Class column (the row's left stripe is its colour); under 360 px
+  // the cells and text tighten too, so the order fits without scrolling sideways.
+  const narrow = useMediaQuery("(max-width: 399.98px)");
+  const tiny = useMediaQuery("(max-width: 359.98px)");
+  const cellPad = tiny ? "px-0.5 py-1 sm:px-1.5" : "px-1 py-1 sm:px-1.5";
   // Tighter cells on a phone, so every column fits (sm and up as before).
-  const th = "px-1 py-2 font-semibold sm:px-1.5";
+  const th = tiny ? "px-0.5 py-2 font-semibold sm:px-1.5" : "px-1 py-2 font-semibold sm:px-1.5";
   return (
     <div className="flex flex-col px-2 pb-3 pt-1 sm:px-3 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
       {above}
       <div
-        className="custom-scroll overflow-x-auto rounded-lg border text-xs md:min-h-0 md:flex-1 md:overflow-y-auto"
+        className={`custom-scroll overflow-x-auto rounded-lg border md:min-h-0 md:flex-1 md:overflow-y-auto ${tiny ? "text-[11px]" : "text-xs"}`}
         style={{ background: C.card, borderColor: C.line, color: C.text }}
       >
         {swap ?? <table className="w-full border-collapse tabular-nums">
@@ -340,7 +346,7 @@ export function RunningOrder({
               <th className="w-5 p-0 sm:w-6" aria-label="In the pits" />
               <th className={`${th} text-right`}>P</th>
               <th className={th}>#</th>
-              <th className={th}>Class</th>
+              {!narrow && <th className={th}>Class</th>}
               <th className={`${th} text-right`} title="Position in class">
                 PIC
               </th>
@@ -354,7 +360,7 @@ export function RunningOrder({
                   onClick={cycleStat}
                   title={LAP_STAT_TITLE[stat]}
                   aria-label={`${LAP_STAT_LABEL[stat]}. ${LAP_STAT_TITLE[stat]}`}
-                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                  className="min-h-[44px] min-w-[24px] whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white sm:min-h-0 sm:min-w-0"
                 >
                   <span className="sm:hidden">{LAP_STAT_SHORT[stat]}</span>
                   <span className="hidden sm:inline">{LAP_STAT_LABEL[stat]}</span>
@@ -366,7 +372,7 @@ export function RunningOrder({
                   onClick={cyclePitStat}
                   title={PIT_STAT_TITLE[pStat]}
                   aria-label={`${PIT_STAT_LABEL[pStat]}. ${PIT_STAT_TITLE[pStat]}`}
-                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                  className="min-h-[44px] min-w-[24px] whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white sm:min-h-0 sm:min-w-0"
                 >
                   <span className="sm:hidden">{PIT_STAT_SHORT[pStat]}</span>
                   <span className="hidden sm:inline">{PIT_STAT_LABEL[pStat]}</span>
@@ -398,7 +404,7 @@ export function RunningOrder({
                 <tr
                   key={r.key}
                   onClick={() => tap(r.key)}
-                  className={`cursor-pointer hover:bg-white/5 ${visit ? "" : "border-b"}`}
+                  className={`h-11 cursor-pointer hover:bg-white/5 sm:h-auto ${visit ? "" : "border-b"}`}
                   style={rowStyle}
                   aria-current={focus ? "true" : undefined}
                   aria-pressed={onRowTap && !focus ? isFollowed : undefined}
@@ -417,9 +423,9 @@ export function RunningOrder({
                       )
                     )}
                   </td>
-                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold">{r.pos ?? "–"}</td>
+                  <td className={`${cellPad} text-right font-semibold`}>{r.pos ?? "–"}</td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 font-bold"
+                    className={`${cellPad} font-bold`}
                     style={{ color: focus ? TRACE.focus : compared ? getCompColor(compSet, focusNum, r.key) : C.text }}
                   >
                     {isFollowed ? (
@@ -430,26 +436,28 @@ export function RunningOrder({
                       carNo(data, r.key)
                     )}
                   </td>
-                  <td className="px-1 py-1 sm:px-1.5">
-                    <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
-                      {r.cls || "–"}
-                    </span>
-                  </td>
-                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold" style={{ color }}>
+                  {!narrow && (
+                    <td className="px-1 py-1 sm:px-1.5">
+                      <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
+                        {r.cls || "–"}
+                      </span>
+                    </td>
+                  )}
+                  <td className={`${cellPad} text-right font-semibold`} style={{ color }}>
                     {r.posClass ?? "–"}
                   </td>
-                  <td className="px-1 py-1 text-right tabular-nums sm:px-1.5" style={{ color: (ld.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
+                  <td className={`${cellPad} text-right tabular-nums`} style={{ color: (ld.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
                     {ld.get(r.key) ?? "–"}
                   </td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 text-right"
+                    className={`${cellPad} text-right`}
                     style={{ color: last !== null && last === best ? C.personal : C.text }}
                     title={last !== null && last === best ? "Its best lap" : undefined}
                   >
                     {lapText(last)}
                   </td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 text-right"
+                    className={`${cellPad} text-right`}
                     style={{ color: classBest ? C.classBest : C.muted }}
                     title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat]} in class`) : undefined}
                   >
@@ -471,7 +479,7 @@ export function RunningOrder({
                     style={rowStyle}
                   >
                     <td className="p-0" style={{ borderLeft: `5px solid ${color}` }} />
-                    <td colSpan={9} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
+                    <td colSpan={narrow ? 8 : 9} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
                       {pitDetail(carPits, visit)}
                     </td>
                   </tr>

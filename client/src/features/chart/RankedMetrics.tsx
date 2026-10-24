@@ -1,0 +1,353 @@
+/**
+ * Comparing a class on a phone (mobile redesign): instead of a wide table or a card per row, one
+ * number at a time, ranked, with a bar for where each sits in the class. The Driver Report first;
+ * Pits and Strategy can take the same parts.
+ *
+ *   [Avg lap] [Best] [Consistency] [Pace vs class] [Clean air] …   which number (swipe the list too)
+ *   ┌ Your car ─────────────────────────────┐
+ *   │  #60 Alana · Michele · Hannah        │  each metric as a percentile strip (Baseball Savant)
+ *   └──────────────────────────────────────┘
+ *   1  Alana Carter        #60 Stratus 60   1:32.069  ▓▓▓▓▓▓▓▓▓▓▓▓
+ *   2  Driver 70           #70 …            1:32.201  ▓▓▓▓▓▓▓▓▓▓▓
+ *   …
+ *   Hold a row (or Compare) to pick 2–3, then "Compare 3" lays them side by side: the metrics down,
+ *   the drivers across, the best of each row marked.
+ *
+ * Bars run from the class's worst (short) to its best (full), so "better" is always longer.
+ */
+import { useMemo, useRef, useState, type ReactNode, type TouchEvent } from "react";
+import { Sheet, SHEET } from "../../components/Sheet";
+import { ChipRow, PC } from "./phone-cards";
+
+export interface RankedMetric<R> {
+  key: string;
+  label: string;
+  /** Which way is better. */
+  better: "low" | "high";
+  value: (r: R) => number | null;
+  format: (v: number) => string;
+  /** One line under the chips: what the number is. */
+  note?: string;
+}
+
+export interface RankedItem<R> {
+  id: string;
+  row: R;
+  /** "Alana Carter" */
+  title: string;
+  /** "#60 Stratus 60" */
+  sub: string;
+  /** Your car's: outlined in orange, and in the strips at the top. */
+  mine: boolean;
+  /** A small tag after the title ("IN CAR"). */
+  tag?: ReactNode;
+}
+
+/** Each item's place in one metric: rank (1 = best), share of the way from worst to best (0–1), percentile (0–100). */
+function standings<R>(items: RankedItem<R>[], m: RankedMetric<R>) {
+  const valued = items.map((it) => ({ it, v: m.value(it.row) })).filter((x): x is { it: RankedItem<R>; v: number } => x.v !== null && Number.isFinite(x.v));
+  valued.sort((a, b) => (m.better === "low" ? a.v - b.v : b.v - a.v));
+  const best = valued[0]?.v;
+  const worst = valued[valued.length - 1]?.v;
+  const span = best !== undefined && worst !== undefined ? Math.abs(worst - best) : 0;
+  const out = new Map<string, { rank: number; v: number; share: number; pct: number }>();
+  valued.forEach((x, i) => {
+    const share = span > 0 ? 1 - Math.abs(x.v - best!) / span : 1;
+    const pct = valued.length > 1 ? Math.round(100 * (1 - i / (valued.length - 1))) : 100;
+    out.set(x.it.id, { rank: i + 1, v: x.v, share, pct });
+  });
+  return { order: valued.map((x) => x.it), place: out, count: valued.length };
+}
+
+/** Red for the class's tail, through grey, to RaceTrace orange at the front (percentile 0–100). */
+function pctColor(p: number): string {
+  if (p >= 67) return "#F48C34";
+  if (p >= 34) return "#9a9ab4";
+  return "#e66767";
+}
+
+/** Your car's drivers (or cars), each metric as a percentile strip: where they sit in the class. */
+function PercentileCard<R>({ items, metrics, all }: { items: RankedItem<R>[]; metrics: RankedMetric<R>[]; all: RankedItem<R>[] }) {
+  const [pick, setPick] = useState(0);
+  const it = items[Math.min(pick, items.length - 1)];
+  const places = useMemo(() => metrics.map((m) => ({ m, s: standings(all, m) })), [metrics, all]);
+  if (!it) return null;
+  return (
+    <section aria-label={`${it.title} against the class`} className="rounded-xl border p-3" style={{ borderColor: PC.accent, background: PC.focusBg }} data-ranked="percentiles">
+      <div className="flex items-center gap-2">
+        <h3 className="m-0 min-w-0 flex-1 truncate text-[14px] font-semibold">
+          {items.length > 1 ? "Your drivers" : it.title}
+          <span className="ml-1.5 text-[12px] font-normal" style={{ color: PC.muted }}>
+            percentile in class
+          </span>
+        </h3>
+      </div>
+      {items.length > 1 && (
+        <div className="mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Your drivers">
+          {items.map((x, i) => (
+            <button
+              key={x.id}
+              type="button"
+              role="tab"
+              aria-selected={i === pick}
+              onClick={() => setPick(i)}
+              data-touch-44
+              className="relative h-8 rounded-full border px-3 text-[13px] font-semibold before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              style={i === pick ? { borderColor: PC.accent, color: PC.text, background: "rgba(244,140,52,0.14)" } : { borderColor: PC.border, color: PC.muted }}
+            >
+              {x.title.split(/\s+/)[0]}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="m-0 mt-2.5 flex list-none flex-col gap-2 p-0">
+        {places.map(({ m, s }) => {
+          const p = s.place.get(it.id);
+          return (
+            <li key={m.key} className="grid grid-cols-[96px_1fr_64px] items-center gap-2 text-[13px]">
+              <span className="truncate" style={{ color: PC.soft }}>
+                {m.label}
+              </span>
+              <span className="relative h-2 rounded-full" style={{ background: PC.line }} aria-hidden>
+                {p && <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(6, Math.min(94, p.pct))}%`, background: pctColor(p.pct), opacity: 0.35 }} />}
+                {p && (
+                  <span
+                    className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[10px] font-bold"
+                    style={{ left: `${Math.max(6, Math.min(94, p.pct))}%`, background: pctColor(p.pct), color: "#0b0b18" }}
+                  >
+                    {p.pct}
+                  </span>
+                )}
+              </span>
+              <span className="text-right font-mono text-[12px]" style={{ color: PC.text }}>
+                {p ? m.format(p.v) : "—"}
+              </span>
+              <span className="sr-only">{p ? `${m.label}: ${m.format(p.v)}, ${p.rank} of ${s.count}, percentile ${p.pct}` : `${m.label}: no value`}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Two or three side by side: metrics down, them across, the best of each row in orange. */
+function VersusSheet<R>({ open, onClose, items, metrics, all }: { open: boolean; onClose: () => void; items: RankedItem<R>[]; metrics: RankedMetric<R>[]; all: RankedItem<R>[] }) {
+  const rows = useMemo(() => metrics.map((m) => ({ m, s: standings(all, m) })), [metrics, all]);
+  return (
+    <Sheet open={open} onClose={onClose} title={`Compare ${items.length}`}>
+      <table className="w-full table-fixed border-collapse text-[13px]" data-ranked="versus">
+        <thead>
+          <tr>
+            <th className="w-[30%] pb-2 text-left text-[11px] font-semibold uppercase tracking-wider" style={{ color: SHEET.muted }} />
+            {items.map((it) => (
+              <th key={it.id} className="pb-2 text-left align-bottom">
+                <span className="block truncate text-[13px] font-semibold" style={{ color: it.mine ? PC.accent : SHEET.text }}>
+                  {it.title}
+                </span>
+                <span className="block truncate text-[11px] font-normal" style={{ color: SHEET.muted }}>
+                  {it.sub}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ m, s }) => {
+            const vals = items.map((it) => s.place.get(it.id));
+            const bestRank = Math.min(...vals.map((v) => v?.rank ?? Infinity));
+            return (
+              <tr key={m.key} className="border-t" style={{ borderColor: SHEET.border }}>
+                <td className="py-2.5 pr-2" style={{ color: SHEET.muted }}>
+                  {m.label}
+                </td>
+                {vals.map((v, i) => (
+                  <td key={items[i].id} className="py-2.5 font-mono" style={{ color: v && v.rank === bestRank ? PC.accent : SHEET.text, fontWeight: v && v.rank === bestRank ? 700 : 400 }}>
+                    {v ? m.format(v.v) : "—"}
+                    {v && <span className="block font-sans text-[11px] font-normal" style={{ color: SHEET.muted }}>{v.rank} of {s.count}</span>}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Sheet>
+  );
+}
+
+export function RankedMetrics<R>({
+  items,
+  metrics,
+  title,
+  subtitle,
+  above,
+  below,
+  onOpen,
+}: {
+  items: RankedItem<R>[];
+  metrics: RankedMetric<R>[];
+  title: string;
+  subtitle?: string;
+  /** Between the heading and the metric chips (the class chips). */
+  above?: ReactNode;
+  /** Under the list (the method note). */
+  below?: ReactNode;
+  /** A row's tap outside comparing (make its car the focus car). */
+  onOpen?: (item: RankedItem<R>) => void;
+}) {
+  const [metricKey, setMetricKey] = useState(metrics[0]?.key ?? "");
+  const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
+  const idx = metrics.indexOf(metric);
+  const { order, place, count } = useMemo(() => standings(items, metric), [items, metric]);
+  const missing = items.filter((it) => !place.has(it.id));
+  const mine = items.filter((it) => it.mine);
+
+  // Comparing: hold a row (or press Compare) to start, then tap to add or drop, up to three.
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [versus, setVersus] = useState(false);
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= 3 ? [...p.slice(1), id] : [...p, id]));
+  const hold = useRef<{ t: ReturnType<typeof setTimeout>; fired: boolean } | null>(null);
+  const startHold = (id: string) => {
+    const h = { fired: false, t: setTimeout(() => {
+      h.fired = true;
+      setPicking(true);
+      setPicked((p) => (p.includes(id) ? p : [...p, id].slice(-3)));
+      navigator.vibrate?.(10);
+    }, 450) };
+    hold.current = h;
+  };
+  const endHold = () => hold.current && clearTimeout(hold.current.t);
+
+  // A sideways swipe on the list moves to the next or previous number.
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => (swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY });
+  const onTouchEnd = (e: TouchEvent) => {
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s) return;
+    const dx = e.changedTouches[0].clientX - s.x;
+    const dy = e.changedTouches[0].clientY - s.y;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+      const next = metrics[idx + (dx < 0 ? 1 : -1)];
+      if (next) setMetricKey(next.key);
+    }
+  };
+
+  const row = (it: RankedItem<R>) => {
+    const p = place.get(it.id);
+    const on = picked.includes(it.id);
+    return (
+      <li key={it.id}>
+        <button
+          type="button"
+          data-ranked-row
+          aria-pressed={picking ? on : undefined}
+          onPointerDown={() => startHold(it.id)}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={() => {
+            if (hold.current?.fired) return;
+            if (picking) toggle(it.id);
+            else onOpen?.(it);
+          }}
+          className="relative flex min-h-[52px] w-full items-center gap-2 overflow-hidden rounded-lg px-2 text-left"
+          style={{ background: on ? "rgba(244,140,52,0.16)" : "transparent", outline: it.mine ? `1px solid ${PC.accent}` : undefined, outlineOffset: -1 }}
+        >
+          {/* The bar, behind the row: the class's best is full width. */}
+          {p && (
+            <span
+              aria-hidden
+              className="absolute inset-y-1.5 left-0 rounded-r-md"
+              style={{ width: `${8 + p.share * 92}%`, background: it.mine ? "rgba(244,140,52,0.22)" : "rgba(122,162,255,0.12)" }}
+            />
+          )}
+          {picking && (
+            <span aria-hidden className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-bold" style={{ borderColor: on ? PC.accent : PC.border, background: on ? PC.accent : "transparent", color: "#0b0b18" }}>
+              {on ? "✓" : ""}
+            </span>
+          )}
+          <span className="relative w-6 shrink-0 text-right font-mono text-[13px]" style={{ color: PC.muted }}>
+            {p?.rank ?? "–"}
+          </span>
+          <span className="relative min-w-0 flex-1">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-[15px] font-semibold" style={{ color: it.mine ? PC.accent : PC.text }}>
+                {it.title}
+              </span>
+              {it.tag}
+            </span>
+            <span className="block truncate text-[12px]" style={{ color: PC.muted }}>
+              {it.sub}
+            </span>
+          </span>
+          <span className="relative shrink-0 font-mono text-[15px] font-bold">{p ? metric.format(p.v) : "—"}</span>
+        </button>
+      </li>
+    );
+  };
+
+  return (
+    <div className="px-3 pb-24 pt-3" style={{ color: PC.text }} data-ranked="view">
+      <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
+      {subtitle && (
+        <p className="m-0 mt-0.5 text-[13px]" style={{ color: PC.muted }}>
+          {subtitle}
+        </p>
+      )}
+      {above && <div className="mt-3">{above}</div>}
+      {mine.length > 0 && (
+        <div className="mt-3">
+          <PercentileCard items={mine} metrics={metrics} all={items} />
+        </div>
+      )}
+      <div className="sticky top-0 z-10 -mx-3 mt-3 px-3 pb-2 pt-2" style={{ background: PC.bg }}>
+        <ChipRow label="Rank by" items={metrics.map((m) => ({ key: m.key, label: m.label }))} value={metric.key} onChange={setMetricKey} />
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[12px]" style={{ color: PC.muted }}>
+          <span className="min-w-0 truncate">
+            {metric.note ?? (metric.better === "low" ? "Lowest first" : "Highest first")} · {count} ranked
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setPicking((p) => !p);
+              setPicked([]);
+            }}
+            className="min-h-[44px] shrink-0 px-1 text-[13px] font-semibold"
+            style={{ color: PC.accent }}
+          >
+            {picking ? "Cancel" : "Compare"}
+          </button>
+        </div>
+      </div>
+      {picking && (
+        <p className="m-0 mb-1 text-[12px]" style={{ color: PC.muted }}>
+          Tap up to three to compare them side by side.
+        </p>
+      )}
+      <ol className="m-0 flex list-none flex-col gap-0.5 p-0" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} aria-label={`Ranked by ${metric.label}`}>
+        {order.map(row)}
+        {missing.map(row)}
+      </ol>
+      {below && <div className="mt-3">{below}</div>}
+
+      {picking && picked.length >= 2 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 px-3 pt-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))", background: "linear-gradient(transparent, #0b0b18 30%)" }}>
+          <button
+            type="button"
+            onClick={() => setVersus(true)}
+            data-ranked="compare"
+            className="flex min-h-[48px] w-full items-center justify-center rounded-xl text-[15px] font-bold shadow-lg"
+            style={{ background: PC.accent, color: "#0b0b18" }}
+          >
+            Compare {picked.length} side by side
+          </button>
+        </div>
+      )}
+      <VersusSheet open={versus} onClose={() => setVersus(false)} items={picked.map((id) => items.find((it) => it.id === id)!).filter(Boolean)} metrics={metrics} all={items} />
+    </div>
+  );
+}
