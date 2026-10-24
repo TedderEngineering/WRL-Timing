@@ -293,7 +293,7 @@ function ShareButton({ make, input, label }: { make: () => Promise<Blob>; input:
       text={`${input.title} · ${input.race.name} on RaceTrace`}
       kind="race_car"
       label={label}
-      className="min-h-[36px] text-left text-sm font-semibold hover:underline disabled:opacity-60"
+      className="min-h-[44px] text-left text-sm font-semibold hover:underline disabled:opacity-60 sm:min-h-[36px]"
     />
   );
 }

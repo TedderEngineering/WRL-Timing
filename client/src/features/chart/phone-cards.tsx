@@ -63,7 +63,7 @@ export function SortBar<K extends string>({
           aria-label={label}
           value={value}
           onChange={(e) => onChange(e.target.value as K)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          className="absolute -inset-px cursor-pointer opacity-0"
         >
           {options.map((o) => (
             <option key={o.key} value={o.key}>
@@ -145,10 +145,10 @@ export function RowCard({
   );
 }
 
-/** Labelled numbers in a grid, three across. */
-export function StatGrid({ stats }: { stats: { label: string; value: ReactNode; color?: string; strong?: boolean }[] }) {
+/** Labelled numbers in a grid, three (or four) across. */
+export function StatGrid({ stats, cols = 3 }: { stats: { label: string; value: ReactNode; color?: string; strong?: boolean }[]; cols?: 3 | 4 }) {
   return (
-    <dl className="m-0 mt-2 grid grid-cols-3 gap-x-3 gap-y-2">
+    <dl className={`m-0 mt-2 grid gap-x-3 gap-y-2 ${cols === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
       {stats.map((s) => (
         <div key={s.label} className="min-w-0">
           <dt className="truncate text-[11px] uppercase tracking-[0.04em]" style={{ color: PC.muted }}>

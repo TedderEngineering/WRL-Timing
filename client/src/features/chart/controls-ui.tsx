@@ -36,6 +36,7 @@ export function AxisToggle({
           type="button"
           aria-pressed={on(m)}
           onClick={() => onChange(m)}
+          data-touch-44={phone ? "" : undefined}
           className={
             phone
               ? "relative min-h-[28px] px-3 text-[12px] before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"

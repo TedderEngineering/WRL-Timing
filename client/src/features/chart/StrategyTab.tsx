@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
+import { useIsCompact } from "../../lib/breakpoint";
+import { ChipRow, PC, RowCard, SectionLabel, SortBar, StatGrid } from "./phone-cards";
 import {
   computeStrategyMetrics,
   computeRaceConditions,
@@ -185,6 +187,10 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
   const focusCls = data.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState(() => (focusCls && classes.includes(focusCls) ? focusCls : classes[0] ?? ""));
   const activeClass = classes.includes(cls) ? cls : classes[0] ?? "";
+  // A new focus car (picked here or on another view) brings its class with it.
+  useEffect(() => {
+    if (focusCls && classes.includes(focusCls)) setCls(focusCls);
+  }, [focusCls, classes]);
   const [sort, setSort] = useState<StrategySort>(DEFAULT_STRATEGY_SORT);
   const [selectedCar, setSelectedCar] = useState<number | null>(null);
 
@@ -205,6 +211,36 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: STRATEGY_SORTS[key].dir }));
 
   const greenPct = conditions.totalLaps ? Math.round(100 - conditions.pctYellow) : 0;
+  const compact = useIsCompact();
+
+  if (compact) {
+    return (
+      <PhoneStrategy
+        rows={rows}
+        classes={classes}
+        activeClass={activeClass}
+        setCls={(c) => {
+          setCls(c);
+          setSelectedCar(null);
+        }}
+        sort={sort}
+        setSort={setSort}
+        insights={insights}
+        focusNum={focusNum}
+        selectedCar={selectedCar}
+        setSelectedCar={setSelectedCar}
+        totalLaps={totalLaps}
+        raceLaps={conditions.totalLaps}
+        best={best}
+        verified={verified}
+        summary={`${classRows.length} cars · ${conditions.totalLaps} laps, ${greenPct}% green (${conditions.yellowLaps} caution laps)`}
+        onGoToTrace={(n) => {
+          setFocusNum(n);
+          onSwitchToTrace();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="px-2 py-3 sm:px-6" style={{ color: P.text }}>
@@ -551,6 +587,185 @@ function PitMarker({ leftPct, isYellow, tooltip }: { leftPct: string; isYellow: 
           {tooltip}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Phone (mobile redesign, step 5): a card per car, the focus car first; tap for stints and stops ───
+
+const SORT_LABEL: Record<StrategySortKey, string> = {
+  classPos: "Class position",
+  carNum: "Car number",
+  team: "Team",
+  lapsCompleted: "Laps",
+  stops: "Stops",
+  avgGreenPace: "Average pace",
+  bestLap: "Best lap",
+  totalPitTime: "Pit time",
+  pitPct: "Pit %",
+  yellowPitPct: "Yellow-flag stops",
+  avgStintLen: "Average stint",
+  maxStintLen: "Longest stint",
+  strategyScore: "Strategy score",
+};
+
+function PhoneStrategy(p: {
+  rows: StrategyMetrics[];
+  classes: string[];
+  activeClass: string;
+  setCls: (c: string) => void;
+  sort: StrategySort;
+  setSort: (s: StrategySort) => void;
+  insights: { title: string; text: string }[];
+  focusNum: number;
+  selectedCar: number | null;
+  setSelectedCar: (n: number | null) => void;
+  totalLaps: number;
+  raceLaps: number;
+  best: number;
+  verified: boolean;
+  summary: string;
+  onGoToTrace: (n: number) => void;
+}) {
+  const mine = p.rows.filter((m) => m.carNum === p.focusNum);
+  const card = (m: StrategyMetrics, pinned = false) => {
+    // The focus car's stints open in its pinned card only, not twice.
+    const open = m.carNum === p.selectedCar && (pinned || !mine.some((x) => x.carNum === m.carNum));
+    return (
+      <RowCard
+        key={`${pinned ? "pin" : "row"}-${m.carNum}`}
+        focus={m.carNum === p.focusNum}
+        onClick={() => p.setSelectedCar(open ? null : m.carNum)}
+        label={`#${m.carLabel} ${m.team}: ${open ? "hide" : "show"} stints and stops`}
+      >
+        <div className="flex items-baseline gap-2">
+          <span className="w-7 shrink-0 font-mono text-[14px] font-bold">P{m.classPos || "—"}</span>
+          <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: CLASS_COLORS[m.cls] ?? PC.accent }}>#{m.carLabel}</span>
+          <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>{m.team.replace(/\s*\([^()]*\)\s*$/, "")}</span>
+          <span className="shrink-0 text-[12px]" style={{ color: PC.muted }}>Score</span>
+          <span className="shrink-0 font-mono text-[15px] font-bold">{m.strategyScore < 0 ? "–" : m.strategyScore.toFixed(1)}</span>
+        </div>
+        <div className="mt-2">
+          <StintMap m={m} totalLaps={p.totalLaps} best={p.best} />
+        </div>
+        <StatGrid
+          stats={[
+            { label: "Avg pace", value: fmtPaceFull(m.avgGreenPace) },
+            { label: "Best", value: fmtPaceFull(m.bestLap), color: P.clear },
+            { label: "Laps", value: m.lapsCompleted },
+            { label: "Stops", value: m.stops },
+            { label: "Pit time", value: (m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)) + (m.untimedStops > 0 ? "*" : "") },
+            { label: "Pit %", value: `${m.pitPct.toFixed(1)}%` },
+            { label: "Yellow stops", value: `${Math.round(m.yellowPitPct)}%` },
+            { label: "Avg stint", value: m.avgStintLen.toFixed(1) },
+            { label: "Longest", value: m.maxStintLen },
+          ]}
+        />
+        {open && <PhoneStrategyDetail m={m} raceLaps={p.raceLaps} onGoToTrace={() => p.onGoToTrace(m.carNum)} />}
+        {!open && (
+          <div className="mt-2 text-[12px]" style={{ color: PC.accent }}>
+            Stints and stops ›
+          </div>
+        )}
+      </RowCard>
+    );
+  };
+
+  return (
+    <div className="px-3 pb-6 pt-3" style={{ color: PC.text }} data-phone-cards="strategy">
+      <h2 className="m-0 text-[16px] font-semibold">Strategy · {p.activeClass}</h2>
+      <p className="m-0 mt-0.5 text-[13px]" style={{ color: PC.muted }}>{p.summary}</p>
+      {p.classes.length > 1 && (
+        <div className="mt-3">
+          <ChipRow label="Class" items={p.classes.map((c) => ({ key: c, label: c, color: CLASS_COLORS[c] }))} value={p.activeClass} onChange={p.setCls} />
+        </div>
+      )}
+      {p.insights.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {p.insights.map((ins, i) => (
+            <div key={i} className="rounded-xl border-l-[3px] px-3 py-2.5" style={{ background: PC.card, borderColor: PC.accent }}>
+              <div className="text-[14px] font-semibold">{ins.title}</div>
+              <div className="mt-0.5 text-[13px] leading-relaxed" style={{ color: PC.muted }}>{ins.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3">
+        <SortBar
+          options={(Object.keys(SORT_LABEL) as StrategySortKey[]).map((k) => ({ key: k, label: SORT_LABEL[k] }))}
+          value={p.sort.key}
+          dir={p.sort.dir}
+          onChange={(k) => p.setSort({ key: k, dir: STRATEGY_SORTS[k].dir })}
+          onFlip={() => p.setSort({ key: p.sort.key, dir: p.sort.dir === "asc" ? "desc" : "asc" })}
+        />
+      </div>
+      {mine.length > 0 && (
+        <>
+          <SectionLabel>Your car</SectionLabel>
+          <div className="flex flex-col gap-2">{mine.map((m) => card(m, true))}</div>
+        </>
+      )}
+      <SectionLabel>All {p.activeClass} cars</SectionLabel>
+      <div className="flex flex-col gap-2">{p.rows.map((m) => card(m))}</div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: PC.muted }}>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_FAST) }} /> {STRATEGY_KEY.best}</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_MID) }} /> {STRATEGY_KEY.mid}</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_SLOW) }} /> {STRATEGY_KEY.slow}</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-3" style={{ background: rgbCss(STINT_CAUTION) }} /> {STRATEGY_KEY.caution}</span>
+      </div>
+      <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: PC.muted }}>{strategyMethod(p.verified)}</p>
+    </div>
+  );
+}
+
+/** A car's stints and stops as lists (the laptop's stint table and hover pit markers). */
+function PhoneStrategyDetail({ m, raceLaps, onGoToTrace }: { m: StrategyMetrics; raceLaps: number; onGoToTrace: () => void }) {
+  const row = "flex items-baseline gap-2 border-t py-2 text-[13px]";
+  return (
+    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+      <SectionLabel>Stints</SectionLabel>
+      {m.stints.map((s) => (
+        <div key={s.n} className={row} style={{ borderColor: PC.line }}>
+          <span className="w-8 shrink-0 font-mono font-semibold">S{s.n}</span>
+          <span className="min-w-0 flex-1">
+            {s.laps} laps
+            {s.yl > 0 && <span style={{ color: S.yel }}> · {s.yl} caution</span>}
+            <span className="block text-[12px]" style={{ color: PC.muted }}>
+              {s.deg !== 0 ? `${s.deg > 0 ? "+" : ""}${s.deg.toFixed(3)} s/lap` : "No fade measured"}
+            </span>
+          </span>
+          <span className="shrink-0 text-right">
+            <span className="block font-mono" style={{ color: s.pace > 0 ? S.grn : PC.muted }}>{s.pace > 0 ? fmtPaceFull(s.pace) : "—"}</span>
+            <span className="block font-mono text-[12px]" style={{ color: s.pe < s.ps ? S.grn : s.pe > s.ps ? S.red : PC.muted }}>
+              P{s.ps} → P{s.pe}
+            </span>
+          </span>
+        </div>
+      ))}
+      <SectionLabel>Stops</SectionLabel>
+      {m.pits.length === 0 && <p className="m-0 text-[13px]" style={{ color: PC.muted }}>No stops.</p>}
+      {m.pits.map((pt, i) => (
+        <div key={i} className={row} style={{ borderColor: PC.line }}>
+          <span className="w-14 shrink-0 font-mono">Lap {pt.lap}</span>
+          <span className="min-w-0 flex-1">
+            {PIT_KIND[pt.kind]}
+            <span style={{ color: pt.yel ? S.yel : S.grn }}> · {pt.yel ? "Yellow" : "Green"}</span>
+            <span className="block text-[12px]" style={{ color: PC.muted }}>{pitDurText(pt, m.verified)}</span>
+          </span>
+          <span className="shrink-0 font-mono" style={{ color: pt.pa < pt.pb ? S.grn : pt.pa > pt.pb ? S.red : PC.muted }}>
+            P{pt.pb} → P{pt.pa}
+          </span>
+        </div>
+      ))}
+      <p className="m-0 mt-1 text-[11px]" style={{ color: PC.muted }}>Race of {raceLaps} laps.</p>
+      <button
+        type="button"
+        onClick={onGoToTrace}
+        className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-lg border text-[14px] font-semibold"
+        style={{ borderColor: PC.border, color: PC.accent }}
+      >
+        View on the trace
+      </button>
     </div>
   );
 }

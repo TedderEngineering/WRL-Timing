@@ -448,7 +448,7 @@ function LapTable({ data, focusNum, rival, cmp, showAll, onShowAll }: { data: Ra
         </tbody>
       </table>
       {!showAll && rows.length > SHOWN && (
-        <button type="button" onClick={onShowAll} className="mt-1.5 min-h-[36px] text-[13px] font-semibold" style={{ color: TRACE.focus }}>
+        <button type="button" onClick={onShowAll} className="mt-1.5 min-h-[44px] text-[13px] font-semibold sm:min-h-[36px]" style={{ color: TRACE.focus }}>
           Show all {rows.length} laps
         </button>
       )}
@@ -560,7 +560,7 @@ function RivalPicker({
         <label htmlFor="rival-search" className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: PANEL.muted }}>
           Any car
         </label>
-        <div className="flex min-h-[40px] items-center gap-2 rounded-lg border px-2.5" style={{ background: PANEL.well, borderColor: PANEL.control }}>
+        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border px-2.5 sm:min-h-[40px]" style={{ background: PANEL.well, borderColor: PANEL.control }}>
           <SearchIcon />
           <input
             id="rival-search"
@@ -569,7 +569,7 @@ function RivalPicker({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Car #, team or driver"
             autoComplete="off"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#6b6b88]"
+            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-[#6b6b88] sm:min-h-0 sm:text-sm"
           />
         </div>
         <div role="group" aria-label="Class" className="flex flex-wrap gap-1.5">
@@ -582,7 +582,7 @@ function RivalPicker({
                 type="button"
                 aria-pressed={on}
                 onClick={() => setCls(c)}
-                className="min-h-[32px] rounded-full border px-3 text-xs font-bold"
+                className="min-h-[44px] rounded-full border px-3.5 text-xs font-bold sm:min-h-[32px] sm:px-3"
                 style={on ? { borderColor: TRACE.focus, background: "rgba(244,140,52,0.14)", color: TRACE.focus } : { borderColor: PANEL.control, color: PANEL.muted }}
               >
                 {c || "All"} · {n}

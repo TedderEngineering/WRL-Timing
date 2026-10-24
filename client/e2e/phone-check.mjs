@@ -71,6 +71,11 @@ const RULES = [
   { id: "no-how-to-on-chart", test: (m) => !m.chart || (m.captionLines && !/pinch|tap a lap|swipe/i.test(m.captionLines.text) && m.captionLines.height <= 40), say: (m) => `chart caption: ${JSON.stringify(m.captionLines)}` },
   // The trace opens on race time on a phone, with Laps | Time in its caption line.
   { id: "trace-opens-on-time", test: (m) => m.page !== "race:position" || m.axisPressed === "Time", say: (m) => `trace caption axis shows ${m.axisPressed}` },
+  // Step 5: tables are cards on a phone; nothing scrolls sideways but chip rows and the views row.
+  { id: "no-sideways-tables", test: (m) => !m.race || m.widestScroller === 0, say: (m) => `something scrolls sideways, ${m.widestScroller} px wide` },
+  { id: "cards-not-tables", test: (m) => !["race:pitanalysis", "race:strategy", "race:drivers"].includes(m.page) || m.cardLists > 0, say: () => "no phone card list on a table view" },
+  { id: "card-controls-44", test: (m) => m.cardControlsSmall.length === 0, say: (m) => `sort or class controls under 44 px: ${m.cardControlsSmall.join(", ")}` },
+  { id: "race-targets-44", test: (m) => !m.race || m.smallTargets === 0, say: (m) => `controls under 44 px on a race view: ${m.smallList.join(", ")}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -102,14 +107,18 @@ function measure() {
   const canvas = [...document.querySelectorAll("canvas")].find(vis);
   const aside = [...document.querySelectorAll("[data-lap-sheet]")].find(vis) ?? [...document.querySelectorAll("aside")].find(vis);
   const targets = [...document.querySelectorAll("button, a[href], select, input, [role=button], [role=tab]")].filter(vis);
+  // data-touch-44: drawn small, with a 44 px touch area reaching past it (::before).
   const small = targets.filter((el) => {
+    if (el.hasAttribute("data-touch-44")) return false;
     const r = el.getBoundingClientRect();
     return r.height < 44 || r.width < 24;
   });
   const sidewaysScrollers = [...document.querySelectorAll("*")].filter((el) => {
     if (!vis(el) || el === doc) return false;
     const s = getComputedStyle(el);
-    return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4 && el.tagName !== "NAV";
+    // Rows of chips and the views row scroll sideways by design; a table or page must not.
+    if (el.tagName === "NAV" || el.getAttribute("role") === "tablist" || el.closest("[data-phone-cards='chips']")) return false;
+    return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4;
   });
   const shell = [...document.querySelectorAll("[data-phone-shell]")].filter(vis);
   const shellSmall = shell
@@ -144,7 +153,13 @@ function measure() {
     })(),
     targets: targets.length,
     smallTargets: small.length,
+    smallList: small.map((el) => `${(el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 24)} ${Math.round(el.getBoundingClientRect().height)}`),
     widestScroller: sidewaysScrollers.reduce((w, el) => Math.max(w, el.scrollWidth), 0),
+    cardControlsSmall: [...document.querySelectorAll("[data-phone-cards='sort'] button, [data-phone-cards='sort'] label, [data-phone-cards='chips'] button")]
+      .filter(vis)
+      .filter((el) => el.getBoundingClientRect().height < 44)
+      .map((el) => el.textContent.trim().slice(0, 20)),
+    cardLists: document.querySelectorAll("[data-phone-cards]:not([data-phone-cards='sort']):not([data-phone-cards='chips'])").length,
   };
 }
 

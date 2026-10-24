@@ -7,7 +7,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
+import { carNo } from "./car-number";
 import { InfoTip } from "../../components/InfoTip";
+import { useIsCompact } from "../../lib/breakpoint";
+import { ChipRow, PC, RowCard, SectionLabel, SortBar, StatGrid } from "./phone-cards";
 import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
 import { sameDriver } from "../my-drivers/api";
 import { stintsOf } from "../my-drivers/stints";
@@ -94,6 +97,11 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live
   const focusCls = data.cars[String(focusNum)]?.cls;
   const [cls, setCls] = useState<string>(() => (focusCls && reports.some((r) => r.cls === focusCls) ? focusCls : reports[0]?.cls ?? ""));
   const [sort, setSort] = useState<DriverSort>(DEFAULT_SORT);
+  // A new focus car (picked here or on another view) brings its class with it.
+  useEffect(() => {
+    if (focusCls && reports.some((r) => r.cls === focusCls)) setCls(focusCls);
+  }, [focusCls, reports]);
+  const compact = useIsCompact();
   const shared = classView !== undefined;
   const report = (shared ? reports.find((r) => r.cls === (classView || focusCls)) : reports.find((r) => r.cls === cls)) ?? reports[0];
 
@@ -129,6 +137,24 @@ export function DriverReportTab({ data, annotations, focusNum, setFocusNum, live
       {DRIVER_COLUMNS[id].tip && <InfoTip label={DRIVER_COLUMNS[id].name} text={DRIVER_COLUMNS[id].tip} />}
     </th>
   );
+
+  if (compact) {
+    return (
+      <PhoneDriverReport
+        data={data}
+        report={report}
+        reports={shared ? [] : reports}
+        rows={rows}
+        sort={sort}
+        setSort={setSort}
+        setCls={setCls}
+        focusNum={focusNum}
+        setFocusNum={setFocusNum}
+        inCar={inCar}
+        live={live}
+      />
+    );
+  }
 
   return (
     <div className="px-2 py-3 sm:px-6" style={{ color: S.text }}>
@@ -271,12 +297,12 @@ function ticks(report: ClassReport): number[] {
   return out;
 }
 
-function Distribution({ row, report }: { row: DriverRow; report: ClassReport }) {
+function Distribution({ row, report, fluid }: { row: DriverRow; report: ClassReport; fluid?: boolean }) {
   const h = ROW_H - 4;
   const mid = h / 2;
   const times = row.shown.map((s) => s.t);
   return (
-    <svg width={DIST_W} height={h} role="img" aria-label={`${row.shown.length} laps from ${lapText(Math.min(...times))} to ${lapText(Math.max(...times))}, average ${lapText(row.avgLap)}`}>
+    <svg width={fluid ? "100%" : DIST_W} height={fluid ? undefined : h} viewBox={`0 0 ${DIST_W} ${h}`} role="img" aria-label={`${row.shown.length} laps from ${lapText(Math.min(...times))} to ${lapText(Math.max(...times))}, average ${lapText(row.avgLap)}`}>
       {ticks(report).map((t) => (
         <line key={t} x1={xOf(t, report)} x2={xOf(t, report)} y1={0} y2={h} stroke={S.line} strokeWidth={1} />
       ))}
@@ -318,7 +344,7 @@ function AxisLabels({ report }: { report: ClassReport }) {
 }
 
 /** The race from start to flag, the driver's stints shaded lighter early and darker late. */
-function TimeOnTrack({ row, raceS, live = false }: { row: DriverRow; raceS: number; live?: boolean }) {
+function TimeOnTrack({ row, raceS, live = false, fluid }: { row: DriverRow; raceS: number; live?: boolean; fluid?: boolean }) {
   const h = ROW_H - 6;
   const x = (s: number) => (raceS > 0 ? (s / raceS) * TRACK_W : 0);
   const shade = (s: number) => {
@@ -327,7 +353,7 @@ function TimeOnTrack({ row, raceS, live = false }: { row: DriverRow; raceS: numb
     return `hsl(212 70% ${light}%)`;
   };
   return (
-    <svg width={TRACK_W} height={h} role="img" aria-label="When the driver was on track">
+    <svg width={fluid ? "100%" : TRACK_W} height={h} viewBox={`0 0 ${TRACK_W} ${h}`} preserveAspectRatio="none" role="img" aria-label="When the driver was on track">
       <rect x={0} y={0} width={TRACK_W} height={h} fill={S.line} />
       {row.onTrack.map(([a, b], i) => (
         <rect key={i} x={x(a)} y={1} width={Math.max(1.5, x(b) - x(a))} height={h - 2} fill={shade((a + b) / 2)}>
@@ -341,5 +367,142 @@ function TimeOnTrack({ row, raceS, live = false }: { row: DriverRow; raceS: numb
         </text>
       )}
     </svg>
+  );
+}
+
+// ─── Phone (mobile redesign, step 5): one card per driver, the focus car's drivers first ───
+
+const SORT_LABEL: Record<SortKey, string> = {
+  avgLap: "Average lap",
+  fastLap: "Best lap",
+  stdDev: "Consistency",
+  avgZ: "Pace vs class",
+  clearAirPct: "Clean-air laps",
+  overtakes: "Passes",
+  shown: "Laps counted",
+  laps: "Laps driven",
+  driver: "Driver name",
+  car: "Car number",
+};
+
+function PhoneDriverReport({
+  data,
+  report,
+  reports,
+  rows,
+  sort,
+  setSort,
+  setCls,
+  focusNum,
+  setFocusNum,
+  inCar,
+  live,
+}: {
+  data: RaceChartData;
+  report: ClassReport;
+  reports: ClassReport[];
+  rows: DriverRow[];
+  sort: DriverSort;
+  setSort: (s: DriverSort) => void;
+  setCls: (c: string) => void;
+  focusNum: number;
+  setFocusNum: (n: number) => void;
+  inCar: Map<string, string> | null;
+  live?: { lap: number };
+}) {
+  const sortKeys: SortKey[] = ["avgLap", "fastLap", "stdDev", "avgZ", "clearAirPct", "overtakes", "shown", "laps", "driver", "car"];
+  const defaultDir = (k: SortKey): "asc" | "desc" => COLUMNS.find((c) => c.key === k)?.dir ?? "asc";
+  const mine = rows.filter((r) => r.carKey === String(focusNum));
+  const rank = new Map(rows.map((r, i) => [r, i + 1]));
+  const card = (r: DriverRow) => {
+    const focus = r.carKey === String(focusNum);
+    const driving = !!(r.driver && inCar?.get(r.carKey) && sameDriver(inCar.get(r.carKey)!, r.driver));
+    return (
+      <RowCard key={`${r.carKey}:${r.driver ?? ""}`} focus={focus} onClick={() => setFocusNum(Number(r.carKey))} label={`${r.driver ?? "Driver not named"}, car ${r.carLabel}. Make this the focus car`}>
+        <div className="flex items-baseline gap-2">
+          <span className="w-6 shrink-0 text-right font-mono text-[13px]" style={{ color: PC.muted }}>{rank.get(r)}</span>
+          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{r.driver ?? <span style={{ color: PC.muted }}>Driver not named</span>}</span>
+          {driving && (
+            <span className="shrink-0 rounded px-1 text-[10px] font-bold" style={{ background: S.clear, color: S.bg }}>IN CAR</span>
+          )}
+          <span className="shrink-0 font-mono text-[15px] font-bold">{r.avgLap ? lapText(r.avgLap) : "—"}</span>
+        </div>
+        <div className="mt-0.5 flex items-baseline gap-1.5 pl-8 text-[13px]">
+          <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? PC.accent }}>#{r.carLabel}</span>
+          <span className="min-w-0 truncate" style={{ color: PC.soft }}>{r.team}{r.make ? ` · ${r.make}` : ""}</span>
+        </div>
+        <div className="mt-2 overflow-hidden">
+          <Distribution row={r} report={report} fluid />
+        </div>
+        <StatGrid
+          stats={[
+            { label: "Best lap", value: r.fastLap ? lapText(r.fastLap) : "—", color: S.clear },
+            { label: "Consistency", value: r.shown.length ? r.stdDev.toFixed(3) : "—" },
+            { label: "Pace vs class", value: r.avgZ === null ? "—" : r.avgZ.toFixed(2) },
+            { label: "Clean air", value: r.clearAirPct === null ? "—" : `${Math.round(r.clearAirPct)}%` },
+            { label: "Passes", value: String(r.overtakes) },
+            { label: "Laps", value: `${r.laps} (${Math.round(r.lapsPct)}%)` },
+          ]}
+        />
+        <div className="mt-2">
+          <div className="mb-1 flex justify-between text-[11px]" style={{ color: PC.muted }}>
+            <span>On track</span>
+            <span>{live ? "Start → now" : `Start → ${Math.round(report.raceS / 3600)} h`}</span>
+          </div>
+          <TimeOnTrack row={r} raceS={report.raceS} live={!!live} fluid />
+        </div>
+      </RowCard>
+    );
+  };
+
+  return (
+    <div className="px-3 pb-6 pt-3" style={{ color: PC.text }} data-phone-cards="driver-report">
+      <h2 className="m-0 text-[16px] font-semibold">Driver performance</h2>
+      <p className="m-0 mt-0.5 text-[13px]" style={{ color: PC.muted }}>
+        {live ? `Through lap ${live.lap} · ` : ""}
+        {report.cls} · {report.rows.length} drivers · ranked on their fastest racing laps
+      </p>
+      {reports.length > 1 && (
+        <div className="mt-3">
+          <ChipRow
+            label="Class"
+            items={reports.map((r) => ({ key: r.cls, label: r.cls, color: CLASS_COLORS[r.cls] }))}
+            value={report.cls}
+            onChange={setCls}
+          />
+        </div>
+      )}
+      <div className="mt-3">
+        <SortBar
+          options={sortKeys.map((k) => ({ key: k, label: SORT_LABEL[k] }))}
+          value={sort.key}
+          dir={sort.dir}
+          onChange={(k) => setSort({ key: k, dir: defaultDir(k) })}
+          onFlip={() => setSort({ key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" })}
+        />
+      </div>
+      {mine.length > 0 && (
+        <>
+          <SectionLabel>#{carNo(data, focusNum)} drivers</SectionLabel>
+          <div className="flex flex-col gap-2">{mine.map(card)}</div>
+        </>
+      )}
+      <SectionLabel>All {report.cls} drivers</SectionLabel>
+      <div className="flex flex-col gap-2">{rows.map(card)}</div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: PC.muted }}>
+        <span className="flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={S.clear} /></svg> Clean air
+        </span>
+        <span className="flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden><path d="M5 0.5 L9.5 5 L5 9.5 L0.5 5 Z" fill={S.traffic} /></svg> Car within {CLEAR_GAP_S} s ahead
+        </span>
+        <span className="flex items-center gap-1.5">
+          <svg width="6" height="14" aria-hidden><line x1="3" x2="3" y1="1" y2="13" stroke={S.text} strokeWidth="2" strokeLinecap="round" /></svg> Average lap
+        </span>
+      </div>
+      <p className="mt-2 text-[12px] leading-relaxed" style={{ color: PC.muted }}>
+        {driverMethodText(sort, { classPct: Math.round((CLASS_LIMIT - 1) * 100), driverPct: Math.round((DRIVER_LIMIT - 1) * 100) })}
+      </p>
+    </div>
   );
 }
