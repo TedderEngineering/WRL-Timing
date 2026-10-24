@@ -17,6 +17,7 @@ import {
   type LapInfoData,
 } from "./chart-renderer";
 import { useChartGestures } from "./chart-gestures";
+import { ChartHintBubble } from "./ChartGestureHelp";
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
 import { LapSheet, PEEK_PX, type SheetLevel } from "./LapSheet";
@@ -50,6 +51,8 @@ interface LapChartProps {
   view: TraceView;
   /** The bottom axis to start with (the user's chart defaults). */
   defaultAxis?: "laps" | "hours" | "both";
+  /** Phones: Gaps and Head-to-head are views of their own; a lap's links go there (and a pass card's rival). */
+  onOpenView?: (view: "gaps" | "h2h", rival?: number) => void;
   /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
   live?: boolean;
   /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
@@ -64,7 +67,7 @@ export const FOLLOW_AFTER_MS = 60_000;
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null,
+  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null, onOpenView,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -512,6 +515,10 @@ export function LapChart({
       setSheet((l) => (l === "peek" ? "half" : l));
       return;
     }
+    if (isMobile && onOpenView && (panel === "gap" || panel === "h2h")) {
+      onOpenView(panel === "gap" ? "gaps" : "h2h");
+      return;
+    }
     h2hDefaultCarRef.current = undefined;
     setSidePanel(panel);
     // A panel needs the room: the sheet goes to full height on a phone.
@@ -572,6 +579,7 @@ export function LapChart({
                     annotations={annotations}
                     activeLap={activeLap}
                     onOpenH2H={(carNum) => {
+                      if (isMobile && onOpenView) return onOpenView("h2h", carNum);
                       h2hDefaultCarRef.current = carNum;
                       setSidePanel("h2h");
                     }}
@@ -642,19 +650,22 @@ export function LapChart({
                 onContextMenu={(e) => e.preventDefault()}
                 style={{ display: "block", cursor: cursorStyle }}
               />
+              {isMobile && <ChartHintBubble />}
             </div>
-            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
-              <span className="flex items-center gap-3">
+            <figcaption className={`flex shrink-0 items-center justify-between gap-2 px-1 pt-1.5 text-xs${isMobile ? " flex-nowrap whitespace-nowrap" : " flex-wrap"}`} style={{ color: TRACE.axis }}>
+              <span className="flex min-w-0 items-center gap-3 truncate">
                 {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
                 {viewLabel}
               </span>
               <span>
                 {isZoomed ? (
                   <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
-                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
+                    {isMobile
+                      ? `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all`
+                      : `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all (W)`}
                   </button>
                 ) : (
-                  isMobile ? "Tap a lap · pinch or double-tap to zoom" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                  !isMobile && "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
                 )}
               </span>
             </figcaption>
@@ -697,14 +708,9 @@ export function LapChart({
           level={sheet}
           setLevel={setSheet}
           label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
-          peek={
-            <>
-              {summary}
-              <div className="mt-1.5">
-                <LapScrubber large maxLap={data.maxLap} fcy={data.fcy || []} activeLap={activeLap} flagLabel={lapFlag} onLap={(l) => { showLapInfo(l); autoPan(l); }} navPrev={navPrev} navNext={navNext} />
-              </div>
-            </>
-          }
+          summary={summary}
+          onPrev={navPrev}
+          onNext={navNext}
         >
           {panelBody}
           {!sidePanel && pins.length > 0 && (

@@ -43,15 +43,24 @@ The Position Trace and Lap Times charts take the gestures phones already teach i
 | Two-finger tap | Zoom out a step (2×) |
 | Drag | Move along the race when zoomed in, reading each lap you pass; let go while moving and it glides to a stop |
 | Tap | Pick a lap; the lap sheet rises once the tap is known not to be a double-tap (300 ms) |
+| ‹ › | Step one lap (either end of the lap sheet's one-line peek; the old lap strip is gone on phones) |
 
 The browser's own page zoom is off over the chart (`touch-action: none`), so a pinch zooms the chart, not
-the page. Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
+the page. No how-to text sits on the chart: the first chart a phone shows carries a one-time bubble
+("Pinch or double-tap to zoom"), and the full list is in the race menu (⋯ → Chart gestures,
+`ChartGestureHelp.tsx`). Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
 (wheel zoom, drag, double-click and drag to zoom to a stretch) is unchanged. The phone check runs
 double-tap, pinch and tap with real touch events at every width.
 
 ## Race views row
 
-On a phone the race views (Trace · Story · Pits · Laps · Strategy · Drivers) sit in one row that scrolls
+On a phone the race views (Trace · Story · Pits · Laps · Gaps · Head-to-head · Strategy · Drivers) sit in one row that scrolls
 sideways (`client/src/components/PhoneViewTabs.tsx`); there is no More menu. The edge with more views
 fades out, the open view is kept in sight, and on a first visit, when the row is wider than the screen,
 it glides to the end and back once (remembered in `localStorage`, skipped with reduced motion).
+
+Gaps and Head-to-head are views of their own on a phone only (`PhoneAnalysisTab.tsx`): the car pill,
+one line `‹ At lap 124 of 249 ›` (the race page's selected lap, shared with the charts; with none picked,
+the last lap another car in the class also ran), and the panel filling the screen. A lap's "Gap
+evolution" and "Head-to-head" links and a pass card's head-to-head open these views. Wider than a
+phone they stay beside the chart, and `?tab=gaps|h2h` falls back to the trace.

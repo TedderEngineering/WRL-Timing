@@ -11,6 +11,7 @@ import {
   type ChartDimensions,
   formatLapTime, lapLabelStep } from "./chart-renderer";
 import { useChartGestures } from "./chart-gestures";
+import { ChartHintBubble } from "./ChartGestureHelp";
 import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
 import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
@@ -836,16 +837,19 @@ export function LapTimeChart({
                 onContextMenu={(e) => e.preventDefault()}
                 style={{ display: "block", cursor: cursorStyle }}
               />
+              {isMobile && <ChartHintBubble />}
             </div>
-            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
-              <span>{classView ? `Lap time rank in ${classView}` : "Lap time rank"} · {view.fieldCars.length} cars</span>
+            <figcaption className={`flex shrink-0 items-center justify-between gap-2 px-1 pt-1.5 text-xs${isMobile ? " flex-nowrap whitespace-nowrap" : " flex-wrap"}`} style={{ color: TRACE.axis }}>
+              <span className="min-w-0 truncate">{classView ? `Lap time rank in ${classView}` : "Lap time rank"} · {view.fieldCars.length} cars</span>
               <span>
                 {isZoomed ? (
                   <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
-                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
+                    {isMobile
+                      ? `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all`
+                      : `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all (W)`}
                   </button>
                 ) : (
-                  isMobile ? "Tap a lap · pinch or double-tap to zoom" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                  !isMobile && "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
                 )}
               </span>
             </figcaption>
@@ -874,14 +878,9 @@ export function LapTimeChart({
           level={sheet}
           setLevel={setSheet}
           label="Lap details"
-          peek={
-            <>
-              {summary}
-              <div className="mt-1.5">
-                <LapScrubber large maxLap={data.maxLap} fcy={data.fcy || []} activeLap={activeLap} flagLabel={lapFlag} onLap={(l) => { showLapInfo(l); autoPan(l); }} navPrev={navPrev} navNext={navNext} />
-              </div>
-            </>
-          }
+          summary={summary}
+          onPrev={navPrev}
+          onNext={navNext}
         >
           <div className="flex flex-col gap-3 p-4">
             <LapTimeDetails info={info} classView={classView} />
