@@ -43,9 +43,12 @@ The Position Trace and Lap Times charts take the gestures phones already teach i
 | Two-finger tap | Zoom out a step (2×) |
 | Drag | Move along the race when zoomed in, reading each lap you pass; let go while moving and it glides to a stop |
 | Tap | Pick a lap; the lap sheet rises once the tap is known not to be a double-tap (300 ms) |
+| ‹ › | Step one lap (either end of the lap sheet's one-line peek; the old lap strip is gone on phones) |
 
 The browser's own page zoom is off over the chart (`touch-action: none`), so a pinch zooms the chart, not
-the page. Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
+the page. No how-to text sits on the chart: the first chart a phone shows carries a one-time bubble
+("Pinch or double-tap to zoom"), and the full list is in the race menu (⋯ → Chart gestures,
+`ChartGestureHelp.tsx`). Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
 (wheel zoom, drag, double-click and drag to zoom to a stretch) is unchanged. The phone check runs
 double-tap, pinch and tap with real touch events at every width.
 

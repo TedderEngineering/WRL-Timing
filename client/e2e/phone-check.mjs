@@ -63,6 +63,9 @@ const RULES = [
   { id: "page-not-zoomed", test: (m) => !m.chart || m.g?.pageScale === 1, say: (m) => `the page itself zoomed to ${m.g?.pageScale}` },
   // Views: one sideways-scrolling row with every view, no More menu.
   { id: "every-view-in-the-row", test: (m) => !m.race || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
+  // The peek is one line (‹ lap ›) and the chart carries no how-to text: help is in ⋯ → Chart gestures.
+  { id: "peek-one-line", test: (m) => !m.chart || (m.peekHeight !== null && m.peekHeight <= 64), say: (m) => `lap sheet peek is ${m.peekHeight} px tall` },
+  { id: "no-how-to-on-chart", test: (m) => !m.chart || (m.captionLines && !/pinch|tap a lap|swipe/i.test(m.captionLines.text) && m.captionLines.height <= 24), say: (m) => `chart caption: ${JSON.stringify(m.captionLines)}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -122,6 +125,14 @@ function measure() {
     chartTop: canvas ? Math.round(canvas.getBoundingClientRect().top) : null,
     chartBottom: canvas ? Math.round(canvas.getBoundingClientRect().bottom) : null,
     lapPanelTop: aside ? Math.round(aside.getBoundingClientRect().top) : null,
+    peekHeight: (() => {
+      const sh = [...document.querySelectorAll("[data-lap-sheet]")].find((e) => e.offsetParent !== null || e.getClientRects().length);
+      return sh ? Math.round(sh.getBoundingClientRect().height) : null;
+    })(),
+    captionLines: (() => {
+      const fc = [...document.querySelectorAll("figure figcaption")].find((e) => e.getClientRects().length);
+      return fc ? { text: fc.innerText, height: Math.round(fc.getBoundingClientRect().height) } : null;
+    })(),
     targets: targets.length,
     smallTargets: small.length,
     widestScroller: sidewaysScrollers.reduce((w, el) => Math.max(w, el.scrollWidth), 0),

@@ -20,6 +20,7 @@ import { hasTeamAccess } from "../lib/utils";
 import EventSidebar from "../components/EventSidebar";
 import { Sheet } from "../components/Sheet";
 import { PhoneViewTabs } from "../components/PhoneViewTabs";
+import { ChartGestureSheet } from "../features/chart/ChartGestureHelp";
 import { useIsCompact } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
@@ -71,6 +72,7 @@ export function RaceDetailPage() {
   const compact = useIsCompact();
   const navigate = useNavigate();
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
+  const [gesturesOpen, setGesturesOpen] = useState(false);
   // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
   const tabChosen = useRef(!!searchParams.get("tab"));
 
@@ -558,7 +560,19 @@ export function RaceDetailPage() {
             <Link to="/races" className={phoneRow} style={{ borderColor: RT.border, background: RT.card, color: RT.text }}>
               All events
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setRaceMenuOpen(false);
+                setGesturesOpen(true);
+              }}
+              className={phoneRow}
+              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+            >
+              Chart gestures
+            </button>
           </Sheet>
+          <ChartGestureSheet open={gesturesOpen} onClose={() => setGesturesOpen(false)} />
 
           <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />
         </>
