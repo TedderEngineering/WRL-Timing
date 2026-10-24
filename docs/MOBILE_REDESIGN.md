@@ -29,3 +29,22 @@ npm run check:phone                                   # build, serve and check, 
 node e2e/phone-check.mjs --url http://localhost:5173  # check a running dev server
 node e2e/phone-check.mjs --widths 375 --shots /tmp/s  # one width, with screenshots
 ```
+
+## Chart gestures
+
+The Position Trace and Lap Times charts take the gestures phones already teach in Photos and Maps
+(`client/src/features/chart/chart-gestures.ts`). Only the laps zoom; positions stay put.
+
+| Gesture | What it does |
+| --- | --- |
+| Pinch | Zoom the laps in or out, keeping the laps under your fingers in place (5 laps at most zoomed in, the whole race at most zoomed out) |
+| Two-finger drag | Move along the race while pinching |
+| Double-tap | Zoom in 3× on the tapped lap; double-tap again to see the whole race |
+| Two-finger tap | Zoom out a step (2×) |
+| Drag | Move along the race when zoomed in, reading each lap you pass; let go while moving and it glides to a stop |
+| Tap | Pick a lap; the lap sheet rises once the tap is known not to be a double-tap (300 ms) |
+
+The browser's own page zoom is off over the chart (`touch-action: none`), so a pinch zooms the chart, not
+the page. Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
+(wheel zoom, drag, double-click and drag to zoom to a stretch) is unchanged. The phone check runs
+double-tap, pinch and tap with real touch events at every width.
