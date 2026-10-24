@@ -18,6 +18,8 @@ import {
 } from "./chart-renderer";
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
+import { LapSheet, PEEK_PX, type SheetLevel } from "./LapSheet";
+import { settleLabels } from "./pit-band";
 import { AxisToggle, TraceControls } from "./TraceControls";
 import type { TraceView } from "./trace-view";
 import { PitCyclePanel } from "./PitCyclePanel";
@@ -81,6 +83,9 @@ export function LapChart({
     if (defaultAxis) setXAxisMode(defaultAxis);
   }, [defaultAxis]);
   const [sidePanel, setSidePanel] = useState<string | null>(null);
+  // Phone lap sheet height (mobile redesign, PR 4). A tap on the chart raises it to half.
+  const [sheet, setSheet] = useState<SheetLevel>("peek");
+  const raiseSheet = useRef<() => void>(() => {});
   /** RaceTrace Live: the side panel's tab (the focus car's lap details, or the Gaps table). */
   const [liveTab, setLiveTab] = useState<"details" | "gaps">("details");
   const h2hDefaultCarRef = useRef<number | undefined>(undefined);
@@ -327,6 +332,7 @@ export function LapChart({
         const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
         const clamped = Math.max(1, Math.min(data.maxLap, lap));
         showLapInfo(clamped);
+        raiseSheet.current();
       }
       // Transfer focus to chart so arrow keys advance laps instead of dropdown
       wrapperRef.current?.focus();
@@ -415,6 +421,7 @@ export function LapChart({
         const cx = getCanvasX(ct.clientX);
         const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
         showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
+        raiseSheet.current();
       }
     },
     [dim, getCanvasX, data.maxLap, showLapInfo]
@@ -533,13 +540,19 @@ export function LapChart({
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
 
+  raiseSheet.current = () => {
+    if (isMobile) setSheet((l) => (l === "peek" ? "half" : l));
+  };
   const openPanel = (panel: "pit" | "gap" | "h2h" | "event") => {
     if (!isTeam) {
       setTeamNote(true);
+      setSheet((l) => (l === "peek" ? "half" : l));
       return;
     }
     h2hDefaultCarRef.current = undefined;
     setSidePanel(panel);
+    // A panel needs the room: the sheet goes to full height on a phone.
+    setSheet("full");
   };
   const panelTitle: Record<string, string> = { pit: "Pit cycle", gap: "Gap evolution", h2h: "Head-to-head", event: "Position change" };
   const focusCar = data.cars[String(focusNum)];
@@ -563,82 +576,15 @@ export function LapChart({
     </ul>
   );
 
-  return (
-    // From md up the trace fills the space it is given; only the side panel scrolls (invisibly).
-    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      <TraceControls
-        data={data}
-        focusNum={focusNum}
-        onFocus={(n) => setFocusNum(n)}
-        classView={classView}
-        compSet={compSet}
-        view={view}
-        xAxisMode={xAxisMode}
-        setXAxisMode={setXAxisMode}
-        headSlot={headSlot}
-      />
 
-      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
-          <figure className="m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
-            <div
-              ref={wrapperRef}
-              tabIndex={0}
-              aria-label={`Position trace for car ${focusNum}${focusCar ? `, ${focusCar.team}` : ""}. Click a lap for details; arrow keys step laps.`}
-              className="relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"
-            >
-              <canvas
-                ref={canvasRef}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onDoubleClick={onDoubleClick}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-                onContextMenu={(e) => e.preventDefault()}
-                style={{ display: "block", cursor: cursorStyle }}
-              />
-            </div>
-            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
-              <span className="flex items-center gap-3">
-                {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
-                {viewLabel}
-              </span>
-              <span>
-                {isZoomed ? (
-                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
-                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
-                  </button>
-                ) : (
-                  isMobile ? "Tap a lap for details · swipe to move along the race" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
-                )}
-              </span>
-            </figcaption>
-          </figure>
-
-          <LapScrubber
-            maxLap={data.maxLap}
-            fcy={data.fcy || []}
-            activeLap={activeLap}
-            flagLabel={lapFlag}
-            onLap={(l) => { showLapInfo(l); autoPan(l); }}
-            navPrev={navPrev}
-            navNext={navNext}
-          />
-
-          <div className="md:hidden">{legend}</div>
-        </div>
-
-        <aside
-          aria-label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
-          className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:overflow-hidden md:border-l md:border-t-0 lg:w-[400px]"
-          style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
-        >
+  // ── Phone (mobile redesign, PR 4): the chart fills the screen, the lap sheet rises over it ──
+  const panelBody = (
+    <>
           {sidePanel ? (
-            <div className="flex h-[70vh] flex-col md:h-auto md:min-h-0 md:flex-1">
+            <div className={isMobile ? "flex h-full min-h-0 flex-col" : "flex h-[70vh] flex-col md:h-auto md:min-h-0 md:flex-1"}>
               <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-3">
                 <span className="font-semibold">{panelTitle[sidePanel]}</span>
-                <button type="button" onClick={() => setSidePanel(null)} className="min-h-[36px] text-[13px]" style={{ color: TRACE.focus }}>
+                <button type="button" onClick={() => { setSidePanel(null); setSheet((l) => (l === "full" ? "half" : l)); }} className="min-h-[44px] text-[13px]" style={{ color: TRACE.focus }}>
                   ‹ Lap details
                 </button>
               </div>
@@ -715,6 +661,160 @@ export function LapChart({
             )}
             </>
           )}
+    </>
+  );
+  const figure = (
+          <figure className={`m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1${isMobile ? " min-h-0 flex-1" : ""}`} style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
+            <div
+              ref={wrapperRef}
+              tabIndex={0}
+              aria-label={`Position trace for car ${focusNum}${focusCar ? `, ${focusCar.team}` : ""}. Click a lap for details; arrow keys step laps.`}
+              className={isMobile ? "relative min-h-[180px] flex-1 overflow-hidden outline-none" : "relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"}
+            >
+              <canvas
+                ref={canvasRef}
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onDoubleClick={onDoubleClick}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onContextMenu={(e) => e.preventDefault()}
+                style={{ display: "block", cursor: cursorStyle }}
+              />
+            </div>
+            <figcaption className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-1.5 text-xs" style={{ color: TRACE.axis }}>
+              <span className="flex items-center gap-3">
+                {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
+                {viewLabel}
+              </span>
+              <span>
+                {isZoomed ? (
+                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
+                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
+                  </button>
+                ) : (
+                  isMobile ? "Tap a lap · swipe to move along" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                )}
+              </span>
+            </figcaption>
+          </figure>
+  );
+  const pins = isMobile ? settleLabels(annotations[String(focusNum)]?.settles ?? [], focusCar?.laps ?? [], classView, focusCar?.cls ?? "") : [];
+  if (isMobile) {
+    const summary = info ? (
+      <div className="flex min-h-[24px] items-baseline gap-x-2 overflow-hidden whitespace-nowrap text-[14px]">
+        <span className="font-semibold">Lap {info.lap.l}</span>
+        <span className="truncate">{info.posLabel}</span>
+        <span className="font-mono" style={{ color: "#cbd5e1" }}>{info.lap.lt}</span>
+        {info.isPit && <span style={{ color: TRACE.glyph }}>● Pit</span>}
+        <span className="ml-auto text-[12px]" style={{ color: info.lap.flag === "FCY" ? TRACE.fcyText : TRACE.axis }}>
+          {info.lap.flag === "FCY" ? "FCY" : "Green"}
+        </span>
+      </div>
+    ) : (
+      <div className="flex min-h-[24px] items-center text-[14px]" style={{ color: TRACE.axis }}>
+        Tap the chart or a numbered pin for a lap&apos;s details
+      </div>
+    );
+    return (
+      <div className="flex h-full min-h-0 flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+        <TraceControls
+          data={data}
+          focusNum={focusNum}
+          onFocus={(n) => setFocusNum(n)}
+          classView={classView}
+          compSet={compSet}
+          view={view}
+          xAxisMode={xAxisMode}
+          setXAxisMode={setXAxisMode}
+          headSlot={headSlot}
+        />
+        <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
+          {figure}
+        </div>
+        <LapSheet
+          level={sheet}
+          setLevel={setSheet}
+          label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
+          peek={
+            <>
+              {summary}
+              <div className="mt-1.5">
+                <LapScrubber large maxLap={data.maxLap} fcy={data.fcy || []} activeLap={activeLap} flagLabel={lapFlag} onLap={(l) => { showLapInfo(l); autoPan(l); }} navPrev={navPrev} navNext={navNext} />
+              </div>
+            </>
+          }
+        >
+          {panelBody}
+          {!sidePanel && pins.length > 0 && (
+            <section aria-label="Pit cycles" className="border-t px-4 py-3" style={{ borderColor: CHART_STYLE.border }}>
+              <h3 className="m-0 mb-1 text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: TRACE.axis }}>Pit cycles</h3>
+              {pins.map((p, i) => (
+                <button
+                  key={`${p.lap}-${i}`}
+                  type="button"
+                  onClick={() => { showLapInfo(p.lap); autoPan(p.lap); }}
+                  className="flex min-h-[44px] w-full items-center gap-3 text-left text-[14px]"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[12px] font-semibold" style={{ borderColor: p.color, color: p.color }}>{i + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{p.title}</span>
+                    <span className="block truncate text-[12px]" style={{ color: p.color }}>Lap {p.lap} · {p.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </section>
+          )}
+          {!sidePanel && (
+            <section aria-label="Key" className="border-t px-4 py-3" style={{ borderColor: CHART_STYLE.border }}>
+              <h3 className="m-0 mb-2 text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: TRACE.axis }}>Key</h3>
+              {legend}
+            </section>
+          )}
+        </LapSheet>
+      </div>
+    );
+  }
+
+  return (
+    // From md up the trace fills the space it is given; only the side panel scrolls (invisibly).
+    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+      <TraceControls
+        data={data}
+        focusNum={focusNum}
+        onFocus={(n) => setFocusNum(n)}
+        classView={classView}
+        compSet={compSet}
+        view={view}
+        xAxisMode={xAxisMode}
+        setXAxisMode={setXAxisMode}
+        headSlot={headSlot}
+      />
+
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
+          {figure}
+
+          <LapScrubber
+            maxLap={data.maxLap}
+            fcy={data.fcy || []}
+            activeLap={activeLap}
+            flagLabel={lapFlag}
+            onLap={(l) => { showLapInfo(l); autoPan(l); }}
+            navPrev={navPrev}
+            navNext={navNext}
+          />
+
+          <div className="md:hidden">{legend}</div>
+        </div>
+
+        <aside
+          aria-label={sidePanel ? panelTitle[sidePanel] : "Lap details"}
+          className="flex flex-col border-t md:min-h-0 md:w-[360px] md:shrink-0 md:overflow-hidden md:border-l md:border-t-0 lg:w-[400px]"
+          style={{ borderColor: CHART_STYLE.border, background: "#0e0e20" }}
+        >
+          {panelBody}
         </aside>
       </div>
     </div>

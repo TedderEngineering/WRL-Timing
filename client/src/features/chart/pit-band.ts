@@ -189,8 +189,18 @@ export function drawSettleLeaders(
     plotLeft: number;
     plotRight: number;
     background: string;
+    /**
+     * Phone width: a numbered pin above each result instead of its label box, so the boxes no
+     * longer cover the trace. The numbers follow the labels' lap order, as the lap sheet's
+     * "Pit cycles" list numbers them (LapChart).
+     */
+    pins?: boolean;
   }
 ) {
+  if (o.pins) {
+    drawSettlePins(ctx, o);
+    return;
+  }
   const BOX_H = 30;
   const STEP = 32;
   const ARROW = 34;
@@ -257,5 +267,43 @@ export function drawSettleLeaders(
     ctx.fillStyle = it.color;
     ctx.fillText(it.sub, bx + w / 2, by + 25);
   }
+  ctx.restore();
+}
+
+/** Phone: each pit-cycle result as a numbered pin above its point (see drawSettleLeaders). */
+function drawSettlePins(
+  ctx: CanvasRenderingContext2D,
+  o: { labels: SettleLabel[]; x: (lap: number) => number; y: (pos: number) => number; lapStart: number; lapEnd: number; plotTop: number; background: string }
+) {
+  const R = 9;
+  ctx.save();
+  o.labels.forEach((l, i) => {
+    if (l.lap < o.lapStart || l.lap > o.lapEnd) return;
+    const cx = o.x(l.lap);
+    const cy = o.y(l.pos);
+    // Above the point, or below it near the top of the plot.
+    const py = cy - 18 - R < o.plotTop ? cy + 18 + R : cy - 18 - R;
+    ctx.strokeStyle = l.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, py + (py < cy ? R : -R));
+    ctx.lineTo(cx, cy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = l.color;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, py, R, 0, Math.PI * 2);
+    ctx.fillStyle = o.background;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 11px 'IBM Plex Sans', system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(i + 1), cx, py + 0.5);
+  });
   ctx.restore();
 }

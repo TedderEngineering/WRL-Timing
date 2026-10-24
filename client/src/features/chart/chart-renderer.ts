@@ -42,6 +42,8 @@ export interface ChartDimensions {
   CH: number;
   /** Race charts (Position Trace, Lap Times): room above the plot for the pit and driver tags. */
   band?: PitTagBand;
+  /** Phone width: pit-cycle results are numbered pins, explained in the lap sheet (mobile redesign, PR 4). */
+  compact?: boolean;
 }
 
 export interface LapInfoData {
@@ -267,7 +269,7 @@ export function computeDimensions(
   const CW = W - ML - MR;
   const CH = H - MT - MB;
 
-  return { W, H, ML, MR, MT, MB, CW, CH, ...(band ? { band } : {}) };
+  return { W, H, ML, MR, MT, MB, CW, CH, ...(band ? { band } : {}), ...(isMobile ? { compact: true } : {}) };
 }
 
 // ─── Main draw function ──────────────────────────────────────────────────────
@@ -609,6 +611,7 @@ export function drawChart(
     plotLeft: adjDim.ML,
     plotRight: adjDim.W - adjDim.MR,
     background: CHART_STYLE.card,
+    pins: !!adjDim.compact,
   });
 
   // ── 8. Car numbers at the end of each highlighted trace (nudged apart) ──

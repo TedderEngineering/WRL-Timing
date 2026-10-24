@@ -146,7 +146,7 @@ function CarDriversInApp({
               aria-pressed={!!f}
               aria-label={f ? `Stop following ${displayName(n)}` : `Follow ${displayName(n)}`}
               title={f ? "Stop following (Settings › My drivers lists them all)" : "Follow this driver in every race, whatever the car"}
-              className="min-h-[32px] shrink-0 rounded-full border px-2.5 text-[12px] font-semibold disabled:opacity-60"
+              className="min-h-[44px] shrink-0 rounded-full sm:min-h-[32px] border px-2.5 text-[12px] font-semibold disabled:opacity-60"
               style={
                 f
                   ? { borderColor: "rgba(244,140,52,0.6)", background: "rgba(244,140,52,0.12)", color: T.accent }

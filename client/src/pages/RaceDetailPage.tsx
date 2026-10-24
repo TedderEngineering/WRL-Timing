@@ -724,7 +724,7 @@ export function RaceDetailPage() {
       )}
 
       {/* Chart — kept mounted to preserve internal state (focusNum, compSet, classView) */}
-      <div className={activeTab !== "position" ? "hidden" : "flex flex-col md:min-h-0 md:flex-1"}>
+      <div className={activeTab !== "position" ? "hidden" : compact ? "flex min-h-0 flex-1 flex-col" : "flex flex-col md:min-h-0 md:flex-1"}>
         <LapChart
           data={data} annotations={annotations} watermarkEmail={user?.email}
           focusNum={focusNum} setFocusNum={setFocusNum}
@@ -761,7 +761,7 @@ export function RaceDetailPage() {
       )}
 
       {activeTab === "laptimes" && (
-        <div className="flex flex-col md:min-h-0 md:flex-1">
+        <div className={compact ? "flex min-h-0 flex-1 flex-col" : "flex flex-col md:min-h-0 md:flex-1"}>
           <LapTimeChart
             data={data} annotations={annotations} watermarkEmail={user?.email}
             focusNum={focusNum} setFocusNum={handleFocusChange}

@@ -14,6 +14,7 @@ import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
 import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
 import { LapScrubber } from "./LapScrubber";
+import { LapSheet, PEEK_PX, type SheetLevel } from "./LapSheet";
 import { CarSummary, Stat } from "./LapDetailsPanel";
 import { CarDrivers } from "../my-drivers/CarDrivers";
 import type { TraceView } from "./trace-view";
@@ -488,6 +489,12 @@ export function LapTimeChart({
 
   // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
   const isMobile = useIsCompact();
+  // Phone lap sheet height (mobile redesign, PR 4). A tap on the chart raises it to half.
+  const [sheet, setSheet] = useState<SheetLevel>("peek");
+  const raiseSheet = useRef<() => void>(() => {});
+  raiseSheet.current = () => {
+    if (isMobile) setSheet((l) => (l === "peek" ? "half" : l));
+  };
 
   const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
   const rangeSelectStart = useRef<number | null>(null);
@@ -673,6 +680,7 @@ export function LapTimeChart({
         const cx = e.clientX - r.left;
         const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dimRef.current));
         showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
+        raiseSheet.current();
       }
       // Transfer focus to chart so arrow keys advance laps instead of dropdown
       wrapperRef.current?.focus();
@@ -764,6 +772,7 @@ export function LapTimeChart({
         const cx = getCanvasX(ct.clientX);
         const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
         showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
+        raiseSheet.current();
       }
     },
     [dim, getCanvasX, data.maxLap, showLapInfo],
@@ -844,26 +853,13 @@ export function LapTimeChart({
     </ul>
   );
 
-  return (
-    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-      <TraceControls
-        data={data}
-        focusNum={focusNum}
-        onFocus={setFocusNum}
-        classView={classView}
-        compSet={compSet}
-        view={view}
-        headSlot={headSlot}
-      />
-
-      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
-          <figure className="m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
+  const figure = (
+          <figure className={`m-0 flex flex-col rounded-lg border p-2 sm:p-3 md:min-h-0 md:flex-1${isMobile ? " min-h-0 flex-1" : ""}`} style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
             <div
               ref={wrapperRef}
               tabIndex={0}
               aria-label={`Lap time rank for car ${focusNum}. Click a lap for details; arrow keys step laps.`}
-              className="relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"
+              className={isMobile ? "relative min-h-[180px] flex-1 overflow-hidden outline-none" : "relative h-[384px] overflow-hidden outline-none md:h-auto md:min-h-[220px] md:flex-1"}
             >
               <canvas
                 ref={canvasRef}
@@ -885,11 +881,73 @@ export function LapTimeChart({
                     Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
                   </button>
                 ) : (
-                  isMobile ? "Tap a lap for details · swipe to move along the race" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                  isMobile ? "Tap a lap · swipe to move along" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
                 )}
               </span>
             </figcaption>
           </figure>
+  );
+  if (isMobile) {
+    const summary = info ? (
+      <div className="flex min-h-[24px] items-baseline gap-x-2 overflow-hidden whitespace-nowrap text-[14px]">
+        <span className="font-semibold">Lap {info.lapNum}</span>
+        <span className="font-mono" style={{ color: "#cbd5e1" }}>{info.lapTimeSec > 1 ? info.lapTime : "—"}</span>
+        <span className="truncate">{info.rank !== null ? `Rank ${info.rank} of ${info.totalRanked}` : info.isPit ? "Pit lap" : info.isFcy ? "FCY lap" : "Not ranked"}</span>
+        <span className="ml-auto text-[12px]" style={{ color: info.isFcy ? TRACE.fcyText : TRACE.axis }}>{info.isFcy ? "FCY" : "Green"}</span>
+      </div>
+    ) : (
+      <div className="flex min-h-[24px] items-center text-[14px]" style={{ color: TRACE.axis }}>
+        Tap the chart for a lap&apos;s time and rank
+      </div>
+    );
+    return (
+      <div className="flex h-full min-h-0 flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+        <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} headSlot={headSlot} />
+        <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
+          {figure}
+        </div>
+        <LapSheet
+          level={sheet}
+          setLevel={setSheet}
+          label="Lap details"
+          peek={
+            <>
+              {summary}
+              <div className="mt-1.5">
+                <LapScrubber large maxLap={data.maxLap} fcy={data.fcy || []} activeLap={activeLap} flagLabel={lapFlag} onLap={(l) => { showLapInfo(l); autoPan(l); }} navPrev={navPrev} navNext={navNext} />
+              </div>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3 p-4">
+            <LapTimeDetails info={info} classView={classView} />
+            <CarSummary data={data} focusNum={focusNum} annotations={annotations} drivers={!live} />
+            {live && <CarDrivers data={data} focusNum={focusNum} annotations={annotations} heading="Drivers" />}
+          </div>
+          <section aria-label="Key" className="border-t px-4 py-3" style={{ borderColor: CHART_STYLE.border }}>
+            <h3 className="m-0 mb-2 text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: TRACE.axis }}>Key</h3>
+            {legend}
+          </section>
+        </LapSheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col md:h-full md:min-h-0" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+      <TraceControls
+        data={data}
+        focusNum={focusNum}
+        onFocus={setFocusNum}
+        classView={classView}
+        compSet={compSet}
+        view={view}
+        headSlot={headSlot}
+      />
+
+      <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-6 sm:py-3 md:min-h-0">
+          {figure}
 
           <LapScrubber
             maxLap={data.maxLap}
