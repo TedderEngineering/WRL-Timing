@@ -326,15 +326,18 @@ export function RunningOrder({
     setPStat(n);
     savePitStat(n);
   };
-  // The narrowest phones (under 360 px) drop the Class column: the row's left stripe is its colour.
-  const narrow = useMediaQuery("(max-width: 359.98px)");
+  // Phones under 400 px drop the Class column (the row's left stripe is its colour); under 360 px
+  // the cells and text tighten too, so the order fits without scrolling sideways.
+  const narrow = useMediaQuery("(max-width: 399.98px)");
+  const tiny = useMediaQuery("(max-width: 359.98px)");
+  const cellPad = tiny ? "px-0.5 py-1 sm:px-1.5" : "px-1 py-1 sm:px-1.5";
   // Tighter cells on a phone, so every column fits (sm and up as before).
-  const th = "px-1 py-2 font-semibold sm:px-1.5";
+  const th = tiny ? "px-0.5 py-2 font-semibold sm:px-1.5" : "px-1 py-2 font-semibold sm:px-1.5";
   return (
     <div className="flex flex-col px-2 pb-3 pt-1 sm:px-3 md:min-h-0 md:w-[440px] md:shrink-0 md:py-4 md:pl-2 md:pr-5 lg:w-[540px]">
       {above}
       <div
-        className="custom-scroll overflow-x-auto rounded-lg border text-xs md:min-h-0 md:flex-1 md:overflow-y-auto"
+        className={`custom-scroll overflow-x-auto rounded-lg border md:min-h-0 md:flex-1 md:overflow-y-auto ${tiny ? "text-[11px]" : "text-xs"}`}
         style={{ background: C.card, borderColor: C.line, color: C.text }}
       >
         {swap ?? <table className="w-full border-collapse tabular-nums">
@@ -420,9 +423,9 @@ export function RunningOrder({
                       )
                     )}
                   </td>
-                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold">{r.pos ?? "–"}</td>
+                  <td className={`${cellPad} text-right font-semibold`}>{r.pos ?? "–"}</td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 font-bold"
+                    className={`${cellPad} font-bold`}
                     style={{ color: focus ? TRACE.focus : compared ? getCompColor(compSet, focusNum, r.key) : C.text }}
                   >
                     {isFollowed ? (
@@ -440,21 +443,21 @@ export function RunningOrder({
                       </span>
                     </td>
                   )}
-                  <td className="px-1 py-1 sm:px-1.5 text-right font-semibold" style={{ color }}>
+                  <td className={`${cellPad} text-right font-semibold`} style={{ color }}>
                     {r.posClass ?? "–"}
                   </td>
-                  <td className="px-1 py-1 text-right tabular-nums sm:px-1.5" style={{ color: (ld.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
+                  <td className={`${cellPad} text-right tabular-nums`} style={{ color: (ld.get(r.key) ?? 0) > 0 ? C.text : C.muted }}>
                     {ld.get(r.key) ?? "–"}
                   </td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 text-right"
+                    className={`${cellPad} text-right`}
                     style={{ color: last !== null && last === best ? C.personal : C.text }}
                     title={last !== null && last === best ? "Its best lap" : undefined}
                   >
                     {lapText(last)}
                   </td>
                   <td
-                    className="px-1 py-1 sm:px-1.5 text-right"
+                    className={`${cellPad} text-right`}
                     style={{ color: classBest ? C.classBest : C.muted }}
                     title={classBest ? (stat === "best" ? "Best lap in class" : `Quickest ${LAP_STAT_LABEL[stat]} in class`) : undefined}
                   >
