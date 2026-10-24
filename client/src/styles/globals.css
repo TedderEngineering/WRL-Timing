@@ -104,6 +104,24 @@
   100% { transform: translateX(0); }
 }
 
+/* The ranked views' "turn the phone sideways" symbol: on the first visit it turns twice. */
+@keyframes phoneTurn {
+  0%, 12% { transform: rotate(0deg); }
+  40%, 62% { transform: rotate(-90deg); }
+  90%, 100% { transform: rotate(0deg); }
+}
+
+.animate-phone-turn {
+  animation: phoneTurn 1.8s ease-in-out 0.4s 2;
+  transform-origin: 50% 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-phone-turn {
+    animation: none;
+  }
+}
+
 @media print {
   canvas {
     display: none !important;

@@ -32,6 +32,7 @@ const SIZES = (opt("--widths") ?? "320,360,375,390,430,844x390,932x430").split("
   const [width, height] = w.split("x").map(Number);
   return { width, height: height || 812 };
 });
+const RANKED = ["race:drivers", "race:pitanalysis", "race:strategy"];
 const TABS = ["position", "cards", "laptimes", "cycle", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
   { name: "home", path: "/", bar: true },
@@ -89,8 +90,12 @@ const RULES = [
   { id: "events-opens-on-my-cars", test: (m) => m.page !== "events" || m.eventsScope === "My cars", say: (m) => `Events opens on ${m.eventsScope}` },
   { id: "app-targets-44", test: (m) => m.race || m.page === "home" || m.smallTargets === 0, say: (m) => `controls under 44 px: ${m.smallList.join(", ")}` },
   { id: "bars-slide-away-on-scroll", test: (m) => !m.hide || m.hide.error === "nothing to scroll" || (m.hide.down < 0 && m.hide.up >= 0), say: (m) => `header top before/down/up: ${JSON.stringify(m.hide)}` },
-  { id: "drivers-ranked-upright", test: (m) => m.page !== "race:drivers" || m.width > m.height || m.rankedRows >= 5, say: (m) => `Driver Report shows ${m.rankedRows} ranked rows` },
-  { id: "drivers-compare-side-by-side", test: (m) => m.page !== "race:drivers" || (m.width > m.height ? m.versus?.table >= 1 : m.versus?.columns === 3 && m.versus.metrics >= 5), say: (m) => `compare: ${JSON.stringify(m.versus)}` },
+  // Driver Report, Pits and Strategy upright: ranked metrics (RankedMetrics); sideways: the full table.
+  { id: "ranked-upright", test: (m) => !RANKED.includes(m.page) || m.width > m.height || m.rankedRows >= 5, say: (m) => `${m.page} shows ${m.rankedRows} ranked rows` },
+  { id: "ranked-compare-side-by-side", test: (m) => !RANKED.includes(m.page) || (m.width > m.height ? m.versus?.table >= 1 : m.versus?.columns === 3 && m.versus.metrics >= 3), say: (m) => `compare: ${JSON.stringify(m.versus)}` },
+  { id: "ranked-row-opens-detail", test: (m) => !["race:pitanalysis", "race:strategy"].includes(m.page) || m.width > m.height || (m.detail?.open && m.detail.closed), say: (m) => `row detail: ${JSON.stringify(m.detail)}` },
+  { id: "ranked-head-compact", test: (m) => !RANKED.includes(m.page) || m.width > m.height || (m.rankedHead !== null && m.rankedHead <= 48 && (m.classChipH === null || m.classChipH <= 34)), say: (m) => `ranked heading ${m.rankedHead} px, class chips ${m.classChipH} px` },
+  { id: "ranked-rotate-symbol", test: (m) => !RANKED.includes(m.page) || m.width > m.height || m.rotateSymbol, say: () => "no turn-sideways symbol on a ranked view" },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -182,6 +187,15 @@ function measure() {
       .map((el) => el.textContent.trim().slice(0, 20)),
     cardLists: document.querySelectorAll("[data-phone-cards]:not([data-phone-cards='sort']):not([data-phone-cards='chips']), [data-ranked='view']").length,
     rankedRows: document.querySelectorAll("[data-ranked-row]").length,
+    rankedHead: (() => {
+      const h = document.querySelector("[data-ranked='head']");
+      return h ? Math.round(h.getBoundingClientRect().height) : null;
+    })(),
+    classChipH: (() => {
+      const b = document.querySelector("[data-ranked='view'] [role='tablist'][aria-label='Class'] button");
+      return b ? Math.round(b.getBoundingClientRect().height) : null;
+    })(),
+    rotateSymbol: !!document.querySelector("[data-ranked='rotate']"),
   };
 }
 
@@ -217,7 +231,19 @@ async function hideOnScroll(page) {
   return { before, down, up };
 }
 
-/** Driver Report upright: Compare, pick two rows, and the side-by-side sheet lists both. Sideways: the full table. */
+/** Pits and Strategy upright: a row's tap opens its stops (or stints) in a sheet, and Escape closes it. */
+async function rankedDetail(page) {
+  if (!(await page.locator("[data-ranked='view']").count())) return { table: await page.locator("table").count() };
+  await page.locator("[data-ranked-row]").first().click();
+  const sheet = page.locator("[data-ranked='detail']");
+  const open = await sheet.waitFor({ timeout: 3000 }).then(() => true, () => false);
+  const lines = open ? (await sheet.innerText()).split("\n").filter(Boolean).length : 0;
+  await page.keyboard.press("Escape");
+  const closed = await sheet.waitFor({ state: "detached", timeout: 3000 }).then(() => true, () => sheet.isHidden());
+  return { open, lines, closed };
+}
+
+/** Ranked views upright: Compare, pick two rows, and the side-by-side sheet lists both. Sideways: the full table. */
 async function versus(page) {
   if (!(await page.locator("[data-ranked='view']").count())) return { table: await page.locator("table").count() };
   await page.getByRole("button", { name: "Compare", exact: true }).click();
@@ -327,7 +353,8 @@ async function main() {
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
         if (pg.name === "race:strategy" || pg.name === "race:gaps") m.hide = await hideOnScroll(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
-        if (pg.name === "race:drivers") m.versus = await versus(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
+        if (pg.name === "race:pitanalysis" || pg.name === "race:strategy") m.detail = await rankedDetail(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
+        if (RANKED.includes(pg.name)) m.versus = await versus(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "race:cards") m.cards = await raceCards(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));

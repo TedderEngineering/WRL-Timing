@@ -91,14 +91,17 @@ export function ChipRow<K extends string>({
   value,
   onChange,
   label,
+  slim = false,
 }: {
   items: { key: K; label: string; color?: string }[];
   value: K;
   onChange: (k: K) => void;
   label: string;
+  /** Drawn 32 px tall, with a 44 px touch area reaching above and below (the ranked views). */
+  slim?: boolean;
 }) {
   return (
-    <div role="tablist" aria-label={label} className="no-scrollbar -mx-2 flex gap-1.5 overflow-x-auto px-2" data-phone-cards="chips">
+    <div role="tablist" aria-label={label} className={`no-scrollbar -mx-2 flex gap-1.5 overflow-x-auto px-2${slim ? " -my-1.5 py-1.5" : ""}`} data-phone-cards="chips">
       {items.map((it) => {
         const on = it.key === value;
         const color = it.color ?? PC.accent;
@@ -109,7 +112,12 @@ export function ChipRow<K extends string>({
             role="tab"
             aria-selected={on}
             onClick={() => onChange(it.key)}
-            className="min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border px-3.5 text-[13px] font-semibold"
+            data-touch-44={slim || undefined}
+            className={
+              slim
+                ? "relative h-8 shrink-0 whitespace-nowrap rounded-full border px-3 text-[13px] font-semibold before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                : "min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border px-3.5 text-[13px] font-semibold"
+            }
             style={{ borderColor: on ? color : PC.border, background: on ? `${color}22` : PC.card, color: on ? PC.text : PC.muted }}
           >
             {it.label}

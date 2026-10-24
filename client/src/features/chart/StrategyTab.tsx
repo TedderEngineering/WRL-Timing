@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
-import { useIsCompact } from "../../lib/breakpoint";
-import { ChipRow, PC, RowCard, SectionLabel, SortBar, StatGrid } from "./phone-cards";
+import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
+import { PC, SectionLabel } from "./phone-cards";
+import { ClassChips, RankedMetrics, type RankedItem, type RankedMetric } from "./RankedMetrics";
 import {
   computeStrategyMetrics,
   computeRaceConditions,
@@ -212,28 +213,27 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
 
   const greenPct = conditions.totalLaps ? Math.round(100 - conditions.pctYellow) : 0;
   const compact = useIsCompact();
+  const landscape = useIsLandscapePhone();
 
-  if (compact) {
+  // Phones upright: the class ranked on one number at a time, a car's stints and stops in a
+  // sheet (RankedMetrics). Sideways: the full table below, scrolling inside its own box.
+  if (compact && !landscape) {
     return (
       <PhoneStrategy
-        rows={rows}
+        rows={classRows}
         classes={classes}
         activeClass={activeClass}
         setCls={(c) => {
           setCls(c);
           setSelectedCar(null);
         }}
-        sort={sort}
-        setSort={setSort}
         insights={insights}
         focusNum={focusNum}
-        selectedCar={selectedCar}
-        setSelectedCar={setSelectedCar}
         totalLaps={totalLaps}
         raceLaps={conditions.totalLaps}
         best={best}
         verified={verified}
-        summary={`${classRows.length} cars · ${conditions.totalLaps} laps, ${greenPct}% green (${conditions.yellowLaps} caution laps)`}
+        summary={`${classRows.length} cars · ${conditions.totalLaps} laps, ${greenPct}% green`}
         onGoToTrace={(n) => {
           setFocusNum(n);
           onSwitchToTrace();
@@ -265,7 +265,7 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
                 setCls(c);
                 setSelectedCar(null);
               }}
-              className="rounded-md border px-3 py-1 text-xs font-semibold"
+              className="min-h-[44px] rounded-md border px-3.5 text-[13px] font-semibold sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs"
               style={{ borderColor: active ? color : P.border, background: active ? `${color}22` : P.card, color: active ? P.text : P.muted }}
             >
               {c}
@@ -287,7 +287,8 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
         </div>
       )}
 
-      <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
+      {/* Sideways on a phone this is the full table, scrolling sideways inside its own box. */}
+      <div data-wide-table className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${P.border}` }}>
@@ -295,7 +296,7 @@ export function StrategyTab({ data, annotations, focusNum, setFocusNum, onSwitch
                 <th
                   key={c.key}
                   onClick={() => sortBy(c.key)}
-                  className="cursor-pointer select-none whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider"
+                  className="cursor-pointer select-none whitespace-nowrap px-2 py-3 text-[11px] font-semibold uppercase tracking-wider sm:py-2"
                   style={{ color: sort.key === c.key ? P.text : P.muted, textAlign: c.align }}
                   aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
                 >
@@ -591,35 +592,29 @@ function PitMarker({ leftPct, isYellow, tooltip }: { leftPct: string; isYellow: 
   );
 }
 
-// ─── Phone (mobile redesign, step 5): a card per car, the focus car first; tap for stints and stops ───
+// ─── Phone, upright: the class ranked on one number at a time; tap a car for its stints and stops ───
 
-const SORT_LABEL: Record<StrategySortKey, string> = {
-  classPos: "Class position",
-  carNum: "Car number",
-  team: "Team",
-  lapsCompleted: "Laps",
-  stops: "Stops",
-  avgGreenPace: "Average pace",
-  bestLap: "Best lap",
-  totalPitTime: "Pit time",
-  pitPct: "Pit %",
-  yellowPitPct: "Yellow-flag stops",
-  avgStintLen: "Average stint",
-  maxStintLen: "Longest stint",
-  strategyScore: "Strategy score",
-};
+function strategyMetrics(): RankedMetric<StrategyMetrics>[] {
+  return [
+    { key: "finish", label: "Finish", better: "low", value: (m) => m.classPos || null, format: (v) => `P${v}`, note: "Class finishing position" },
+    { key: "score", label: "Score", better: "high", value: (m) => (m.strategyScore < 0 ? null : m.strategyScore), format: (v) => v.toFixed(1), note: "Strategy score; higher is better" },
+    { key: "pace", label: "Avg pace", better: "low", value: (m) => m.avgGreenPace || null, format: fmtPaceFull, note: "Average green-flag lap" },
+    { key: "best", label: "Best lap", better: "low", value: (m) => m.bestLap || null, format: fmtPaceFull },
+    { key: "pitTime", label: "Pit time", better: "low", value: (m) => m.totalPitTime || null, format: (v) => fmtTenths(v), note: "Total time in the pits" },
+    { key: "stops", label: "Stops", better: "low", value: (m) => m.stops, format: (v) => String(v), note: "Fewest first" },
+    { key: "avgStint", label: "Avg stint", better: "high", value: (m) => m.avgStintLen || null, format: (v) => v.toFixed(1), note: "Laps per stint, on average" },
+    { key: "maxStint", label: "Longest stint", better: "high", value: (m) => m.maxStintLen || null, format: (v) => String(v), note: "Laps in its longest stint" },
+    { key: "yellow", label: "Yellow stops", better: "high", value: (m) => (m.stops ? m.yellowPitPct : null), format: (v) => `${Math.round(v)}%`, note: "Share of its stops made under a caution" },
+  ];
+}
 
 function PhoneStrategy(p: {
   rows: StrategyMetrics[];
   classes: string[];
   activeClass: string;
   setCls: (c: string) => void;
-  sort: StrategySort;
-  setSort: (s: StrategySort) => void;
   insights: { title: string; text: string }[];
   focusNum: number;
-  selectedCar: number | null;
-  setSelectedCar: (n: number | null) => void;
   totalLaps: number;
   raceLaps: number;
   best: number;
@@ -627,93 +622,73 @@ function PhoneStrategy(p: {
   summary: string;
   onGoToTrace: (n: number) => void;
 }) {
-  const mine = p.rows.filter((m) => m.carNum === p.focusNum);
-  const card = (m: StrategyMetrics, pinned = false) => {
-    // The focus car's stints open in its pinned card only, not twice.
-    const open = m.carNum === p.selectedCar && (pinned || !mine.some((x) => x.carNum === m.carNum));
-    return (
-      <RowCard
-        key={`${pinned ? "pin" : "row"}-${m.carNum}`}
-        focus={m.carNum === p.focusNum}
-        onClick={() => p.setSelectedCar(open ? null : m.carNum)}
-        label={`#${m.carLabel} ${m.team}: ${open ? "hide" : "show"} stints and stops`}
-      >
-        <div className="flex items-baseline gap-2">
-          <span className="w-7 shrink-0 font-mono text-[14px] font-bold">P{m.classPos || "—"}</span>
-          <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: CLASS_COLORS[m.cls] ?? PC.accent }}>#{m.carLabel}</span>
-          <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>{m.team.replace(/\s*\([^()]*\)\s*$/, "")}</span>
-          <span className="shrink-0 text-[12px]" style={{ color: PC.muted }}>Score</span>
-          <span className="shrink-0 font-mono text-[15px] font-bold">{m.strategyScore < 0 ? "–" : m.strategyScore.toFixed(1)}</span>
-        </div>
-        <div className="mt-2">
-          <StintMap m={m} totalLaps={p.totalLaps} best={p.best} />
-        </div>
-        <StatGrid
-          stats={[
-            { label: "Avg pace", value: fmtPaceFull(m.avgGreenPace) },
-            { label: "Best", value: fmtPaceFull(m.bestLap), color: P.clear },
-            { label: "Laps", value: m.lapsCompleted },
-            { label: "Stops", value: m.stops },
-            { label: "Pit time", value: (m.verified ? fmtTenths(m.totalPitTime) : fmtTime(m.totalPitTime)) + (m.untimedStops > 0 ? "*" : "") },
-            { label: "Pit %", value: `${m.pitPct.toFixed(1)}%` },
-            { label: "Yellow stops", value: `${Math.round(m.yellowPitPct)}%` },
-            { label: "Avg stint", value: m.avgStintLen.toFixed(1) },
-            { label: "Longest", value: m.maxStintLen },
-          ]}
-        />
-        {open && <PhoneStrategyDetail m={m} raceLaps={p.raceLaps} onGoToTrace={() => p.onGoToTrace(m.carNum)} />}
-        {!open && (
-          <div className="mt-2 text-[12px]" style={{ color: PC.accent }}>
-            Stints and stops ›
-          </div>
-        )}
-      </RowCard>
-    );
-  };
-
+  const metrics = useMemo(strategyMetrics, []);
+  const items: RankedItem<StrategyMetrics>[] = p.rows.map((m) => ({
+    id: String(m.carNum),
+    row: m,
+    title: `#${m.carLabel} ${m.team.replace(/\s*\([^()]*\)\s*$/, "")}`,
+    sub: `${m.classPos ? `P${m.classPos} in ${m.cls} · ` : ""}${m.stops} stop${m.stops === 1 ? "" : "s"} · ${m.stints.length} stint${m.stints.length === 1 ? "" : "s"}`,
+    mine: m.carNum === p.focusNum,
+  }));
   return (
-    <div className="px-3 pb-6 pt-3" style={{ color: PC.text }} data-phone-cards="strategy">
-      <h2 className="m-0 text-[16px] font-semibold">Strategy · {p.activeClass}</h2>
-      <p className="m-0 mt-0.5 text-[13px]" style={{ color: PC.muted }}>{p.summary}</p>
-      {p.classes.length > 1 && (
-        <div className="mt-3">
-          <ChipRow label="Class" items={p.classes.map((c) => ({ key: c, label: c, color: CLASS_COLORS[c] }))} value={p.activeClass} onChange={p.setCls} />
-        </div>
-      )}
-      {p.insights.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2">
-          {p.insights.map((ins, i) => (
-            <div key={i} className="rounded-xl border-l-[3px] px-3 py-2.5" style={{ background: PC.card, borderColor: PC.accent }}>
-              <div className="text-[14px] font-semibold">{ins.title}</div>
-              <div className="mt-0.5 text-[13px] leading-relaxed" style={{ color: PC.muted }}>{ins.text}</div>
+    <RankedMetrics
+      items={items}
+      metrics={metrics}
+      title={`Strategy · ${p.activeClass}`}
+      subtitle={p.summary}
+      above={p.classes.length > 1 ? <ClassChips classes={p.classes} value={p.activeClass} onChange={p.setCls} colors={CLASS_COLORS} /> : undefined}
+      detail={(it, close) => {
+        const m = it.row;
+        return {
+          title: `${it.title}${m.classPos ? ` · P${m.classPos}` : ""}`,
+          body: (
+            <div style={{ color: PC.text }}>
+              <div className="overflow-hidden rounded-[2px]">
+                <StintMap m={m} totalLaps={p.totalLaps} best={p.best} />
+              </div>
+              <StintKey />
+              <PhoneStrategyDetail
+                m={m}
+                raceLaps={p.raceLaps}
+                onGoToTrace={() => {
+                  close();
+                  p.onGoToTrace(m.carNum);
+                }}
+              />
             </div>
-          ))}
-        </div>
-      )}
-      <div className="mt-3">
-        <SortBar
-          options={(Object.keys(SORT_LABEL) as StrategySortKey[]).map((k) => ({ key: k, label: SORT_LABEL[k] }))}
-          value={p.sort.key}
-          dir={p.sort.dir}
-          onChange={(k) => p.setSort({ key: k, dir: STRATEGY_SORTS[k].dir })}
-          onFlip={() => p.setSort({ key: p.sort.key, dir: p.sort.dir === "asc" ? "desc" : "asc" })}
-        />
-      </div>
-      {mine.length > 0 && (
+          ),
+        };
+      }}
+      below={
         <>
-          <SectionLabel>Your car</SectionLabel>
-          <div className="flex flex-col gap-2">{mine.map((m) => card(m, true))}</div>
+          {p.insights.length > 0 && (
+            <div className="mb-3 flex flex-col gap-2">
+              <SectionLabel>What stood out</SectionLabel>
+              {p.insights.map((ins, i) => (
+                <div key={i} className="rounded-xl border-l-[3px] px-3 py-2.5" style={{ background: PC.card, borderColor: PC.accent }}>
+                  <div className="text-[14px] font-semibold">{ins.title}</div>
+                  <div className="mt-0.5 text-[13px] leading-relaxed" style={{ color: PC.muted }}>{ins.text}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="m-0 text-[12px] leading-relaxed" style={{ color: PC.muted }}>
+            Tap a car for its stints and stops. {strategyMethod(p.verified)}
+          </p>
         </>
-      )}
-      <SectionLabel>All {p.activeClass} cars</SectionLabel>
-      <div className="flex flex-col gap-2">{p.rows.map((m) => card(m))}</div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: PC.muted }}>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_FAST) }} /> {STRATEGY_KEY.best}</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_MID) }} /> {STRATEGY_KEY.mid}</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_SLOW) }} /> {STRATEGY_KEY.slow}</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-3" style={{ background: rgbCss(STINT_CAUTION) }} /> {STRATEGY_KEY.caution}</span>
-      </div>
-      <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: PC.muted }}>{strategyMethod(p.verified)}</p>
+      }
+    />
+  );
+}
+
+/** The stint map's colours, in a line under it. */
+function StintKey() {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: PC.muted }}>
+      <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_FAST) }} /> {STRATEGY_KEY.best}</span>
+      <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_MID) }} /> {STRATEGY_KEY.mid}</span>
+      <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-[2px]" style={{ background: rgbCss(STINT_SLOW) }} /> {STRATEGY_KEY.slow}</span>
+      <span className="flex items-center gap-1.5"><span className="inline-block h-[3px] w-3" style={{ background: rgbCss(STINT_CAUTION) }} /> {STRATEGY_KEY.caution}</span>
     </div>
   );
 }

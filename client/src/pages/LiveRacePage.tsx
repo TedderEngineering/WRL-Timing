@@ -996,7 +996,7 @@ export function LiveRacePage() {
         {tab === "pitanalysis" && (
           <div className={pane}>
             <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={traceView} headSlot={headSlot} phoneSlot={landscape ? carSlot : null} />
-            <div className={`custom-scroll px-2 py-3 sm:px-6 ${scrollPane}`}>
+            <div className={`custom-scroll sm:px-6 sm:py-3 ${scrollPane}`}>
               <PitAnalysisTab analysis={pitAnalysis} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setTab("position")} classView={classView} />
             </div>
           </div>

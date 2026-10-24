@@ -4,8 +4,9 @@ import { Link } from "react-router-dom";
 import type { RaceChartData } from "@shared/types";
 import { carKey } from "./car-number";
 import { CLASS_COLORS } from "./constants";
-import { useIsCompact } from "../../lib/breakpoint";
-import { ChipRow, PC, RowCard, SectionLabel, SortBar, StatGrid } from "./phone-cards";
+import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
+import { PC, SectionLabel, StatGrid } from "./phone-cards";
+import { ClassChips, RankedMetrics, type RankedItem, type RankedMetric } from "./RankedMetrics";
 import {
   DEFAULT_PIT_SORT,
   PIT_COLORS,
@@ -178,6 +179,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [selectedCar, setSelectedCar] = useState<string | null>(null);
   const compact = useIsCompact();
+  const landscape = useIsLandscapePhone();
 
   // Fetch pit analysis data
   useEffect(() => {
@@ -313,10 +315,10 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   const lostInClass = classRows.flatMap((r) => r.stops.filter((x) => (x.kind ?? "stop") === "stop" && !isCautionStop(x)).map((x) => x.timeLost_s)).filter((v): v is number => typeof v === "number");
   const avgLostInClass = lostInClass.length ? lostInClass.reduce((a, b) => a + b, 0) / lostInClass.length : null;
   const maxStops = Math.max(1, ...classRows.map((r) => r.stops.length));
-  const cols: { key: PitSortKey; label: string; align: "left" | "right"; title?: string; wide?: boolean; cell: (r: PitRow) => React.ReactNode }[] = [
+  const cols: { key: PitSortKey; label: string; align: "left" | "right"; title?: string; cell: (r: PitRow) => React.ReactNode }[] = [
     { key: "classPos", label: "P", align: "right", cell: (r) => <b>{r.classPos >= 999 ? "—" : r.classPos}</b> },
     { key: "car", label: "Car", align: "left", cell: (r) => <span className="font-mono font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? P.accent }}>#{r.label}</span> },
-    { key: "team", label: "Team", align: "left", wide: true, cell: (r) => <span className="block max-w-[180px] truncate" title={r.team}>{r.team}</span> },
+    { key: "team", label: "Team", align: "left", cell: (r) => <span className="block max-w-[180px] truncate" title={r.team}>{r.team}</span> },
     { key: "stops", label: "Stops", align: "right", title: "Every pit-lane visit: stops, garage visits, drive-throughs and penalties", cell: (r) => r.visits },
     { key: "avgLane", label: facts ? "Avg lane" : "Avg service", align: "right", title: facts ? "Average time in the pit lane" : "Average service time", cell: (r) => <span className="font-mono">{fmtTime(r.avgLane)}</span> },
     { key: "avgLost", label: "Avg lost", align: "right", title: "Average time lost on green-flag stops", cell: (r) => <span className="font-mono">{fmtTime(r.avgLost)}</span> },
@@ -324,108 +326,49 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
     { key: "worst", label: "Worst", align: "right", title: "Most time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.loss }}>{fmtTime(r.worst)}</span> },
   ];
 
-  if (compact) {
-    const mine = classRows.filter((r) => r.key === String(focusNum));
-    const card = (r: PitRow, pinned = false) => {
-      const open = r.label === selectedCar && (pinned || !mine.some((x) => x.key === r.key));
-      const detail = open ? rows.find((x) => x.carNumber === r.label) : null;
-      return (
-        <RowCard
-          key={`${pinned ? "pin" : "row"}-${r.key}`}
-          focus={r.key === String(focusNum)}
-          onClick={() => setSelectedCar(r.label === selectedCar ? null : r.label)}
-          label={`#${r.label} ${r.team}: ${open ? "hide" : "show"} each stop`}
-        >
-          <div className="flex items-baseline gap-2">
-            <span className="w-7 shrink-0 font-mono text-[14px] font-bold">{r.classPos >= 999 ? "—" : `P${r.classPos}`}</span>
-            <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? P.accent }}>#{r.label}</span>
-            <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: P.soft }}>{r.team}</span>
-            <span className="shrink-0 text-[13px]" style={{ color: P.muted }}>{r.visits} stops</span>
-          </div>
-          <StatGrid
-            stats={[
-              { label: facts ? "Avg lane" : "Avg service", value: fmtTime(r.avgLane) },
-              { label: "Avg lost", value: fmtTime(r.avgLost) },
-              { label: "Best", value: fmtTime(r.best), color: P.gain },
-              { label: "Worst", value: fmtTime(r.worst), color: P.loss },
-            ]}
-            cols={4}
-          />
-          {/* Each stop, wrapped onto as many lines as it needs */}
-          <div className="mt-2 flex flex-wrap gap-1">
-            {r.stops.map((st, j) => (
-              <StopCell key={j} s={st} facts={facts} />
-            ))}
-          </div>
-          {detail ? (
-            <PhoneStopList
-              row={detail}
-              facts={facts}
-              onGoToTrace={() => {
-                const k = carKey(chart, detail.carNumber);
-                if (k !== null) setFocusNum(k);
-                onSwitchToTrace();
-              }}
-            />
-          ) : (
-            <div className="mt-2 text-[12px]" style={{ color: P.accent }}>Each stop ›</div>
-          )}
-        </RowCard>
-      );
-    };
+  // Phones upright: the class ranked on one number at a time, a car's stops in a sheet
+  // (RankedMetrics). Sideways: the full table below, scrolling inside its own box.
+  if (compact && !landscape) {
+    const items: RankedItem<PitRow>[] = classRows.map((r) => ({
+      id: r.key,
+      row: r,
+      title: `#${r.label} ${r.team}`,
+      sub: `${r.classPos >= 999 ? "" : `P${r.classPos} in ${r.cls} · `}${r.visits} stop${r.visits === 1 ? "" : "s"}`,
+      mine: r.key === String(focusNum),
+    }));
     return (
-      <div className="pb-6" style={{ color: P.text }} data-phone-cards="pit-stops">
-        <h2 className="m-0 text-[16px] font-semibold">Pit stops · {activeClass}</h2>
-        <p className="m-0 mt-0.5 text-[13px]" style={{ color: P.muted }}>
-          {classRows.length} cars · {stopsInClass} stops{avgLostInClass !== null ? ` · ${fmtTime(avgLostInClass)} lost on an average green-flag stop` : ""}
-        </p>
-        {classes.length > 1 && !shared && (
-          <div className="mt-3">
-            <ChipRow
-              label="Class"
-              items={classes.map((c) => ({ key: c, label: c, color: CLASS_COLORS[c] }))}
-              value={activeClass}
-              onChange={(c) => {
-                setCls(c);
-                setSelectedCar(null);
-              }}
-            />
-          </div>
-        )}
-        <div className="mt-3">
-          <SortBar
-            options={cols.map((c) => ({ key: c.key, label: PIT_SORT_LABEL[c.key] ?? c.label }))}
-            value={sort.key}
-            dir={sort.dir}
-            onChange={(k) => setSort({ key: k, dir: PIT_SORTS[k].dir })}
-            onFlip={() => setSort({ key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" })}
-          />
-        </div>
-        {mine.length > 0 && (
-          <>
-            <SectionLabel>Your car</SectionLabel>
-            <div className="flex flex-col gap-2">{mine.map((r) => card(r, true))}</div>
-          </>
-        )}
-        <SectionLabel>All {activeClass} cars</SectionLabel>
-        <div className="flex flex-col gap-2">{classRows.map((r) => card(r))}</div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: P.muted }}>
-          {facts && (
-            <>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.quick, 0.18), borderColor: rgb(PIT_COLORS.quick) }} /> {PIT_KEY.quick}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.slow, 0.18), borderColor: rgb(PIT_COLORS.slow) }} /> {PIT_KEY.slow}
-              </span>
-            </>
-          )}
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} /> {PIT_KEY.caution}
-          </span>
-        </div>
-        <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: P.muted }}>{pitMethod(facts)}</p>
-      </div>
+      <RankedMetrics
+        items={items}
+        metrics={pitMetrics(facts)}
+        title={`Pit stops · ${activeClass}`}
+        subtitle={`${classRows.length} cars · ${stopsInClass} stops${avgLostInClass !== null ? ` · ${secs(avgLostInClass)} lost per green stop` : ""}`}
+        above={classes.length > 1 && !shared ? <ClassChips classes={classes} value={activeClass} onChange={setCls} colors={CLASS_COLORS} /> : undefined}
+        detail={(it, close) => {
+          const r = it.row;
+          const car = rows.find((x) => x.carNumber === r.label);
+          return {
+            title: `#${r.label} ${r.team}${r.classPos >= 999 ? "" : ` · P${r.classPos}`}`,
+            body: (
+              <PhoneCarStops
+                row={r}
+                car={car ?? null}
+                facts={facts}
+                onGoToTrace={() => {
+                  close();
+                  const k = carKey(chart, r.label);
+                  if (k !== null) setFocusNum(k);
+                  onSwitchToTrace();
+                }}
+              />
+            ),
+          };
+        }}
+        below={
+          <p className="m-0 text-[12px] leading-relaxed" style={{ color: PC.muted }}>
+            Tap a car for each of its stops. {pitMethod(facts)}
+          </p>
+        }
+      />
     );
   }
 
@@ -453,7 +396,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
                   setCls(c);
                   setSelectedCar(null);
                 }}
-                className="rounded-md border px-3 py-1 text-xs font-semibold"
+                className="min-h-[44px] rounded-md border px-3.5 text-[13px] font-semibold sm:min-h-0 sm:px-3 sm:py-1 sm:text-xs"
                 style={{ borderColor: active ? color : P.border, background: active ? `${color}22` : P.card, color: active ? P.text : P.muted }}
               >
                 {c}
@@ -463,7 +406,8 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
         </div>
       )}
 
-      <div className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
+      {/* Sideways on a phone this is the full table, scrolling sideways inside its own box. */}
+      <div data-wide-table className="custom-scroll overflow-x-auto rounded-lg border" style={{ borderColor: P.line, background: P.card }}>
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${P.border}` }}>
@@ -472,7 +416,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
                   key={c.key}
                   onClick={() => sortBy(c.key)}
                   title={c.title}
-                  className={`cursor-pointer select-none whitespace-nowrap px-2 py-2 text-[11px] font-semibold uppercase tracking-wider${c.wide ? " hidden sm:table-cell" : ""}`}
+                  className="cursor-pointer select-none whitespace-nowrap px-2 py-3 text-[11px] font-semibold uppercase tracking-wider sm:py-2"
                   style={{ color: sort.key === c.key ? P.text : P.muted, textAlign: c.align }}
                   aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
                 >
@@ -498,7 +442,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
                   aria-expanded={open}
                 >
                   {cols.map((c) => (
-                    <td key={c.key} className={`whitespace-nowrap px-2 py-1${c.wide ? " hidden sm:table-cell" : ""}`} style={{ textAlign: c.align }}>
+                    <td key={c.key} className="whitespace-nowrap px-2 py-2.5 sm:py-1" style={{ textAlign: c.align }}>
                       {c.cell(r)}
                     </td>
                   ))}
@@ -849,16 +793,6 @@ function MiniCard({ label, value, color }: { label: string; value: string; color
   );
 }
 
-const PIT_SORT_LABEL: Partial<Record<PitSortKey, string>> = {
-  classPos: "Class position",
-  car: "Car number",
-  team: "Team",
-  stops: "Stops",
-  avgLane: "Average pit lane",
-  avgLost: "Average time lost",
-  best: "Best stop",
-  worst: "Worst stop",
-};
 
 /** Phone: a car's stops as a list (the laptop's per-stop table), under its card. */
 function PhoneStopList({ row, facts, onGoToTrace }: { row: CarRow; facts: boolean; onGoToTrace: () => void }) {
@@ -895,6 +829,71 @@ function PhoneStopList({ row, facts, onGoToTrace }: { row: CarRow; facts: boolea
       >
         View on the trace
       </button>
+    </div>
+  );
+}
+
+// ─── Phone, upright: the class ranked on one number at a time ───────────────
+
+/** Seconds under a minute as "34.2 s", longer as "1:04.2". */
+function secs(v: number): string {
+  return Math.abs(v) < 60 ? `${v.toFixed(1)} s` : fmtTime(v);
+}
+
+/** Class places gained (negative: lost) over the car's pit cycles, from the race's analysis. */
+function netPlaces(r: PitRow): number | null {
+  const net = r.stops.map((s) => s.netClass).filter((v): v is number => typeof v === "number");
+  return net.length ? net.reduce((a, b) => a + b, 0) : null;
+}
+
+function pitMetrics(facts: boolean): RankedMetric<PitRow>[] {
+  return [
+    { key: "avgLost", label: "Time lost", better: "low", value: (r) => r.avgLost, format: secs, note: "Average time lost on a green-flag stop" },
+    { key: "best", label: "Best stop", better: "low", value: (r) => r.best, format: secs, note: "Least time lost on a green-flag stop" },
+    { key: "worst", label: "Worst stop", better: "low", value: (r) => r.worst, format: secs, note: "Most time lost on a green-flag stop" },
+    { key: "avgLane", label: facts ? "Pit lane" : "Service", better: "low", value: (r) => r.avgLane, format: secs, note: facts ? "Average time in the pit lane" : "Average service time" },
+    { key: "stops", label: "Stops", better: "low", value: (r) => r.visits, format: (v) => String(v), note: "Every pit-lane visit, fewest first" },
+    ...(facts
+      ? [{ key: "places", label: "Places", better: "high" as const, value: netPlaces, format: (v: number) => (v > 0 ? `+${v}` : v < 0 ? `−${-v}` : "0"), note: "Class places gained over its pit cycles" }]
+      : []),
+    { key: "finish", label: "Finish", better: "low", value: (r) => (r.classPos >= 999 ? null : r.classPos), format: (v) => `P${v}`, note: "Class finishing position" },
+  ];
+}
+
+/** A car's stops, in the sheet a ranked row opens: its averages, each stop as a chip, then as a list. */
+function PhoneCarStops({ row, car, facts, onGoToTrace }: { row: PitRow; car: CarRow | null; facts: boolean; onGoToTrace: () => void }) {
+  return (
+    <div style={{ color: PC.text }}>
+      <StatGrid
+        stats={[
+          { label: facts ? "Avg lane" : "Avg service", value: fmtTime(row.avgLane) },
+          { label: "Avg lost", value: fmtTime(row.avgLost) },
+          { label: "Best", value: fmtTime(row.best), color: P.gain },
+          { label: "Worst", value: fmtTime(row.worst), color: P.loss },
+        ]}
+        cols={4}
+      />
+      <div className="mt-3 flex flex-wrap gap-1">
+        {row.stops.map((st, j) => (
+          <StopCell key={j} s={st} facts={facts} />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: PC.muted }}>
+        {facts && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.quick, 0.18), borderColor: rgb(PIT_COLORS.quick) }} /> {PIT_KEY.quick}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.slow, 0.18), borderColor: rgb(PIT_COLORS.slow) }} /> {PIT_KEY.slow}
+            </span>
+          </>
+        )}
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} /> {PIT_KEY.caution}
+        </span>
+      </div>
+      {car && <PhoneStopList row={car} facts={facts} onGoToTrace={onGoToTrace} />}
     </div>
   );
 }
