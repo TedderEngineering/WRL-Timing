@@ -199,7 +199,8 @@ export function RaceDetailPage() {
   );
 
   // Class, makes and compare, the same on Position Trace and Lap Times.
-  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView });
+  // A phone compares the focus car with its class rivals by default; a laptop with every car in view.
+  const traceView = useTraceView({ data: data ?? null, focusNum, setFocusNum: handleFocusChange, setCompSet, classView, setClassView, defaultCompare: compact ? "rivals" : "all" });
 
   // Favorite and results status from the race detail endpoint
   useEffect(() => {

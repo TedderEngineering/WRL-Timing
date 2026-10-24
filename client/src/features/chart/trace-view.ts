@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { getVisibleCars } from "./chart-renderer";
 import { makeGroupsOf } from "./makes";
+import { classRivals } from "./car-groups";
 
 /**
  * The view both race charts share (Position Trace and Lap Times): class, makes, focus and
@@ -12,9 +13,12 @@ export interface TraceView {
   /** Makes picked in the Make filter; empty = all makes. */
   makeFilter: string[];
   setMakeFilter: (m: string[]) => void;
-  /** Compare is every car in view (the default). */
+  /** Compare is every car in view (the laptop's default). */
   compareAll: boolean;
   setCompareAll: (on: boolean) => void;
+  /** Compare is the focus car's class rivals, two ahead and two behind (the phone's default; car-groups.ts). */
+  compareRivals: boolean;
+  setCompareRivals: () => void;
   /** Every car in the class view and the makes picked: the field the charts draw. */
   fieldCars: number[];
   toggleComp: (n: number) => void;
@@ -33,11 +37,21 @@ export function useTraceView(args: {
   setClassView: (c: string) => void;
   /** Which race this is. A live race's data changes every update but is the same race; without a key, new data = new race. */
   raceKey?: string;
+  /**
+   * What a new race, class or make compares against until the person picks cars: every car in
+   * view (laptop), or the focus car's class rivals (phone, plan decision M3). Default "all".
+   */
+  defaultCompare?: "all" | "rivals";
 }): TraceView {
   const { data, focusNum, setFocusNum, setCompSet, classView, setClassView, raceKey } = args;
+  const defaultCompare = args.defaultCompare ?? "all";
   const race = raceKey ?? data;
   const [makeFilter, setMakeFilter] = useState<string[]>([]);
-  const [compareAll, setCompareAll] = useState(true);
+  // "custom" = cars the person picked; kept until a new race, class or make.
+  const [mode, setMode] = useState<"all" | "rivals" | "custom">(defaultCompare);
+  const compareAll = mode === "all";
+  const setCompareAll = useCallback((on: boolean) => setMode(on ? "all" : "custom"), []);
+  const setCompareRivals = useCallback(() => setMode("rivals"), []);
 
   const fieldCars = useMemo(() => {
     if (!data) return [];
@@ -48,19 +62,23 @@ export function useTraceView(args: {
     return base.filter((n) => keep.has(n) || n === focusNum);
   }, [data, classView, makeFilter, focusNum]);
 
-  // A new race, class or make goes back to every car (a live update is not a new race).
+  // A new race, class or make goes back to the default (a live update is not a new race).
   useEffect(() => {
-    setCompareAll(true);
-  }, [classView, makeFilter, race]);
+    setMode(defaultCompare);
+  }, [classView, makeFilter, race, defaultCompare]);
   useEffect(() => {
-    if (!compareAll || !data) return;
+    if (!data || mode === "custom") return;
+    if (mode === "rivals") {
+      setCompSet(new Set(classRivals(data, focusNum, fieldCars)));
+      return;
+    }
     // Every car in view with laps; before the race (no laps anywhere) every entry.
     setCompSet(new Set(fieldCars.filter((n) => n !== focusNum && ((data.cars[String(n)]?.laps.length ?? 0) > 0 || data.maxLap === 0))));
-  }, [compareAll, fieldCars, focusNum, data, setCompSet]);
+  }, [mode, fieldCars, focusNum, data, setCompSet]);
 
   const toggleComp = useCallback(
     (n: number) => {
-      setCompareAll(false);
+      setMode("custom");
       setCompSet((prev) => {
         const next = new Set(prev);
         if (next.has(n)) next.delete(n);
@@ -72,13 +90,13 @@ export function useTraceView(args: {
   );
   const addComp = useCallback(
     (n: number) => {
-      setCompareAll(false);
+      setMode("custom");
       setCompSet((prev) => new Set(prev).add(n));
     },
     [setCompSet]
   );
   const clearComp = useCallback(() => {
-    setCompareAll(false);
+    setMode("custom");
     setCompSet(new Set());
   }, [setCompSet]);
 
@@ -98,5 +116,5 @@ export function useTraceView(args: {
     [data, focusNum, setFocusNum, setClassView]
   );
 
-  return { makeFilter, setMakeFilter, compareAll, setCompareAll, fieldCars, toggleComp, addComp, clearComp, pickClass };
+  return { makeFilter, setMakeFilter, compareAll, setCompareAll, compareRivals: mode === "rivals", setCompareRivals, fieldCars, toggleComp, addComp, clearComp, pickClass };
 }

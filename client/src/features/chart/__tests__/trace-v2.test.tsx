@@ -29,6 +29,8 @@ const fakeView = (d: RaceChartData, makeFilter: string[]): TraceView => ({
   setMakeFilter: () => {},
   compareAll: false,
   setCompareAll: () => {},
+  compareRivals: false,
+  setCompareRivals: () => {},
   fieldCars: Object.keys(d.cars).map(Number),
   toggleComp: () => {},
   addComp: () => {},
