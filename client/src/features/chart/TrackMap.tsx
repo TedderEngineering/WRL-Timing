@@ -8,7 +8,8 @@ import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import { mapFlag } from "./flags";
-import { GHOST_KEY, GHOST_MAX_S, ghostPlace, readPitGhost, savePitGhost, type PitGhost } from "./pit-ghost";
+import { GHOST_KEY, GHOST_MAX_S, ghostPlace, readPitGhost, savePitGhost, WINDOW_MAX_S, type PitGhost } from "./pit-ghost";
+import { ghostLabel, ghostTraffic, type GhostTraffic } from "./ghost-traffic";
 import { InfoTip } from "../../components/InfoTip";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
@@ -176,6 +177,8 @@ export function TrackMap({
     savePitGhost(g);
   };
   const pitGhostRef = useRef(pitGhost);
+  /** The traffic around the ghost (worked out each second), for its ring and label on the track. */
+  const ghostTrafficRef = useRef<GhostTraffic | null>(null);
   pitGhostRef.current = pitGhost;
   /** Where the pit ghost is now (m past the line): the time set behind the focus car at its pace; null off the track. */
   const ghostOf = (key: number, len: number): number | null => {
@@ -566,8 +569,10 @@ export function TrackMap({
     const gd = pitGhostRef.current.on ? ghostOf(focusNum, track.len) : null;
     if (gd !== null) {
       const [gx, gy] = px(pointAt(track.pts, track.ds, track.len, gd));
+      // Its ring: green in clear air, amber in traffic (ghost-traffic.ts).
+      const tr = ghostTrafficRef.current;
       ctx.setLineDash([3, 2.5]);
-      ctx.strokeStyle = TRACE.focus;
+      ctx.strokeStyle = tr ? (tr.near.length ? GHOST_TRAFFIC : GHOST_CLEAR) : TRACE.focus;
       ctx.lineWidth = 2.5;
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = TRACE.focus;
@@ -577,7 +582,7 @@ export function TrackMap({
       ctx.globalAlpha = 1;
       ctx.stroke();
       ctx.setLineDash([]);
-      const text = `PIT +${Math.round(pitGhostRef.current.lossS)}`;
+      const text = `PIT +${Math.round(pitGhostRef.current.lossS)}${tr ? ` · ${ghostLabel(tr)}` : ""}`;
       ctx.font = "700 9px system-ui, sans-serif";
       const w = ctx.measureText(text).width + 8;
       ctx.fillStyle = TRACE.focus;
@@ -764,6 +769,26 @@ export function TrackMap({
   // The pit ghost: where the focus car would rejoin after a stop losing the time the viewer set,
   // among the places (the Live Crossing Order lists it in its place on the road).
   const ghostD = track && pitGhost.on ? ghostOf(focusNum, track.len) : null;
+  // The traffic it would come out in, and when it next comes out clear (ghost-traffic.ts): each
+  // car on track at its recent green pace (its motion's pace without one).
+  let traffic: GhostTraffic | null = null;
+  if (track && ghostD !== null) {
+    const speedOf = (k: number) => {
+      const p = greenPace.get(k);
+      if (p && p > 0) return track.len / p;
+      const m = [...motions.current.values()].find((x) => carKey(data, x.num) === k);
+      return m && m.base > 0 ? m.base : typicalSpeed;
+    };
+    traffic = ghostTraffic({
+      cars: places.filter((p) => !p.inPit && p.key !== focusNum).map((p) => ({ key: p.key, d: p.d, v: speedOf(p.key) })),
+      ghostD,
+      ghostV: speedOf(focusNum),
+      len: track.len,
+      windowS: pitGhost.windowS,
+      caution: isCaution(flag),
+    });
+  }
+  ghostTrafficRef.current = traffic;
   if (ghostD !== null) places.push({ key: GHOST_KEY, d: ghostD, inPit: false });
   // The cars that will catch the focus car within its next lap (closing.ts): listed on the map,
   // and where each gets there marked on the track.
@@ -907,6 +932,7 @@ export function TrackMap({
                     onFrom={pickCrossFrom}
                     note={note}
                     ghostLossS={ghostD !== null ? pitGhost.lossS : null}
+                    ghostTraffic={traffic}
                     lapS={track.len / speed}
                     onRowTap={(k) => {
                       if (k !== focusNum) follow(toggleFollow(followed, carNo(data, k)));
@@ -1081,6 +1107,27 @@ function MapKey({
               }}
               aria-label="Pit ghost: seconds a stop would lose"
               className="w-11 rounded border bg-transparent px-1 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              style={{ borderColor: "#3a3a5c", color: C.text }}
+            />
+            s
+          </label>
+        )}
+        {pitGhost.on && (
+          <label className="flex items-center gap-0.5 pr-1.5" style={{ color: C.muted }} title="Clear air: no car within this many seconds either side of where it would rejoin">
+            clear ±
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0.5}
+              max={WINDOW_MAX_S}
+              step={0.5}
+              value={pitGhost.windowS}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0 && v <= WINDOW_MAX_S) onPitGhost({ ...pitGhost, windowS: v });
+              }}
+              aria-label="Pit ghost: seconds of clear air either side"
+              className="w-9 rounded border bg-transparent px-1 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               style={{ borderColor: "#3a3a5c", color: C.text }}
             />
             s
@@ -1285,6 +1332,10 @@ function TurnButtons({ angle, readout, onTurn }: { angle: number; readout: React
     </div>
   );
 }
+
+/** The pit ghost's ring: in clear air, in traffic. */
+const GHOST_CLEAR = "#4ade80";
+const GHOST_TRAFFIC = "#fab219";
 
 /** The cars-closing panel on the map, on or off, kept on this device. */
 const CLOSING_KEY = "rt.live.closingPanel";

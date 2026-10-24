@@ -18,6 +18,7 @@ import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { InfoTip } from "../../components/InfoTip";
 import { GHOST_KEY } from "./pit-ghost";
+import { clockText, ghostLabel, type GhostTraffic } from "./ghost-traffic";
 import { liveClassColor } from "./constants";
 import { recentPace } from "./live-battles";
 
@@ -158,6 +159,7 @@ export function LiveTrackOrder({
   onFrom,
   note = null,
   ghostLossS = null,
+  ghostTraffic = null,
   lapS = null,
 }: {
   data: RaceChartData;
@@ -181,6 +183,8 @@ export function LiveTrackOrder({
   note?: string | null;
   /** The pit ghost's time (s), when it is in the rows. */
   ghostLossS?: number | null;
+  /** The traffic it would come out in (ghost-traffic.ts). */
+  ghostTraffic?: GhostTraffic | null;
   /** A lap at the pace the gaps are measured at (s): from the leader, gaps to the focus car go the nearer way round. */
   lapS?: number | null;
 }) {
@@ -298,8 +302,23 @@ export function LiveTrackOrder({
                 <td className="px-1.5 py-1 text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.focus }}>
                   Pit
                 </td>
-                <td className="px-1.5 py-1 italic" style={{ color: C.focus }}>
-                  #{carNo(data, focusKey)} after a stop (+{ghostLossS ?? 0} s)
+                <td className="px-1.5 py-1" style={{ color: C.focus }}>
+                  <span className="italic">
+                    #{carNo(data, focusKey)} after a stop (+{ghostLossS ?? 0} s)
+                  </span>
+                  {ghostTraffic && (
+                    <span
+                      className="block text-[11px] font-semibold"
+                      style={{ color: ghostTraffic.near.length ? "#fab219" : "#4ade80" }}
+                      title={
+                        ghostTraffic.near.length
+                          ? `It would come out among ${ghostTraffic.near.map((n) => `#${carNo(data, n.key)} (${n.gapS < 0 ? "−" : "+"}${Math.abs(n.gapS).toFixed(1)} s)`).join(", ")}.${ghostTraffic.clearInS !== null ? ` Stopping in ${clockText(ghostTraffic.clearInS)} it would come out clear${ghostTraffic.clearForS !== null ? `, for ${clockText(ghostTraffic.clearForS)}` : ""}.` : ""}`
+                          : `It would come out in clear air${ghostTraffic.clearForS !== null ? ` (for ${clockText(ghostTraffic.clearForS)} from now)` : ""}.`
+                      }
+                    >
+                      {ghostTraffic.near.length ? `${ghostTraffic.near.map((n) => `#${carNo(data, n.key)}`).join(" ")} · ${ghostLabel(ghostTraffic).replace(/^\d+ cars? · ?/, "") || "in traffic"}` : "clear air"}
+                    </span>
+                  )}
                 </td>
                 <td />
                 <td />
