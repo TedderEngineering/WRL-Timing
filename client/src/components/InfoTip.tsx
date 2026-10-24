@@ -60,7 +60,9 @@ export function InfoTip({ label, text }: { label: string; text: string }) {
           if (at && Date.now() - openedAt.current > 400) hide();
           else show();
         }}
-        className="ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full align-[-2px] opacity-70 hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+        // Drawn 16 px; on a phone its touch area reaches 44 px (::before).
+        data-touch-44
+        className="relative ml-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full align-[-2px] opacity-70 before:absolute before:-inset-[14px] before:content-[''] hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 sm:before:hidden"
       >
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden>
           <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.4" />

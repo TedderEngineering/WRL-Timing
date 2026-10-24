@@ -154,3 +154,19 @@ On a phone the race row has **Race cards** right after Story (`features/share/Ra
   narrows to make room. Closed, the one-line peek stays at the bottom.
 - **Race screens:** live sessions and qualifying sessions count as race screens: no site bar or bottom
   bar, and their bars slide away on scroll.
+
+## Comparing a class on a phone: ranked metrics
+
+Neither a card per row (hard to compare) nor the laptop table (too wide) suits a phone. Upright, the
+Driver Report uses `RankedMetrics.tsx`; Pits and Strategy can take the same parts.
+
+- **Your car's drivers first.** A percentile strip per metric (Baseball Savant style): a bar from the
+  class's worst to its best, with a bubble at the driver's percentile, orange at the front and red at
+  the back. Chips switch between your drivers.
+- **Then the class ranked on one number at a time.** Avg lap, Best lap, Consistency, Pace vs class,
+  Clean air, Passes, Laps driven. Pick a metric with the sticky chips, or swipe the list sideways
+  for the next one. Each row has its rank, name, car and value over a bar from worst (short) to best
+  (full). Your car's rows are outlined in orange.
+- **Compare.** Hold a row, or press Compare, then tap up to three; "Compare 3 side by side" opens a
+  sheet with the metrics down, the drivers across, and the best of each row in orange with its rank.
+- **Sideways:** the full laptop table, scrolling sideways inside its box with the driver column fixed.
