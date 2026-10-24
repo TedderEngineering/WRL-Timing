@@ -8,10 +8,13 @@ import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import { mapFlag } from "./flags";
+import { InfoTip } from "../../components/InfoTip";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
 import { RaceControl } from "./RaceControl";
-import { LiveTrackOrder, leaderOrder, leaderRef, trackOrder } from "./LiveTrackOrder";
+import { LiveTrackOrder, leaderOrder, leaderRef, trackOrder, type TrackPlace } from "./LiveTrackOrder";
+import { closingOnFocus, SOON_S, URGENT_S, type Closing } from "./closing";
+import { recentPace } from "./live-battles";
 import { driversInCars } from "./DriverReportTab";
 import {
   IN_PIT,
@@ -163,6 +166,10 @@ export function TrackMap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const hits = useRef<{ key: number; x: number; y: number; r: number }[]>([]);
+  /** Each car's recent green lap time (live-battles.ts recentPace, as the Trend column), for who is closing. */
+  const greenPace = useMemo(() => new Map(Object.keys(data.cars).map((k) => [Number(k), recentPace(data, Number(k)).now])), [data]);
+  /** Who is closing on the focus car (worked out each second), for the markers drawn on the track. */
+  const closingRef = useRef<Closing[]>([]);
   // The map turned to suit the viewer (map-rotate.ts): dragged with the mouse, or 45° at a time
   // with the buttons on the map. Drawn from the ref (a drag redraws without re-rendering the page);
   // the state is for the buttons' readout.
@@ -523,6 +530,34 @@ export function TrackMap({
       }
     }
 
+    // Where each car closing on the focus car gets to it within the lap (closing.ts): a tick across
+    // the track in how-soon colour, with its number.
+    for (const c of closingRef.current.slice(0, 3)) {
+      const [mx, my] = px(pointAt(track.pts, track.ds, track.len, c.meetD));
+      const [nx, ny] = px(pointAt(track.pts, track.ds, track.len, c.meetD + 20));
+      const a = Math.atan2(ny - my, nx - mx) + Math.PI / 2;
+      const col = closingColor(c.catchS);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(mx - Math.cos(a) * 12, my - Math.sin(a) * 12);
+      ctx.lineTo(mx + Math.cos(a) * 12, my + Math.sin(a) * 12);
+      ctx.stroke();
+      const text = `#${carNo(data, c.key)}`;
+      ctx.font = "700 9px system-ui, sans-serif";
+      const w = ctx.measureText(text).width + 8;
+      const lx = mx + Math.cos(a) * 24;
+      const ly = my + Math.sin(a) * 24;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.roundRect(lx - w / 2, ly - 7, w, 14, 4);
+      ctx.fill();
+      ctx.fillStyle = "#0b0b18";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, lx, ly + 0.5);
+    }
+
     // The overall leader: a gold ring round its dot and a P1 tag above it, on top of everything.
     if (leaderAt) {
       const { x, y, r } = leaderAt;
@@ -658,6 +693,19 @@ export function TrackMap({
     keys(nums)
       .map((k) => `#${carNo(data, k)}`)
       .join(", ");
+  // Every running car's place on the track now (refreshed with the clock every second), and every
+  // car in the pit lane, also the ones the map no longer moves (it drops a car once in the pits).
+  const places: TrackPlace[] = [...motions.current.values()].flatMap((m) => {
+    const k = carKey(data, m.num);
+    if (k === null || !data.cars[String(k)] || out.has(k)) return [];
+    return [{ key: k, d: m.shown, inPit: (m.flags & IN_PIT) !== 0 || pitVisits.has(k) }];
+  });
+  for (const k of pitVisits.keys()) if (!out.has(k) && !places.some((p) => p.key === k)) places.push({ key: k, d: 0, inPit: true });
+  // The cars that will catch the focus car within its next lap (closing.ts): listed on the map,
+  // and where each gets there marked on the track.
+  const closing = track ? closingOnFocus({ places, focusKey: focusNum, len: track.len, pace: (k) => greenPace.get(k) ?? null, caution: isCaution(flag) }) : [];
+  closingRef.current = hidden.has("closing") ? [] : closing;
+  const closingShown = !!track && !isCaution(flag) && places.some((p) => p.key === focusNum && !p.inPit) && greenPace.get(focusNum) != null;
 
   return (
     <div className="flex flex-col md:min-h-0 md:flex-1">
@@ -680,6 +728,7 @@ export function TrackMap({
           />
           {track && <TurnButtons angle={angle} readout={readout} onTurn={turnTo} />}
           {track && <FlagBadge flag={flag} />}
+          {closingShown && !hidden.has("closing") && <ClosingPanel data={data} focusNum={focusNum} closing={closing} />}
           {!track && (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
               {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
@@ -731,14 +780,6 @@ export function TrackMap({
           swap={
             orderView === "live" && track ? (
               (() => {
-                const places = [...motions.current.values()].flatMap((m) => {
-                  const k = carKey(data, m.num);
-                  if (k === null || !data.cars[String(k)] || out.has(k)) return [];
-                  return [{ key: k, d: m.shown, inPit: (m.flags & IN_PIT) !== 0 || pitVisits.has(k) }];
-                });
-                // Every car in the pit lane, also the ones the map no longer moves (it drops a car
-                // once it is in the pits).
-                for (const k of pitVisits.keys()) if (!out.has(k) && !places.some((p) => p.key === k)) places.push({ key: k, d: 0, inPit: true });
                 const motionOf = (k: number | null) => [...motions.current.values()].find((m) => carKey(data, m.num) === k);
                 const onTrack = (k: number | null) => places.some((p) => p.key === k && !p.inPit);
                 // From the leader when the viewer picks it, and for now when the focus car is in the
@@ -917,6 +958,12 @@ function MapKey({
       {chip("lapped", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} />, "lapped", "A lap or more down on its class leader (the LD column).")}
       {chip("outLap", <span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: C.outLap }} />, "out-lap", "Back on track from a pit stop, on the lap it rejoined.")}
       {chip("faint", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} />, "faint signal", "No fresh position from the car.")}
+      {chip(
+        "closing",
+        <span className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "#fab219" }} />,
+        "closing on focus car",
+        "The cars that will catch the focus car within its next lap, listed on the map, and where each gets to it marked on the track."
+      )}
       {caution &&
         chip(
           "sc",
@@ -936,6 +983,62 @@ function MapKey({
 
 /** Behind a chip floating over the map on a wide screen: the map's ground, mostly opaque. */
 const OVER_BG = "rgba(11,11,24,0.82)";
+
+/** How soon a car closing on the focus car gets to it, as a colour: red within URGENT_S, amber within SOON_S. */
+function closingColor(catchS: number): string {
+  return catchS < URGENT_S ? "#f87171" : catchS < SOON_S ? "#fab219" : "#cbd5e1";
+}
+
+/** "now", "8 s", "1:05". */
+function soonText(s: number): string {
+  if (s < 1) return "now";
+  if (s < 60) return `${Math.round(s)} s`;
+  const r = Math.round(s);
+  return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, "0")}`;
+}
+
+/**
+ * On the map, bottom left: the cars that will catch the focus car within its next lap (closing.ts),
+ * soonest first, each with how long until it gets there; its place on the track is marked on the
+ * map. One quiet line when no one is closing.
+ */
+function ClosingPanel({ data, focusNum, closing }: { data: RaceChartData; focusNum: number; closing: Closing[] }) {
+  const shown = closing.slice(0, 4);
+  const num = carNo(data, focusNum);
+  const tip =
+    "Cars on track that will catch the focus car within its next lap, at each car's pace over its last 5 green laps: how long until each gets there (red within 10 s, amber within 30 s), and where, marked on the track. Faster classes lapping it count too. Not shown under a caution.";
+  return (
+    <div className="pointer-events-auto absolute bottom-2 left-2 max-w-[calc(100%-7rem)] rounded-md border text-[11px] backdrop-blur-sm" style={{ borderColor: "#3a3a5c", background: OVER_BG, color: C.text }} role="status" aria-label={`Closing on #${num}`}>
+      <div className="flex items-center gap-1 px-2 pt-1 font-semibold uppercase tracking-wider" style={{ color: closing.length ? "#fab219" : C.muted, paddingBottom: closing.length ? 2 : 4 }}>
+        {closing.length ? `Closing on #${num}` : "No one closing"}
+        <InfoTip label="Closing on the focus car" text={tip} />
+      </div>
+      {shown.length > 0 && (
+        <ul className="m-0 list-none px-1 pb-1">
+          {shown.map((c) => {
+            const car = data.cars[String(c.key)];
+            return (
+              <li
+                key={c.key}
+                className="flex items-center gap-2 rounded px-1 py-0.5 tabular-nums"
+                title={`#${carNo(data, c.key)} is ${c.behindS.toFixed(1)} s behind on the road and ${c.quickerS.toFixed(1)} s a lap quicker: it gets to #${num} in ${soonText(c.catchS)}.`}
+              >
+                <span className="rounded-sm border-l-[3px] pl-1 font-bold" style={{ borderColor: liveClassColor(car?.cls ?? "") }}>
+                  #{carNo(data, c.key)}
+                </span>
+                <span style={{ color: C.muted }}>{car?.cls}</span>
+                <span className="ml-auto font-bold" style={{ color: closingColor(c.catchS) }}>
+                  {soonText(c.catchS)}
+                </span>
+              </li>
+            );
+          })}
+          {closing.length > shown.length && <li className="px-1 text-[10px]" style={{ color: C.muted }}>+{closing.length - shown.length} more</li>}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /**
  * On the map, top centre: the session's flag when it is not green (flags.ts mapFlag): a caution,
