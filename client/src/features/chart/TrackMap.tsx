@@ -8,6 +8,7 @@ import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import { mapFlag } from "./flags";
+import { GHOST_KEY, GHOST_MAX_S, ghostPlace, readPitGhost, savePitGhost, type PitGhost } from "./pit-ghost";
 import { InfoTip } from "../../components/InfoTip";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
 import { virtualCars } from "../live/race-laps";
@@ -168,6 +169,20 @@ export function TrackMap({
   const hits = useRef<{ key: number; x: number; y: number; r: number }[]>([]);
   /** Each car's recent green lap time (live-battles.ts recentPace, as the Trend column), for who is closing. */
   const greenPace = useMemo(() => new Map(Object.keys(data.cars).map((k) => [Number(k), recentPace(data, Number(k)).now])), [data]);
+  /** The pit ghost (pit-ghost.ts): on or off and the time a stop would lose, kept on this device. */
+  const [pitGhost, setPitGhost] = useState<PitGhost>(readPitGhost);
+  const changePitGhost = (g: PitGhost) => {
+    setPitGhost(g);
+    savePitGhost(g);
+  };
+  const pitGhostRef = useRef(pitGhost);
+  pitGhostRef.current = pitGhost;
+  /** Where the pit ghost is now (m past the line): the time set behind the focus car at its pace; null off the track. */
+  const ghostOf = (key: number, len: number): number | null => {
+    const m = [...motions.current.values()].find((x) => carKey(data, x.num) === key);
+    if (!m || m.flags & IN_PIT || pitVisits.has(key) || out.has(key)) return null;
+    return ghostPlace(m.shown, m.base > 0 ? m.base : typicalSpeed, pitGhostRef.current.lossS, len);
+  };
   /** The cars-closing panel on or off (kept on this device); its ticks on the track go with the key's "closing" chip. */
   const [closingOn, setClosingOn] = useState(() => {
     try {
@@ -546,6 +561,35 @@ export function TrackMap({
       }
     }
 
+    // The pit ghost (pit-ghost.ts): a dashed ring in the focus car's colour where it would rejoin
+    // after a stop losing the time set, with that time.
+    const gd = pitGhostRef.current.on ? ghostOf(focusNum, track.len) : null;
+    if (gd !== null) {
+      const [gx, gy] = px(pointAt(track.pts, track.ds, track.len, gd));
+      ctx.setLineDash([3, 2.5]);
+      ctx.strokeStyle = TRACE.focus;
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = TRACE.focus;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const text = `PIT +${Math.round(pitGhostRef.current.lossS)}`;
+      ctx.font = "700 9px system-ui, sans-serif";
+      const w = ctx.measureText(text).width + 8;
+      ctx.fillStyle = TRACE.focus;
+      ctx.beginPath();
+      ctx.roundRect(gx - w / 2, gy - 11 - 16, w, 14, 4);
+      ctx.fill();
+      ctx.fillStyle = "#0b0b18";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, gx, gy - 11 - 9 + 0.5);
+    }
+
     // Where each car closing on the focus car gets to it within the lap (closing.ts): a tick across
     // the track in how-soon colour, with its number.
     for (const c of closingRef.current.slice(0, 3)) {
@@ -717,6 +761,10 @@ export function TrackMap({
     return [{ key: k, d: m.shown, inPit: (m.flags & IN_PIT) !== 0 || pitVisits.has(k) }];
   });
   for (const k of pitVisits.keys()) if (!out.has(k) && !places.some((p) => p.key === k)) places.push({ key: k, d: 0, inPit: true });
+  // The pit ghost: where the focus car would rejoin after a stop losing the time the viewer set,
+  // among the places (the Live Crossing Order lists it in its place on the road).
+  const ghostD = track && pitGhost.on ? ghostOf(focusNum, track.len) : null;
+  if (ghostD !== null) places.push({ key: GHOST_KEY, d: ghostD, inPit: false });
   // The cars that will catch the focus car within its next lap (closing.ts): listed on the map,
   // and where each gets there marked on the track.
   const closing = track ? closingOnFocus({ places, focusKey: focusNum, len: track.len, pace: (k) => greenPace.get(k) ?? null, caution: isCaution(flag) }) : [];
@@ -779,6 +827,8 @@ export function TrackMap({
           hidden={hidden}
           onToggle={toggleLayer}
           virtual={!!clock}
+          pitGhost={pitGhost}
+          onPitGhost={changePitGhost}
           caution={isCaution(flag)}
           leaderNote={leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
           status={[
@@ -856,6 +906,8 @@ export function TrackMap({
                     from={fromLeader ? "leader" : "focus"}
                     onFrom={pickCrossFrom}
                     note={note}
+                    ghostLossS={ghostD !== null ? pitGhost.lossS : null}
+                    lapS={track.len / speed}
                     onRowTap={(k) => {
                       if (k !== focusNum) follow(toggleFollow(followed, carNo(data, k)));
                     }}
@@ -941,6 +993,8 @@ function MapKey({
   hidden,
   onToggle,
   virtual,
+  pitGhost,
+  onPitGhost,
   caution,
   leaderNote,
   status,
@@ -950,6 +1004,9 @@ function MapKey({
   hidden: Set<string>;
   onToggle: (k: string) => void;
   virtual: boolean;
+  /** The pit ghost: off until turned on, with the time a stop would lose. */
+  pitGhost: PitGhost;
+  onPitGhost: (g: PitGhost) => void;
   caution: boolean;
   leaderNote: string;
   status: string[];
@@ -995,6 +1052,41 @@ function MapKey({
           "virtual car",
           "Each class's virtual car laps at its class leader's average over its last 3 laps and crosses the line exactly as the clock runs out: a leader ahead of it on the road has one more lap to run."
         )}
+      {/* The pit ghost: off until turned on (unlike the rest), with the time a stop would lose. */}
+      <span className="pointer-events-auto flex w-fit items-center gap-1 whitespace-nowrap rounded-md border xl:backdrop-blur-sm" style={{ borderColor: pitGhost.on ? TRACE.focus : "#2a2a48", background: OVER_BG }}>
+        <button
+          type="button"
+          aria-pressed={pitGhost.on}
+          onClick={() => onPitGhost({ ...pitGhost, on: !pitGhost.on })}
+          title={`Pit ghost: where the focus car would rejoin if it stopped now and lost the time set (pit lane plus fuelling), on the track and in the Live Crossing Order. The cars around it are taken to keep their gaps. ${pitGhost.on ? "Tap to turn it off." : "Tap to turn it on."}`}
+          className="flex items-center gap-1.5 rounded-md py-0.5 pl-2 pr-1 hover:bg-white/5"
+          style={{ color: pitGhost.on ? C.text : "#5c5c78" }}
+        >
+          <span className="inline-block h-3 w-3 rounded-full border-2 border-dashed" style={{ borderColor: TRACE.focus, opacity: pitGhost.on ? 1 : 0.5 }} />
+          pit ghost
+        </button>
+        {pitGhost.on && (
+          <label className="flex items-center gap-0.5 pr-1.5" style={{ color: C.muted }} title="The time a stop would lose (s): pit lane plus fuelling">
+            +
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={GHOST_MAX_S}
+              step={1}
+              value={pitGhost.lossS}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v >= 0 && v <= GHOST_MAX_S) onPitGhost({ ...pitGhost, lossS: v });
+              }}
+              aria-label="Pit ghost: seconds a stop would lose"
+              className="w-11 rounded border bg-transparent px-1 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              style={{ borderColor: "#3a3a5c", color: C.text }}
+            />
+            s
+          </label>
+        )}
+      </span>
       {chip("lapped", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted, background: "rgba(154,154,180,0.3)" }} />, "lapped", "A lap or more down on its class leader (the LD column).")}
       {chip("outLap", <span className="inline-block h-3 w-3 rounded-full border-2" style={{ borderColor: C.outLap }} />, "out-lap", "Back on track from a pit stop, on the lap it rejoined.")}
       {chip("faint", <span className="inline-block h-2.5 w-2.5 rounded-full border" style={{ borderColor: C.muted }} />, "faint signal", "No fresh position from the car.")}

@@ -17,6 +17,7 @@
 import type { RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { InfoTip } from "../../components/InfoTip";
+import { GHOST_KEY } from "./pit-ghost";
 import { liveClassColor } from "./constants";
 import { recentPace } from "./live-battles";
 
@@ -156,6 +157,8 @@ export function LiveTrackOrder({
   from,
   onFrom,
   note = null,
+  ghostLossS = null,
+  lapS = null,
 }: {
   data: RaceChartData;
   rows: TrackOrderRow[];
@@ -176,6 +179,10 @@ export function LiveTrackOrder({
   onFrom?: (f: "focus" | "leader") => void;
   /** Why the list is not what the viewer chose ("#246 is in the pits: …"). */
   note?: string | null;
+  /** The pit ghost's time (s), when it is in the rows. */
+  ghostLossS?: number | null;
+  /** A lap at the pace the gaps are measured at (s): from the leader, gaps to the focus car go the nearer way round. */
+  lapS?: number | null;
 }) {
   const leaders = classLeaders(data);
   const fromLeader = from === "leader";
@@ -185,8 +192,18 @@ export function LiveTrackOrder({
   const focusRow = rows.find((r) => r.key === focusKey);
   const base = fromLeader && focusRow && !focusRow.inPit && focusRow.gapS !== null ? focusRow.gapS : null;
   const ref = base !== null ? focusKey : rows.find((r) => r.isRef)?.key;
-  const gapOf = (r: TrackOrderRow) => (base !== null ? r.gapS! - base : r.gapS!);
-  const trend = new Map(ref === undefined ? [] : rows.filter((r) => r.key !== ref).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
+  // Ahead or behind the focus car the nearer way round the lap, as in Focus car mode (a car just
+  // behind the leader can be just ahead of a focus car nearly a lap down on it).
+  const gapOf = (r: TrackOrderRow) => {
+    if (base === null) return r.gapS!;
+    let g = r.gapS! - base;
+    if (lapS && lapS > 0) {
+      g = ((g % lapS) + lapS) % lapS;
+      if (g > lapS / 2) g -= lapS;
+    }
+    return g;
+  };
+  const trend = new Map(ref === undefined ? [] : rows.filter((r) => r.key !== ref && r.key !== GHOST_KEY).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
   const who = fromLeader && base === null ? "the leader" : "the focus car";
   const picker = onFrom && (
     <span className="ml-auto inline-flex shrink-0 overflow-hidden rounded-md border" role="radiogroup" aria-label="Measure the order from" style={{ borderColor: C.line }}>
@@ -271,6 +288,28 @@ export function LiveTrackOrder({
       </thead>
       <tbody>
         {rows.map((r) => {
+          if (r.key === GHOST_KEY) {
+            // The pit ghost (pit-ghost.ts): where the focus car would rejoin after a stop, in its place on the road.
+            return (
+              <tr key="ghost" style={{ borderTop: `1px dashed ${C.focus}`, borderBottom: `1px dashed ${C.focus}`, background: "rgba(244,140,52,0.10)" }} title={`Pit ghost: where #${carNo(data, focusKey)} would rejoin if it stopped now and lost ${ghostLossS ?? 0} s`}>
+                <td className="p-0 text-center">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-dashed align-middle" style={{ borderColor: C.focus }} />
+                </td>
+                <td className="px-1.5 py-1 text-[10px] font-extrabold uppercase tracking-wider" style={{ color: C.focus }}>
+                  Pit
+                </td>
+                <td className="px-1.5 py-1 italic" style={{ color: C.focus }}>
+                  #{carNo(data, focusKey)} after a stop (+{ghostLossS ?? 0} s)
+                </td>
+                <td />
+                <td />
+                <td className="px-1.5 py-1 text-right font-semibold" style={{ color: C.focus }}>
+                  {r.gapS === null ? "" : gapText(gapOf(r))}
+                </td>
+                <td />
+              </tr>
+            );
+          }
           const car = data.cars[String(r.key)];
           if (!car) return null;
           const color = liveClassColor(car.cls);
