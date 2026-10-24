@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { mockApi, preparePitAnalysis, RACE_ID } from "./mock-api.mjs";
+import { LIVE_SLUG, QUAL_ID, mockApi, preparePitAnalysis, RACE_ID } from "./mock-api.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -38,6 +38,9 @@ const PAGES = [
   { name: "me", path: "/me", bar: true },
   { name: "dashboard", path: "/dashboard", bar: true },
   { name: "events", path: "/races", bar: true },
+  { name: "live", path: `/live/${LIVE_SLUG}`, race: true, chart: true, live: true },
+  { name: "live:map", path: `/live/${LIVE_SLUG}?tab=map`, race: true, live: true },
+  { name: "qualifying", path: `/qualifying/${QUAL_ID}`, race: true, qual: true },
   ...TABS.map((t) => ({ name: `race:${t}`, path: `/chart?race=${RACE_ID}&tab=${t}`, race: true, chart: t === "position" || t === "laptimes" })),
 ];
 
@@ -64,9 +67,10 @@ const RULES = [
   { id: "double-tap-keeps-sheet-down", test: (m) => !m.chart || m.g?.levelAfterDbl === "peek", say: (m) => `lap sheet at ${m.g?.levelAfterDbl} after a double-tap` },
   { id: "pinch-zooms", test: (m) => !m.chart || (m.g?.pinch && m.g.pinch.range < m.g.pinch.full * 0.5), say: (m) => `pinch showed ${JSON.stringify(m.g?.pinch)}` },
   { id: "tap-raises-sheet", test: (m) => !m.chart || m.g?.levelAfterTap === "half", say: (m) => `lap sheet at ${m.g?.levelAfterTap} after a tap` },
+  { id: "sideways-rail-beside-chart", test: (m) => !m.chart || m.width < m.height || (m.g?.rail && m.g.rail.chartRight <= m.g.rail.railLeft + 2 && m.g.rail.chartHeight >= 150), say: (m) => `sideways lap details: ${JSON.stringify(m.g?.rail)}` },
   { id: "page-not-zoomed", test: (m) => !m.chart || m.g?.pageScale === 1, say: (m) => `the page itself zoomed to ${m.g?.pageScale}` },
   // Views: one sideways-scrolling row with every view, no More menu.
-  { id: "every-view-in-the-row", test: (m) => !m.race || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
+  { id: "every-view-in-the-row", test: (m) => !m.page.startsWith("race:") || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
   // The peek is one line (‹ lap ›) and the chart carries no how-to text: help is in ⋯ → Chart gestures.
   { id: "peek-one-line", test: (m) => !m.chart || (m.peekHeight !== null && m.peekHeight <= 64), say: (m) => `lap sheet peek is ${m.peekHeight} px tall` },
   { id: "no-how-to-on-chart", test: (m) => !m.chart || (m.captionLines && !/pinch|tap a lap|swipe/i.test(m.captionLines.text) && m.captionLines.height <= 40), say: (m) => `chart caption: ${JSON.stringify(m.captionLines)}` },
@@ -277,6 +281,12 @@ async function gestures(page) {
   await tap(cx, cy);
   await page.waitForTimeout(600);
   g.levelAfterTap = await level();
+  // Sideways the open lap details are a rail beside the chart, not a sheet over it.
+  g.rail = await page.evaluate(() => {
+    const rail = [...document.querySelectorAll("[data-lap-sheet][data-rail]")].find((e) => e.getClientRects().length);
+    const canvas = [...document.querySelectorAll("canvas")].find((e) => e.getClientRects().length && e.getBoundingClientRect().width > 50);
+    return rail && canvas ? { railLeft: Math.round(rail.getBoundingClientRect().left), chartRight: Math.round(canvas.getBoundingClientRect().right), chartHeight: Math.round(canvas.getBoundingClientRect().height) } : null;
+  });
   await cdp.detach();
   return g;
 }

@@ -156,7 +156,8 @@ export function Layout() {
   // and back arrow, so the site bar and live banner step aside; every other page gets the
   // bottom bar (AppBar) in place of the hamburger menu.
   const compact = useIsCompact();
-  const raceScreen = compact && pathname === "/chart";
+  // A race screen: a race, a live session (not the list or a pre-race page) or a qualifying session.
+  const raceScreen = compact && (pathname === "/chart" || /^\/live\/(?!next\/)[^/]+$/.test(pathname) || /^\/qualifying\/[^/]+$/.test(pathname));
   const showBar = compact && !raceScreen && !full;
 
   return (
@@ -231,7 +232,8 @@ export function Layout() {
           </div>
         </nav>
       </header>
-      {!full && !raceScreen && <LiveBanner />}
+      {/* Phones: the bottom bar's Live place (with its red dot) says a race is live instead. */}
+      {!full && !compact && <LiveBanner />}
 
       {/* Page content */}
       <main className={appPage ? "flex-1 min-h-0" : "flex-1"}>

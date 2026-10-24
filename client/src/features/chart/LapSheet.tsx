@@ -20,6 +20,15 @@ export type SheetLevel = "peek" | "half" | "full";
 /** The peek's height without the home-bar inset: grab bar and the 44 px lap line. */
 export const PEEK_PX = 60;
 
+/**
+ * A phone held sideways (mobile redesign, step 7, decision M7): the lap details open as a rail on
+ * the right, beside the chart, instead of a sheet over it. Closed, the one-line peek stays at
+ * the bottom as upright.
+ */
+export const RAIL_WIDTH = "min(44vw, 400px)";
+/** The race page's top row, above the rail. */
+const RAIL_TOP = "calc(48px + env(safe-area-inset-top))";
+
 const ORDER: SheetLevel[] = ["peek", "half", "full"];
 
 const STEP = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#cbd5e1] active:bg-white/10";
@@ -45,6 +54,7 @@ export function LapSheet({
   summary,
   onPrev,
   onNext,
+  rail = false,
   children,
 }: {
   level: SheetLevel;
@@ -55,6 +65,8 @@ export function LapSheet({
   summary: ReactNode;
   onPrev: () => void;
   onNext: () => void;
+  /** Sideways: open as a rail on the right (RAIL_WIDTH) rather than a sheet from the bottom. */
+  rail?: boolean;
   children: ReactNode;
 }) {
   // While dragging, the sheet follows the finger; on release it settles at the nearest height.
@@ -79,16 +91,23 @@ export function LapSheet({
     if (i >= 0 && i < ORDER.length) setLevel(ORDER[i]);
   };
 
+  const railOpen = rail && level !== "peek";
   return (
     <section
       ref={panel}
       aria-label={label}
       data-lap-sheet
       data-level={level}
-      className="fixed inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t shadow-[0_-8px_24px_rgba(0,0,0,0.35)]"
+      data-rail={railOpen ? "" : undefined}
+      className={
+        railOpen
+          ? "fixed bottom-0 right-0 z-30 flex flex-col rounded-tl-2xl border-l border-t shadow-[-8px_0_24px_rgba(0,0,0,0.35)]"
+          : "fixed inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t shadow-[0_-8px_24px_rgba(0,0,0,0.35)]"
+      }
       style={{
-        height: dragPx !== null ? `${dragPx}px` : heightOf(level),
-        transition: dragPx !== null ? "none" : "height 200ms ease-out",
+        ...(railOpen
+          ? { top: RAIL_TOP, width: RAIL_WIDTH }
+          : { height: dragPx !== null ? `${dragPx}px` : heightOf(level), transition: dragPx !== null ? "none" : "height 200ms ease-out" }),
         background: "#0e0e20",
         borderColor: "#1e1e38",
         color: "#e0e0e8",
@@ -100,6 +119,7 @@ export function LapSheet({
         data-phone-shell="lap-sheet"
         className="shrink-0 touch-none select-none"
         onPointerDown={(e) => {
+          if (rail) return;
           start.current = {
             y: e.clientY,
             h: panel.current?.getBoundingClientRect().height ?? PEEK_PX,
@@ -138,9 +158,9 @@ export function LapSheet({
           </button>
           <button
             type="button"
-            aria-label={`${level === "full" ? "Show less" : "Show more"} of the lap details`}
+            aria-label={`${(rail ? railOpen : level === "full") ? "Show less" : "Show more"} of the lap details`}
             aria-expanded={level !== "peek"}
-            onClick={() => step(level === "full" ? -1 : 1)}
+            onClick={() => (rail ? setLevel(railOpen ? "peek" : "half") : step(level === "full" ? -1 : 1))}
             className="flex h-11 min-w-0 flex-1 items-center px-1 text-left"
           >
             <span className="min-w-0 flex-1" aria-live="polite">

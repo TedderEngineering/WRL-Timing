@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMediaQuery } from "../../lib/breakpoint";
 import type { AnnotationData, CarData, PitMarker, RaceChartData } from "@shared/types";
 import { carNo } from "./car-number";
 import { formatLapTime, getCompColor } from "./chart-renderer";
@@ -325,6 +326,8 @@ export function RunningOrder({
     setPStat(n);
     savePitStat(n);
   };
+  // The narrowest phones (under 360 px) drop the Class column: the row's left stripe is its colour.
+  const narrow = useMediaQuery("(max-width: 359.98px)");
   // Tighter cells on a phone, so every column fits (sm and up as before).
   const th = "px-1 py-2 font-semibold sm:px-1.5";
   return (
@@ -340,7 +343,7 @@ export function RunningOrder({
               <th className="w-5 p-0 sm:w-6" aria-label="In the pits" />
               <th className={`${th} text-right`}>P</th>
               <th className={th}>#</th>
-              <th className={th}>Class</th>
+              {!narrow && <th className={th}>Class</th>}
               <th className={`${th} text-right`} title="Position in class">
                 PIC
               </th>
@@ -354,7 +357,7 @@ export function RunningOrder({
                   onClick={cycleStat}
                   title={LAP_STAT_TITLE[stat]}
                   aria-label={`${LAP_STAT_LABEL[stat]}. ${LAP_STAT_TITLE[stat]}`}
-                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                  className="min-h-[44px] min-w-[24px] whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white sm:min-h-0 sm:min-w-0"
                 >
                   <span className="sm:hidden">{LAP_STAT_SHORT[stat]}</span>
                   <span className="hidden sm:inline">{LAP_STAT_LABEL[stat]}</span>
@@ -366,7 +369,7 @@ export function RunningOrder({
                   onClick={cyclePitStat}
                   title={PIT_STAT_TITLE[pStat]}
                   aria-label={`${PIT_STAT_LABEL[pStat]}. ${PIT_STAT_TITLE[pStat]}`}
-                  className="whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white"
+                  className="min-h-[44px] min-w-[24px] whitespace-nowrap font-semibold underline decoration-dotted underline-offset-4 hover:text-white sm:min-h-0 sm:min-w-0"
                 >
                   <span className="sm:hidden">{PIT_STAT_SHORT[pStat]}</span>
                   <span className="hidden sm:inline">{PIT_STAT_LABEL[pStat]}</span>
@@ -398,7 +401,7 @@ export function RunningOrder({
                 <tr
                   key={r.key}
                   onClick={() => tap(r.key)}
-                  className={`cursor-pointer hover:bg-white/5 ${visit ? "" : "border-b"}`}
+                  className={`h-11 cursor-pointer hover:bg-white/5 sm:h-auto ${visit ? "" : "border-b"}`}
                   style={rowStyle}
                   aria-current={focus ? "true" : undefined}
                   aria-pressed={onRowTap && !focus ? isFollowed : undefined}
@@ -430,11 +433,13 @@ export function RunningOrder({
                       carNo(data, r.key)
                     )}
                   </td>
-                  <td className="px-1 py-1 sm:px-1.5">
-                    <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
-                      {r.cls || "–"}
-                    </span>
-                  </td>
+                  {!narrow && (
+                    <td className="px-1 py-1 sm:px-1.5">
+                      <span className="rounded px-1 text-[10px] font-bold" style={{ background: color, color: labelOn(color) }}>
+                        {r.cls || "–"}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-1 py-1 sm:px-1.5 text-right font-semibold" style={{ color }}>
                     {r.posClass ?? "–"}
                   </td>
@@ -471,7 +476,7 @@ export function RunningOrder({
                     style={rowStyle}
                   >
                     <td className="p-0" style={{ borderLeft: `5px solid ${color}` }} />
-                    <td colSpan={9} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
+                    <td colSpan={narrow ? 8 : 9} className="px-1.5 pb-1.5 pt-0 text-[11px]" style={{ color: C.pitText }}>
                       {pitDetail(carPits, visit)}
                     </td>
                   </tr>

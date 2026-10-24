@@ -13,6 +13,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const seedDir = path.resolve(here, "../../server/prisma");
 
 export const RACE_ID = "e2e-race";
+export const LIVE_SLUG = "e2e-live";
+export const QUAL_ID = "e2e-qual";
 const EVENT_ID = "e2e-event";
 
 let cache = null;
@@ -37,6 +39,9 @@ export async function preparePitAnalysis() {
     const mod = await vite.ssrLoadModule("/src/features/chart/live-pit-analysis.ts");
     const f = fixtures();
     f.pitAnalysis = mod.pitAnalysisFromChart(f.data, f.annotations, race.track);
+    // RaceTrace Live: the seeded race as a live session, encoded by the server's own wire code.
+    const wire = await vite.ssrLoadModule(path.resolve(here, "../../server/src/live/wire.ts"));
+    f.liveFull = wire.encodeFull(1, f.data, f.annotations);
   } finally {
     await vite.close();
   }
@@ -144,8 +149,38 @@ function myCar(id) {
   };
 }
 
+const liveInfo = {
+  slug: LIVE_SLUG, updatedAt: new Date().toISOString(), waiting: null, delayed: false, ended: false,
+  eventName: "WRL Barber", sessionName: "Saturday 8 Hour", track: race.track,
+  status: { leaderLap: 249, carCount: 57, flag: "Green", runningRaceTime: "07:12:30", timeToGo: "00:47:30", warnings: [] },
+};
+
+/** A qualifying session from the seed: each car's first laps, split into three sectors. */
+function qualifying() {
+  const { data } = fixtures();
+  const cars = Object.entries(data.cars).map(([num, c]) => {
+    const laps = c.laps.slice(1, 9).filter((l) => l.ltSec > 0).map((l, i) => {
+      const s1 = +(l.ltSec * 0.31).toFixed(3), s2 = +(l.ltSec * 0.37).toFixed(3), s3 = +(l.ltSec - s1 - s2).toFixed(3);
+      const f = (x) => `0:${x.toFixed(3).padStart(6, "0")}`;
+      return { l: i + 1, lt: l.lt, ltSec: l.ltSec, s1, s2, s3, s1f: f(s1), s2f: f(s2), s3f: f(s3), s1imp: 0, s2imp: 0, s3imp: 0, flag: "GF", pit: false, lapImp: 0 };
+    });
+    const best = laps.reduce((b, l) => (l.ltSec < b.ltSec ? l : b), laps[0] ?? { ltSec: 0, l: 0 });
+    const min = (k) => Math.min(...laps.map((l) => l[k]));
+    return { num, team: c.team, driver: `Driver ${num}`, cls: c.cls, mfr: "", laps, bestLap: best.ltSec, bestLapNum: best.l, theoreticalBest: min("s1") + min("s2") + min("s3"), bestS1: min("s1"), bestS2: min("s2"), bestS3: min("s3") };
+  }).filter((c) => c.laps.length).sort((a, b) => a.bestLap - b.bestLap);
+  return {
+    session: { id: QUAL_ID, name: "Qualifying", track: race.track, series: "WRL", date: race.date, carCount: cars.length },
+    data: { sessionName: "Qualifying", track: race.track, series: "WRL", date: race.date, cars, classes: [...new Set(cars.map((c) => c.cls))].sort(), totalLaps: cars.reduce((n, c) => n + c.laps.length, 0) },
+  };
+}
+
 /** The answer for one request, or null when this stand-in does not know the route. */
 function answer(method, route, search = new URLSearchParams()) {
+  if (route === "/live/key") return { k: "e2e-key", renewAt: new Date(Date.now() + 3600e3).toISOString() };
+  if (route === `/live/${LIVE_SLUG}/head`) return { epoch: "e1", v: 1, ageMs: 0, live: liveInfo };
+  if (route.startsWith(`/live/${LIVE_SLUG}/full/`)) return { race: { id: "live-race", name: race.name, date: race.date, track: race.track, series: "WRL", season: 2026 }, full: fixtures().liveFull };
+  if (route === `/live/${LIVE_SLUG}/events`) return { events: [] };
+  if (route === `/qualifying/${QUAL_ID}/chart-data`) return qualifying();
   if (route === "/dashboard/my-car") return myCar(search.get("car"));
   if (route === `/races/${RACE_ID}/car-card` || route === `/races/${RACE_ID}/driver-card`) {
     const num = search.get("car") ?? "60";
@@ -190,7 +225,7 @@ function answer(method, route, search = new URLSearchParams()) {
   if (route.startsWith("/me/cars")) return { cars: myCars, max: 5 };
   if (route.startsWith("/me/drivers")) return { drivers: [] };
   if (route.startsWith("/me/alerts")) return { on: false };
-  if (route === "/live") return { sessions: [], upcoming: [], recent: [], demo: null };
+  if (route === "/live") return { sessions: [{ slug: LIVE_SLUG, sessionName: liveInfo.sessionName, eventName: liveInfo.eventName, track: race.track, updatedAt: liveInfo.updatedAt }], upcoming: [], recent: [], demo: null };
   return null;
 }
 

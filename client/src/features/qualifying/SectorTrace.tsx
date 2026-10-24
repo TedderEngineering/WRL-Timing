@@ -499,7 +499,7 @@ export function SectorTrace({ data, compSet, classView }: SectorTraceProps) {
   return (
     <div className="flex flex-col gap-1">
       {/* Mode toggle */}
-      <div className="flex items-center gap-1 px-1">
+      <div className="flex flex-wrap items-center gap-1 px-1">
         <span className="text-[11px] uppercase tracking-wider font-semibold mr-1" style={{ color: "#cbd5e1" }}>
           View
         </span>
@@ -507,7 +507,7 @@ export function SectorTrace({ data, compSet, classView }: SectorTraceProps) {
           <button
             key={m.id}
             onClick={() => setMode(m.id)}
-            className="px-2.5 py-0.5 rounded-xl text-[11px] border transition-all cursor-pointer"
+            className="min-h-[44px] px-3 rounded-xl text-[12px] border transition-all cursor-pointer sm:min-h-0 sm:px-2.5 sm:py-0.5 sm:text-[11px]"
             style={{
               background: mode === m.id ? "#4472C4" : CHART_STYLE.card,
               borderColor: mode === m.id ? "#4472C4" : CHART_STYLE.border,

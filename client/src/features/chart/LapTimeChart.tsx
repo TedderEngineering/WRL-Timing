@@ -16,7 +16,7 @@ import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
 import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
 import { LapScrubber } from "./LapScrubber";
-import { LapSheet, PEEK_PX, type SheetLevel } from "./LapSheet";
+import { LapSheet, PEEK_PX, RAIL_WIDTH, type SheetLevel } from "./LapSheet";
 import { CarSummary, Stat } from "./LapDetailsPanel";
 import { CarDrivers } from "../my-drivers/CarDrivers";
 import type { TraceView } from "./trace-view";
@@ -26,7 +26,7 @@ import {
   computeClassLapTimeRankings,
 } from "./lap-time-rankings";
 import { carNo } from "./car-number";
-import { useIsCompact } from "../../lib/breakpoint";
+import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
 import { isGreenFlag } from "./flags";
 
 // ─── Coordinate helpers (duplicated for module independence) ─────────────────
@@ -493,6 +493,8 @@ export function LapTimeChart({
 
   // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
   const isMobile = useIsCompact();
+  // Sideways (M7): the lap details open as a rail beside the chart, which narrows to make room.
+  const railMode = useIsLandscapePhone() && isMobile;
   // Phone lap sheet height (mobile redesign, PR 4). A tap on the chart raises it to half.
   const [sheet, setSheet] = useState<SheetLevel>("peek");
   const raiseSheet = useRef<() => void>(() => {});
@@ -529,11 +531,18 @@ export function LapTimeChart({
     drawLapTimeChart(canvas, data, annotations, rankings, focusNum, compSet, activeLap, classView, d, !isPaid, lapStart, lapEnd, selectionRange, watermarkEmail);
   }, [data, annotations, rankings, focusNum, compSet, activeLap, classView, dim, resize, isPaid, lapStart, lapEnd, selectionRange, watermarkEmail]);
 
+  // Resize on window resize and on container reflow (the sideways lap rail opening), as the trace.
   useEffect(() => {
     const onResize = () => { const d = resize(); if (d) setDim(d); };
     window.addEventListener("resize", onResize);
     onResize();
-    return () => window.removeEventListener("resize", onResize);
+    const wrapper = wrapperRef.current;
+    const ro = wrapper && typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : undefined;
+    if (wrapper) ro?.observe(wrapper);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      ro?.disconnect();
+    };
   }, [resize]);
 
   // ── Coordinate helpers ──────────────────────────────────────────
@@ -873,12 +882,20 @@ export function LapTimeChart({
     return (
       <div className="flex h-full min-h-0 flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
         <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} headSlot={headSlot} phoneSlot={phoneSlot} />
-        <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
+        <div
+          className="flex min-h-0 flex-1 flex-col px-2 pt-2"
+          style={
+            railMode && sheet !== "peek"
+              ? { paddingRight: `calc(${RAIL_WIDTH} + 8px)`, paddingBottom: "calc(8px + env(safe-area-inset-bottom))" }
+              : { paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }
+          }
+        >
           {figure}
         </div>
         <LapSheet
           level={sheet}
           setLevel={setSheet}
+          rail={railMode}
           label="Lap details"
           summary={summary}
           onPrev={navPrev}

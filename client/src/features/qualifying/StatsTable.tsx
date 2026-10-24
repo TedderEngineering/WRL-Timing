@@ -1,5 +1,19 @@
 import { useMemo, useState } from "react";
 import { CHART_STYLE } from "../chart/constants";
+import { useIsCompact } from "../../lib/breakpoint";
+import { PC, RowCard, SortBar, StatGrid } from "../chart/phone-cards";
+
+const PHONE_SORT: { key: SortKey; label: string }[] = [
+  { key: "bestLap", label: "Best lap" },
+  { key: "theoBest", label: "Theoretical best" },
+  { key: "delta", label: "Delta to theoretical" },
+  { key: "consistency", label: "Consistency" },
+  { key: "s1Best", label: "S1 best" },
+  { key: "s2Best", label: "S2 best" },
+  { key: "s3Best", label: "S3 best" },
+  { key: "car", label: "Car number" },
+  { key: "driver", label: "Driver" },
+];
 import type { QualifyingChartData, QualifyingCar } from "@shared/types";
 
 interface StatsTableProps {
@@ -106,6 +120,8 @@ function consistencyColor(value: number, classAvg: number, classStd: number): st
 export function StatsTable({ data, compSet, classView }: StatsTableProps) {
   const [sortCol, setSortCol] = useState<SortKey>("bestLap");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Phones (mobile redesign, step 7): one card per car instead of a 17-column table.
+  const compact = useIsCompact();
 
   const handleSort = (col: SortKey) => {
     if (sortCol === col) {
@@ -238,6 +254,57 @@ export function StatsTable({ data, compSet, classView }: StatsTableProps) {
         style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border, color: CHART_STYLE.muted }}
       >
         No cars selected.
+      </div>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2" style={{ color: PC.text }} data-phone-cards="qualifying">
+        <SortBar
+          options={PHONE_SORT}
+          value={sortCol}
+          dir={sortDir}
+          onChange={(k) => {
+            setSortCol(k);
+            setSortDir(DESC_DEFAULT.has(k) ? "desc" : "asc");
+          }}
+          onFlip={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+        />
+        {sortedRows.map((row) => {
+          const avg = classAvgs.get(row.car.cls || "All");
+          const dc = (val: number, cAvg: number, cStd: number) => deltaColor(val, cAvg, cStd);
+          const sector = (best: number, mean: number, bAvg?: number, bStd?: number) => (
+            <>
+              <span style={{ color: avg && bAvg !== undefined && bStd !== undefined ? dc(best, bAvg, bStd) : PC.text }}>{fmtSec(best)}</span>
+              <span className="block text-[11px]" style={{ color: PC.muted }}>avg {fmtSec(mean)}</span>
+            </>
+          );
+          return (
+            <RowCard key={row.car.num}>
+              <div className="flex items-baseline gap-2">
+                <span className="w-7 shrink-0 font-mono text-[14px] font-bold">P{row.pos}</span>
+                <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: PC.accent }}>#{row.car.num}</span>
+                <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>
+                  {row.car.driver} · {row.car.cls}
+                </span>
+                <span className="shrink-0 font-mono text-[15px] font-bold" style={{ color: avg ? dc(row.car.bestLap, avg.bestLap, avg.bestLapStd) : PC.text }}>
+                  {fmtSec(row.car.bestLap)}
+                </span>
+              </div>
+              <StatGrid
+                stats={[
+                  { label: "Theo. best", value: fmtSec(row.car.theoreticalBest) },
+                  { label: "Delta", value: fmtDelta(row.delta) },
+                  { label: "Consistency", value: fmtPct(row.consistency) },
+                  { label: "S1", value: sector(row.car.bestS1, row.s1Avg, avg?.s1Best, avg?.s1BestStd) },
+                  { label: "S2", value: sector(row.car.bestS2, row.s2Avg, avg?.s2Best, avg?.s2BestStd) },
+                  { label: "S3", value: sector(row.car.bestS3, row.s3Avg, avg?.s3Best, avg?.s3BestStd) },
+                ]}
+              />
+            </RowCard>
+          );
+        })}
       </div>
     );
   }
