@@ -69,6 +69,7 @@ export function MePage() {
           <Group title="Following">
             <Item to="/settings/cars" label="My cars" />
             <Item to="/settings/drivers" label="My drivers" />
+            <Item to="/season" label="Season" detail="Every round, run and to come" />
           </Group>
           <Group title="Settings">
             <Item to="/settings/account" label="Account" />
@@ -100,6 +101,13 @@ export function MePage() {
         <Item to="/privacy" label="Privacy" />
         <Item to="/terms" label="Terms" />
       </Group>
+
+      {/* The site footer, which phones don't show above the bottom bar. */}
+      <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer" className="mt-6 flex min-h-[44px] items-center gap-3 px-1 text-[13px] text-gray-500 dark:text-gray-400">
+        <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-5 dark:hidden" />
+        <img src="/te-logo-white.png" alt="Tedder Engineering" className="hidden h-5 dark:block" />
+        <span>© {new Date().getFullYear()} Tedder Engineering</span>
+      </a>
 
       {isAuthenticated && (
         <Group>

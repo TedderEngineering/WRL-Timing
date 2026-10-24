@@ -95,3 +95,28 @@ your car's cards pinned first, then the class in order. A card shows its row's n
 Tap a Pit Stops or Strategy card for its stops or stints as a list, with "View on the trace". Strategy
 and the Driver Report follow the focus car's class. Every control on a race view is 44 px on a phone
 (laptop sizes from `sm:` up), and search fields use 16 px text so iPhones don't zoom on focus.
+
+## Home and Events (step 6)
+
+**Home on a phone** (`PhoneCarHero.tsx`, the phone branch of `DashboardPage.tsx`):
+- The first steps sit at the top, folded to the progress and the next step, until they are done.
+- Your car's latest race comes next, on one screen: race, car, the result (or the story's headline),
+  places over the pit cycles and stops, one highlight, then **Read the story** (filled) and Position
+  Trace / Pit stops.
+- "More about this race" opens the laptop's full car card under it.
+- With more than one car, swipe sideways (or tap the dots) for the next.
+- Below that: Continue, the next round, the latest four races, install hint, live demo, favorites,
+  and the support card.
+- The season calendar moves to Me → Season (`/season`).
+
+**Events on a phone** (`RaceListPage.tsx`):
+- For someone who follows a car, the page opens on **My cars**, with an All races / My cars switch.
+  The choice is remembered.
+- A car's races come from the public car search (`myCarRaces.ts`); there is no server change.
+- Season and series chips and the search box are 44 px.
+
+**Site bar on a phone:** the RaceTrace mark and name only. The footer's links (share, terms,
+privacy, Tedder Engineering) live in Me.
+
+The phone check's stand-in API now follows two cars and lists thirty race weekends. On a 390 px
+phone, Events goes from 6,215 px to one screen.

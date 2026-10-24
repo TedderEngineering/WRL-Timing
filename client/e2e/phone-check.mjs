@@ -37,6 +37,7 @@ const PAGES = [
   { name: "home", path: "/", bar: true },
   { name: "me", path: "/me", bar: true },
   { name: "dashboard", path: "/dashboard", bar: true },
+  { name: "events", path: "/races", bar: true },
   ...TABS.map((t) => ({ name: `race:${t}`, path: `/chart?race=${RACE_ID}&tab=${t}`, race: true, chart: t === "position" || t === "laptimes" })),
 ];
 
@@ -76,6 +77,11 @@ const RULES = [
   { id: "cards-not-tables", test: (m) => !["race:pitanalysis", "race:strategy", "race:drivers"].includes(m.page) || m.cardLists > 0, say: () => "no phone card list on a table view" },
   { id: "card-controls-44", test: (m) => m.cardControlsSmall.length === 0, say: (m) => `sort or class controls under 44 px: ${m.cardControlsSmall.join(", ")}` },
   { id: "race-targets-44", test: (m) => !m.race || m.smallTargets === 0, say: (m) => `controls under 44 px on a race view: ${m.smallList.join(", ")}` },
+  // Step 6: Home and Events.
+  { id: "home-car-on-first-screen", test: (m) => m.page !== "dashboard" || m.width > m.height || (m.homeStoryBottom !== null && m.homeStoryBottom <= m.height - 64), say: (m) => `"Read the story" ends at ${m.homeStoryBottom} px, under the bottom bar` },
+  { id: "home-swipe-next-car", test: (m) => m.page !== "dashboard" || /1 OF 2 → .*2 OF 2/i.test(m.swipe ?? ""), say: (m) => `swiping your car: ${m.swipe}` },
+  { id: "events-opens-on-my-cars", test: (m) => m.page !== "events" || m.eventsScope === "My cars", say: (m) => `Events opens on ${m.eventsScope}` },
+  { id: "app-targets-44", test: (m) => m.race || m.page === "home" || m.smallTargets === 0, say: (m) => `controls under 44 px: ${m.smallList.join(", ")}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -154,6 +160,12 @@ function measure() {
     targets: targets.length,
     smallTargets: small.length,
     smallList: small.map((el) => `${(el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 24)} ${Math.round(el.getBoundingClientRect().height)}`),
+    pageHeight: doc.scrollHeight,
+    homeStoryBottom: (() => {
+      const b = [...document.querySelectorAll("[data-phone-home='primary']")].find(vis);
+      return b ? Math.round(b.getBoundingClientRect().bottom) : null;
+    })(),
+    eventsScope: document.querySelector("[data-phone-events='scope'] [aria-selected='true']")?.textContent ?? null,
     widestScroller: sidewaysScrollers.reduce((w, el) => Math.max(w, el.scrollWidth), 0),
     cardControlsSmall: [...document.querySelectorAll("[data-phone-cards='sort'] button, [data-phone-cards='sort'] label, [data-phone-cards='chips'] button")]
       .filter(vis)
@@ -168,6 +180,22 @@ async function zoomShown(page) {
   const text = await page.locator("figure:visible figcaption").first().innerText();
   const m = text.match(/Laps (\d+)–(\d+) of (\d+)/);
   return m ? { range: +m[2] - +m[1], full: +m[3] - 1 } : null;
+}
+
+/** Home: a sideways swipe on your car moves to your next car. Returns the heading before and after. */
+async function swipeCars(page) {
+  const heading = () => page.locator("[data-phone-home='car'] h2").first().innerText();
+  const before = await heading();
+  await page.locator("[data-phone-home='car'] article").first().scrollIntoViewIfNeeded();
+  const box = await page.locator("[data-phone-home='car'] article").first().boundingBox();
+  const cdp = await page.context().newCDPSession(page);
+  const y = box.y + 60;
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + box.width - 30, y }] });
+  for (let i = 1; i <= 5; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: box.x + box.width - 30 - i * 40, y }] });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
+  await page.waitForTimeout(600);
+  return `${before} → ${await heading()}`;
 }
 
 /** Real touch events through the DevTools protocol, which Playwright's tap cannot do with two fingers. */
@@ -228,6 +256,7 @@ async function main() {
         if (pg.chart) await page.locator("canvas:visible").first().waitFor({ timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
+        if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         unknown.forEach((u) => unknownRoutes.add(u));
         if (opt("--shots")) {
