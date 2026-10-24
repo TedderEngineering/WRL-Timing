@@ -12,7 +12,7 @@ export function ShareImageActions({
   text,
   kind,
   label,
-  className = "text-[13px] hover:underline disabled:opacity-60",
+  className = "min-h-[44px] text-[13px] hover:underline disabled:opacity-60 sm:min-h-0",
   color = "#F48C34",
 }: {
   make: () => Promise<Blob>;

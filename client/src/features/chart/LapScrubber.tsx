@@ -13,6 +13,7 @@ export function LapScrubber({
   onLap,
   navPrev,
   navNext,
+  large = false,
 }: {
   maxLap: number;
   fcy: Array<[number, number]>;
@@ -21,7 +22,10 @@ export function LapScrubber({
   onLap: (lap: number) => void;
   navPrev: () => void;
   navNext: () => void;
+  /** Phone lap sheet: 44 px buttons and a taller strip (mobile redesign, PR 4). */
+  large?: boolean;
 }) {
+  const btn = large ? "h-11 w-11 shrink-0 rounded-lg border" : "h-9 w-9 shrink-0 rounded-md border";
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const pct = (lap: number) => (maxLap > 1 ? ((lap - 1) / (maxLap - 1)) * 100 : 0);
@@ -38,7 +42,7 @@ export function LapScrubber({
 
   return (
     <div className="flex items-center gap-3">
-      <button type="button" aria-label="Previous lap" onClick={navPrev} className="h-9 w-9 shrink-0 rounded-md border" style={{ background: "#12122a", borderColor: "#3a3a5c", color: "#e0e0e8" }}>
+      <button type="button" aria-label="Previous lap" onClick={navPrev} className={btn} style={{ background: "#12122a", borderColor: "#3a3a5c", color: "#e0e0e8" }}>
         ◀
       </button>
       <div
@@ -64,7 +68,7 @@ export function LapScrubber({
         onPointerUp={() => {
           dragging.current = false;
         }}
-        className="relative h-6 flex-1 cursor-pointer touch-none rounded border outline-none focus-visible:ring-2 focus-visible:ring-[#F48C34]"
+        className={`relative ${large ? "h-9" : "h-6"} flex-1 cursor-pointer touch-none rounded border outline-none focus-visible:ring-2 focus-visible:ring-[#F48C34]`}
         style={{ background: "#12122a", borderColor: "#1e1e38" }}
       >
         {fcy.map(([s, e]) => (
@@ -78,7 +82,7 @@ export function LapScrubber({
           <div className="absolute -bottom-1 -top-1 w-[3px] rounded-sm" style={{ left: `calc(${pct(activeLap)}% - 1px)`, background: TRACE.focus }} />
         )}
       </div>
-      <button type="button" aria-label="Next lap" onClick={navNext} className="h-9 w-9 shrink-0 rounded-md border" style={{ background: "#12122a", borderColor: "#3a3a5c", color: "#e0e0e8" }}>
+      <button type="button" aria-label="Next lap" onClick={navNext} className={btn} style={{ background: "#12122a", borderColor: "#3a3a5c", color: "#e0e0e8" }}>
         ▶
       </button>
       <span className="hidden min-w-[96px] font-mono text-xs sm:inline" style={{ color: "#9a9ab4" }}>

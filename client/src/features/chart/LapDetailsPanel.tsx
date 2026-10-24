@@ -73,7 +73,7 @@ export function Stat({ label, value, sub }: { label: string; value: string; sub?
 
 function LinkButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="min-h-[36px] text-left text-[13px] hover:underline" style={{ color: TRACE.focus }}>
+    <button type="button" onClick={onClick} className="min-h-[44px] text-left text-[13px] hover:underline sm:min-h-[36px]" style={{ color: TRACE.focus }}>
       {children} ›
     </button>
   );

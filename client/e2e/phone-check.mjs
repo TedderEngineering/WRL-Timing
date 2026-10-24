@@ -51,6 +51,9 @@ const RULES = [
   { id: "app-bar-where-expected", test: (m) => m.appBar === !m.race, say: (m) => (m.race ? "bottom bar shown on a race screen" : "bottom bar missing") },
   // PR 3: the car pill and sheet.
   { id: "compare-rivals-by-default", test: (m) => !m.chart || (m.compareCount !== null && m.compareCount <= 4), say: (m) => `compares ${m.compareCount} cars by default (4 at most on a phone)` },
+  // PR 4: the lap sheet.
+  { id: "lap-answer-on-screen", test: (m) => !m.chart || (m.lapPanelTop !== null && m.lapPanelTop < HEIGHT), say: (m) => `lap details start at ${m.lapPanelTop} px, below the ${HEIGHT} px screen` },
+  { id: "sheet-clear-of-chart", test: (m) => !m.chart || (m.chartBottom !== null && m.lapPanelTop !== null && m.chartBottom <= m.lapPanelTop + 2), say: (m) => `chart bottom ${m.chartBottom} px runs under the lap sheet at ${m.lapPanelTop} px` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -80,7 +83,7 @@ function measure() {
   };
   const doc = document.scrollingElement;
   const canvas = [...document.querySelectorAll("canvas")].find(vis);
-  const aside = [...document.querySelectorAll("aside")].find(vis);
+  const aside = [...document.querySelectorAll("[data-lap-sheet]")].find(vis) ?? [...document.querySelectorAll("aside")].find(vis);
   const targets = [...document.querySelectorAll("button, a[href], select, input, [role=button], [role=tab]")].filter(vis);
   const small = targets.filter((el) => {
     const r = el.getBoundingClientRect();
@@ -107,6 +110,7 @@ function measure() {
     raceViews: document.querySelectorAll('nav[aria-label="Race views"]').length,
     canvases: document.querySelectorAll("canvas").length,
     chartTop: canvas ? Math.round(canvas.getBoundingClientRect().top) : null,
+    chartBottom: canvas ? Math.round(canvas.getBoundingClientRect().bottom) : null,
     lapPanelTop: aside ? Math.round(aside.getBoundingClientRect().top) : null,
     targets: targets.length,
     smallTargets: small.length,
