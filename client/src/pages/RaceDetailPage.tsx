@@ -19,28 +19,13 @@ import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
 import EventSidebar from "../components/EventSidebar";
 import { Sheet } from "../components/Sheet";
+import { PhoneViewTabs } from "../components/PhoneViewTabs";
 import { useIsCompact } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
 
-/** A full-width, 48 px row in the phone race menu and More sheet. */
+/** A full-width, 48 px row in the phone race menu. */
 const phoneRow = "flex min-h-[48px] w-full items-center gap-2 rounded-lg border px-4 text-[15px]";
-
-function LockIcon() {
-  return (
-    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-label="Team plan">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-    </svg>
-  );
-}
-
-function TeamTag() {
-  return (
-    <span className="rounded px-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ background: "#1e1e38", color: "#9a9ab4" }}>
-      Team
-    </span>
-  );
-}
 
 /** Redirect /races/:id → /chart?race=:id for bookmarked URLs */
 export function RaceDetailRedirect() {
@@ -82,11 +67,10 @@ export function RaceDetailPage() {
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
-  // Phones (mobile redesign, PR 2): one-line header with a race menu, and a More sheet.
+  // Phones (mobile redesign, PR 2): one-line header with a race menu, and a row of views.
   const compact = useIsCompact();
   const navigate = useNavigate();
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
   const tabChosen = useRef(!!searchParams.get("tab"));
 
@@ -451,16 +435,10 @@ export function RaceDetailPage() {
     }, { replace: true });
   };
 
-  // Phone views (mobile redesign, PR 2): Story · Trace · Pits · Laps · More. Strategy and the
-  // Driver Report open from More, so no view is ever hidden off the edge of the screen.
-  const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps" };
-  const MORE_IDS: TabId[] = ["strategy", "drivers"];
-  const moreTabs = tabs.filter((t) => MORE_IDS.includes(t.id));
-  const moreActive = MORE_IDS.includes(activeTab);
-  const phoneTabs: { id: TabId | "more"; label: string; locked: boolean }[] = [
-    ...tabs.filter((t) => !MORE_IDS.includes(t.id)).map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label })),
-    { id: "more", label: moreActive ? (moreTabs.find((t) => t.id === activeTab)?.label ?? "More") : "More", locked: false },
-  ];
+  // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Laps ·
+  // Strategy · Drivers), with short names so most fit; the row nudges once on a first visit.
+  const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps", drivers: "Drivers" };
+  const phoneTabs = tabs.map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label }));
 
   /** Back to where the person came from in RaceTrace, or to the event list on a fresh visit. */
   const goBack = () => {
@@ -582,52 +560,7 @@ export function RaceDetailPage() {
             </Link>
           </Sheet>
 
-          {/* Five slots, none hidden: Story · Trace · Pits · Laps · More (Strategy, Driver Report) */}
-          <nav aria-label="Race views" data-phone-shell="race-views" className="flex shrink-0 border-b" style={{ borderColor: RT.line }}>
-            {phoneTabs.map((tab) => {
-              const isActive = tab.id === "more" ? moreActive : activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-current={isActive ? "page" : undefined}
-                  aria-haspopup={tab.id === "more" ? "dialog" : undefined}
-                  onClick={() => (tab.id === "more" ? setMoreOpen(true) : selectTab(tab.id))}
-                  className="flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1 px-1 text-sm"
-                  style={{
-                    color: isActive ? RT.text : RT.muted,
-                    fontWeight: isActive ? 600 : 400,
-                    borderBottom: `2px solid ${isActive ? RT.accent : "transparent"}`,
-                    marginBottom: -1,
-                  }}
-                >
-                  <span className="truncate">{tab.label}</span>
-                  {tab.locked && <LockIcon />}
-                </button>
-              );
-            })}
-          </nav>
-
-          <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More views">
-            <div className="flex flex-col gap-2">
-              {moreTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-current={activeTab === tab.id ? "page" : undefined}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    selectTab(tab.id);
-                  }}
-                  className={phoneRow}
-                  style={{ borderColor: activeTab === tab.id ? RT.accent : RT.border, background: RT.card, color: RT.text }}
-                >
-                  <span className="flex-1 text-left">{tab.label}</span>
-                  {tab.locked && <TeamTag />}
-                </button>
-              ))}
-            </div>
-          </Sheet>
+          <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />
         </>
       ) : (
         <>

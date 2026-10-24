@@ -48,3 +48,10 @@ The browser's own page zoom is off over the chart (`touch-action: none`), so a p
 the page. Zoom animations and the glide are skipped when the phone asks for reduced motion. The mouse
 (wheel zoom, drag, double-click and drag to zoom to a stretch) is unchanged. The phone check runs
 double-tap, pinch and tap with real touch events at every width.
+
+## Race views row
+
+On a phone the race views (Trace · Story · Pits · Laps · Strategy · Drivers) sit in one row that scrolls
+sideways (`client/src/components/PhoneViewTabs.tsx`); there is no More menu. The edge with more views
+fades out, the open view is kept in sight, and on a first visit, when the row is wider than the screen,
+it glides to the end and back once (remembered in `localStorage`, skipped with reduced motion).

@@ -61,6 +61,8 @@ const RULES = [
   { id: "pinch-zooms", test: (m) => !m.chart || (m.g?.pinch && m.g.pinch.range < m.g.pinch.full * 0.5), say: (m) => `pinch showed ${JSON.stringify(m.g?.pinch)}` },
   { id: "tap-raises-sheet", test: (m) => !m.chart || m.g?.levelAfterTap === "half", say: (m) => `lap sheet at ${m.g?.levelAfterTap} after a tap` },
   { id: "page-not-zoomed", test: (m) => !m.chart || m.g?.pageScale === 1, say: (m) => `the page itself zoomed to ${m.g?.pageScale}` },
+  // Views: one sideways-scrolling row with every view, no More menu.
+  { id: "every-view-in-the-row", test: (m) => !m.race || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -115,6 +117,7 @@ function measure() {
     shellSmall,
     sideways: Math.max(0, doc.scrollWidth - innerWidth),
     raceViews: document.querySelectorAll('nav[aria-label="Race views"]').length,
+    viewNames: [...document.querySelectorAll('nav[aria-label="Race views"] button')].map((b) => b.textContent.trim()),
     canvases: document.querySelectorAll("canvas").length,
     chartTop: canvas ? Math.round(canvas.getBoundingClientRect().top) : null,
     chartBottom: canvas ? Math.round(canvas.getBoundingClientRect().bottom) : null,
