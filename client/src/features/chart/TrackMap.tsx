@@ -830,7 +830,8 @@ export function TrackMap({
                 let speed = typicalSpeed;
                 if (fromLeader) {
                   const place = (k: number) => data.cars[String(k)]?.finishPos ?? 0;
-                  const m = motionOf(leaderRef(places, leaderK, place));
+                  // The gaps are the focus car's when it is on track: at its pace (else the car measured from).
+                  const m = motionOf(focusAway ? leaderRef(places, leaderK, place) : focusNum);
                   speed = m && m.base > 0 ? m.base : typicalSpeed;
                   rows = leaderOrder(places, leaderK, place, track.len, speed);
                 } else {

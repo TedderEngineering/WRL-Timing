@@ -178,10 +178,16 @@ export function LiveTrackOrder({
   note?: string | null;
 }) {
   const leaders = classLeaders(data);
-  const ref = rows.find((r) => r.isRef)?.key;
-  const trend = new Map(ref === undefined ? [] : rows.filter((r) => !r.isRef).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
   const fromLeader = from === "leader";
-  const who = fromLeader ? "the leader" : "the focus car";
+  // From the leader, the gaps are still the focus car's (the leader is on top, the order follows
+  // it round the lap): each car's place behind the leader less the focus car's. With the focus car
+  // off the track for now (in the pits), from the leader.
+  const focusRow = rows.find((r) => r.key === focusKey);
+  const base = fromLeader && focusRow && !focusRow.inPit && focusRow.gapS !== null ? focusRow.gapS : null;
+  const ref = base !== null ? focusKey : rows.find((r) => r.isRef)?.key;
+  const gapOf = (r: TrackOrderRow) => (base !== null ? r.gapS! - base : r.gapS!);
+  const trend = new Map(ref === undefined ? [] : rows.filter((r) => r.key !== ref).map((r) => [r.key, gainPerLap(data, ref, r.key)]));
+  const who = fromLeader && base === null ? "the leader" : "the focus car";
   const picker = onFrom && (
     <span className="ml-auto inline-flex shrink-0 overflow-hidden rounded-md border" role="radiogroup" aria-label="Measure the order from" style={{ borderColor: C.line }}>
       {(
@@ -226,9 +232,11 @@ export function LiveTrackOrder({
           <InfoTip
             label="Live Crossing Order"
             text={`${
-              fromLeader
-                ? "On the road round the circuit now, the overall leader on top: every car behind it on the road (+), the whole lap, in seconds at its pace."
-                : "On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace."
+              fromLeader && base !== null
+                ? "On the road round the circuit now, the overall leader on top, then every car in the order it follows on the road (the whole lap). Gap: ahead of (−) or behind (+) the focus car, in seconds at its pace."
+                : fromLeader
+                  ? "On the road round the circuit now, the overall leader on top: every car behind it on the road (+), the whole lap, in seconds at its pace."
+                  : "On the road round the circuit now, from the focus car: ahead (−) and behind (+) in seconds at its pace."
             } Trend: the time ${who} is gaining (▲) or losing (▼) to each car a lap.`}
           />
           {picker}
@@ -250,7 +258,7 @@ export function LiveTrackOrder({
           <th className={`${th} text-right`} title="Laps down to the class leader, counted when the car last crossed the line (0: on the lead lap)">
             LD
           </th>
-          <th className={`${th} text-right`} title={fromLeader ? "Seconds behind the leader on the road" : "Seconds ahead (−) or behind (+) the focus car on the road"}>
+          <th className={`${th} text-right`} title={fromLeader && base === null ? "Seconds behind the leader on the road" : "Seconds ahead (−) or behind (+) the focus car on the road"}>
             Gap
           </th>
           <th
@@ -306,13 +314,13 @@ export function LiveTrackOrder({
                   <span className="rounded px-1 text-[10px] font-bold text-white" style={{ background: C.pit }}>
                     PIT
                   </span>
-                ) : r.isRef ? (
+                ) : r.key === ref ? (
                   fromLeader && r.key === leaderKey ? <span style={{ color: C.muted }}>Leader</span> : ""
                 ) : (
-                  gapText(r.gapS!)
+                  gapText(gapOf(r))
                 )}
               </td>
-              <td className="py-1 pl-1.5 pr-2 text-right text-xs font-semibold">{r.isRef || r.inPit ? "" : <Trend s={trend.get(r.key) ?? null} />}</td>
+              <td className="py-1 pl-1.5 pr-2 text-right text-xs font-semibold">{r.key === ref || r.inPit ? "" : <Trend s={trend.get(r.key) ?? null} />}</td>
             </tr>
           );
         })}
