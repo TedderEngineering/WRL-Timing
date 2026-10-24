@@ -24,6 +24,7 @@ import { ChartGestureSheet } from "../features/chart/ChartGestureHelp";
 import { PhoneAnalysisTab } from "../features/chart/PhoneAnalysisTab";
 import { RaceCardsView } from "../features/share/RaceCardsView";
 import { RaceCardsContext } from "../features/share/raceCardsContext";
+import { ChromeHiddenContext, CollapsingBars, useHideOnScroll } from "../lib/hideOnScroll";
 import { useIsCompact, useIsLandscapePhone } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
@@ -77,6 +78,9 @@ export function RaceDetailPage() {
   // A phone held sideways: back, views, car pill and menu share one top row, so the chart keeps the height.
   const landscape = useIsLandscapePhone() && compact;
   const [carSlot, setCarSlot] = useState<HTMLElement | null>(null);
+  const { hidden: chromeHidden, onScrollCapture: onChromeScroll, show: showChrome } = useHideOnScroll();
+  // A new view starts with the bars in view.
+  useEffect(() => showChrome(), [activeTab, showChrome]);
   const navigate = useNavigate();
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
   const [gesturesOpen, setGesturesOpen] = useState(false);
@@ -533,11 +537,19 @@ export function RaceDetailPage() {
     <RaceCardsContext.Provider value={compact ? openRaceCards : null}>
     {/* Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
         parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar. */}
-    <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
+    <ChromeHiddenContext.Provider value={compact && chromeHidden}>
+    <div
+      className={compact ? "flex h-full flex-col overflow-hidden" : "flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden"}
+      style={{ background: "#0b0b18", color: RT.text }}
+      onScrollCapture={compact ? onChromeScroll : undefined}
+    >
       {compact ? (
         <>
           {/* Phone header (mobile redesign, PR 2): one line. Back, the race, its results status,
               and the race menu (Share, PDF, Follow, Star, this weekend's other races). */}
+          {/* Phones: the header and the views row slide away while you scroll down a view, and come
+              back as you scroll up (lib/hideOnScroll.tsx). */}
+          <CollapsingBars hidden={chromeHidden}>
           <section data-phone-shell="race-header" className="flex min-h-[48px] shrink-0 items-center gap-1 pl-1 pr-1" style={{ paddingTop: "env(safe-area-inset-top)" }}>
             <button type="button" onClick={goBack} aria-label="Back" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ color: RT.text }}>
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
@@ -581,6 +593,7 @@ export function RaceDetailPage() {
               </svg>
             </button>
           </section>
+          </CollapsingBars>
 
           {/* Kept mounted while closed: the Follow button opens the race on the user's own car. */}
           <Sheet open={raceMenuOpen} onClose={() => setRaceMenuOpen(false)} title={raceMeta.name} keepMounted>
@@ -620,7 +633,11 @@ export function RaceDetailPage() {
           </Sheet>
           <ChartGestureSheet open={gesturesOpen} onClose={() => setGesturesOpen(false)} />
 
-          {!landscape && <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />}
+          {!landscape && (
+            <CollapsingBars hidden={chromeHidden}>
+              <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />
+            </CollapsingBars>
+          )}
         </>
       ) : (
         <>
@@ -735,7 +752,7 @@ export function RaceDetailPage() {
       </div>
 
       {activeTab === "story" && hasStories && (
-        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto" : "custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto"}>
           <StoryTab
             raceId={id!}
             data={data}
@@ -806,13 +823,13 @@ export function RaceDetailPage() {
       )}
 
       {activeTab === "pitanalysis" && (
-        <div className="custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto px-2 py-3" : "custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto"}>
           <PitAnalysisTab raceId={id} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
         </div>
       )}
 
       {activeTab === "strategy" && (
-        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto" : "custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto"}>
           <StrategyTab
             data={data} annotations={annotations}
             classView={classView} setClassView={setClassView}
@@ -823,12 +840,13 @@ export function RaceDetailPage() {
       )}
 
       {activeTab === "drivers" && (
-        <div className="custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto" : "custom-scroll md:min-h-0 md:flex-1 md:overflow-y-auto"}>
           <DriverReportTab data={data} annotations={annotations} focusNum={focusNum} setFocusNum={handleFocusChange} />
         </div>
       )}
 
     </div>
+    </ChromeHiddenContext.Provider>
     </RaceCardsContext.Provider>
     </RaceMetaContext.Provider>
   );
