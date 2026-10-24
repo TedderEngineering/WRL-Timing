@@ -3,25 +3,17 @@
  * class, make and the compare cars, the same on both tabs.
  */
 import { createPortal } from "react-dom";
-import { finishInfo } from "./finish";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RaceChartData } from "@shared/types";
 import { getCompColor } from "./chart-renderer";
-import { TRACE } from "./constants";
 import { makeGroupsOf } from "./makes";
 import { useIsCompact } from "../../lib/breakpoint";
 import type { TraceView } from "./trace-view";
-import { carMatchesSearch, carNo, textMatches } from "./car-number";
+import { carNo } from "./car-number";
+import { carGroups } from "./car-groups";
+import { AxisToggle, T } from "./controls-ui";
+import { PhoneCarBar } from "./CarSheet";
 
-const T = {
-  card: "#12122a",
-  border: "#3a3a5c",
-  line: "#1e1e38",
-  text: "#e0e0e8",
-  soft: "#cbd5e1",
-  muted: "#9a9ab4",
-  accent: TRACE.focus,
-};
 
 const labelCls = "text-[11px] uppercase tracking-[0.06em]";
 
@@ -96,36 +88,7 @@ function CarMenu({
     };
   }, [onClose]);
 
-  const groups = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const byCls = new Map<
-      string,
-      Array<{ n: number; team: string; pos: number; make?: string; dns: boolean; official: string; classified: boolean; driver?: string }>
-    >();
-    for (const [k, c] of Object.entries(data.cars)) {
-      const n = Number(k);
-      // Number, team, make or a driver's name (car-number.ts).
-      if (needle && !carMatchesSearch(data, n, needle)) continue;
-      const list = byCls.get(c.cls) ?? [];
-      list.push({
-        n,
-        team: c.team,
-        pos: c.finishPosClass || 999,
-        official: finishInfo(data, n)?.official ?? "",
-        classified: finishInfo(data, n)?.pos != null,
-        make: c.make,
-        // Before the race (no laps anywhere: the live page's pre-race layout) every entry can be picked.
-        dns: c.laps.length === 0 && data.maxLap > 0,
-        // The driver the search found, shown under the team.
-        driver: needle ? (c.drivers ?? []).find((d) => textMatches(d, needle)) : undefined,
-      });
-      byCls.set(c.cls, list);
-    }
-    return [...byCls.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      // Classified cars in class order, then those without a classified position (DSQ, not classified).
-      .map(([cls, cars]) => ({ cls, cars: cars.sort((a, b) => Number(b.classified) - Number(a.classified) || a.pos - b.pos) }));
-  }, [data, q]);
+  const groups = useMemo(() => carGroups(data, q), [data, q]);
 
   return (
     <div
@@ -198,10 +161,8 @@ function CarMenu({
 export function TraceControls(p: TraceControlsProps) {
   const { data, focusNum, classView, compSet, view } = p;
   const [menu, setMenu] = useState<"focus" | null>(null);
-  // Phone (mockup F6): the focus car and a Filters button; the rest opens below.
+  // Phones have their own car pill and sheet (CarSheet.tsx, mobile redesign PR 3).
   const compact = useIsCompact();
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const showFilters = !compact || filtersOpen;
   const focus = data.cars[String(focusNum)];
   const classes = Object.entries(data.classGroups).sort(([a], [b]) => a.localeCompare(b));
   const makeGroups = useMemo(() => makeGroupsOf(data), [data]);
@@ -215,6 +176,20 @@ export function TraceControls(p: TraceControlsProps) {
       .filter((x) => x.n > 0)
       .sort((a, b) => b.n - a.n || a.m.localeCompare(b.m));
   }, [makeGroups, classView, data]);
+  if (compact) {
+    return (
+      <PhoneCarBar
+        data={data}
+        focusNum={focusNum}
+        onFocus={p.onFocus}
+        classView={classView}
+        compSet={compSet}
+        view={view}
+        xAxisMode={p.xAxisMode}
+        setXAxisMode={p.setXAxisMode}
+      />
+    );
+  }
   const compare = [...compSet].filter((n) => n !== focusNum);
   // In published-number order: "007" sits with "7", not after the stand-in key (car-number.ts).
   const chips = [...view.fieldCars].sort((a, b) => {
@@ -228,23 +203,21 @@ export function TraceControls(p: TraceControlsProps) {
     fontWeight: on ? 600 : 400,
   });
 
-  const head = !compact && p.headSlot ? p.headSlot : null;
+  const head = p.headSlot ?? null;
   const focusAndClass = (
     <>
       {/* Focus */}
-      <div className={`relative flex items-center gap-2 ${compact ? "w-full" : ""}`}>
-        {!compact && (
-          <span className={labelCls} style={{ color: T.muted }}>
-            Focus
-          </span>
-        )}
+      <div className="relative flex items-center gap-2">
+        <span className={labelCls} style={{ color: T.muted }}>
+          Focus
+        </span>
         <button
           type="button"
           onClick={() => setMenu(menu === "focus" ? null : "focus")}
           aria-haspopup="dialog"
           aria-expanded={menu === "focus"}
           aria-label={`Focus car: #${carNo(data, focusNum)} ${focus?.team ?? ""}. Change`}
-          className={`flex min-h-[36px] items-center gap-2 border px-3 text-sm ${compact ? "min-w-0 flex-1 rounded-full" : "max-w-[320px] rounded-md"}`}
+          className="flex min-h-[36px] max-w-[320px] items-center gap-2 rounded-md border px-3 text-sm"
           style={{ background: T.card, borderColor: T.accent, color: T.text }}
         >
           <span className="font-mono font-semibold">#{carNo(data, focusNum)}</span>
@@ -254,24 +227,6 @@ export function TraceControls(p: TraceControlsProps) {
             ▾
           </span>
         </button>
-        {compact && (
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((o) => !o)}
-            aria-expanded={filtersOpen}
-            className="min-h-[36px] shrink-0 rounded-full border px-3.5 text-[13px]"
-            style={{
-              background: T.card,
-              borderColor: filtersOpen ? T.accent : T.border,
-              color: T.text,
-            }}
-          >
-            Filters
-            {classView || compSet.size
-              ? ` · ${[classView, compSet.size ? `${[...compSet].filter((n) => n !== focusNum).length} compare` : ""].filter(Boolean).join(", ")}`
-              : ""}
-          </button>
-        )}
         {menu === "focus" && (
           <CarMenu
             title="Choose the focus car"
@@ -287,7 +242,7 @@ export function TraceControls(p: TraceControlsProps) {
       </div>
 
       {/* Class */}
-      {showFilters && classes.length > 1 && (
+      {classes.length > 1 && (
         <div
           role="group"
           aria-label="Class"
@@ -328,7 +283,7 @@ export function TraceControls(p: TraceControlsProps) {
       {head ? createPortal(focusAndClass, head) : focusAndClass}
 
       {/* Make */}
-      {showFilters && makes.length >= 2 && (
+      {makes.length >= 2 && (
         <div
           role="group"
           aria-label="Make"
@@ -361,88 +316,60 @@ export function TraceControls(p: TraceControlsProps) {
       )}
 
       {/* Compare: every car in view as a small chip, coloured when compared (as on Lap Times) */}
-      {showFilters && (
-        <div className="flex w-full flex-wrap items-center gap-1">
-          <span className={`${labelCls} mr-1`} style={{ color: T.muted }}>
-            Compare
-          </span>
-          <button
-            type="button"
-            aria-pressed={view.compareAll}
-            onClick={() => view.setCompareAll(true)}
-            title="Compare with every car in view, each in its own colour"
-            className="rounded-xl border px-2.5 py-0.5 text-[11px]"
-            style={pill(view.compareAll)}
-          >
-            All {classView || "cars"} ({chips.length})
-          </button>
-          <button
-            type="button"
-            onClick={view.clearComp}
-            disabled={compare.length === 0}
-            className="mr-1 rounded-xl border px-2.5 py-0.5 text-[11px] disabled:opacity-40"
-            style={pill(false)}
-          >
-            Clear
-          </button>
-          {chips.map((n) => {
-            const on = compSet.has(n) && n !== focusNum;
-            const isFocus = n === focusNum;
-            const col = on ? getCompColor(compSet, focusNum, n) : undefined;
-            const car = data.cars[String(n)];
-            const noLaps = !car || (car.laps.length === 0 && data.maxLap > 0);
-            return (
-              <button
-                key={n}
-                type="button"
-                aria-pressed={on}
-                disabled={isFocus || noLaps}
-                onClick={() => view.toggleComp(n)}
-                title={isFocus ? `${carLabel(data, n)} (focus car)` : `${carLabel(data, n)}${car?.make ? ` · ${car.make}` : ""} (${car?.cls})${noLaps ? ` — ${car?.status || "no laps"}` : ""}`}
-                className="rounded-lg border px-2 py-0.5 font-mono text-[11px]"
-                style={{
-                  borderColor: isFocus ? T.accent : col || T.line,
-                  background: isFocus ? "rgba(244,140,52,0.14)" : col ? `${col}33` : "transparent",
-                  color: isFocus ? T.accent : on ? "#fff" : "#6b6b88",
-                  opacity: noLaps ? 0.35 : 1,
-                }}
-              >
-                #{carNo(data, n)}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {compact && filtersOpen && p.xAxisMode && p.setXAxisMode && <AxisToggle value={p.xAxisMode} onChange={p.setXAxisMode} />}
-    </div>
-  );
-}
-
-/** Laps / Time / Both for the x axis. */
-export function AxisToggle({
-  value,
-  onChange,
-  small,
-}: {
-  value: "laps" | "hours" | "both";
-  onChange: (m: "laps" | "hours" | "both") => void;
-  small?: boolean;
-}) {
-  return (
-    <div role="group" aria-label="X axis" className="flex overflow-hidden rounded-md border" style={{ borderColor: T.border }}>
-      {(["laps", "hours", "both"] as const).map((m) => (
+      <div className="flex w-full flex-wrap items-center gap-1">
+        <span className={`${labelCls} mr-1`} style={{ color: T.muted }}>
+          Compare
+        </span>
         <button
-          key={m}
           type="button"
-          aria-pressed={value === m}
-          onClick={() => onChange(m)}
-          className={small ? "min-h-[28px] px-2.5 text-xs" : "min-h-[40px] px-3 text-sm"}
-          style={{ background: value === m ? T.line : "transparent", color: value === m ? T.text : T.muted }}
+          aria-pressed={view.compareAll}
+          onClick={() => view.setCompareAll(true)}
+          title="Compare with every car in view, each in its own colour"
+          className="rounded-xl border px-2.5 py-0.5 text-[11px]"
+          style={pill(view.compareAll)}
         >
-          {m === "laps" ? "Laps" : m === "hours" ? "Time" : "Both"}
+          All {classView || "cars"} ({chips.length})
         </button>
-      ))}
+        <button
+          type="button"
+          onClick={view.clearComp}
+          disabled={compare.length === 0}
+          className="mr-1 rounded-xl border px-2.5 py-0.5 text-[11px] disabled:opacity-40"
+          style={pill(false)}
+        >
+          Clear
+        </button>
+        {chips.map((n) => {
+          const on = compSet.has(n) && n !== focusNum;
+          const isFocus = n === focusNum;
+          const col = on ? getCompColor(compSet, focusNum, n) : undefined;
+          const car = data.cars[String(n)];
+          const noLaps = !car || (car.laps.length === 0 && data.maxLap > 0);
+          return (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={on}
+              disabled={isFocus || noLaps}
+              onClick={() => view.toggleComp(n)}
+              title={isFocus ? `${carLabel(data, n)} (focus car)` : `${carLabel(data, n)}${car?.make ? ` · ${car.make}` : ""} (${car?.cls})${noLaps ? ` — ${car?.status || "no laps"}` : ""}`}
+              className="rounded-lg border px-2 py-0.5 font-mono text-[11px]"
+              style={{
+                borderColor: isFocus ? T.accent : col || T.line,
+                background: isFocus ? "rgba(244,140,52,0.14)" : col ? `${col}33` : "transparent",
+                color: isFocus ? T.accent : on ? "#fff" : "#6b6b88",
+                opacity: noLaps ? 0.35 : 1,
+              }}
+            >
+              #{carNo(data, n)}
+            </button>
+          );
+        })}
+      </div>
+
+
     </div>
   );
 }
+
+export { AxisToggle };

@@ -49,6 +49,8 @@ const RULES = [
   { id: "chart-near-top", test: (m) => m.chartTop === null || m.chartTop <= CHART_TOP_MAX, say: (m) => `chart starts at ${m.chartTop} px (limit ${CHART_TOP_MAX})` },
   { id: "shell-targets-44", test: (m) => m.shellSmall.length === 0, say: (m) => `phone shell controls under 44 px: ${m.shellSmall.join(", ")}` },
   { id: "app-bar-where-expected", test: (m) => m.appBar === !m.race, say: (m) => (m.race ? "bottom bar shown on a race screen" : "bottom bar missing") },
+  // PR 3: the car pill and sheet.
+  { id: "compare-rivals-by-default", test: (m) => !m.chart || (m.compareCount !== null && m.compareCount <= 4), say: (m) => `compares ${m.compareCount} cars by default (4 at most on a phone)` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -97,6 +99,7 @@ function measure() {
     .map((el) => (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 24));
   const raceHeader = document.querySelector('[data-phone-shell="race-header"]');
   return {
+    compareCount: document.querySelector("[data-compare-count]") ? Number(document.querySelector("[data-compare-count]").getAttribute("data-compare-count")) : null,
     appBar: shell.some((el) => el.getAttribute("data-phone-shell") === "app-bar"),
     raceHeader: raceHeader && vis(raceHeader) ? Math.round(raceHeader.getBoundingClientRect().height) : null,
     shellSmall,
@@ -136,7 +139,7 @@ async function main() {
           fs.mkdirSync(opt("--shots"), { recursive: true });
           await page.screenshot({ path: path.join(opt("--shots"), `${pg.name.replace(":", "-")}-${width}.png`) });
         }
-        rows.push({ width, page: pg.name, race: !!pg.race, errors, ...m, ms: Date.now() - t0 });
+        rows.push({ width, page: pg.name, race: !!pg.race, chart: !!pg.chart, errors, ...m, ms: Date.now() - t0 });
         await page.close();
       }
       await ctx.close();
@@ -146,7 +149,7 @@ async function main() {
     server.stop();
   }
 
-  const cols = ["width", "page", "sideways", "raceViews", "chartTop", "lapPanelTop", "raceHeader", "appBar", "smallTargets", "targets", "widestScroller", "ms"];
+  const cols = ["width", "page", "sideways", "raceViews", "chartTop", "lapPanelTop", "raceHeader", "appBar", "compareCount", "smallTargets", "targets", "widestScroller", "ms"];
   console.log(cols.join("\t"));
   for (const r of rows) console.log(cols.map((c) => r[c] ?? "-").join("\t"));
   if (unknownRoutes.size) console.log(`\nRoutes the stand-in answered 404: ${[...unknownRoutes].sort().join(", ")}`);
