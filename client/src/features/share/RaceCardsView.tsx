@@ -86,15 +86,14 @@ function CardSlide({ slide, index, onImage }: { slide: Slide; index: number; onI
   }, [img]);
   return (
     <div data-race-card={slide.key} className="flex h-full w-full shrink-0 snap-center items-center justify-center px-1">
-      <div className="relative aspect-[4/5] h-full max-w-full overflow-hidden rounded-xl border" style={{ borderColor: C.line, background: C.card }}>
-        {img && img !== "error" ? (
-          <img src={img.url} alt={`${slide.title} share card`} className="h-full w-full object-contain" draggable={false} />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center p-6 text-center text-[14px]" style={{ color: C.muted }}>
-            {img === "error" ? "This card could not be made. Check your connection and try again." : <span className="animate-pulse">Making the card…</span>}
-          </div>
-        )}
-      </div>
+      {/* The image sizes itself: as large as fits either way, at its own 4:5. */}
+      {img && img !== "error" ? (
+        <img src={img.url} alt={`${slide.title} share card`} className="block max-h-full max-w-full rounded-xl border object-contain" style={{ borderColor: C.line }} draggable={false} />
+      ) : (
+        <div className="flex aspect-[4/5] max-h-full w-full max-w-full items-center justify-center rounded-xl border p-6 text-center text-[14px]" style={{ borderColor: C.line, background: C.card, color: C.muted }}>
+          {img === "error" ? "This card could not be made. Check your connection and try again." : <span className="animate-pulse">Making the card…</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -238,7 +237,9 @@ export function RaceCardsView({
     }
   };
 
-  const secondary = "flex min-h-[44px] flex-1 items-center justify-center rounded-lg border text-[13px] font-semibold disabled:opacity-50";
+  // Drawn 36 px tall so the card gets the room, each with a 44 px touch area (::before).
+  const secondary =
+    "relative flex h-9 flex-1 items-center justify-center rounded-lg border text-[13px] font-semibold disabled:opacity-50 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
   const actions = (
     <div className="flex flex-col gap-2" data-race-cards="actions">
       <button
@@ -246,26 +247,24 @@ export function RaceCardsView({
         onClick={share}
         disabled={!blob}
         data-race-cards="share"
-        className="flex min-h-[52px] items-center justify-center gap-2 rounded-xl text-[16px] font-bold shadow-lg disabled:opacity-60"
+        className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl text-[15px] font-bold shadow-lg disabled:opacity-60"
         style={{ background: C.accent, color: C.bg }}
       >
         <ShareIcon />
         {blob ? `Share ${slide?.kind === "car_race" ? "the race card" : `${slide?.chip}'s card`}` : "Making the card…"}
       </button>
       <div className="flex gap-2">
-        <button type="button" onClick={copy} disabled={!blob} className={secondary} style={{ borderColor: C.border, color: C.text }}>
+        <button type="button" onClick={copy} disabled={!blob} data-touch-44 className={secondary} style={{ borderColor: C.border, color: C.text }}>
           Copy image
         </button>
-        <button type="button" onClick={save} disabled={!blob} className={secondary} style={{ borderColor: C.border, color: C.text }}>
+        <button type="button" onClick={save} disabled={!blob} data-touch-44 className={secondary} style={{ borderColor: C.border, color: C.text }}>
           Save
         </button>
-        <button type="button" onClick={copyLink} className={secondary} style={{ borderColor: C.border, color: C.text }}>
+        <button type="button" onClick={copyLink} data-touch-44 className={secondary} style={{ borderColor: C.border, color: C.text }}>
           Copy link
         </button>
       </div>
-      <p role="status" className="m-0 min-h-[18px] text-center text-[12px]" style={{ color: C.muted }}>
-        {note ?? "Share opens your phone's list: Messages, WhatsApp, Instagram, Facebook, X, email…"}
-      </p>
+
     </div>
   );
 
@@ -278,7 +277,8 @@ export function RaceCardsView({
           role="tab"
           aria-selected={i === current}
           onClick={() => go(i)}
-          className="min-h-[44px] shrink-0 whitespace-nowrap rounded-full border px-4 text-[14px] font-semibold"
+          data-touch-44
+          className="relative h-9 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-semibold before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']"
           style={i === current ? { borderColor: C.accent, background: "rgba(244,140,52,0.14)", color: C.text } : { borderColor: C.border, color: C.muted }}
         >
           {s.chip}
@@ -288,6 +288,12 @@ export function RaceCardsView({
   );
 
   const cards = (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+    {note && (
+      <p role="status" className="pointer-events-none absolute inset-x-0 bottom-2 z-10 m-0 mx-auto w-max max-w-[90%] rounded-full px-3 py-1.5 text-center text-[12px] shadow-lg" style={{ background: "rgba(18,18,42,0.95)", border: `1px solid ${C.border}`, color: C.text }}>
+        {note}
+      </p>
+    )}
     <div
       ref={strip}
       onScroll={(e) => {
@@ -303,12 +309,15 @@ export function RaceCardsView({
         <CardSlide key={s.key} slide={s} index={i} onImage={onImage} />
       ))}
     </div>
+    </div>
   );
 
   if (!car) return null;
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ background: C.bg, color: C.text }} data-race-cards="view">
-      <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} phoneSlot={phoneSlot} />
+      {/* Upright, no car pill: the chips name the car and the card gets the room (the car is the
+          one picked on the other views). Sideways, the pill sits in the top row at no cost. */}
+      {phoneSlot && <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} phoneSlot={phoneSlot} />}
       <div className="pt-2">{chips}</div>
       {landscape ? (
         <div className="flex min-h-0 flex-1 gap-3 px-3 py-2">
@@ -316,7 +325,7 @@ export function RaceCardsView({
           <div className="flex w-1/2 flex-col justify-center">{actions}</div>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-2" style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}>
           {cards}
           {actions}
         </div>

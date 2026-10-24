@@ -171,7 +171,7 @@ function measure() {
     widestScroller: sidewaysScrollers.reduce((w, el) => Math.max(w, el.scrollWidth), 0),
     cardControlsSmall: [...document.querySelectorAll("[data-phone-cards='sort'] button, [data-phone-cards='sort'] label, [data-phone-cards='chips'] button")]
       .filter(vis)
-      .filter((el) => el.getBoundingClientRect().height < 44)
+      .filter((el) => !el.hasAttribute("data-touch-44") && el.getBoundingClientRect().height < 44)
       .map((el) => el.textContent.trim().slice(0, 20)),
     cardLists: document.querySelectorAll("[data-phone-cards]:not([data-phone-cards='sort']):not([data-phone-cards='chips'])").length,
   };
