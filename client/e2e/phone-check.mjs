@@ -78,7 +78,7 @@ const RULES = [
   { id: "trace-opens-on-time", test: (m) => m.page !== "race:position" || m.axisPressed === "Time", say: (m) => `trace caption axis shows ${m.axisPressed}` },
   // Step 5: tables are cards on a phone; nothing scrolls sideways but chip rows and the views row.
   { id: "no-sideways-tables", test: (m) => !m.race || m.widestScroller === 0, say: (m) => `something scrolls sideways, ${m.widestScroller} px wide` },
-  { id: "cards-not-tables", test: (m) => !["race:pitanalysis", "race:strategy", "race:drivers"].includes(m.page) || m.cardLists > 0, say: () => "no phone card list on a table view" },
+  { id: "cards-not-tables", test: (m) => !["race:pitanalysis", "race:strategy", "race:drivers"].includes(m.page) || m.width > m.height || m.cardLists > 0, say: () => "no phone card list on a table view" },
   { id: "card-controls-44", test: (m) => m.cardControlsSmall.length === 0, say: (m) => `sort or class controls under 44 px: ${m.cardControlsSmall.join(", ")}` },
   { id: "race-targets-44", test: (m) => !m.race || m.smallTargets === 0, say: (m) => `controls under 44 px on a race view: ${m.smallList.join(", ")}` },
   // Step 6: Home and Events.
@@ -89,6 +89,8 @@ const RULES = [
   { id: "events-opens-on-my-cars", test: (m) => m.page !== "events" || m.eventsScope === "My cars", say: (m) => `Events opens on ${m.eventsScope}` },
   { id: "app-targets-44", test: (m) => m.race || m.page === "home" || m.smallTargets === 0, say: (m) => `controls under 44 px: ${m.smallList.join(", ")}` },
   { id: "bars-slide-away-on-scroll", test: (m) => !m.hide || m.hide.error === "nothing to scroll" || (m.hide.down < 0 && m.hide.up >= 0), say: (m) => `header top before/down/up: ${JSON.stringify(m.hide)}` },
+  { id: "drivers-ranked-upright", test: (m) => m.page !== "race:drivers" || m.width > m.height || m.rankedRows >= 5, say: (m) => `Driver Report shows ${m.rankedRows} ranked rows` },
+  { id: "drivers-compare-side-by-side", test: (m) => m.page !== "race:drivers" || (m.width > m.height ? m.versus?.table >= 1 : m.versus?.columns === 3 && m.versus.metrics >= 5), say: (m) => `compare: ${JSON.stringify(m.versus)}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -130,7 +132,7 @@ function measure() {
     if (!vis(el) || el === doc) return false;
     const s = getComputedStyle(el);
     // Rows of chips and the views row scroll sideways by design; a table or page must not.
-    if (el.tagName === "NAV" || el.getAttribute("role") === "tablist" || el.closest("[data-phone-cards='chips']") || el.hasAttribute("data-carousel")) return false;
+    if (el.tagName === "NAV" || el.getAttribute("role") === "tablist" || el.closest("[data-phone-cards='chips']") || el.hasAttribute("data-carousel") || el.hasAttribute("data-wide-table")) return false;
     return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4;
   });
   const shell = [...document.querySelectorAll("[data-phone-shell]")].filter(vis);
@@ -178,7 +180,8 @@ function measure() {
       .filter(vis)
       .filter((el) => !el.hasAttribute("data-touch-44") && el.getBoundingClientRect().height < 44)
       .map((el) => el.textContent.trim().slice(0, 20)),
-    cardLists: document.querySelectorAll("[data-phone-cards]:not([data-phone-cards='sort']):not([data-phone-cards='chips'])").length,
+    cardLists: document.querySelectorAll("[data-phone-cards]:not([data-phone-cards='sort']):not([data-phone-cards='chips']), [data-ranked='view']").length,
+    rankedRows: document.querySelectorAll("[data-ranked-row]").length,
   };
 }
 
@@ -212,6 +215,18 @@ async function hideOnScroll(page) {
   await page.waitForTimeout(400);
   const up = await header();
   return { before, down, up };
+}
+
+/** Driver Report upright: Compare, pick two rows, and the side-by-side sheet lists both. Sideways: the full table. */
+async function versus(page) {
+  if (!(await page.locator("[data-ranked='view']").count())) return { table: await page.locator("table").count() };
+  await page.getByRole("button", { name: "Compare", exact: true }).click();
+  const rows = page.locator("[data-ranked-row]");
+  await rows.nth(0).click();
+  await rows.nth(2).click();
+  await page.locator("[data-ranked='compare']").click();
+  await page.locator("[data-ranked='versus']").waitFor({ timeout: 3000 });
+  return { columns: await page.locator("[data-ranked='versus'] thead th").count(), metrics: await page.locator("[data-ranked='versus'] tbody tr").count() };
 }
 
 /** Race cards: the first card drawn, its Share button on screen and live, and a swipe to the next card. */
@@ -312,6 +327,7 @@ async function main() {
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
         if (pg.name === "race:strategy" || pg.name === "race:gaps") m.hide = await hideOnScroll(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
+        if (pg.name === "race:drivers") m.versus = await versus(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "race:cards") m.cards = await raceCards(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
