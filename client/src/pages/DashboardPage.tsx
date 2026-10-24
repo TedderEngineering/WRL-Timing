@@ -19,6 +19,8 @@ import { LiveDemoCard } from "../features/live/LiveDemoCard";
 import { greeting } from "../features/dashboard/format";
 import type { LatestEvent, SeasonResponse } from "../features/dashboard/types";
 import { SupportCard } from "../features/support/SupportPrompts";
+import { PhoneCarHero } from "../features/dashboard/PhoneCarHero";
+import { useIsCompact } from "../lib/breakpoint";
 
 interface RaceItem {
   id: string;
@@ -171,13 +173,14 @@ export function DashboardPage() {
   }, []);
 
   const continueRace = recent[0] ?? null;
+  const compact = useIsCompact();
   // The two latest weekends get the full card with the recap; earlier ones a smaller card in a
   // grid, with the same race tabs and one click to Position Trace.
   const cards = (events ?? []).slice(0, 2);
   const earlier = (events ?? []).slice(2);
 
-  return (
-    <div className="container-page py-6 text-left text-[var(--rt-text)] lg:py-8">
+  const verifyAlert = (
+    <>
       {user && !user.emailVerified && (
         <Alert variant="warning" className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -204,6 +207,166 @@ export function DashboardPage() {
           </div>
         </Alert>
       )}
+    </>
+  );
+  const freeBanner = (
+    <>
+      {isFree && !bannerDismissed && (
+        <div
+          className="mb-5 flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
+          style={{ borderColor: "var(--rt-accent)", background: "var(--rt-accent-soft)" }}
+        >
+          <p className="m-0 text-sm">
+            <span className="font-semibold">Free plan:</span> the three newest races are
+            open. Pro opens every race and every recap.
+          </p>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <Link
+              to="/settings/billing"
+              className="rounded-md bg-[var(--rt-accent)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--rt-on-accent)]"
+            >
+              See Pro
+            </Link>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              aria-label="Dismiss"
+              className="px-1 text-xl leading-none text-[var(--rt-text-muted)]"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+  const yoursSection = (
+    <>
+          {view && (
+            <section aria-labelledby="yours" className="flex flex-col gap-2.5">
+              {/* One row: cars or drivers (when both), the car or driver tabs, the settings link. */}
+              <div className="flex flex-wrap items-end gap-x-3 border-b border-[var(--rt-border)]">
+                {hasCars && hasDrivers ? (
+                  <div id="yours" role="tablist" aria-label="Yours" className="mb-1.5 flex shrink-0 gap-0.5 rounded-md bg-[var(--rt-surface)] p-0.5">
+                    {(
+                      [
+                        ["cars", myCar!.carCount > 1 ? "Cars" : "Car"],
+                        ["drivers", myDriver!.driverCount > 1 ? "Drivers" : "Driver"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={view === key}
+                        onClick={() => chooseYours(key)}
+                        className={`min-h-[30px] rounded px-2.5 text-[12px] font-semibold uppercase tracking-[0.06em] ${
+                          view === key ? "bg-[var(--rt-border)] text-[var(--rt-text)]" : "text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <h2 id="yours" className="m-0 mb-2.5 shrink-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
+                    {view === "cars" ? (myCar!.carCount > 1 ? "Your cars" : "Your car") : myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"}
+                  </h2>
+                )}
+                <div className="order-last min-w-0 basis-full sm:order-none sm:basis-0 sm:flex-1">
+                  {view === "cars" ? (
+                    <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} onReorder={orderCars} className="" />
+                  ) : (
+                    <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} onReorder={orderDrivers} className="" />
+                  )}
+                </div>
+                <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="mb-2.5 ml-auto shrink-0 text-[13px] text-[var(--rt-accent)]">
+                  {view === "cars" ? "My cars →" : "My drivers →"}
+                </Link>
+              </div>
+              {view === "cars" ? <MyCarCard data={myCar!} ask={shownRecaps.length === 0} onPickRace={(raceId) => void pickCarRace(myCar!.car!.id, raceId)} picking={pickingCarRace} /> : <MyDriverCard data={myDriver!} onPickRace={(raceId) => void pickDriverRace(myDriver!.driver!.id, raceId)} picking={pickingRace} />}
+            </section>
+          )}
+    </>
+  );
+  const favoritesRow = (
+    <section className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--rt-border)] px-5 py-3 text-[var(--rt-text-muted)]">
+      <span className="text-[13px] font-semibold uppercase tracking-[0.1em]">Favorites</span>
+      {favorites.length ? (
+        favorites.map((f) => (
+          <Link key={f.id} to={`/chart?race=${f.id}`} className="inline-flex min-h-[44px] items-center rounded-md border border-[var(--rt-border)] px-2.5 text-[13px] text-[var(--rt-text)] sm:min-h-0 sm:py-1">
+            ★ {f.name} · {f.track}
+          </Link>
+        ))
+      ) : (
+        <span className="text-[13px]">Star a race to keep it here.</span>
+      )}
+    </section>
+  );
+
+  // ── Phone (mobile redesign, step 6): first steps until done, your car on one screen, the next
+  // round and the latest races; the season moves under Me (/season).
+  if (compact) {
+    const next = nextFor(season);
+    return (
+      <div className="container-page flex flex-col gap-4 py-4 text-left text-[var(--rt-text)]" data-phone-home="page">
+        {verifyAlert}
+        <h1 className="m-0 truncate text-xl font-semibold">
+          {greeting()}
+          {user?.displayName ? `, ${user.displayName.split(" ")[0]}` : ""}
+        </h1>
+        <FirstStepsChecklist data={myCar} driver={myDriver} compact />
+        {!yoursLoaded && hadYours && <div className="h-80 animate-pulse rounded-xl bg-[var(--rt-surface)]" aria-busy="true" aria-label="Loading your car" />}
+        {view === "cars" && myCar ? (
+          <PhoneCarHero
+            data={myCar}
+            active={carChoice ?? myCar.car!.id}
+            onChoose={(id) => void chooseCar(id)}
+            ask={shownRecaps.length === 0}
+            onPickRace={(raceId) => void pickCarRace(myCar.car!.id, raceId)}
+            picking={pickingCarRace}
+          />
+        ) : (
+          yoursSection
+        )}
+        {view !== "drivers" && shownRecaps.map((r, i) => <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />)}
+        {continueRace && continueRace.id !== myCar?.race?.id && (
+          <Link to={`/chart?race=${continueRace.id}`} className="flex min-h-[48px] items-center gap-2.5 rounded-lg border border-[var(--rt-border)] bg-[var(--rt-surface)] px-3.5 text-[var(--rt-text-secondary)]">
+            <span className="text-xs uppercase tracking-[0.08em] text-[var(--rt-text-muted)]">Continue</span>
+            <span className="min-w-0 flex-1 truncate text-[var(--rt-text)]">{continueRace.name} · {continueRace.track}</span>
+            <span className="text-[var(--rt-accent)]">→</span>
+          </Link>
+        )}
+        {next && season && <NextUp next={next} today={season.today} />}
+        {freeBanner}
+        <div className="mt-2 flex items-center justify-between">
+          <h2 className="m-0 text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">Latest races</h2>
+          <Link to="/races" className="inline-flex min-h-[44px] items-center text-[13px] text-[var(--rt-accent)]">All events →</Link>
+        </div>
+        {events === null ? (
+          <div className="h-40 animate-pulse rounded-xl bg-[var(--rt-surface)]" />
+        ) : events.length === 0 ? (
+          <p className="m-0 text-[14px] text-[var(--rt-text-secondary)]">{failed ? "The latest races could not be loaded. Refresh to try again." : "Race data will appear here as it becomes available."}</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {events.slice(0, 4).map((ev, i) => (
+              <RecapCard key={ev.key} event={ev} variant={i === 0 ? "compact" : "mini"} />
+            ))}
+          </div>
+        )}
+        <InstallHint />
+        <LiveDemoCard />
+        {favoritesRow}
+        <SupportCard />
+        <p className="m-0 px-1 text-[13px] text-[var(--rt-text-muted)]">
+          It&apos;s free for your teammates too. <ShareRaceTraceButton source="dashboard" className="inline-flex min-h-[44px] items-center font-semibold text-[var(--rt-accent)]" />
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container-page py-6 text-left text-[var(--rt-text)] lg:py-8">
+      {verifyAlert}
 
       {/* Greeting + continue */}
       <section className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -251,32 +414,7 @@ export function DashboardPage() {
         <LiveDemoCard />
       </div>
 
-      {isFree && !bannerDismissed && (
-        <div
-          className="mb-5 flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
-          style={{ borderColor: "var(--rt-accent)", background: "var(--rt-accent-soft)" }}
-        >
-          <p className="m-0 text-sm">
-            <span className="font-semibold">Free plan:</span> the three newest races are
-            open. Pro opens every race and every recap.
-          </p>
-          <div className="flex shrink-0 items-center gap-2.5">
-            <Link
-              to="/settings/billing"
-              className="rounded-md bg-[var(--rt-accent)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--rt-on-accent)]"
-            >
-              See Pro
-            </Link>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              aria-label="Dismiss"
-              className="px-1 text-xl leading-none text-[var(--rt-text-muted)]"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+      {freeBanner}
 
       <div className="flex flex-wrap items-start gap-5">
         {/* Latest races */}
@@ -288,51 +426,7 @@ export function DashboardPage() {
               <div className="h-56 animate-pulse rounded-xl bg-[var(--rt-surface)]" />
             </div>
           )}
-          {view && (
-            <section aria-labelledby="yours" className="flex flex-col gap-2.5">
-              {/* One row: cars or drivers (when both), the car or driver tabs, the settings link. */}
-              <div className="flex flex-wrap items-end gap-x-3 border-b border-[var(--rt-border)]">
-                {hasCars && hasDrivers ? (
-                  <div id="yours" role="tablist" aria-label="Yours" className="mb-1.5 flex shrink-0 gap-0.5 rounded-md bg-[var(--rt-surface)] p-0.5">
-                    {(
-                      [
-                        ["cars", myCar!.carCount > 1 ? "Cars" : "Car"],
-                        ["drivers", myDriver!.driverCount > 1 ? "Drivers" : "Driver"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        role="tab"
-                        aria-selected={view === key}
-                        onClick={() => chooseYours(key)}
-                        className={`min-h-[30px] rounded px-2.5 text-[12px] font-semibold uppercase tracking-[0.06em] ${
-                          view === key ? "bg-[var(--rt-border)] text-[var(--rt-text)]" : "text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <h2 id="yours" className="m-0 mb-2.5 shrink-0 text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--rt-text-muted)]">
-                    {view === "cars" ? (myCar!.carCount > 1 ? "Your cars" : "Your car") : myDriver!.driverCount > 1 ? "Your drivers" : "Your driver"}
-                  </h2>
-                )}
-                <div className="order-last min-w-0 basis-full sm:order-none sm:basis-0 sm:flex-1">
-                  {view === "cars" ? (
-                    <CarTabs cars={myCar!.cars ?? []} active={carChoice ?? myCar!.car!.id} onChoose={chooseCar} onReorder={orderCars} className="" />
-                  ) : (
-                    <DriverTabs drivers={myDriver!.drivers} active={driverChoice ?? myDriver!.driver!.id} onChoose={chooseDriver} onReorder={orderDrivers} className="" />
-                  )}
-                </div>
-                <Link to={view === "cars" ? "/settings/cars" : "/settings/drivers"} className="mb-2.5 ml-auto shrink-0 text-[13px] text-[var(--rt-accent)]">
-                  {view === "cars" ? "My cars →" : "My drivers →"}
-                </Link>
-              </div>
-              {view === "cars" ? <MyCarCard data={myCar!} ask={shownRecaps.length === 0} onPickRace={(raceId) => void pickCarRace(myCar!.car!.id, raceId)} picking={pickingCarRace} /> : <MyDriverCard data={myDriver!} onPickRace={(raceId) => void pickDriverRace(myDriver!.driver!.id, raceId)} picking={pickingRace} />}
-            </section>
-          )}
+          {yoursSection}
           {/* "Your 2026", series by series as each season ends (plan H), for the car shown. */}
           {view !== "drivers" &&
             shownRecaps.map((r, i) => <SeasonRecapCard key={r.key} recap={r} ask={i === 0} />)}
@@ -399,24 +493,7 @@ export function DashboardPage() {
           )}
 
           {/* Favorites */}
-          <section className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--rt-border)] px-5 py-3 text-[var(--rt-text-muted)]">
-            <span className="text-[13px] font-semibold uppercase tracking-[0.1em]">
-              Favorites
-            </span>
-            {favorites.length ? (
-              favorites.map((f) => (
-                <Link
-                  key={f.id}
-                  to={`/chart?race=${f.id}`}
-                  className="rounded-md border border-[var(--rt-border)] px-2.5 py-1 text-[13px] text-[var(--rt-text)]"
-                >
-                  ★ {f.name} · {f.track}
-                </Link>
-              ))
-            ) : (
-              <span className="text-[13px]">Star a race to keep it here.</span>
-            )}
-          </section>
+          {favoritesRow}
         </main>
 
         {/* Season */}

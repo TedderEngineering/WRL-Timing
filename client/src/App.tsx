@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./features/auth";
 import { HomePage } from "./pages/HomePage";
 import { PricingPage } from "./pages/PricingPage";
 import { MePage } from "./pages/MePage";
+import { SeasonPage } from "./pages/SeasonPage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 
@@ -198,6 +199,8 @@ export function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/season" element={<ProtectedRoute><SeasonPage /></ProtectedRoute>} />
 
         {/* Race routes: signed in only (signed out, the home page shows the latest and next race). The alerts-off link from an email works signed out. */}
         <Route path="/races" element={<ProtectedRoute><RaceListPage /></ProtectedRoute>} />

@@ -383,7 +383,7 @@ export function MyCarCard({
                       {row}
                     </button>
                   ) : (
-                    <Link to={chartHref(r.raceId, r.carNumber)} className="flex min-h-[40px] items-center gap-3">
+                    <Link to={chartHref(r.raceId, r.carNumber)} className="flex min-h-[44px] items-center gap-3 sm:min-h-[40px]">
                       {row}
                     </Link>
                   )}
@@ -551,8 +551,11 @@ function PitCycles({ cls, cycles }: { cls: string; cycles: PitCycleFact[] }) {
 export function FirstStepsChecklist({
   data,
   driver = null,
+  compact = false,
 }: {
   data: MyCarResponse | null;
+  /** Phones (mobile redesign, step 6): the progress and the next step only, so your car stays on the first screen. */
+  compact?: boolean;
   /** The followed drivers' side (Dashboard /my-driver): following a driver counts as following. */
   driver?: { driverCount: number; race: { id: string } | null; car?: { number: string }; viewed?: boolean } | null;
 }) {
@@ -619,7 +622,7 @@ export function FirstStepsChecklist({
   const next = steps.find((s) => !s.done && (s.to || s.action));
 
   return (
-    <section aria-labelledby="first-steps" className="rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] px-5 py-4 text-left">
+    <section aria-labelledby="first-steps" className={`rounded-xl border border-[var(--rt-border)] bg-[var(--rt-surface)] text-left ${compact ? "px-4 py-3" : "px-5 py-4"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id="first-steps" className="m-0 text-[15px] font-semibold text-[var(--rt-text)]">Make RaceTrace yours</h2>
@@ -633,7 +636,7 @@ export function FirstStepsChecklist({
             writeUi({ checklistHidden: true });
             setHidden(true);
           }}
-          className="min-h-[36px] px-1 text-[13px] text-[var(--rt-text-muted)] hover:text-[var(--rt-text)]"
+          className="min-h-[44px] px-1 text-[13px] text-[var(--rt-text-muted)] hover:text-[var(--rt-text)] sm:min-h-[36px]"
         >
           Hide
         </button>
@@ -649,7 +652,7 @@ export function FirstStepsChecklist({
         <div className="h-full rounded-full bg-[var(--rt-accent)]" style={{ width: `${(done / steps.length) * 100}%` }} />
       </div>
       <ol className="m-0 mt-2 list-none p-0">
-        {steps.map((s) => {
+        {steps.filter((s) => !compact || s === next).map((s) => {
           const isNext = s === next;
           const body = (
             <>
@@ -670,7 +673,7 @@ export function FirstStepsChecklist({
           );
           if (!s.done && s.action) {
             return (
-              <li key={s.key} className="flex min-h-[40px] items-center gap-3">
+              <li key={s.key} className="flex min-h-[44px] items-center gap-3 sm:min-h-[40px]">
                 {body}
                 <button type="button" onClick={s.action.run} className="ml-auto text-sm font-semibold text-[var(--rt-accent)]">
                   {s.action.label}
@@ -681,7 +684,7 @@ export function FirstStepsChecklist({
           if (isNext && s.alts && s.to) {
             // Several ways to do this step: find a race and press Follow, add a car, find a driver.
             return (
-              <li key={s.key} className="flex min-h-[40px] flex-wrap items-center gap-x-4 gap-y-1">
+              <li key={s.key} className="flex min-h-[44px] flex-wrap items-center gap-x-4 gap-y-1 sm:min-h-[40px]">
                 <span className="flex items-center gap-3">{body}</span>
                 <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold">
                   <Link to={s.to} onClick={() => track("checklist_step", { step: s.key })} className="text-[var(--rt-accent)]">
@@ -699,9 +702,9 @@ export function FirstStepsChecklist({
           return (
             <li key={s.key}>
               {s.done || !s.to ? (
-                <div className="flex min-h-[40px] items-center gap-3">{body}</div>
+                <div className="flex min-h-[44px] items-center gap-3 sm:min-h-[40px]">{body}</div>
               ) : (
-                <Link to={s.to} onClick={() => track("checklist_step", { step: s.key })} className="flex min-h-[40px] items-center gap-3 rounded-md hover:bg-[color-mix(in_srgb,var(--rt-text)_5%,transparent)]">
+                <Link to={s.to} onClick={() => track("checklist_step", { step: s.key })} className="flex min-h-[44px] items-center gap-3 rounded-md hover:bg-[color-mix(in_srgb,var(--rt-text)_5%,transparent)] sm:min-h-[40px]">
                   {body}
                 </Link>
               )}

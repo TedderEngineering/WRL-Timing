@@ -165,18 +165,19 @@ export function Layout() {
       {/* Navigation */}
       {full && <FullscreenButton on floating />}
       <header className={`${full || raceScreen ? "hidden " : ""}sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800`}>
-        <nav className="container-page flex items-center justify-between h-16 gap-2 sm:gap-3" aria-label="Main">
+        <nav className="container-page flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-3" aria-label="Main">
           {/* The same brand block as Finding Grip's header (GripLayout.tsx): Tedder logo | app mark + name.
               Phones get a smaller Tedder logo and tighter spacing so the name and coffee button fit. */}
           <div className="flex items-center gap-2 sm:gap-6 min-w-0">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 md:shrink-0">
-              <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer" className="shrink-0">
+              {/* Phones: the RaceTrace mark and name only (the Tedder logo is on the laptop bar and in Me). */}
+              <a href="https://tedderengineering.com" target="_blank" rel="noopener noreferrer" className="hidden shrink-0 sm:block">
                 <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-6 sm:h-8 dark:hidden" />
                 <img src="/te-logo-white.png" alt="Tedder Engineering" className="h-6 sm:h-8 hidden dark:block" />
               </a>
               <Link
                 to={isAuthenticated ? "/dashboard" : "/"}
-                className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-700 pl-2 sm:pl-3 text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
+                className="flex min-h-[44px] items-center gap-2 sm:border-l border-gray-300 dark:border-gray-700 sm:pl-3 text-lg font-bold text-gray-900 dark:text-gray-100 min-w-0"
               >
                 <img src="/racetrace-icon-192.png" alt="" className="h-6 w-6 shrink-0 rounded-md" />
                 <span className="truncate">RaceTrace</span>
@@ -238,7 +239,8 @@ export function Layout() {
       </main>
 
       {/* Footer */}
-      {!appPage && <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
+      {/* Phones: the bottom bar's Me holds share, terms and privacy instead. */}
+      {!appPage && !showBar && <footer className="border-t border-gray-200 dark:border-gray-800 py-8">
         <div className="container-page flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 dark:text-gray-400">
           <a href="https://tedderengineering.com" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src="/te-logo-black.png" alt="Tedder Engineering" className="h-6 dark:hidden" />

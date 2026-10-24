@@ -351,7 +351,7 @@ function MiniBody({ race }: { race: LatestRace }) {
       <span className="text-[var(--rt-text-muted)]">{race.locked ? "🔒" : race.recap ? "Recap ready" : "Chart only"}</span>
       <Link
         to={chartHref(race.id)}
-        className="ml-auto inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg bg-[var(--rt-accent)] px-3 text-xs font-semibold text-[var(--rt-on-accent)] hover:brightness-110"
+        className="ml-auto inline-flex min-h-[44px] items-center gap-1.5 sm:min-h-[36px] whitespace-nowrap rounded-lg bg-[var(--rt-accent)] px-3 text-xs font-semibold text-[var(--rt-on-accent)] hover:brightness-110"
       >
         <TraceIcon />
         Position Trace
@@ -438,7 +438,7 @@ export function RecapCard({
               onClick={() => setTab(i)}
               draggable={false}
               className={`flex items-center whitespace-nowrap border-b-2 transition-colors ${
-                mini ? "min-h-[34px] px-2 text-xs" : "min-h-[40px] px-3 text-sm"
+                mini ? "min-h-[44px] px-2.5 text-xs sm:min-h-[34px] sm:px-2" : "min-h-[44px] px-3 text-sm sm:min-h-[40px]"
               } ${
                 i === tab
                   ? "border-[var(--rt-accent)] font-semibold text-[var(--rt-text)]"

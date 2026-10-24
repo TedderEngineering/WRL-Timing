@@ -8,7 +8,19 @@ import { cn } from "../lib/utils";
 import { SeriesBadge } from "../components/SeriesBadge";
 import { dayName, formatDateRange } from "../lib/race-dates";
 import { DriverResults, useDriverSearch } from "../features/races/DriverResults";
-import { CarResults, useCarSearch } from "../features/my-cars/CarSearch";
+import { CarResults, useCarSearch, useMyCarsList } from "../features/my-cars/CarSearch";
+import { useMyCarRaceIds } from "../features/my-cars/myCarRaces";
+import { useIsCompact } from "../lib/breakpoint";
+
+const SCOPE_KEY = "rt.eventsScope";
+function readScope(): "mine" | "all" | null {
+  try {
+    const v = localStorage.getItem(SCOPE_KEY);
+    return v === "mine" || v === "all" ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 type Family = WeekendRace["family"];
 
@@ -45,6 +57,22 @@ export function RaceListPage() {
   const { drivers, loading: driversLoading } = useDriverSearch(query);
   // And cars, by number or team.
   const { cars, loading: carsLoading } = useCarSearch(query);
+  // Phones (mobile redesign, step 6): All / My cars, opening on My cars for someone who follows
+  // a car (the choice is remembered in this browser).
+  const compact = useIsCompact();
+  const myCars = useMyCarsList(user?.id);
+  const myRaceIds = useMyCarRaceIds(compact ? myCars : null);
+  const canScope = compact && !!myCars?.length;
+  const [scopePick, setScopePick] = useState<"mine" | "all" | null>(() => readScope());
+  const scope: "mine" | "all" = canScope ? (scopePick ?? "mine") : "all";
+  const pickScope = (v: "mine" | "all") => {
+    setScopePick(v);
+    try {
+      localStorage.setItem(SCOPE_KEY, v);
+    } catch {
+      /* private window */
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -65,8 +93,9 @@ export function RaceListPage() {
     return weekends
       .filter((w) => season === "all" || w.season === season)
       .map((w) => (families.size === 0 ? w : { ...w, races: w.races.filter((r) => families.has(r.family)) }))
+      .map((w) => (scope === "mine" && myRaceIds ? { ...w, races: w.races.filter((r) => myRaceIds.has(r.id)) } : w))
       .filter((w) => w.races.length > 0 && matches(w, query.trim()));
-  }, [weekends, season, families, query]);
+  }, [weekends, season, families, query, scope, myRaceIds]);
 
   // One section per season; race weekends are weeks apart, so months would be one card each.
   const bySeason = useMemo(() => {
@@ -79,6 +108,8 @@ export function RaceListPage() {
     return groups;
   }, [shown]);
 
+  // My cars, while their races are being looked up: the skeleton, not every race for a moment.
+  const loadingMine = scope === "mine" && myRaceIds === null;
   const raceCount = shown.reduce((n, w) => n + w.races.length, 0);
   const filtered = query !== "" || season !== "all" || families.size > 0;
 
@@ -104,6 +135,29 @@ export function RaceListPage() {
         )}
       </div>
 
+      {canScope && (
+        <div role="tablist" aria-label="Which races" className="mb-3 grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: "var(--rt-surface)" }} data-phone-events="scope">
+          {(
+            [
+              ["mine", myCars!.length > 1 ? "My cars" : "My car"],
+              ["all", "All races"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={scope === k}
+              onClick={() => pickScope(k)}
+              className="min-h-[44px] rounded-md text-[14px] font-semibold"
+              style={scope === k ? { background: "var(--rt-accent)", color: "var(--rt-on-accent)" } : { color: "var(--rt-text-muted)" }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center">
         <SearchBar value={query} onChange={setQuery} isSearching={driversLoading || carsLoading} placeholder="Search tracks, races, drivers or car numbers..." className="lg:max-w-md lg:flex-1" />
@@ -116,7 +170,7 @@ export function RaceListPage() {
                 aria-checked={season === s}
                 onClick={() => setSeason(s)}
                 className={cn(
-                  "rounded-md px-3 py-1 text-sm transition-colors",
+                  "min-h-[44px] rounded-md px-3 text-sm transition-colors sm:min-h-0 sm:py-1",
                   season === s ? "bg-brand-500 font-semibold text-gray-950" : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
                 )}
               >
@@ -134,7 +188,7 @@ export function RaceListPage() {
                 aria-label={f}
                 title={f}
                 className={cn(
-                  "inline-flex items-center rounded-full border px-2.5 py-1 transition-colors",
+                  "inline-flex min-h-[44px] items-center rounded-full border px-3 transition-colors sm:min-h-0 sm:px-2.5 sm:py-1",
                   on
                     ? "border-brand-500 bg-brand-500/15"
                     : "border-gray-200 opacity-70 hover:opacity-100 dark:border-gray-800"
@@ -151,7 +205,7 @@ export function RaceListPage() {
                 setSeason("all");
                 setFamilies(new Set());
               }}
-              className="px-2 text-sm text-brand-500 hover:text-brand-400"
+              className="min-h-[44px] px-2 text-sm text-brand-500 hover:text-brand-400 sm:min-h-0"
             >
               Clear
             </button>
@@ -160,13 +214,18 @@ export function RaceListPage() {
       </div>
 
       {error && <p className="py-16 text-center text-red-500">{error}</p>}
-      {!data && !error && <Skeleton />}
+      {(!data || loadingMine) && !error && <Skeleton />}
       <CarResults cars={cars} />
       <DriverResults drivers={drivers} />
 
-      {data && shown.length === 0 && drivers.length === 0 && cars.length === 0 && (
+      {data && !loadingMine && shown.length === 0 && drivers.length === 0 && cars.length === 0 && (
         <p className="py-16 text-center text-gray-500 dark:text-gray-400">
-          No race weekends match.{" "}
+          {scope === "mine" && !filtered ? "None of your cars' races are on RaceTrace yet. " : "No race weekends match. "}
+          {scope === "mine" && (
+            <button className="min-h-[44px] text-brand-500 hover:underline" onClick={() => pickScope("all")}>
+              Show all races
+            </button>
+          )}{" "}
           {filtered && (
             <button className="text-brand-500 hover:underline" onClick={() => { setQuery(""); setSeason("all"); setFamilies(new Set()); }}>
               Clear the filters
@@ -176,7 +235,7 @@ export function RaceListPage() {
       )}
 
       <div className="space-y-10">
-        {bySeason.map((g) => (
+        {!loadingMine && bySeason.map((g) => (
           <section key={g.season} aria-labelledby={`s-${g.season}`}>
             <h2 id={`s-${g.season}`} className="mb-3 flex items-baseline gap-2 text-lg font-bold text-gray-900 dark:text-gray-100">
               {g.season}

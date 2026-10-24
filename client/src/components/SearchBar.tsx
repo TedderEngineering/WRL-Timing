@@ -31,7 +31,7 @@ export function SearchBar({ value, onChange, isSearching, className, placeholder
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-10 md:h-10 pl-10 pr-9 rounded-lg border border-gray-700 bg-gray-800 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+        className="w-full h-11 sm:h-10 pl-10 pr-9 rounded-lg border border-gray-700 bg-gray-800 text-[16px] sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
       />
 
       {/* Clear button */}
