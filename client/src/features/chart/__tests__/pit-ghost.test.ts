@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GHOST_KEY, ghostPlace } from "../pit-ghost";
+import { FALLBACK_LOSS_S, GHOST_KEY, ghostLoss, ghostPlace } from "../pit-ghost";
 import { leaderOrder, trackOrder } from "../LiveTrackOrder";
 
 describe("the pit ghost", () => {
@@ -22,5 +22,13 @@ describe("the pit ghost", () => {
     // From the leader, in its place on the road too.
     const fromLeader = leaderOrder(places, 246, () => 0, 6000, 40);
     expect(fromLeader.map((r) => r.key)).toEqual([246, 38, GHOST_KEY, 5]);
+  });
+
+  it("uses the time typed, else this race's measured green-flag stop, else 60 s", () => {
+    const g = { on: true, lossS: null, windowS: 3 };
+    expect(ghostLoss(g, 97.9)).toBe(97.9);
+    expect(ghostLoss(g, null)).toBe(FALLBACK_LOSS_S);
+    expect(ghostLoss({ ...g, lossS: 65 }, 97.9)).toBe(65);
+    expect(ghostLoss({ ...g, lossS: 0 }, 97.9)).toBe(0);
   });
 });

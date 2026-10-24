@@ -8,7 +8,8 @@ import { RunningOrder, outCars, type PitVisit } from "./RunningOrder";
 import { lapsDown } from "./laps-down";
 import { PitList } from "./PitList";
 import { mapFlag } from "./flags";
-import { GHOST_KEY, GHOST_MAX_S, ghostPlace, readPitGhost, savePitGhost, WINDOW_MAX_S, type PitGhost } from "./pit-ghost";
+import { FALLBACK_LOSS_S, GHOST_KEY, GHOST_MAX_S, ghostLoss, ghostPlace, readPitGhost, savePitGhost, WINDOW_MAX_S, type PitGhost } from "./pit-ghost";
+import { liveStrategy } from "./live-strategy";
 import { ghostLabel, ghostTraffic, type GhostTraffic } from "./ghost-traffic";
 import { InfoTip } from "../../components/InfoTip";
 import { readMapAngle, rotatedFit, saveMapAngle, snapDeg, stepDeg } from "./map-rotate";
@@ -180,11 +181,19 @@ export function TrackMap({
   /** The traffic around the ghost (worked out each second), for its ring and label on the track. */
   const ghostTrafficRef = useRef<GhostTraffic | null>(null);
   pitGhostRef.current = pitGhost;
+  /** This race's measured green-flag stop for the focus car's class (the Strategy tab's), the ghost's time unless one is typed. */
+  const measuredLossS = useMemo(
+    () => (pitGhost.on ? (liveStrategy({ data, annotations, focusNum, flag: null, timeToGoS: null })?.greenStopS ?? null) : null),
+    [pitGhost.on, data, annotations, focusNum]
+  );
+  const lossS = ghostLoss(pitGhost, measuredLossS);
+  const lossRef = useRef(lossS);
+  lossRef.current = lossS;
   /** Where the pit ghost is now (m past the line): the time set behind the focus car at its pace; null off the track. */
   const ghostOf = (key: number, len: number): number | null => {
     const m = [...motions.current.values()].find((x) => carKey(data, x.num) === key);
     if (!m || m.flags & IN_PIT || pitVisits.has(key) || out.has(key)) return null;
-    return ghostPlace(m.shown, m.base > 0 ? m.base : typicalSpeed, pitGhostRef.current.lossS, len);
+    return ghostPlace(m.shown, m.base > 0 ? m.base : typicalSpeed, lossRef.current, len);
   };
   /** The cars-closing panel on or off (kept on this device); its ticks on the track go with the key's "closing" chip. */
   const [closingOn, setClosingOn] = useState(() => {
@@ -582,7 +591,7 @@ export function TrackMap({
       ctx.globalAlpha = 1;
       ctx.stroke();
       ctx.setLineDash([]);
-      const text = `PIT +${Math.round(pitGhostRef.current.lossS)}${tr ? ` · ${ghostLabel(tr)}` : ""}`;
+      const text = `PIT +${Math.round(lossRef.current)}${tr ? ` · ${ghostLabel(tr)}` : ""}`;
       ctx.font = "700 9px system-ui, sans-serif";
       const w = ctx.measureText(text).width + 8;
       ctx.fillStyle = TRACE.focus;
@@ -854,6 +863,8 @@ export function TrackMap({
           virtual={!!clock}
           pitGhost={pitGhost}
           onPitGhost={changePitGhost}
+          ghostLossS={lossS}
+          measuredLossS={measuredLossS}
           caution={isCaution(flag)}
           leaderNote={leaderInPits ? `overall leader #${carNo(data, leaderInPits)} in the pits` : "overall leader"}
           status={[
@@ -931,7 +942,7 @@ export function TrackMap({
                     from={fromLeader ? "leader" : "focus"}
                     onFrom={pickCrossFrom}
                     note={note}
-                    ghostLossS={ghostD !== null ? pitGhost.lossS : null}
+                    ghostLossS={ghostD !== null ? Math.round(lossS) : null}
                     ghostTraffic={traffic}
                     lapS={track.len / speed}
                     onRowTap={(k) => {
@@ -1021,6 +1032,8 @@ function MapKey({
   virtual,
   pitGhost,
   onPitGhost,
+  ghostLossS,
+  measuredLossS,
   caution,
   leaderNote,
   status,
@@ -1033,6 +1046,9 @@ function MapKey({
   /** The pit ghost: off until turned on, with the time a stop would lose. */
   pitGhost: PitGhost;
   onPitGhost: (g: PitGhost) => void;
+  /** The time the ghost uses now, and this race's measured green-flag stop (its time unless one is typed). */
+  ghostLossS: number;
+  measuredLossS: number | null;
   caution: boolean;
   leaderNote: string;
   status: string[];
@@ -1092,7 +1108,13 @@ function MapKey({
           pit ghost
         </button>
         {pitGhost.on && (
-          <label className="flex items-center gap-0.5 pr-1.5" style={{ color: C.muted }} title="The time a stop would lose (s): pit lane plus fuelling">
+          <label
+            className="flex items-center gap-0.5 pr-1.5"
+            style={{ color: C.muted }}
+            title={`The time a stop would lose (s): pit lane plus fuelling. ${
+              measuredLossS !== null ? `This race's green-flag stops lose about ${Math.round(measuredLossS)} s` : `No green-flag stop measured yet: ${FALLBACK_LOSS_S} s until there is one`
+            }${pitGhost.lossS === null ? " (in use: type a time to set your own)." : "; you set your own."}`}
+          >
             +
             <input
               type="number"
@@ -1100,18 +1122,35 @@ function MapKey({
               min={0}
               max={GHOST_MAX_S}
               step={1}
-              value={pitGhost.lossS}
+              value={pitGhost.lossS ?? Math.round(ghostLossS)}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v >= 0 && v <= GHOST_MAX_S) onPitGhost({ ...pitGhost, lossS: v });
               }}
               aria-label="Pit ghost: seconds a stop would lose"
               className="w-11 rounded border bg-transparent px-1 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-              style={{ borderColor: "#3a3a5c", color: C.text }}
+              style={{ borderColor: "#3a3a5c", color: pitGhost.lossS === null ? C.muted : C.text }}
             />
             s
           </label>
         )}
+        {pitGhost.on &&
+          (pitGhost.lossS === null ? (
+            <span className="pr-1 text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }} title="The race's measured green-flag stop: type a time to set your own">
+              auto
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onPitGhost({ ...pitGhost, lossS: null })}
+              className="mr-1 rounded border px-1 text-[10px] font-semibold uppercase tracking-wider hover:bg-white/10"
+              style={{ borderColor: "#3a3a5c", color: C.muted }}
+              title={measuredLossS !== null ? `Back to this race's measured green-flag stop (about ${Math.round(measuredLossS)} s)` : "Back to the race's measured green-flag stop once there is one"}
+              aria-label="Pit ghost: use the race's measured stop time"
+            >
+              auto
+            </button>
+          ))}
         {pitGhost.on && (
           <label className="flex items-center gap-0.5 pr-1.5" style={{ color: C.muted }} title="Clear air: no car within this many seconds either side of where it would rejoin">
             clear ±
