@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./features/auth";
 // Public pages
 import { HomePage } from "./pages/HomePage";
 import { PricingPage } from "./pages/PricingPage";
+import { MePage } from "./pages/MePage";
 import { TermsPage } from "./pages/TermsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 
@@ -166,6 +167,7 @@ export function App() {
         {/* Public routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/me" element={<MePage />} />
         <Route path="/support/thanks" element={<SupportThanksPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />

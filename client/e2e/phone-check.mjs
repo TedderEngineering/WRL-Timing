@@ -31,7 +31,9 @@ const WIDTHS = (opt("--widths") ?? "320,360,375,390,430").split(",").map(Number)
 const HEIGHT = 812;
 const TABS = ["position", "laptimes", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
-  { name: "home", path: "/" },
+  { name: "home", path: "/", bar: true },
+  { name: "me", path: "/me", bar: true },
+  { name: "dashboard", path: "/dashboard", bar: true },
   ...TABS.map((t) => ({ name: `race:${t}`, path: `/chart?race=${RACE_ID}&tab=${t}`, race: true, chart: t === "position" || t === "laptimes" })),
 ];
 
@@ -43,7 +45,14 @@ const RULES = [
   { id: "no-sideways-page", test: (m) => m.sideways === 0, say: (m) => `page scrolls sideways by ${m.sideways} px` },
   { id: "race-built-once", test: (m) => !m.race || m.raceViews === 1, say: (m) => `race views rendered ${m.raceViews} times` },
   { id: "no-page-errors", test: (m) => m.errors.length === 0, say: (m) => `page errors: ${m.errors.join(" | ")}` },
+  // PR 2: the phone shell.
+  { id: "chart-near-top", test: (m) => m.chartTop === null || m.chartTop <= CHART_TOP_MAX, say: (m) => `chart starts at ${m.chartTop} px (limit ${CHART_TOP_MAX})` },
+  { id: "shell-targets-44", test: (m) => m.shellSmall.length === 0, say: (m) => `phone shell controls under 44 px: ${m.shellSmall.join(", ")}` },
+  { id: "app-bar-where-expected", test: (m) => m.appBar === !m.race, say: (m) => (m.race ? "bottom bar shown on a race screen" : "bottom bar missing") },
+  { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
+/** 30% of the 812 px design screen. */
+const CHART_TOP_MAX = Math.round(812 * 0.3);
 
 async function serve() {
   const dist = path.resolve(here, "../dist");
@@ -80,7 +89,17 @@ function measure() {
     const s = getComputedStyle(el);
     return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4 && el.tagName !== "NAV";
   });
+  const shell = [...document.querySelectorAll("[data-phone-shell]")].filter(vis);
+  const shellSmall = shell
+    .flatMap((el) => [...el.querySelectorAll("button, a[href]")])
+    .filter(vis)
+    .filter((el) => el.getBoundingClientRect().height < 44)
+    .map((el) => (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().slice(0, 24));
+  const raceHeader = document.querySelector('[data-phone-shell="race-header"]');
   return {
+    appBar: shell.some((el) => el.getAttribute("data-phone-shell") === "app-bar"),
+    raceHeader: raceHeader && vis(raceHeader) ? Math.round(raceHeader.getBoundingClientRect().height) : null,
+    shellSmall,
     sideways: Math.max(0, doc.scrollWidth - innerWidth),
     raceViews: document.querySelectorAll('nav[aria-label="Race views"]').length,
     canvases: document.querySelectorAll("canvas").length,
@@ -127,7 +146,7 @@ async function main() {
     server.stop();
   }
 
-  const cols = ["width", "page", "sideways", "raceViews", "canvases", "chartTop", "lapPanelTop", "smallTargets", "targets", "widestScroller", "ms"];
+  const cols = ["width", "page", "sideways", "raceViews", "chartTop", "lapPanelTop", "raceHeader", "appBar", "smallTargets", "targets", "widestScroller", "ms"];
   console.log(cols.join("\t"));
   for (const r of rows) console.log(cols.map((c) => r[c] ?? "-").join("\t"));
   if (unknownRoutes.size) console.log(`\nRoutes the stand-in answered 404: ${[...unknownRoutes].sort().join(", ")}`);

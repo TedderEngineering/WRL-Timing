@@ -53,9 +53,14 @@ export default {
           from: { transform: "translateX(-100%)" },
           to: { transform: "translateX(0)" },
         },
+        "sheet-up": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
       },
       animation: {
         "slide-in-left": "slide-in-left 200ms ease-out",
+        "sheet-up": "sheet-up 200ms ease-out",
       },
     },
   },
