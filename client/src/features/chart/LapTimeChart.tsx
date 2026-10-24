@@ -449,6 +449,8 @@ interface LapTimeChartProps {
   live?: boolean;
   /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
   headSlot?: HTMLElement | null;
+  /** Phones held sideways: the race page's top row, for the car pill. */
+  phoneSlot?: HTMLElement | null;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -456,7 +458,7 @@ interface LapTimeChartProps {
 export function LapTimeChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, live = false, headSlot = null,
+  classView, activeLap, setActiveLap, view, live = false, headSlot = null, phoneSlot = null,
 }: LapTimeChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -870,7 +872,7 @@ export function LapTimeChart({
     );
     return (
       <div className="flex h-full min-h-0 flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
-        <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} headSlot={headSlot} />
+        <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} headSlot={headSlot} phoneSlot={phoneSlot} />
         <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
           {figure}
         </div>

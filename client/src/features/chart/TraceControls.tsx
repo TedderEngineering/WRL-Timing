@@ -33,6 +33,11 @@ export interface TraceControlsProps {
    * tab row). Wider than a phone only; a phone keeps them here.
    */
   headSlot?: HTMLElement | null;
+  /**
+   * Phones held sideways: the race page's top row, where the car pill goes so the chart keeps
+   * the height (the pill is portalled there, slim).
+   */
+  phoneSlot?: HTMLElement | null;
 }
 
 /** The small pills and car chips of the compare row (the Lap Times look, used on both tabs). */
@@ -177,7 +182,7 @@ export function TraceControls(p: TraceControlsProps) {
       .sort((a, b) => b.n - a.n || a.m.localeCompare(b.m));
   }, [makeGroups, classView, data]);
   if (compact) {
-    return (
+    const bar = (
       <PhoneCarBar
         data={data}
         focusNum={focusNum}
@@ -187,8 +192,10 @@ export function TraceControls(p: TraceControlsProps) {
         view={view}
         xAxisMode={p.xAxisMode}
         setXAxisMode={p.setXAxisMode}
+        slim={!!p.phoneSlot}
       />
     );
+    return p.phoneSlot ? createPortal(bar, p.phoneSlot) : bar;
   }
   const compare = [...compSet].filter((n) => n !== focusNum);
   // In published-number order: "007" sits with "7", not after the stand-in key (car-number.ts).

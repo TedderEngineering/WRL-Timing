@@ -22,7 +22,7 @@ import { Sheet } from "../components/Sheet";
 import { PhoneViewTabs } from "../components/PhoneViewTabs";
 import { ChartGestureSheet } from "../features/chart/ChartGestureHelp";
 import { PhoneAnalysisTab } from "../features/chart/PhoneAnalysisTab";
-import { useIsCompact } from "../lib/breakpoint";
+import { useIsCompact, useIsLandscapePhone } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
 
@@ -64,21 +64,24 @@ export function RaceDetailPage() {
   const [hasStories, setHasStories] = useState<boolean | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
   // Gaps and Head-to-head are views of their own on a phone only (PhoneAnalysisTab).
-  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers" | "gaps" | "h2h">(() => {
+  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers" | "gaps" | "h2h" | "cycle">(() => {
     const t = searchParams.get("tab");
-    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers" || t === "gaps" || t === "h2h") return t;
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers" || t === "gaps" || t === "h2h" || t === "cycle") return t;
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
   // Phones (mobile redesign, PR 2): one-line header with a race menu, and a row of views.
   const compact = useIsCompact();
+  // A phone held sideways: back, views, car pill and menu share one top row, so the chart keeps the height.
+  const landscape = useIsLandscapePhone() && compact;
+  const [carSlot, setCarSlot] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
   const [gesturesOpen, setGesturesOpen] = useState(false);
   const [h2hRival, setH2hRival] = useState<number | undefined>(undefined);
   // Wider than a phone, Gaps and Head-to-head open beside the chart instead.
   useEffect(() => {
-    if (!compact && (activeTab === "gaps" || activeTab === "h2h")) setActiveTab("position");
+    if (!compact && (activeTab === "gaps" || activeTab === "h2h" || activeTab === "cycle")) setActiveTab("position");
   }, [compact, activeTab]);
   // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
   const tabChosen = useRef(!!searchParams.get("tab"));
@@ -420,6 +423,7 @@ export function RaceDetailPage() {
     { id: "position" as const, label: "Position Trace", locked: false },
     ...(hasStories ? [{ id: "story" as const, label: "Story", locked: false }] : []),
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
+    ...(compact ? [{ id: "cycle" as const, label: "Pit cycle", locked: !isTeam }] : []),
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
     ...(compact
       ? [
@@ -450,8 +454,8 @@ export function RaceDetailPage() {
     }, { replace: true });
   };
 
-  // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Laps · Gaps ·
-  // Head-to-head · Strategy · Drivers), with short names; the row nudges once on a first visit.
+  // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Pit cycle · Laps ·
+  // Gaps · Head-to-head · Strategy · Drivers), with short names; the row nudges once on a first visit.
   const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps", drivers: "Drivers" };
   const phoneTabs = tabs.map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label }));
 
@@ -470,7 +474,7 @@ export function RaceDetailPage() {
       <ShareRaceButton raceId={id!} raceName={raceMeta.name} className={actionClass} style={actionStyle} />
       {/* The open tab as a PDF; a Team tab only for those who can open it. */}
       {/* Gaps and Head-to-head (phone views) have no PDF of their own. */}
-      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && activeTab !== "gaps" && activeTab !== "h2h" && (
+      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && activeTab !== "gaps" && activeTab !== "h2h" && activeTab !== "cycle" && (
         <DownloadPdfButton
           tab={activeTab}
           input={{
@@ -527,11 +531,26 @@ export function RaceDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="m-0 min-w-0 flex-1 truncate text-base font-semibold">{raceMeta.name}</h1>
+            {landscape ? (
+              <>
+                <h1 className="sr-only">{raceMeta.name}</h1>
+                <div className="min-w-0 flex-1">
+                  <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />
+                </div>
+                {/* The chart views' car pill is portalled here (TraceControls phoneSlot) */}
+                <div ref={setCarSlot} className="flex min-w-0 max-w-[38%] shrink-0 items-center" />
+              </>
+            ) : (
+              <h1 className="m-0 min-w-0 flex-1 truncate text-base font-semibold">{raceMeta.name}</h1>
+            )}
             {resultsStatus && (
-              <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: resultsStatus === "provisional" ? "#fab219" : "#4ade80" }}>
+              <span
+                className="flex shrink-0 items-center gap-1 text-xs"
+                style={{ color: resultsStatus === "provisional" ? "#fab219" : "#4ade80" }}
+                title={resultsStatus === "provisional" ? "Provisional results" : "Official results"}
+              >
                 <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: "currentColor" }} />
-                {resultsStatus === "provisional" ? "Provisional" : "Official"}
+                <span className={landscape ? "sr-only" : undefined}>{resultsStatus === "provisional" ? "Provisional" : "Official"}</span>
               </span>
             )}
             <button
@@ -588,7 +607,7 @@ export function RaceDetailPage() {
           </Sheet>
           <ChartGestureSheet open={gesturesOpen} onClose={() => setGesturesOpen(false)} />
 
-          <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />
+          {!landscape && <PhoneViewTabs tabs={phoneTabs} active={activeTab} onSelect={selectTab} />}
         </>
       ) : (
         <>
@@ -694,6 +713,7 @@ export function RaceDetailPage() {
           activeLap={activeLap} setActiveLap={setActiveLap}
           view={traceView}
           defaultAxis={chartDefaults.axis}
+          phoneSlot={landscape && activeTab === "position" ? carSlot : null}
           onOpenView={(v, rival) => {
             setH2hRival(rival);
             selectTab(v);
@@ -734,11 +754,12 @@ export function RaceDetailPage() {
             classView={classView}
             activeLap={activeLap} setActiveLap={setActiveLap}
             view={traceView}
+            phoneSlot={landscape ? carSlot : null}
           />
         </div>
       )}
 
-      {compact && (activeTab === "gaps" || activeTab === "h2h") && (
+      {compact && (activeTab === "gaps" || activeTab === "h2h" || activeTab === "cycle") && (
         <div className="flex min-h-0 flex-1 flex-col">
           <PhoneAnalysisTab
             kind={activeTab}
@@ -747,6 +768,7 @@ export function RaceDetailPage() {
             compSet={compSet} classView={classView} view={traceView}
             activeLap={activeLap} setActiveLap={setActiveLap}
             h2hRival={activeTab === "h2h" ? h2hRival : undefined}
+            phoneSlot={landscape ? carSlot : null}
           />
         </div>
       )}

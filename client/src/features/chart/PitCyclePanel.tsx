@@ -2,6 +2,10 @@ import { useState, useMemo } from "react";
 import type { RaceChartData, AnnotationData } from "@shared/types";
 import { classStopCycle, type StopRow } from "./pit-stops";
 import { carNo } from "./car-number";
+import { useIsCompact } from "../../lib/breakpoint";
+import { RowCard, SortBar, StatGrid, PC } from "./phone-cards";
+
+const SORT_NAMES: Record<SortKey, string> = { pitLoss: "Pit loss", pitRoad: "Time in pit lane", inLap: "In-lap number", car: "Car number" };
 
 interface PitCyclePanelProps {
   data: RaceChartData;
@@ -24,6 +28,8 @@ function secToDisplay(sec: number | null | undefined): string {
 export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyclePanelProps) {
   const [sortKey, setSortKey] = useState<SortKey>("pitLoss");
   const [sortAsc, setSortAsc] = useState(true);
+  // Phones: one card per stop, the focus car's first, instead of a 7-column table (mobile redesign).
+  const compact = useIsCompact();
 
   // The class's round of stops that the focus car's stop belongs to (pit-stops.ts).
   const cycle = useMemo(() => classStopCycle(data, annotations, focusNum, activeLap), [data, annotations, focusNum, activeLap]);
@@ -80,7 +86,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
           : `Every ${cycle.cls} car's ${ord(cycle.stopNumber)} stop · laps ${cycle.firstLap}–${cycle.lastLap}`}
       </div>
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-2 border-b px-4 pb-3" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+      <div className={`grid gap-2 border-b px-4 pb-3 ${compact ? "grid-cols-2 gap-y-3" : "grid-cols-4"}`} style={{ borderColor: "rgba(255,255,255,0.08)" }}>
         <SummaryBox label="Your pit loss" value={focusRow ? secToDisplay(focusRow.timing.totalPitLoss) : "—"} />
         <SummaryBox label="Cycle avg" value={secToDisplay(avgPitLoss)} />
         <SummaryBox label="Best stop" value={bestRow ? secToDisplay(bestRow.timing.totalPitLoss) : "—"} sub={bestRow ? `#${carNo(data, bestRow.carNum)}` : undefined} />
@@ -89,6 +95,42 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
 
       {/* Table: fits the side panel; only the rows scroll (no visible scrollbar) */}
       <div className="no-scrollbar flex-1 overflow-y-auto">
+        {compact ? (
+          <div className="flex flex-col gap-2 px-3 pt-3">
+            <SortBar
+              options={(["pitLoss", "pitRoad", "inLap", "car"] as SortKey[]).map((k) => ({ key: k, label: SORT_NAMES[k] }))}
+              value={sortKey}
+              dir={sortAsc ? "asc" : "desc"}
+              onChange={(k) => { setSortKey(k); setSortAsc(true); }}
+              onFlip={() => setSortAsc((a) => !a)}
+            />
+            {[...sorted.filter((r) => r.isFocus), ...sorted.filter((r) => !r.isFocus)].map((row) => {
+              const mine = focusRow?.timing.totalPitLoss;
+              const theirs = row.timing.totalPitLoss;
+              const lossColor = row.isFocus || typeof mine !== "number" || typeof theirs !== "number" ? PC.text : theirs <= mine ? "#4ade80" : "#f87171";
+              return (
+                <RowCard key={`${row.carNum}-${row.pitLap}`} focus={row.isFocus}>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-[15px] font-bold" style={{ color: row.isFocus ? PC.accent : PC.text }}>#{carNo(data, row.carNum)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>{row.team}</span>
+                    <span className="shrink-0 text-[12px]" style={{ color: PC.muted }}>Loss</span>
+                    <span className="shrink-0 font-mono text-[15px] font-bold" style={{ color: lossColor }}>{secToDisplay(row.timing.totalPitLoss)}</span>
+                  </div>
+                  <StatGrid
+                    stats={[
+                      { label: `In-lap ${row.pitLap}`, value: secToDisplay(row.timing.inLapTime) },
+                      { label: "Pit lane", value: secToDisplay(row.timing.pitRoadTime) },
+                      { label: "Out-lap", value: `${secToDisplay(row.outLap)}${row.outLapWhole ? "*" : ""}` },
+                    ]}
+                  />
+                  <div className="mt-1.5 text-[12px]" style={{ color: PC.muted }}>
+                    Green-flag average {secToDisplay(row.timing.avgGreenLapTime)}
+                  </div>
+                </RowCard>
+              );
+            })}
+          </div>
+        ) : (
         <table className="w-full table-fixed text-[11px]">
           <colgroup>
             <col style={{ width: "13%" }} />
@@ -133,7 +175,8 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
             })}
           </tbody>
         </table>
-        <div className="px-3 pb-3 pt-2 text-[10px] leading-relaxed" style={{ color: "rgba(255,255,255,0.4)" }}>
+        )}
+        <div className={`px-3 pb-3 pt-2 leading-relaxed ${compact ? "text-[12px]" : "text-[10px]"}`} style={{ color: "rgba(255,255,255,0.4)" }}>
           {sorted.some((r) => r.timing.source === "facts")
             ? "Pit = official time in the pit lane, where the timing has it. Loss = time lost against the car's green-flag pace; under a caution, against cars on track then (it can come out ahead)."
             : "Pit = time in the pit lane. Loss = in-lap and out-lap time over the car's green-flag average."}
@@ -149,7 +192,7 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
 function SummaryBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{label}</div>
+      <div className="text-[11px] uppercase tracking-wider mb-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>{label}</div>
       <div className="text-sm font-bold tabular-nums text-white">{value}</div>
       {sub && <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>{sub}</div>}
     </div>

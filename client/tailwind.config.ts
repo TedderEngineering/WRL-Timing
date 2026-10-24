@@ -3,6 +3,15 @@ export default {
   content: ["./index.html", "./grip.html", "./src/**/*.{js,ts,jsx,tsx}"],
   darkMode: "class",
   theme: {
+    // Tailwind's widths, except that a phone held sideways (short and touch-only) stays a phone:
+    // every sm:/md:/lg: style needs the width AND either the height of a tablet or a mouse.
+    // Keep in step with COMPACT_QUERY in src/lib/breakpoint.ts.
+    screens: Object.fromEntries(
+      [["sm", 640], ["md", 768], ["lg", 1024], ["xl", 1280], ["2xl", 1536]].map(([k, w]) => [
+        k,
+        { raw: `(min-width: ${w}px) and (min-height: 500px), (min-width: ${w}px) and (pointer: fine)` },
+      ])
+    ),
     extend: {
       colors: {
         // Site accent. Defined as CSS variables in styles/globals.css so the Finding

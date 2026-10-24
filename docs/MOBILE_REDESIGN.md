@@ -70,3 +70,18 @@ phone they stay beside the chart, and `?tab=gaps|h2h` falls back to the trace.
 The Position Trace opens on race time on a phone (`phone-axis.ts`), with a small **Laps | Time** switch at
 the right of the chart's caption line; a change is remembered on that phone (`localStorage`). Both axes
 together stay in the car sheet. Laptops keep the Settings → Preferences chart default (laps unless changed).
+
+## Phones held sideways
+
+A phone held sideways (short and touch-only: under 500 px tall with a coarse pointer) is a phone, in
+CSS and JS alike: `COMPACT_QUERY` in `client/src/lib/breakpoint.ts`, and every Tailwind screen in
+`tailwind.config.js` needs the width and either a tablet's height or a mouse. So everything built for
+phones (time axis, one-line lap sheet, views row, gestures, Pit cycle / Gaps / Head-to-head views)
+applies both ways up. Sideways, the race page puts back, the views, the car pill and ⋯ in one 48 px row,
+so the chart starts at 65 px on an 844×390 screen. The phone check runs 844×390 and 932×430 too.
+
+## Pit cycle view
+
+On a phone, Pit cycle is a view of its own (Trace · Story · Pits · Pit cycle · Laps · …), like Gaps and
+Head-to-head: the line steps stop to stop (`‹ Stop 12 of 12 · lap 220 ›`), and the stops are cards,
+the focus car's first, with a sort picker. "Open the pit cycle" in a lap's details opens it.

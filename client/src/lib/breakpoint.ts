@@ -10,8 +10,14 @@ import { useSyncExternalStore } from "react";
 
 export type DeviceClass = "compact" | "medium" | "expanded";
 
-/** Phones held upright: below Tailwind's `sm`. */
-export const COMPACT_QUERY = "(max-width: 639.98px)";
+/**
+ * Phones, either way up: narrower than Tailwind's `sm`, or short and touch-only (a phone held
+ * sideways is 360-430 px tall). The Tailwind screens use the same rule (tailwind.config.js), so a
+ * sideways phone gets the phone layout in CSS and JS alike.
+ */
+export const COMPACT_QUERY = "(max-width: 639.98px), (max-height: 499.98px) and (pointer: coarse)";
+/** A phone held sideways: the compact layout, with the little height it has. */
+export const LANDSCAPE_PHONE_QUERY = "(max-height: 499.98px) and (pointer: coarse) and (orientation: landscape)";
 /** Phones and tablets: below Tailwind's `lg`. */
 const BELOW_EXPANDED_QUERY = "(max-width: 1023.98px)";
 
@@ -59,9 +65,14 @@ export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(sub, () => matches(query), () => false);
 }
 
-/** True on a phone-width window (below 640 px). */
+/** True on a phone, upright or sideways. */
 export function useIsCompact(): boolean {
   return useMediaQuery(COMPACT_QUERY);
+}
+
+/** True on a phone held sideways. */
+export function useIsLandscapePhone(): boolean {
+  return useMediaQuery(LANDSCAPE_PHONE_QUERY);
 }
 
 /** The window's class, kept current as it changes. */

@@ -54,7 +54,9 @@ interface LapChartProps {
   /** The bottom axis to start with (the user's chart defaults). */
   defaultAxis?: "laps" | "hours" | "both";
   /** Phones: Gaps and Head-to-head are views of their own; a lap's links go there (and a pass card's rival). */
-  onOpenView?: (view: "gaps" | "h2h", rival?: number) => void;
+  onOpenView?: (view: "gaps" | "h2h" | "cycle", rival?: number) => void;
+  /** Phones held sideways: the race page's top row, for the car pill. */
+  phoneSlot?: HTMLElement | null;
   /** RaceTrace Live: laps keep arriving (zoom follows the latest lap). */
   live?: boolean;
   /** RaceTrace Live: the page's tab row, where the focus car and class picker go (TraceControls). */
@@ -69,7 +71,7 @@ export const FOLLOW_AFTER_MS = 60_000;
 export function LapChart({
   data, annotations, watermarkEmail,
   focusNum, setFocusNum, compSet,
-  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null, onOpenView,
+  classView, activeLap, setActiveLap, view, defaultAxis, live = false, headSlot = null, onOpenView, phoneSlot = null,
 }: LapChartProps) {
   const { user } = useAuth();
   const isPaid = hasFullAccess(user);
@@ -528,8 +530,8 @@ export function LapChart({
       setSheet((l) => (l === "peek" ? "half" : l));
       return;
     }
-    if (isMobile && onOpenView && (panel === "gap" || panel === "h2h")) {
-      onOpenView(panel === "gap" ? "gaps" : "h2h");
+    if (isMobile && onOpenView && (panel === "gap" || panel === "h2h" || panel === "pit")) {
+      onOpenView(panel === "gap" ? "gaps" : panel === "pit" ? "cycle" : "h2h");
       return;
     }
     h2hDefaultCarRef.current = undefined;
@@ -727,6 +729,7 @@ export function LapChart({
           xAxisMode={xAxisMode}
           setXAxisMode={setXAxisMode}
           headSlot={headSlot}
+          phoneSlot={phoneSlot}
         />
         <div className="flex min-h-0 flex-1 flex-col px-2 pt-2" style={{ paddingBottom: `calc(${PEEK_PX + 8}px + env(safe-area-inset-bottom))` }}>
           {figure}
