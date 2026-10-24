@@ -1,19 +1,8 @@
 import { useMemo, useState } from "react";
 import { CHART_STYLE } from "../chart/constants";
-import { useIsCompact } from "../../lib/breakpoint";
-import { PC, RowCard, SortBar, StatGrid } from "../chart/phone-cards";
-
-const PHONE_SORT: { key: SortKey; label: string }[] = [
-  { key: "bestLap", label: "Best lap" },
-  { key: "theoBest", label: "Theoretical best" },
-  { key: "delta", label: "Delta to theoretical" },
-  { key: "consistency", label: "Consistency" },
-  { key: "s1Best", label: "S1 best" },
-  { key: "s2Best", label: "S2 best" },
-  { key: "s3Best", label: "S3 best" },
-  { key: "car", label: "Car number" },
-  { key: "driver", label: "Driver" },
-];
+import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
+import { PC, StatGrid } from "../chart/phone-cards";
+import { RankedMetrics, type RankedItem, type RankedMetric } from "../chart/RankedMetrics";
 import type { QualifyingChartData, QualifyingCar } from "@shared/types";
 
 interface StatsTableProps {
@@ -120,8 +109,10 @@ function consistencyColor(value: number, classAvg: number, classStd: number): st
 export function StatsTable({ data, compSet, classView }: StatsTableProps) {
   const [sortCol, setSortCol] = useState<SortKey>("bestLap");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  // Phones (mobile redesign, step 7): one card per car instead of a 17-column table.
+  // Phones upright: the cars ranked on one number at a time (RankedMetrics), instead of a
+  // 17-column table. Sideways: the full table, scrolling inside its own box.
   const compact = useIsCompact();
+  const landscape = useIsLandscapePhone();
 
   const handleSort = (col: SortKey) => {
     if (sortCol === col) {
@@ -258,53 +249,60 @@ export function StatsTable({ data, compSet, classView }: StatsTableProps) {
     );
   }
 
-  if (compact) {
+  if (compact && !landscape) {
+    const items: RankedItem<CarStats>[] = rows.map((r) => ({
+      id: r.car.num,
+      row: r,
+      title: `#${r.car.num} ${r.car.driver}`,
+      sub: [r.car.team, r.car.cls].filter(Boolean).join(" · "),
+      mine: false,
+    }));
     return (
-      <div className="flex flex-col gap-2" style={{ color: PC.text }} data-phone-cards="qualifying">
-        <SortBar
-          options={PHONE_SORT}
-          value={sortCol}
-          dir={sortDir}
-          onChange={(k) => {
-            setSortCol(k);
-            setSortDir(DESC_DEFAULT.has(k) ? "desc" : "asc");
+      <div className="-mx-3 -mt-3">
+        <RankedMetrics
+          items={items}
+          metrics={QUAL_METRICS}
+          title="Qualifying stats"
+          subtitle={`${classView || (data.classes.length > 1 ? "All classes" : data.classes[0] ?? "")} · ${rows.length} cars`}
+          detail={(it) => {
+            const r = it.row;
+            const sector = (best: number, avg: number, sd: number) => (
+              <>
+                {fmtSec(best)}
+                <span className="block text-[11px]" style={{ color: PC.muted }}>
+                  avg {fmtSec(avg)} · σ {sd.toFixed(3)}
+                </span>
+              </>
+            );
+            return {
+              title: it.title,
+              body: (
+                <div style={{ color: PC.text }}>
+                  <p className="m-0 mb-2 text-[13px]" style={{ color: PC.muted }}>
+                    {it.sub}
+                  </p>
+                  <StatGrid
+                    stats={[
+                      { label: "Best lap", value: fmtSec(r.car.bestLap) },
+                      { label: "Theo. best", value: fmtSec(r.car.theoreticalBest) },
+                      { label: "Left on table", value: fmtDelta(r.delta) },
+                      { label: "S1", value: sector(r.car.bestS1, r.s1Avg, r.s1Std) },
+                      { label: "S2", value: sector(r.car.bestS2, r.s2Avg, r.s2Std) },
+                      { label: "S3", value: sector(r.car.bestS3, r.s3Avg, r.s3Std) },
+                      { label: "Consistency", value: fmtPct(r.consistency) },
+                      { label: "Laps", value: r.car.laps.length },
+                    ]}
+                  />
+                </div>
+              ),
+            };
           }}
-          onFlip={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+          below={
+            <p className="m-0 text-[12px] leading-relaxed" style={{ color: PC.muted }}>
+              Tap a car for its sectors. Theoretical best: its best three sectors added up. Consistency: how little its sector times vary, weighted by sector length.
+            </p>
+          }
         />
-        {sortedRows.map((row) => {
-          const avg = classAvgs.get(row.car.cls || "All");
-          const dc = (val: number, cAvg: number, cStd: number) => deltaColor(val, cAvg, cStd);
-          const sector = (best: number, mean: number, bAvg?: number, bStd?: number) => (
-            <>
-              <span style={{ color: avg && bAvg !== undefined && bStd !== undefined ? dc(best, bAvg, bStd) : PC.text }}>{fmtSec(best)}</span>
-              <span className="block text-[11px]" style={{ color: PC.muted }}>avg {fmtSec(mean)}</span>
-            </>
-          );
-          return (
-            <RowCard key={row.car.num}>
-              <div className="flex items-baseline gap-2">
-                <span className="w-7 shrink-0 font-mono text-[14px] font-bold">P{row.pos}</span>
-                <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: PC.accent }}>#{row.car.num}</span>
-                <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>
-                  {row.car.driver} · {row.car.cls}
-                </span>
-                <span className="shrink-0 font-mono text-[15px] font-bold" style={{ color: avg ? dc(row.car.bestLap, avg.bestLap, avg.bestLapStd) : PC.text }}>
-                  {fmtSec(row.car.bestLap)}
-                </span>
-              </div>
-              <StatGrid
-                stats={[
-                  { label: "Theo. best", value: fmtSec(row.car.theoreticalBest) },
-                  { label: "Delta", value: fmtDelta(row.delta) },
-                  { label: "Consistency", value: fmtPct(row.consistency) },
-                  { label: "S1", value: sector(row.car.bestS1, row.s1Avg, avg?.s1Best, avg?.s1BestStd) },
-                  { label: "S2", value: sector(row.car.bestS2, row.s2Avg, avg?.s2Best, avg?.s2BestStd) },
-                  { label: "S3", value: sector(row.car.bestS3, row.s3Avg, avg?.s3Best, avg?.s3BestStd) },
-                ]}
-              />
-            </RowCard>
-          );
-        })}
       </div>
     );
   }
@@ -351,6 +349,7 @@ export function StatsTable({ data, compSet, classView }: StatsTableProps) {
 
   return (
     <div
+      data-wide-table
       className="rounded-lg border overflow-x-auto"
       style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}
     >
@@ -457,3 +456,15 @@ export function StatsTable({ data, compSet, classView }: StatsTableProps) {
     </div>
   );
 }
+
+// ─── Phone, upright: the cars ranked on one number at a time ───────────────
+
+const QUAL_METRICS: RankedMetric<CarStats>[] = [
+  { key: "bestLap", label: "Best lap", better: "low", value: (r) => (r.car.bestLap > 0 ? r.car.bestLap : null), format: fmtSec },
+  { key: "theoBest", label: "Theo. best", better: "low", value: (r) => (r.car.theoreticalBest > 0 ? r.car.theoreticalBest : null), format: fmtSec, note: "Its best three sectors added up" },
+  { key: "delta", label: "Left on table", better: "low", value: (r) => (r.car.bestLap > 0 && r.car.theoreticalBest > 0 ? r.delta : null), format: (v) => `+${v.toFixed(3)}`, note: "Best lap against its theoretical best" },
+  { key: "consistency", label: "Consistency", better: "high", value: (r) => (r.consistency > 0 ? r.consistency : null), format: fmtPct, note: "Higher is steadier" },
+  { key: "s1", label: "S1", better: "low", value: (r) => (r.car.bestS1 > 0 ? r.car.bestS1 : null), format: fmtSec, note: "Best sector 1" },
+  { key: "s2", label: "S2", better: "low", value: (r) => (r.car.bestS2 > 0 ? r.car.bestS2 : null), format: fmtSec, note: "Best sector 2" },
+  { key: "s3", label: "S3", better: "low", value: (r) => (r.car.bestS3 > 0 ? r.car.bestS3 : null), format: fmtSec, note: "Best sector 3" },
+];

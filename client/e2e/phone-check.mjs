@@ -32,7 +32,7 @@ const SIZES = (opt("--widths") ?? "320,360,375,390,430,844x390,932x430").split("
   const [width, height] = w.split("x").map(Number);
   return { width, height: height || 812 };
 });
-const RANKED = ["race:drivers", "race:pitanalysis", "race:strategy"];
+const RANKED = ["race:drivers", "race:pitanalysis", "race:strategy", "qualifying", "live:strategy"];
 const TABS = ["position", "cards", "laptimes", "cycle", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
   { name: "home", path: "/", bar: true },
@@ -41,6 +41,7 @@ const PAGES = [
   { name: "events", path: "/races", bar: true },
   { name: "live", path: `/live/${LIVE_SLUG}`, race: true, chart: true, live: true },
   { name: "live:map", path: `/live/${LIVE_SLUG}?tab=map`, race: true, live: true },
+  { name: "live:strategy", path: `/live/${LIVE_SLUG}?tab=strategy`, race: true, live: true },
   { name: "qualifying", path: `/qualifying/${QUAL_ID}`, race: true, qual: true },
   ...TABS.map((t) => ({ name: `race:${t}`, path: `/chart?race=${RACE_ID}&tab=${t}`, race: true, chart: t === "position" || t === "laptimes" })),
 ];
@@ -352,6 +353,11 @@ async function main() {
         if (pg.chart) await page.locator("canvas:visible").first().waitFor({ timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
+        // The page as it opens, before the tests below tap, scroll and open sheets.
+        if (opt("--shots")) {
+          fs.mkdirSync(opt("--shots"), { recursive: true });
+          await page.screenshot({ path: path.join(opt("--shots"), `${pg.name.replace(":", "-")}-${height === 812 ? width : `${width}x${height}`}.png`) });
+        }
         if (pg.name === "race:strategy" || pg.name === "race:gaps") m.hide = await hideOnScroll(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "race:pitanalysis" || pg.name === "race:strategy") m.detail = await rankedDetail(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (RANKED.includes(pg.name)) m.versus = await versus(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
@@ -359,10 +365,6 @@ async function main() {
         if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         unknown.forEach((u) => unknownRoutes.add(u));
-        if (opt("--shots")) {
-          fs.mkdirSync(opt("--shots"), { recursive: true });
-          await page.screenshot({ path: path.join(opt("--shots"), `${pg.name.replace(":", "-")}-${height === 812 ? width : `${width}x${height}`}.png`) });
-        }
         rows.push({ width, height, page: pg.name, race: !!pg.race, chart: !!pg.chart, errors, ...m, ms: Date.now() - t0 });
         await page.close();
       }

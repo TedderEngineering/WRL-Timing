@@ -180,11 +180,12 @@ export function QualifyingDetailPage() {
         />
         </CollapsingBars>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-2">
-          <p className="m-0 mb-2 text-[13px]" style={{ color: CHART_STYLE.muted }}>
+          <p className="m-0 mb-2.5 text-[12px]" style={{ color: CHART_STYLE.muted }}>
             {meta.track} · {dateStr}
           </p>
           {data.classes.length > 1 && (
             <ChipRow
+              slim
               label="Class"
               items={[{ key: "", label: `All (${data.cars.length})` }, ...data.classes.map((c) => ({ key: c, label: `${c} (${data.cars.filter((x) => x.cls === c).length})` }))]}
               value={classView}
@@ -195,7 +196,7 @@ export function QualifyingDetailPage() {
             type="button"
             onClick={() => setCarsOpen(true)}
             aria-haspopup="dialog"
-            className="mt-2 flex min-h-[44px] w-full items-center justify-between rounded-full border px-4 text-[14px]"
+            className="mt-2.5 flex min-h-[44px] w-full items-center justify-between rounded-full border px-4 text-[14px]"
             style={{ borderColor: "#F48C34", background: CHART_STYLE.card }}
           >
             <span>Cars compared</span>
