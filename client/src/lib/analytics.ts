@@ -19,12 +19,14 @@
  *    script, so there is no click capture or session recording.
  * Return visits are measured from our own database, not from analytics.
  *
- * Visits: `visit { source, landing }` once per page load. `source` is the link's `?from=` tag
+ * Visits: `visit { source, landing, device }` once per page load. `source` is the link's `?from=` tag
  * (instagram, email, share…) or, without one, the kind of site that linked here (google,
  * facebook, other_site, direct), never the page or search that sent the visitor; `landing` is a
- * short code for the page type. See `noteVisit`.
+ * short code for the page type; `device` is the screen size class (compact, medium, expanded:
+ * lib/breakpoint.ts), so phone use can be told apart. See `noteVisit`.
  */
 import { IS_GRIP_SITE } from "./site";
+import { currentDeviceClass } from "./breakpoint";
 
 /** Every event either site may send. Keep the names identical across sites. */
 export const ANALYTICS_EVENTS = [
@@ -38,7 +40,7 @@ export const ANALYTICS_EVENTS = [
   "record_hot",
   "on_target",
   // Both
-  "share_card", // { kind, method }
+  "share_card", // { kind, method, device }
   "share_app", // { source, method }: someone shared the site's link
   "share_arrival", // { landing }: a visit came from a shared link (?from=share)
   "alert_opt_in", // { channel, on, source }
@@ -46,7 +48,7 @@ export const ANALYTICS_EVENTS = [
   "checklist_step", // { step }
   "coffee_open", // { from }
   "coffee_paid", // { coffees }, on the thank-you page
-  "visit", // { source, landing }: a page load, and where it came from (noteVisit)
+  "visit", // { source, landing, device }: a page load, where it came from (noteVisit), and the screen size class
 ] as const;
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
 
@@ -238,7 +240,7 @@ export function visitSource(href: string, referrer: string): string {
 let visitNoted = false;
 
 /**
- * Once per page load: send `visit { source, landing }`. `landing(path)` gives a short code for
+ * Once per page load: send `visit { source, landing, device }`. `landing(path)` gives a short code for
  * the page type (home, race, live…); the address itself is never sent. A `?from=` tag other
  * than the ones their own handlers read (share, alert) is then taken out of the address bar,
  * so a reload or bookmark doesn't count it again.
@@ -253,7 +255,7 @@ export function noteVisit(landing: (path: string) => string): void {
   visitNoted = true;
   try {
     const opened = new URL(at.href);
-    track("visit", { source: visitSource(at.href, at.referrer), landing: landing(opened.pathname) });
+    track("visit", { source: visitSource(at.href, at.referrer), landing: landing(opened.pathname), device: currentDeviceClass() });
     const now = new URL(window.location.href);
     const tag = now.searchParams.get("from");
     if (tag !== null && tag !== "share" && tag !== "alert") {

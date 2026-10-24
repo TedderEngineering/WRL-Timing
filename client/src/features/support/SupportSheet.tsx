@@ -65,7 +65,7 @@ export function SupportSheet({ support, copy = RACETRACE_COPY, onClose }: { supp
         aria-modal="true"
         aria-labelledby="support-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[460px] rounded-t-2xl border border-[var(--rt-border)] bg-[var(--rt-surface)] p-5 text-left text-[var(--rt-text)] shadow-2xl sm:rounded-2xl"
+        className="w-full max-w-[460px] rounded-t-2xl border border-[var(--rt-border)] bg-[var(--rt-surface)] p-5 text-left text-[var(--rt-text)] shadow-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:pb-5"
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded bg-[var(--rt-border)] sm:hidden" />
         <div className="flex items-center gap-3">

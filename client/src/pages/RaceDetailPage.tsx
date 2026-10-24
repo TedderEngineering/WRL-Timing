@@ -230,37 +230,22 @@ export function RaceDetailPage() {
     [],
   );
 
+  // The page is built once for every width: the sidebar is its own rail from md up
+  // (`hidden md:flex` inside EventSidebar) and a drawer below md. Building the content
+  // twice, once per width, drew two charts on every visit (mobile redesign, PR 1).
   const withSidebar = (content: React.ReactNode) => (
-    <>
-
-      {/* Desktop: flex-row layout — sidebar left, chart right */}
-      <div className="hidden md:flex h-full overflow-hidden">
-        <EventSidebar
-          isCollapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((p) => !p)}
-          onSelectRace={handleSelectRace}
-          selectedRaceId={id || null}
-          selectedEventId={effectiveEventId}
-          mobileOpen={mobileDrawerOpen}
-          onMobileClose={() => setMobileDrawerOpen(false)}
-        />
-        <main className="flex-1 min-w-0 overflow-hidden">{content}</main>
-      </div>
-
-      {/* Mobile: full-width content + drawer overlay */}
-      <div className="md:hidden h-full min-w-0">
-        {content}
-        <EventSidebar
-          isCollapsed={false}
-          onToggle={() => {}}
-          onSelectRace={handleSelectRace}
-          selectedRaceId={id || null}
-          selectedEventId={effectiveEventId}
-          mobileOpen={mobileDrawerOpen}
-          onMobileClose={() => setMobileDrawerOpen(false)}
-        />
-      </div>
-    </>
+    <div className="flex h-full overflow-hidden">
+      <EventSidebar
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((p) => !p)}
+        onSelectRace={handleSelectRace}
+        selectedRaceId={id || null}
+        selectedEventId={effectiveEventId}
+        mobileOpen={mobileDrawerOpen}
+        onMobileClose={() => setMobileDrawerOpen(false)}
+      />
+      <main className="h-full min-w-0 flex-1 overflow-hidden">{content}</main>
+    </div>
   );
 
   // ── No race selected (auto-load in progress or no events) ────────

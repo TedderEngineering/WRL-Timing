@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { track } from "@/lib/analytics";
+import { currentDeviceClass } from "@/lib/breakpoint";
 
 export type ShareMethod = "share" | "copy" | "download" | "cancelled";
 
@@ -106,7 +107,7 @@ export function useShareCard() {
         } else {
           method = await shareImage(await args.make(), args.filename, args.text);
         }
-        if (method !== "cancelled") track("share_card", { kind: args.kind, method });
+        if (method !== "cancelled") track("share_card", { kind: args.kind, method, device: currentDeviceClass() });
         return method;
       } finally {
         setBusy(false);

@@ -159,7 +159,7 @@ describe("visits", () => {
     noteVisit(() => "race");
     const sent = recentEvents().slice(before);
     expect(sent.map((e) => e.event)).toEqual(["visit"]);
-    expect(sent[0].details).toEqual({ source: "instagram", landing: "race" });
+    expect(sent[0].details).toEqual({ source: "instagram", landing: "race", device: "expanded" });
     // The tag goes, so a reload doesn't count it again; the race stays.
     expect(replaced).toEqual(["/chart?race=r1"]);
   });
