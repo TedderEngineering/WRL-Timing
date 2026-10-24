@@ -753,6 +753,8 @@ export function TrackMap({
                 onMap={!hidden.has("closing")}
                 onToggleMap={() => toggleLayer("closing")}
                 onClose={() => pickClosingOn(false)}
+                followed={followKeys}
+                onCarTap={(k) => follow(toggleFollow(followed, carNo(data, k)))}
               />
             ) : (
               <button
@@ -1046,6 +1048,8 @@ function ClosingPanel({
   onMap,
   onToggleMap,
   onClose,
+  followed,
+  onCarTap,
 }: {
   data: RaceChartData;
   focusNum: number;
@@ -1055,6 +1059,9 @@ function ClosingPanel({
   onToggleMap: () => void;
   /** Fold the panel away (a small "Closing" button brings it back). */
   onClose: () => void;
+  /** The cars followed on the map; tapping a car follows it or stops (as a row of the timing table). */
+  followed: Set<number>;
+  onCarTap: (key: number) => void;
 }) {
   const iconBtn = "flex h-5 w-5 items-center justify-center rounded hover:bg-white/10";
   const shown = closing.slice(0, 4);
@@ -1094,19 +1101,25 @@ function ClosingPanel({
         <ul className="m-0 list-none px-1 pb-1">
           {shown.map((c) => {
             const car = data.cars[String(c.key)];
+            const on = followed.has(c.key);
             return (
-              <li
-                key={c.key}
-                className="flex items-center gap-2 rounded px-1 py-0.5 tabular-nums"
-                title={`#${carNo(data, c.key)} is ${c.behindS.toFixed(1)} s behind on the road and ${c.quickerS.toFixed(1)} s a lap quicker: it gets to #${num} in ${soonText(c.catchS)}.`}
-              >
-                <span className="rounded-sm border-l-[3px] pl-1 font-bold" style={{ borderColor: liveClassColor(car?.cls ?? "") }}>
-                  #{carNo(data, c.key)}
-                </span>
-                <span style={{ color: C.muted }}>{car?.cls}</span>
-                <span className="ml-auto font-bold" style={{ color: closingColor(c.catchS) }}>
-                  {soonText(c.catchS)}
-                </span>
+              <li key={c.key}>
+                <button
+                  type="button"
+                  onClick={() => onCarTap(c.key)}
+                  aria-pressed={on}
+                  className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left tabular-nums hover:bg-white/10"
+                  style={{ background: on ? "rgba(255,255,255,0.08)" : undefined }}
+                  title={`#${carNo(data, c.key)} is ${c.behindS.toFixed(1)} s behind on the road and ${c.quickerS.toFixed(1)} s a lap quicker: it gets to #${num} in ${soonText(c.catchS)}. ${on ? "Following on the map: tap to stop." : "Tap to follow it on the map."}`}
+                >
+                  <span className="rounded-sm border-l-[3px] pl-1 font-bold" style={{ borderColor: liveClassColor(car?.cls ?? "") }}>
+                    {on ? <span className="rounded-full border-2 border-white px-1">#{carNo(data, c.key)}</span> : `#${carNo(data, c.key)}`}
+                  </span>
+                  <span style={{ color: C.muted }}>{car?.cls}</span>
+                  <span className="ml-auto font-bold" style={{ color: closingColor(c.catchS) }}>
+                    {soonText(c.catchS)}
+                  </span>
+                </button>
               </li>
             );
           })}
