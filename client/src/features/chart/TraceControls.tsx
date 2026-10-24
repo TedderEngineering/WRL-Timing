@@ -9,6 +9,7 @@ import type { RaceChartData } from "@shared/types";
 import { getCompColor } from "./chart-renderer";
 import { TRACE } from "./constants";
 import { makeGroupsOf } from "./makes";
+import { useIsCompact } from "../../lib/breakpoint";
 import type { TraceView } from "./trace-view";
 import { carMatchesSearch, carNo, textMatches } from "./car-number";
 
@@ -194,26 +195,11 @@ function CarMenu({
   );
 }
 
-function useCompact() {
-  const q = "(max-width: 639px)";
-  const [compact, setCompact] = useState(
-    () => typeof window !== "undefined" && window.matchMedia?.(q).matches
-  );
-  useEffect(() => {
-    const m = window.matchMedia?.(q);
-    if (!m) return;
-    const on = () => setCompact(m.matches);
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  return compact;
-}
-
 export function TraceControls(p: TraceControlsProps) {
   const { data, focusNum, classView, compSet, view } = p;
   const [menu, setMenu] = useState<"focus" | null>(null);
   // Phone (mockup F6): the focus car and a Filters button; the rest opens below.
-  const compact = useCompact();
+  const compact = useIsCompact();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const showFilters = !compact || filtersOpen;
   const focus = data.cars[String(focusNum)];

@@ -152,7 +152,7 @@ export function Layout() {
 
   return (
     <SupportProvider>
-    <div className={appPage ? "h-dvh flex flex-col overflow-hidden" : "min-h-screen flex flex-col"}>
+    <div className={appPage ? "h-dvh flex flex-col overflow-hidden pb-safe" : "min-h-screen flex flex-col"}>
       {/* Navigation */}
       {full && <FullscreenButton on floating />}
       <header className={`${full ? "hidden " : ""}sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800`}>

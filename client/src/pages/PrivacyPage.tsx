@@ -95,7 +95,8 @@ export function PrivacyPage() {
             says who shared it. We also count each visit and where it came from: the tag on
             the link that was opened (for example one from our Instagram post or an email), or
             otherwise the name of the site that linked here, such as a search engine or social
-            network, and the kind of page opened (home, a race, live timing). We never record
+            network, the kind of page opened (home, a race, live timing), and whether the
+            screen is phone, tablet or desktop sized. We never record
             the address of the page you came from, what you searched for, or which race you
             opened.
           </p>

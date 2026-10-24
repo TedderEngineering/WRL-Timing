@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, mobile/redesign]
   pull_request:
-    branches: [main]
+    # mobile/redesign: the phone redesign's integration branch; its pull requests get the
+    # same checks as main's, plus the phone-width checks below.
+    branches: [main, mobile/redesign]
 
 # The jobs only read the code; nothing here writes to the repository.
 permissions:
@@ -151,6 +153,31 @@ jobs:
           npm ci
           npx prisma generate
           npm run build
+
+  phone:
+    name: Phone layout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      # Builds the site and opens every race tab at 320-430 px against a stand-in API
+      # (client/e2e/mock-api.mjs: the seeded race, no server or database).
+      - name: Phone-width checks
+        working-directory: client
+        run: npm run check:phone
 
   deploy-staging:
     name: Deploy to Staging

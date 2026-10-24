@@ -23,6 +23,7 @@ import {
   computeClassLapTimeRankings,
 } from "./lap-time-rankings";
 import { carNo } from "./car-number";
+import { useIsCompact } from "../../lib/breakpoint";
 import { isGreenFlag } from "./flags";
 
 // ─── Coordinate helpers (duplicated for module independence) ─────────────────
@@ -485,7 +486,8 @@ export function LapTimeChart({
   // Reset zoom when race data changes; a live race keeps the viewer's zoom as laps arrive.
   useLapZoomOnGrow(data.maxLap, lapStart, lapEnd, setLapStart, setLapEnd, live);
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+  // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
+  const isMobile = useIsCompact();
 
   const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
   const rangeSelectStart = useRef<number | null>(null);

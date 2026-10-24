@@ -19,6 +19,10 @@
 
   body {
     @apply antialiased;
+    /* RaceTrace's page sets viewport-fit=cover (index.html), so the page runs under the
+       notch in landscape: keep content clear of it. Zero on every other page and device. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 
@@ -26,6 +30,11 @@
   .container-page {
     @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
   }
+}
+
+/* Clear of the phone's home bar (viewport-fit=cover); zero where there is none. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Scrolls without a visible scrollbar (side panels, drag-to-pan chart) */

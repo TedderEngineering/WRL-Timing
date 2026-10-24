@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { useLapZoomOnGrow } from "./live-zoom";
+import { useIsCompact } from "../../lib/breakpoint";
 import { LiveGapsPanel } from "./LiveGapsPanel";
 import { hasFullAccess } from "../../lib/utils";
 import type {
@@ -106,7 +107,8 @@ export function LapChart({
   // Reset zoom when race data changes; a live race keeps the viewer's zoom as laps arrive.
   useLapZoomOnGrow(data.maxLap, lapStart, lapEnd, setLapStart, setLapEnd, live);
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+  // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
+  const isMobile = useIsCompact();
 
   const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
   const rangeSelectStart = useRef<number | null>(null);
