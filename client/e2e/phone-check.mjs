@@ -32,7 +32,7 @@ const SIZES = (opt("--widths") ?? "320,360,375,390,430,844x390,932x430").split("
   const [width, height] = w.split("x").map(Number);
   return { width, height: height || 812 };
 });
-const TABS = ["position", "laptimes", "cycle", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
+const TABS = ["position", "cards", "laptimes", "cycle", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
   { name: "home", path: "/", bar: true },
   { name: "me", path: "/me", bar: true },
@@ -80,6 +80,8 @@ const RULES = [
   // Step 6: Home and Events.
   { id: "home-car-on-first-screen", test: (m) => m.page !== "dashboard" || m.width > m.height || (m.homeStoryBottom !== null && m.homeStoryBottom <= m.height - 64), say: (m) => `"Read the story" ends at ${m.homeStoryBottom} px, under the bottom bar` },
   { id: "home-swipe-next-car", test: (m) => m.page !== "dashboard" || /1 OF 2 → .*2 OF 2/i.test(m.swipe ?? ""), say: (m) => `swiping your car: ${m.swipe}` },
+  { id: "race-cards-share-on-screen", test: (m) => m.page !== "race:cards" || (m.cards?.shareEnabled && m.cards.shareBottom <= m.height && m.cards.slides >= 2 && m.cards.imgHeight >= 150), say: (m) => `race cards: ${JSON.stringify(m.cards)}` },
+  { id: "race-cards-swipe", test: (m) => m.page !== "race:cards" || (m.cards?.afterSwipe && !/race$/.test(m.cards.afterSwipe)), say: (m) => `after a swipe the chosen card is ${m.cards?.afterSwipe}` },
   { id: "events-opens-on-my-cars", test: (m) => m.page !== "events" || m.eventsScope === "My cars", say: (m) => `Events opens on ${m.eventsScope}` },
   { id: "app-targets-44", test: (m) => m.race || m.page === "home" || m.smallTargets === 0, say: (m) => `controls under 44 px: ${m.smallList.join(", ")}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
@@ -123,7 +125,7 @@ function measure() {
     if (!vis(el) || el === doc) return false;
     const s = getComputedStyle(el);
     // Rows of chips and the views row scroll sideways by design; a table or page must not.
-    if (el.tagName === "NAV" || el.getAttribute("role") === "tablist" || el.closest("[data-phone-cards='chips']")) return false;
+    if (el.tagName === "NAV" || el.getAttribute("role") === "tablist" || el.closest("[data-phone-cards='chips']") || el.hasAttribute("data-carousel")) return false;
     return (s.overflowX === "auto" || s.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4;
   });
   const shell = [...document.querySelectorAll("[data-phone-shell]")].filter(vis);
@@ -180,6 +182,23 @@ async function zoomShown(page) {
   const text = await page.locator("figure:visible figcaption").first().innerText();
   const m = text.match(/Laps (\d+)–(\d+) of (\d+)/);
   return m ? { range: +m[2] - +m[1], full: +m[3] - 1 } : null;
+}
+
+/** Race cards: the first card drawn, its Share button on screen and live, and a swipe to the next card. */
+async function raceCards(page) {
+  await page.locator("[data-race-card] img").first().waitFor({ timeout: 15_000 });
+  const share = page.locator("[data-race-cards='share']");
+  const box = await share.boundingBox();
+  const out = {
+    slides: await page.locator("[data-race-card]").count(),
+    shareBottom: box ? Math.round(box.y + box.height) : null,
+    shareEnabled: await share.isEnabled(),
+    imgHeight: Math.round((await page.locator("[data-race-card] img").first().boundingBox())?.height ?? 0),
+  };
+  await page.locator("[data-race-cards='strip']").evaluate((el) => el.scrollTo({ left: el.clientWidth }));
+  await page.waitForTimeout(500);
+  out.afterSwipe = await page.locator("[role=tablist][aria-label=Cards] [aria-selected=true]").innerText();
+  return out;
 }
 
 /** Home: a sideways swipe on your car moves to your next car. Returns the heading before and after. */
@@ -256,6 +275,7 @@ async function main() {
         if (pg.chart) await page.locator("canvas:visible").first().waitFor({ timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
+        if (pg.name === "race:cards") m.cards = await raceCards(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         unknown.forEach((u) => unknownRoutes.add(u));

@@ -147,6 +147,16 @@ function myCar(id) {
 /** The answer for one request, or null when this stand-in does not know the route. */
 function answer(method, route, search = new URLSearchParams()) {
   if (route === "/dashboard/my-car") return myCar(search.get("car"));
+  if (route === `/races/${RACE_ID}/car-card` || route === `/races/${RACE_ID}/driver-card`) {
+    const num = search.get("car") ?? "60";
+    const ch = fixtures().data.cars[num];
+    if (!ch) return null;
+    const m = myCar(myCars.find((c) => c.number === num)?.id ?? "car-60");
+    const facts = { ...m.facts, number: num, team: ch.team, cls: ch.cls, carKey: num, finishClass: ch.finishPosClass, finishOverall: ch.finishPos, laps: ch.laps.length };
+    const raceInfo = { id: RACE_ID, name: race.name, date: race.date, track: race.track, series: "WRL", resultsStatus: "official", locked: false, lockReason: null };
+    if (route.endsWith("car-card")) return { race: raceInfo, car: { number: num, team: ch.team, cls: ch.cls }, drivers: m.drivers, facts, drive: null };
+    return { race: raceInfo, car: { number: num, team: ch.team, cls: ch.cls, coDrivers: m.drivers.filter((d) => d !== search.get("driver")) }, facts, driverFacts: null, driverHighlights: [] };
+  }
   if (route === "/dashboard/my-driver") return { driverCount: 0, driver: null, drivers: [], race: null };
   if (route === "/dashboard/latest")
     return { events: weekends().slice(0, 4).map((w) => ({ key: w.key, series: w.families[0], subSeries: null, seriesLabel: w.families[0], round: null, track: w.track, startDate: w.startDate, endDate: w.endDate, isNew: false, races: w.races.map((r) => ({ id: r.id, name: r.name, session: r.title, date: r.date, totalCars: r.cars, maxLap: r.laps, resultsStatus: "official", locked: false, lockReason: null, recap: null })) })) };

@@ -18,6 +18,7 @@ import {
 } from "./api";
 import { driveOf, driveTimeText, stintsOf } from "./stints";
 import { ShareRaceDriverCard } from "./driverCard";
+import { useOpenRaceCards } from "../share/raceCardsContext";
 
 const T = { line: "#1e1e38", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#f48c34", control: "#2c2c50" };
 
@@ -60,6 +61,8 @@ function CarDriversInApp({
   // The share card needs the stored race: the race page (/chart?race=), not RaceTrace Live.
   const raceId = pathname === "/chart" ? params.get("race") : null;
   const mine = useMyDrivers(user?.id);
+  // Phones: a driver's Share opens the Race cards view on their card.
+  const openCards = useOpenRaceCards();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [justFollowed, setJustFollowed] = useState<string | null>(null);
@@ -117,28 +120,43 @@ function CarDriversInApp({
 
   return (
     <section aria-label="Drivers" className="mt-1 flex flex-col">
-      {heading && (
-        <div className="pb-1 text-[11px] uppercase tracking-[0.06em]" style={{ color: T.muted }}>
-          {heading}
+      {(heading || openCards) && (
+        <div className="pb-1 text-[12px] font-semibold uppercase tracking-[0.06em] sm:text-[11px] sm:font-normal" style={{ color: T.muted }}>
+          {heading ?? "Drivers"}
         </div>
       )}
       {names.map((n) => {
         const drive = driveOf(car.laps, stints, n);
         const f = followedAs(mine, n);
         return (
-          <div key={n} className="flex min-h-[44px] items-center gap-2.5 border-t py-1" style={{ borderColor: T.line }}>
+          <div key={n} className="flex min-h-[56px] items-center gap-2.5 border-t py-1.5 sm:min-h-[44px] sm:py-1" style={{ borderColor: T.line }}>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold" style={{ color: T.text }}>
+              <div className="truncate text-[15px] font-semibold sm:text-[13px]" style={{ color: T.text }}>
                 {displayName(n)}
               </div>
               {drive && drive.stints > 0 && (
-                <div className="truncate text-[12px] tabular-nums" style={{ color: T.muted }}>
+                <div className="truncate text-[13px] tabular-nums sm:text-[12px]" style={{ color: T.muted }}>
                   {drive.stints} stint{drive.stints === 1 ? "" : "s"} · {driveTimeText(drive.driveTimeS)}
                   {drive.best ? ` · best ${formatDuration(drive.best.sec)}` : ""}
                 </div>
               )}
-              {raceId && <ShareRaceDriverCard raceId={raceId} carNumber={car.label ?? String(focusNum)} driver={n} chart={data} annotations={annotations} />}
+              {raceId && !openCards && <ShareRaceDriverCard raceId={raceId} carNumber={car.label ?? String(focusNum)} driver={n} chart={data} annotations={annotations} />}
             </div>
+            {raceId && openCards && (
+              <button
+                type="button"
+                onClick={() => openCards(n)}
+                aria-label={`Share ${displayName(n)}'s card`}
+                data-share-open="driver"
+                className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold"
+                style={{ background: T.accent, color: "#0b0b18" }}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+                </svg>
+                Share
+              </button>
+            )}
             <button
               type="button"
               onClick={() => toggle(n)}
