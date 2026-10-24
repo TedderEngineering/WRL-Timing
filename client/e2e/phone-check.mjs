@@ -340,11 +340,14 @@ async function main() {
   for (const r of rows) for (const rule of RULES) if (!rule.test(r)) failures.push(`${rule.id} @ ${r.height === 812 ? `${r.width}px` : `${r.width}x${r.height}`} ${r.page}: ${rule.say(r)}`);
   if (failures.length) {
     console.log(`\n${failures.length} rule failure(s):\n  ${failures.join("\n  ")}`);
+    // On GitHub Actions each failure is also an annotation, readable on the pull request.
+    if (process.env.GITHUB_ACTIONS) for (const f of failures.slice(0, 40)) console.log(`::error title=Phone check::${f.replace(/[\r\n]+/g, " ")}`);
     if (ASSERT) process.exit(1);
   } else console.log("\nAll phone rules pass.");
 }
 
 main().catch((e) => {
   console.error(e);
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=Phone check crashed::${String(e?.stack ?? e).replace(/[\r\n]+/g, " | ").slice(0, 900)}`);
   process.exit(1);
 });
