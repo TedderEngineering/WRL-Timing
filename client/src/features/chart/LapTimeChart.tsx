@@ -10,6 +10,7 @@ import {
   getMaxPos,
   type ChartDimensions,
   formatLapTime, lapLabelStep } from "./chart-renderer";
+import { useChartGestures } from "./chart-gestures";
 import { CHART_STYLE, COMPARE_PALETTE, TRACE } from "./constants";
 import { drawPitTags } from "./pit-band";
 import { TraceControls } from "./TraceControls";
@@ -727,55 +728,21 @@ export function LapTimeChart({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // ── Touch: panning + lap selection ─────────────────────────────
-  const touchState = useRef({ startX: 0, startLapStart: 1, startLapEnd: 1, moved: false });
-
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchState.current = {
-      startX: e.touches[0].clientX,
-      startLapStart: lapStartRef.current,
-      startLapEnd: lapEndRef.current,
-      moved: false,
-    };
-  }, []);
-
-  const onTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      if (!e.touches.length || !dim) return;
-      const tx = e.touches[0].clientX;
-      const dx = tx - touchState.current.startX;
-      touchState.current.moved = true;
-
-      const { startLapStart, startLapEnd } = touchState.current;
-      const range = startLapEnd - startLapStart;
-      const lapDelta = -(dx / dim.CW) * range;
-
-      let newStart = startLapStart + lapDelta;
-      let newEnd = startLapEnd + lapDelta;
-      if (newStart < 1) { newStart = 1; newEnd = 1 + range; }
-      if (newEnd > data.maxLap) { newEnd = data.maxLap; newStart = data.maxLap - range; }
-
-      setLapStart(newStart);
-      setLapEnd(newEnd);
-
-      const cx = getCanvasX(tx);
-      const lap = Math.round(lapOfX(cx, newStart, newEnd, dim));
-      showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
+  // ── Touch: pinch and double-tap to zoom, drag to move, tap a lap (chart-gestures.ts) ──
+  useChartGestures(
+    canvasRef,
+    {
+      dim,
+      maxLap: data.maxLap,
+      getWindow: () => [lapStartRef.current, lapEndRef.current],
+      setWindow: ([s, e]) => {
+        setLapStart(s);
+        setLapEnd(e);
+      },
+      showLap: showLapInfo,
+      onTap: () => raiseSheet.current(),
     },
-    [dim, getCanvasX, data.maxLap, showLapInfo],
-  );
-
-  const onTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      if (!touchState.current.moved && dim) {
-        const ct = e.changedTouches[0];
-        const cx = getCanvasX(ct.clientX);
-        const lap = Math.round(lapOfX(cx, lapStartRef.current, lapEndRef.current, dim));
-        showLapInfo(Math.max(1, Math.min(data.maxLap, lap)));
-        raiseSheet.current();
-      }
-    },
-    [dim, getCanvasX, data.maxLap, showLapInfo],
+    isMobile
   );
 
   // ── Keyboard navigation ───────────────────────────────────────────────
@@ -866,9 +833,6 @@ export function LapTimeChart({
                 onMouseDown={onMouseDown}
                 onMouseMove={onMouseMove}
                 onDoubleClick={onDoubleClick}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
                 onContextMenu={(e) => e.preventDefault()}
                 style={{ display: "block", cursor: cursorStyle }}
               />
@@ -881,7 +845,7 @@ export function LapTimeChart({
                     Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
                   </button>
                 ) : (
-                  isMobile ? "Tap a lap · swipe to move along" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                  isMobile ? "Tap a lap · pinch or double-tap to zoom" : "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
                 )}
               </span>
             </figcaption>

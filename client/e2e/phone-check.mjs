@@ -54,6 +54,15 @@ const RULES = [
   // PR 4: the lap sheet.
   { id: "lap-answer-on-screen", test: (m) => !m.chart || (m.lapPanelTop !== null && m.lapPanelTop < HEIGHT), say: (m) => `lap details start at ${m.lapPanelTop} px, below the ${HEIGHT} px screen` },
   { id: "sheet-clear-of-chart", test: (m) => !m.chart || (m.chartBottom !== null && m.lapPanelTop !== null && m.chartBottom <= m.lapPanelTop + 2), say: (m) => `chart bottom ${m.chartBottom} px runs under the lap sheet at ${m.lapPanelTop} px` },
+  // PR 4: chart gestures (pinch, double-tap, tap), done with real touch events.
+  { id: "double-tap-zooms", test: (m) => !m.chart || (m.g?.dbl1 && m.g.dbl1.range < m.g.dbl1.full * 0.5), say: (m) => `double-tap showed ${JSON.stringify(m.g?.dbl1)}` },
+  { id: "double-tap-again-shows-all", test: (m) => !m.chart || m.g?.dbl2 === null, say: (m) => `second double-tap left ${JSON.stringify(m.g?.dbl2)}` },
+  { id: "double-tap-keeps-sheet-down", test: (m) => !m.chart || m.g?.levelAfterDbl === "peek", say: (m) => `lap sheet at ${m.g?.levelAfterDbl} after a double-tap` },
+  { id: "pinch-zooms", test: (m) => !m.chart || (m.g?.pinch && m.g.pinch.range < m.g.pinch.full * 0.5), say: (m) => `pinch showed ${JSON.stringify(m.g?.pinch)}` },
+  { id: "tap-raises-sheet", test: (m) => !m.chart || m.g?.levelAfterTap === "half", say: (m) => `lap sheet at ${m.g?.levelAfterTap} after a tap` },
+  { id: "page-not-zoomed", test: (m) => !m.chart || m.g?.pageScale === 1, say: (m) => `the page itself zoomed to ${m.g?.pageScale}` },
+  // Views: one sideways-scrolling row with every view, no More menu.
+  { id: "every-view-in-the-row", test: (m) => !m.race || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -108,6 +117,7 @@ function measure() {
     shellSmall,
     sideways: Math.max(0, doc.scrollWidth - innerWidth),
     raceViews: document.querySelectorAll('nav[aria-label="Race views"]').length,
+    viewNames: [...document.querySelectorAll('nav[aria-label="Race views"] button')].map((b) => b.textContent.trim()),
     canvases: document.querySelectorAll("canvas").length,
     chartTop: canvas ? Math.round(canvas.getBoundingClientRect().top) : null,
     chartBottom: canvas ? Math.round(canvas.getBoundingClientRect().bottom) : null,
@@ -116,6 +126,51 @@ function measure() {
     smallTargets: small.length,
     widestScroller: sidewaysScrollers.reduce((w, el) => Math.max(w, el.scrollWidth), 0),
   };
+}
+
+/** The zoom the caption shows ("Laps 41–81 of 121 · show all"), or null when the whole race shows. */
+async function zoomShown(page) {
+  const text = await page.locator("figure:visible figcaption").first().innerText();
+  const m = text.match(/Laps (\d+)–(\d+) of (\d+)/);
+  return m ? { range: +m[2] - +m[1], full: +m[3] - 1 } : null;
+}
+
+/** Real touch events through the DevTools protocol, which Playwright's tap cannot do with two fingers. */
+async function gestures(page) {
+  const cdp = await page.context().newCDPSession(page);
+  const box = await page.locator("canvas:visible").first().boundingBox();
+  const cx = box.x + box.width * 0.5;
+  const cy = box.y + box.height * 0.5;
+  const touch = (type, pts) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  const tap = async (x, y) => {
+    await touch("touchStart", [[x, y]]);
+    await touch("touchEnd", []);
+  };
+  const doubleTap = async () => {
+    await tap(cx, cy);
+    await page.waitForTimeout(90);
+    await tap(cx + 3, cy + 2);
+    await page.waitForTimeout(500);
+  };
+  const level = () => page.locator("[data-lap-sheet]:visible").getAttribute("data-level");
+  const g = {};
+  await doubleTap();
+  g.dbl1 = await zoomShown(page);
+  g.levelAfterDbl = await level();
+  await doubleTap();
+  g.dbl2 = await zoomShown(page);
+  // Pinch apart from 60 px to 240 px.
+  await touch("touchStart", [[cx - 30, cy], [cx + 30, cy]]);
+  for (let i = 1; i <= 6; i++) await touch("touchMove", [[cx - 30 - i * 15, cy], [cx + 30 + i * 15, cy]]);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  g.pinch = await zoomShown(page);
+  g.pageScale = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+  await tap(cx, cy);
+  await page.waitForTimeout(600);
+  g.levelAfterTap = await level();
+  await cdp.detach();
+  return g;
 }
 
 async function main() {
@@ -138,6 +193,7 @@ async function main() {
         if (pg.chart) await page.locator("canvas:visible").first().waitFor({ timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
+        if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         unknown.forEach((u) => unknownRoutes.add(u));
         if (opt("--shots")) {
           fs.mkdirSync(opt("--shots"), { recursive: true });
