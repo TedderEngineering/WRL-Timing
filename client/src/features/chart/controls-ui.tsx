@@ -11,26 +11,39 @@ export const T = {
   accent: "#F48C34",
 };
 
-/** Laps / Time / Both for the x axis. */
+/**
+ * Laps / Time / Both for the x axis. `phone`: just Laps | Time, small in the chart's caption
+ * line, each with a 44 px touch area reaching past its 28 px look (Both stays in the car sheet).
+ */
 export function AxisToggle({
   value,
   onChange,
   small,
+  phone,
 }: {
   value: "laps" | "hours" | "both";
   onChange: (m: "laps" | "hours" | "both") => void;
   small?: boolean;
+  phone?: boolean;
 }) {
+  const modes = phone ? (["laps", "hours"] as const) : (["laps", "hours", "both"] as const);
+  const on = (m: string) => value === m || (phone && m === "hours" && value === "both");
   return (
-    <div role="group" aria-label="X axis" className="flex overflow-hidden rounded-md border" style={{ borderColor: T.border }}>
-      {(["laps", "hours", "both"] as const).map((m) => (
+    <div role="group" aria-label="X axis" className={`flex shrink-0 rounded-md border${phone ? "" : " overflow-hidden"}`} style={{ borderColor: T.border }}>
+      {modes.map((m) => (
         <button
           key={m}
           type="button"
-          aria-pressed={value === m}
+          aria-pressed={on(m)}
           onClick={() => onChange(m)}
-          className={small ? "min-h-[28px] px-2.5 text-xs" : "min-h-[44px] px-3 text-sm"}
-          style={{ background: value === m ? T.line : "transparent", color: value === m ? T.text : T.muted }}
+          className={
+            phone
+              ? "relative min-h-[28px] px-3 text-[12px] before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              : small
+                ? "min-h-[28px] px-2.5 text-xs"
+                : "min-h-[44px] px-3 text-sm"
+          }
+          style={{ background: on(m) ? T.line : "transparent", color: on(m) ? T.text : T.muted }}
         >
           {m === "laps" ? "Laps" : m === "hours" ? "Time" : "Both"}
         </button>

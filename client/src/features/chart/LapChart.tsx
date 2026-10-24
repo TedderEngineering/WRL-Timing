@@ -17,6 +17,8 @@ import {
   type LapInfoData,
 } from "./chart-renderer";
 import { useChartGestures } from "./chart-gestures";
+import { readPhoneAxis, writePhoneAxis, type AxisMode } from "./phone-axis";
+import { COMPACT_QUERY } from "../../lib/breakpoint";
 import { ChartHintBubble } from "./ChartGestureHelp";
 import { LapDetailsPanel } from "./LapDetailsPanel";
 import { LapScrubber } from "./LapScrubber";
@@ -81,11 +83,10 @@ export function LapChart({
   // ── Internal-only state ────────────────────────────────────────
   const [dim, setDim] = useState<ChartDimensions | null>(null);
   const [info, setInfo] = useState<LapInfoData | null>(null);
-  const [xAxisMode, setXAxisMode] = useState<"laps" | "hours" | "both">(defaultAxis ?? "laps");
-  // The user's default, also when it arrives after the chart opened (first visit on this device).
-  useEffect(() => {
-    if (defaultAxis) setXAxisMode(defaultAxis);
-  }, [defaultAxis]);
+  // Phones open on race time (phone-axis.ts); larger screens on the user's chart default.
+  const [xAxisMode, setXAxisModeState] = useState<AxisMode>(() =>
+    typeof window !== "undefined" && window.matchMedia?.(COMPACT_QUERY).matches ? readPhoneAxis() : (defaultAxis ?? "laps")
+  );
   const [sidePanel, setSidePanel] = useState<string | null>(null);
   // Phone lap sheet height (mobile redesign, PR 4). A tap on the chart raises it to half.
   const [sheet, setSheet] = useState<SheetLevel>("peek");
@@ -118,6 +119,18 @@ export function LapChart({
 
   // Phone width, kept current on resize and rotation (lib/breakpoint.ts).
   const isMobile = useIsCompact();
+  // The user's default, also when it arrives after the chart opened (first visit on this device).
+  const startAxis = isMobile ? readPhoneAxis() : defaultAxis;
+  useEffect(() => {
+    if (startAxis) setXAxisModeState(startAxis);
+  }, [startAxis]);
+  const setXAxisMode = useCallback(
+    (m: AxisMode) => {
+      setXAxisModeState(m);
+      if (isMobile) writePhoneAxis(m);
+    },
+    [isMobile]
+  );
 
   const panState = useRef({ panning: false, startX: 0, startLapStart: 1, startLapEnd: 1 });
   const rangeSelectStart = useRef<number | null>(null);
@@ -653,21 +666,35 @@ export function LapChart({
               {isMobile && <ChartHintBubble />}
             </div>
             <figcaption className={`flex shrink-0 items-center justify-between gap-2 px-1 pt-1.5 text-xs${isMobile ? " flex-nowrap whitespace-nowrap" : " flex-wrap"}`} style={{ color: TRACE.axis }}>
+              {isMobile ? (
+                <>
+                  {/* Phone: what is shown (or the zoom, with a way back), and Laps | Time */}
+                  {isZoomed ? (
+                    <button type="button" className="min-w-0 truncate" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
+                      Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all
+                    </button>
+                  ) : (
+                    <span className="min-w-0 truncate">{viewLabel}</span>
+                  )}
+                  <AxisToggle phone value={xAxisMode} onChange={setXAxisMode} />
+                </>
+              ) : (
+              <>
               <span className="flex min-w-0 items-center gap-3 truncate">
-                {!isMobile && <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />}
+                <AxisToggle small value={xAxisMode} onChange={setXAxisMode} />
                 {viewLabel}
               </span>
               <span>
                 {isZoomed ? (
                   <button type="button" className="underline-offset-2 hover:underline" onClick={() => { setLapStart(1); setLapEnd(data.maxLap); }}>
-                    {isMobile
-                      ? `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all`
-                      : `Laps ${Math.round(lapStart)}–${Math.round(lapEnd)} of ${data.maxLap} · show all (W)`}
+                    Laps {Math.round(lapStart)}–{Math.round(lapEnd)} of {data.maxLap} · show all (W)
                   </button>
                 ) : (
-                  !isMobile && "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
+                  "Scroll to zoom · drag to pan · double-click and drag to zoom to a stretch"
                 )}
               </span>
+              </>
+              )}
             </figcaption>
           </figure>
   );
@@ -684,8 +711,8 @@ export function LapChart({
         </span>
       </div>
     ) : (
-      <div className="flex min-h-[24px] items-center text-[14px]" style={{ color: TRACE.axis }}>
-        Tap the chart or a numbered pin for a lap&apos;s details
+      <div className="flex min-h-[24px] items-center truncate whitespace-nowrap text-[14px]" style={{ color: TRACE.axis }}>
+        Tap a lap for its details
       </div>
     );
     return (
