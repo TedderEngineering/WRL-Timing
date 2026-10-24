@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { currentDeviceClass, deviceClassOf } from "../breakpoint";
+import { COMPACT_QUERY, currentDeviceClass, deviceClassOf } from "../breakpoint";
 
 describe("screen size classes", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -13,13 +13,18 @@ describe("screen size classes", () => {
   });
 
   it("read the window through matchMedia when the browser has it", () => {
-    const widths = { "(max-width: 639.98px)": true, "(max-width: 1023.98px)": true } as Record<string, boolean>;
+    const widths = { [COMPACT_QUERY]: true, "(max-width: 1023.98px)": true } as Record<string, boolean>;
     const matchMedia = (q: string) => ({ matches: !!widths[q], addEventListener() {}, removeEventListener() {} });
     vi.stubGlobal("window", { matchMedia, innerWidth: 375 });
     expect(currentDeviceClass()).toBe("compact");
-    widths["(max-width: 639.98px)"] = false;
+    widths[COMPACT_QUERY] = false;
     expect(currentDeviceClass()).toBe("medium");
     widths["(max-width: 1023.98px)"] = false;
     expect(currentDeviceClass()).toBe("expanded");
+  });
+
+  it("count a phone held sideways (short, touch-only) as a phone", () => {
+    expect(COMPACT_QUERY).toContain("(max-width: 639.98px)");
+    expect(COMPACT_QUERY).toContain("(max-height: 499.98px) and (pointer: coarse)");
   });
 });

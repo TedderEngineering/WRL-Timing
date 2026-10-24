@@ -27,9 +27,12 @@ const opt = (name) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 const ASSERT = args.includes("--assert");
-const WIDTHS = (opt("--widths") ?? "320,360,375,390,430").split(",").map(Number);
-const HEIGHT = 812;
-const TABS = ["position", "laptimes", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
+/** Phone sizes: upright widths (812 tall), and WxH for others; 844x390 and 932x430 are phones held sideways. */
+const SIZES = (opt("--widths") ?? "320,360,375,390,430,844x390,932x430").split(",").map((w) => {
+  const [width, height] = w.split("x").map(Number);
+  return { width, height: height || 812 };
+});
+const TABS = ["position", "laptimes", "cycle", "gaps", "h2h", "pitanalysis", "strategy", "drivers"];
 const PAGES = [
   { name: "home", path: "/", bar: true },
   { name: "me", path: "/me", bar: true },
@@ -46,13 +49,13 @@ const RULES = [
   { id: "race-built-once", test: (m) => !m.race || m.raceViews === 1, say: (m) => `race views rendered ${m.raceViews} times` },
   { id: "no-page-errors", test: (m) => m.errors.length === 0, say: (m) => `page errors: ${m.errors.join(" | ")}` },
   // PR 2: the phone shell.
-  { id: "chart-near-top", test: (m) => m.chartTop === null || m.chartTop <= CHART_TOP_MAX, say: (m) => `chart starts at ${m.chartTop} px (limit ${CHART_TOP_MAX})` },
+  { id: "chart-near-top", test: (m) => m.chartTop === null || m.chartTop <= chartTopMax(m), say: (m) => `chart starts at ${m.chartTop} px (limit ${chartTopMax(m)})` },
   { id: "shell-targets-44", test: (m) => m.shellSmall.length === 0, say: (m) => `phone shell controls under 44 px: ${m.shellSmall.join(", ")}` },
   { id: "app-bar-where-expected", test: (m) => m.appBar === !m.race, say: (m) => (m.race ? "bottom bar shown on a race screen" : "bottom bar missing") },
   // PR 3: the car pill and sheet.
   { id: "compare-rivals-by-default", test: (m) => !m.chart || (m.compareCount !== null && m.compareCount <= 4), say: (m) => `compares ${m.compareCount} cars by default (4 at most on a phone)` },
   // PR 4: the lap sheet.
-  { id: "lap-answer-on-screen", test: (m) => !m.chart || (m.lapPanelTop !== null && m.lapPanelTop < HEIGHT), say: (m) => `lap details start at ${m.lapPanelTop} px, below the ${HEIGHT} px screen` },
+  { id: "lap-answer-on-screen", test: (m) => !m.chart || (m.lapPanelTop !== null && m.lapPanelTop < m.height), say: (m) => `lap details start at ${m.lapPanelTop} px, below the ${m.height} px screen` },
   { id: "sheet-clear-of-chart", test: (m) => !m.chart || (m.chartBottom !== null && m.lapPanelTop !== null && m.chartBottom <= m.lapPanelTop + 2), say: (m) => `chart bottom ${m.chartBottom} px runs under the lap sheet at ${m.lapPanelTop} px` },
   // PR 4: chart gestures (pinch, double-tap, tap), done with real touch events.
   { id: "double-tap-zooms", test: (m) => !m.chart || (m.g?.dbl1 && m.g.dbl1.range < m.g.dbl1.full * 0.5), say: (m) => `double-tap showed ${JSON.stringify(m.g?.dbl1)}` },
@@ -71,7 +74,7 @@ const RULES = [
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
-const CHART_TOP_MAX = Math.round(812 * 0.3);
+const chartTopMax = (m) => (m.height < m.width ? 120 : Math.round(812 * 0.3));
 
 async function serve() {
   const dist = path.resolve(here, "../dist");
@@ -197,8 +200,8 @@ async function main() {
   const rows = [];
   const unknownRoutes = new Set();
   try {
-    for (const width of WIDTHS) {
-      const ctx = await browser.newContext({ viewport: { width, height: HEIGHT }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    for (const { width, height } of SIZES) {
+      const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
       for (const pg of PAGES) {
         const t0 = Date.now();
         const page = await ctx.newPage();
@@ -214,9 +217,9 @@ async function main() {
         unknown.forEach((u) => unknownRoutes.add(u));
         if (opt("--shots")) {
           fs.mkdirSync(opt("--shots"), { recursive: true });
-          await page.screenshot({ path: path.join(opt("--shots"), `${pg.name.replace(":", "-")}-${width}.png`) });
+          await page.screenshot({ path: path.join(opt("--shots"), `${pg.name.replace(":", "-")}-${height === 812 ? width : `${width}x${height}`}.png`) });
         }
-        rows.push({ width, page: pg.name, race: !!pg.race, chart: !!pg.chart, errors, ...m, ms: Date.now() - t0 });
+        rows.push({ width, height, page: pg.name, race: !!pg.race, chart: !!pg.chart, errors, ...m, ms: Date.now() - t0 });
         await page.close();
       }
       await ctx.close();
@@ -233,7 +236,7 @@ async function main() {
   if (opt("--json")) fs.writeFileSync(opt("--json"), JSON.stringify(rows, null, 2));
 
   const failures = [];
-  for (const r of rows) for (const rule of RULES) if (!rule.test(r)) failures.push(`${rule.id} @ ${r.width}px ${r.page}: ${rule.say(r)}`);
+  for (const r of rows) for (const rule of RULES) if (!rule.test(r)) failures.push(`${rule.id} @ ${r.height === 812 ? `${r.width}px` : `${r.width}x${r.height}`} ${r.page}: ${rule.say(r)}`);
   if (failures.length) {
     console.log(`\n${failures.length} rule failure(s):\n  ${failures.join("\n  ")}`);
     if (ASSERT) process.exit(1);

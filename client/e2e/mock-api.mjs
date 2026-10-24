@@ -40,6 +40,30 @@ export async function preparePitAnalysis() {
   } finally {
     await vite.close();
   }
+  addPitTiming(fixtures());
+}
+
+/**
+ * The seed has stops but no pit timing (an import adds it). For the Pit cycle view, give each
+ * stop a stand-in timing from its in- and out-lap against the car's typical green lap.
+ */
+function addPitTiming({ data, annotations }) {
+  for (const [key, ann] of Object.entries(annotations)) {
+    const car = data.cars[key];
+    if (!car || !ann?.pits) continue;
+    const green = car.laps.filter((l) => l.pit === 0 && l.flag !== "FCY" && l.ltSec > 0).map((l) => l.ltSec).sort((a, b) => a - b);
+    const avg = green.length ? green[Math.floor(green.length / 2)] : null;
+    for (const p of ann.pits) {
+      if (p.pitTiming) continue;
+      const inLap = car.laps.find((l) => l.l === p.l)?.ltSec ?? null;
+      const outLap = car.laps.find((l) => l.l === p.l + 1)?.ltSec ?? null;
+      if (!inLap || !outLap || !avg) continue;
+      p.pitTiming = {
+        pitInTime: null, pitRoadTime: null, pitOutTime: null, isDriveThrough: false,
+        totalPitLoss: inLap + outLap - 2 * avg, inLapTime: inLap, outLapTime: outLap, avgGreenLapTime: avg,
+      };
+    }
+  }
 }
 
 const user = {

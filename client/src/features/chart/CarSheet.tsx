@@ -30,6 +30,8 @@ export interface PhoneCarBarProps {
   view: TraceView;
   xAxisMode?: Axis;
   setXAxisMode?: (m: Axis) => void;
+  /** A phone held sideways: the pill sits in the race page's one top row, without its own band. */
+  slim?: boolean;
 }
 
 const label = "mb-2 mt-5 text-[12px] font-semibold uppercase tracking-[0.06em]";
@@ -44,7 +46,11 @@ export function PhoneCarBar(p: PhoneCarBarProps) {
   const place = finish?.posClass != null ? `P${finish.posClass}` : (finish?.official ?? "");
 
   return (
-    <div data-phone-shell="car-bar" className="sticky top-0 z-20 border-b px-3 py-2" style={{ background: "#0b0b18", borderColor: T.line }}>
+    <div
+      data-phone-shell="car-bar"
+      className={p.slim ? "min-w-0" : "sticky top-0 z-20 border-b px-3 py-2"}
+      style={p.slim ? undefined : { background: "#0b0b18", borderColor: T.line }}
+    >
       <button
         type="button"
         onClick={() => setOpen(true)}
