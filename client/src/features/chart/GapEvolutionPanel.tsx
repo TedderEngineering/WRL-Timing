@@ -321,7 +321,7 @@ function TargetMenu({ data, focusNum, activeLap, compSet, kind, chosen, onPick, 
         Pick a car
       </label>
       <div className="px-1.5 pb-1.5">
-        <div className="flex min-h-[40px] items-center gap-2 rounded-lg border px-2.5" style={{ background: PANEL.well, borderColor: PANEL.control }}>
+        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border px-2.5 sm:min-h-[40px]" style={{ background: PANEL.well, borderColor: PANEL.control }}>
           <SearchIcon />
           <input
             id="gap-target-search"
@@ -329,7 +329,7 @@ function TargetMenu({ data, focusNum, activeLap, compSet, kind, chosen, onPick, 
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Car #, team or driver"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#6b6b88]"
+            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-[#6b6b88] sm:min-h-0 sm:text-sm"
             autoComplete="off"
           />
         </div>
@@ -808,7 +808,7 @@ function GapTable({
         </tbody>
       </table>
       {!showAll && items.length > SHOWN && (
-        <button type="button" onClick={onShowAll} className="mt-1.5 min-h-[36px] text-[13px] font-semibold" style={{ color: TRACE.focus }}>
+        <button type="button" onClick={onShowAll} className="mt-1.5 min-h-[44px] text-[13px] font-semibold sm:min-h-[36px]" style={{ color: TRACE.focus }}>
           Show all {rows.length} laps
         </button>
       )}

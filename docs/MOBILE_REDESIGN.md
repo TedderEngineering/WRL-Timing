@@ -85,3 +85,13 @@ so the chart starts at 65 px on an 844×390 screen. The phone check runs 844×39
 On a phone, Pit cycle is a view of its own (Trace · Story · Pits · Pit cycle · Laps · …), like Gaps and
 Head-to-head: the line steps stop to stop (`‹ Stop 12 of 12 · lap 220 ›`), and the stops are cards,
 the focus car's first, with a sort picker. "Open the pit cycle" in a lap's details opens it.
+
+## Tables as cards (step 5)
+
+On a phone, Pit Stops, Strategy and the Driver Report are lists of cards, never tables that scroll
+sideways (`phone-cards.tsx`): class chips, a sort picker (the phone's own) with a direction button,
+your car's cards pinned first, then the class in order. A card shows its row's numbers in a 3- or
+4-across grid with the row's graphic full width (stint map, lap spread, time on track, each stop).
+Tap a Pit Stops or Strategy card for its stops or stints as a list, with "View on the trace". Strategy
+and the Driver Report follow the focus car's class. Every control on a race view is 44 px on a phone
+(laptop sizes from `sm:` up), and search fields use 16 px text so iPhones don't zoom on focus.

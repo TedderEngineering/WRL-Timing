@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import type { RaceChartData } from "@shared/types";
 import { carKey } from "./car-number";
 import { CLASS_COLORS } from "./constants";
+import { useIsCompact } from "../../lib/breakpoint";
+import { ChipRow, PC, RowCard, SectionLabel, SortBar, StatGrid } from "./phone-cards";
 import {
   DEFAULT_PIT_SORT,
   PIT_COLORS,
@@ -175,6 +177,7 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
   const [loading, setLoading] = useState(analysis === undefined);
   const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [selectedCar, setSelectedCar] = useState<string | null>(null);
+  const compact = useIsCompact();
 
   // Fetch pit analysis data
   useEffect(() => {
@@ -320,6 +323,111 @@ export function PitAnalysisTab({ raceId, analysis, chart, focusNum, setFocusNum,
     { key: "best", label: "Best", align: "right", title: "Least time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.gain }}>{fmtTime(r.best)}</span> },
     { key: "worst", label: "Worst", align: "right", title: "Most time lost on a green-flag stop", cell: (r) => <span className="font-mono" style={{ color: P.loss }}>{fmtTime(r.worst)}</span> },
   ];
+
+  if (compact) {
+    const mine = classRows.filter((r) => r.key === String(focusNum));
+    const card = (r: PitRow, pinned = false) => {
+      const open = r.label === selectedCar && (pinned || !mine.some((x) => x.key === r.key));
+      const detail = open ? rows.find((x) => x.carNumber === r.label) : null;
+      return (
+        <RowCard
+          key={`${pinned ? "pin" : "row"}-${r.key}`}
+          focus={r.key === String(focusNum)}
+          onClick={() => setSelectedCar(r.label === selectedCar ? null : r.label)}
+          label={`#${r.label} ${r.team}: ${open ? "hide" : "show"} each stop`}
+        >
+          <div className="flex items-baseline gap-2">
+            <span className="w-7 shrink-0 font-mono text-[14px] font-bold">{r.classPos >= 999 ? "—" : `P${r.classPos}`}</span>
+            <span className="shrink-0 font-mono text-[15px] font-semibold" style={{ color: CLASS_COLORS[r.cls] ?? P.accent }}>#{r.label}</span>
+            <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: P.soft }}>{r.team}</span>
+            <span className="shrink-0 text-[13px]" style={{ color: P.muted }}>{r.visits} stops</span>
+          </div>
+          <StatGrid
+            stats={[
+              { label: facts ? "Avg lane" : "Avg service", value: fmtTime(r.avgLane) },
+              { label: "Avg lost", value: fmtTime(r.avgLost) },
+              { label: "Best", value: fmtTime(r.best), color: P.gain },
+              { label: "Worst", value: fmtTime(r.worst), color: P.loss },
+            ]}
+            cols={4}
+          />
+          {/* Each stop, wrapped onto as many lines as it needs */}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {r.stops.map((st, j) => (
+              <StopCell key={j} s={st} facts={facts} />
+            ))}
+          </div>
+          {detail ? (
+            <PhoneStopList
+              row={detail}
+              facts={facts}
+              onGoToTrace={() => {
+                const k = carKey(chart, detail.carNumber);
+                if (k !== null) setFocusNum(k);
+                onSwitchToTrace();
+              }}
+            />
+          ) : (
+            <div className="mt-2 text-[12px]" style={{ color: P.accent }}>Each stop ›</div>
+          )}
+        </RowCard>
+      );
+    };
+    return (
+      <div className="pb-6" style={{ color: P.text }} data-phone-cards="pit-stops">
+        <h2 className="m-0 text-[16px] font-semibold">Pit stops · {activeClass}</h2>
+        <p className="m-0 mt-0.5 text-[13px]" style={{ color: P.muted }}>
+          {classRows.length} cars · {stopsInClass} stops{avgLostInClass !== null ? ` · ${fmtTime(avgLostInClass)} lost on an average green-flag stop` : ""}
+        </p>
+        {classes.length > 1 && !shared && (
+          <div className="mt-3">
+            <ChipRow
+              label="Class"
+              items={classes.map((c) => ({ key: c, label: c, color: CLASS_COLORS[c] }))}
+              value={activeClass}
+              onChange={(c) => {
+                setCls(c);
+                setSelectedCar(null);
+              }}
+            />
+          </div>
+        )}
+        <div className="mt-3">
+          <SortBar
+            options={cols.map((c) => ({ key: c.key, label: PIT_SORT_LABEL[c.key] ?? c.label }))}
+            value={sort.key}
+            dir={sort.dir}
+            onChange={(k) => setSort({ key: k, dir: PIT_SORTS[k].dir })}
+            onFlip={() => setSort({ key: sort.key, dir: sort.dir === "asc" ? "desc" : "asc" })}
+          />
+        </div>
+        {mine.length > 0 && (
+          <>
+            <SectionLabel>Your car</SectionLabel>
+            <div className="flex flex-col gap-2">{mine.map((r) => card(r, true))}</div>
+          </>
+        )}
+        <SectionLabel>All {activeClass} cars</SectionLabel>
+        <div className="flex flex-col gap-2">{classRows.map((r) => card(r))}</div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" style={{ color: P.muted }}>
+          {facts && (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.quick, 0.18), borderColor: rgb(PIT_COLORS.quick) }} /> {PIT_KEY.quick}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-3 rounded-[2px] border" style={{ background: tint(PIT_COLORS.slow, 0.18), borderColor: rgb(PIT_COLORS.slow) }} /> {PIT_KEY.slow}
+              </span>
+            </>
+          )}
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-[3px]" style={{ background: rgb(PIT_COLORS.caution) }} /> {PIT_KEY.caution}
+          </span>
+        </div>
+        <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: P.muted }}>{pitMethod(facts)}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-2 py-3 sm:px-6" style={{ color: P.text }}>
@@ -737,6 +845,56 @@ function MiniCard({ label, value, color }: { label: string; value: string; color
       <div style={{ fontSize: "1.1rem", fontWeight: 800, color, fontFamily: "'JetBrains Mono', monospace" }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+const PIT_SORT_LABEL: Partial<Record<PitSortKey, string>> = {
+  classPos: "Class position",
+  car: "Car number",
+  team: "Team",
+  stops: "Stops",
+  avgLane: "Average pit lane",
+  avgLost: "Average time lost",
+  best: "Best stop",
+  worst: "Worst stop",
+};
+
+/** Phone: a car's stops as a list (the laptop's per-stop table), under its card. */
+function PhoneStopList({ row, facts, onGoToTrace }: { row: CarRow; facts: boolean; onGoToTrace: () => void }) {
+  return (
+    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+      <SectionLabel>Each stop</SectionLabel>
+      {row.stops.map((stop) => {
+        const green = stop.condition === "Full green";
+        const pl = stopPlaces(stop);
+        return (
+          <div key={stop.stopNumber} className="flex items-baseline gap-2 border-t py-2 text-[13px]" style={{ borderColor: PC.line }}>
+            <span className="w-14 shrink-0 font-mono">Lap {stop.pitLap}</span>
+            <span className="min-w-0 flex-1">
+              <span style={{ color: green ? S.grn : S.yel }}>{stop.condition}</span>
+              {stop.kind && stop.kind !== "stop" && <span style={{ color: PC.muted }}> · {KIND_LABEL[stop.kind] ?? stop.kind}</span>}
+              <span className="block text-[12px]" style={{ color: PC.muted }}>
+                {facts ? "Pit lane" : "Service"} {fmtTime(facts ? stop.pitRoadTime_s : stop.serviceTime_s)}
+                {stop.delta_s !== null && stop.delta_s !== undefined ? ` · ${fmtDelta(stop.delta_s)} vs cycle` : ""}
+                {pl ? ` · ${placesText(pl)}` : ""}
+              </span>
+            </span>
+            <span className="shrink-0 text-right font-mono">
+              <span className="block text-[11px]" style={{ color: PC.muted }}>Lost</span>
+              {fmtTime(stop.timeLost_s)}
+            </span>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={onGoToTrace}
+        className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-lg border text-[14px] font-semibold"
+        style={{ borderColor: PC.border, color: PC.accent }}
+      >
+        View on the trace
+      </button>
     </div>
   );
 }

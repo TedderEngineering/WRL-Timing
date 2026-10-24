@@ -41,7 +41,7 @@ export function Segmented<T extends string>({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(o.value)}
-            className={`${compact ? "min-h-[30px] text-xs" : "min-h-[34px] text-[13px]"} truncate rounded-md px-1 font-semibold transition-colors`}
+            className={`${compact ? "min-h-[44px] text-xs sm:min-h-[30px]" : "min-h-[44px] text-[13px] sm:min-h-[34px]"} truncate rounded-md px-1 font-semibold transition-colors`}
             style={on ? { background: PANEL.control, color: "#fff" } : { color: PANEL.muted }}
           >
             {o.label}
@@ -120,7 +120,7 @@ export function Section({
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={toggle}
-        className="flex min-h-[40px] w-full items-center gap-2 px-4 text-left hover:bg-white/[0.03]"
+        className="flex min-h-[44px] w-full items-center gap-2 px-4 text-left hover:bg-white/[0.03] sm:min-h-[40px]"
       >
         <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: PANEL.muted }}>
           {title}
