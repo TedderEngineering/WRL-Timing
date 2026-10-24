@@ -864,8 +864,8 @@ export function LapTimeChart({
         <span className="ml-auto text-[12px]" style={{ color: info.isFcy ? TRACE.fcyText : TRACE.axis }}>{info.isFcy ? "FCY" : "Green"}</span>
       </div>
     ) : (
-      <div className="flex min-h-[24px] items-center text-[14px]" style={{ color: TRACE.axis }}>
-        Tap the chart for a lap&apos;s time and rank
+      <div className="flex min-h-[24px] items-center truncate whitespace-nowrap text-[14px]" style={{ color: TRACE.axis }}>
+        Tap a lap for its details
       </div>
     );
     return (

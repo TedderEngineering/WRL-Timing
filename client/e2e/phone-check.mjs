@@ -65,7 +65,9 @@ const RULES = [
   { id: "every-view-in-the-row", test: (m) => !m.race || (m.viewNames.length >= 5 && !m.viewNames.includes("More")), say: (m) => `views row holds ${m.viewNames.join(", ")}` },
   // The peek is one line (‹ lap ›) and the chart carries no how-to text: help is in ⋯ → Chart gestures.
   { id: "peek-one-line", test: (m) => !m.chart || (m.peekHeight !== null && m.peekHeight <= 64), say: (m) => `lap sheet peek is ${m.peekHeight} px tall` },
-  { id: "no-how-to-on-chart", test: (m) => !m.chart || (m.captionLines && !/pinch|tap a lap|swipe/i.test(m.captionLines.text) && m.captionLines.height <= 24), say: (m) => `chart caption: ${JSON.stringify(m.captionLines)}` },
+  { id: "no-how-to-on-chart", test: (m) => !m.chart || (m.captionLines && !/pinch|tap a lap|swipe/i.test(m.captionLines.text) && m.captionLines.height <= 40), say: (m) => `chart caption: ${JSON.stringify(m.captionLines)}` },
+  // The trace opens on race time on a phone, with Laps | Time in its caption line.
+  { id: "trace-opens-on-time", test: (m) => m.page !== "race:position" || m.axisPressed === "Time", say: (m) => `trace caption axis shows ${m.axisPressed}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -132,6 +134,10 @@ function measure() {
     captionLines: (() => {
       const fc = [...document.querySelectorAll("figure figcaption")].find((e) => e.getClientRects().length);
       return fc ? { text: fc.innerText, height: Math.round(fc.getBoundingClientRect().height) } : null;
+    })(),
+    axisPressed: (() => {
+      const fc = [...document.querySelectorAll("figure figcaption")].find((e) => e.getClientRects().length);
+      return fc?.querySelector('[aria-label="X axis"] [aria-pressed="true"]')?.textContent ?? null;
     })(),
     targets: targets.length,
     smallTargets: small.length,

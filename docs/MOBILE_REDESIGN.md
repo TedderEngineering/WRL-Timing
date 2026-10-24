@@ -64,3 +64,9 @@ one line `‹ At lap 124 of 249 ›` (the race page's selected lap, shared with 
 the last lap another car in the class also ran), and the panel filling the screen. A lap's "Gap
 evolution" and "Head-to-head" links and a pass card's head-to-head open these views. Wider than a
 phone they stay beside the chart, and `?tab=gaps|h2h` falls back to the trace.
+
+## X axis on a phone
+
+The Position Trace opens on race time on a phone (`phone-axis.ts`), with a small **Laps | Time** switch at
+the right of the chart's caption line; a change is remembered on that phone (`localStorage`). Both axes
+together stay in the car sheet. Laptops keep the Settings → Preferences chart default (laps unless changed).
