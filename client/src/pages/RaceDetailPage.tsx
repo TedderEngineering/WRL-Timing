@@ -823,7 +823,7 @@ export function RaceDetailPage() {
       )}
 
       {activeTab === "pitanalysis" && (
-        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto px-2 py-3" : "custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto"}>
+        <div className={compact ? "custom-scroll min-h-0 flex-1 overflow-y-auto" : "custom-scroll px-2 py-3 sm:px-6 md:min-h-0 md:flex-1 md:overflow-y-auto"}>
           <PitAnalysisTab raceId={id} chart={data} focusNum={focusNum} setFocusNum={setFocusNum} onSwitchToTrace={() => setActiveTab("position")} />
         </div>
       )}

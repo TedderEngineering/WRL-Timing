@@ -9,8 +9,8 @@ import type { AnnotationData, RaceChartData } from "@shared/types";
 import { CLASS_COLORS } from "./constants";
 import { InfoTip } from "../../components/InfoTip";
 import { useIsCompact, useIsLandscapePhone } from "../../lib/breakpoint";
-import { RankedMetrics, type RankedItem, type RankedMetric } from "./RankedMetrics";
-import { ChipRow, PC } from "./phone-cards";
+import { ClassChips, RankedMetrics, type RankedItem, type RankedMetric } from "./RankedMetrics";
+import { PC } from "./phone-cards";
 import { DRIVER_COLUMNS, type DriverColumnId } from "./driver-report-columns";
 import { sameDriver } from "../my-drivers/api";
 import { stintsOf } from "../my-drivers/stints";
@@ -422,12 +422,8 @@ function RankedDriverReport({
       items={items}
       metrics={DRIVER_METRICS}
       title="Driver performance"
-      subtitle={`${live ? `Through lap ${live.lap} · ` : ""}${report.cls} · ${report.rows.length} drivers · turn the phone sideways for the full table`}
-      above={
-        reports.length > 1 ? (
-          <ChipRow label="Class" items={reports.map((r) => ({ key: r.cls, label: r.cls, color: CLASS_COLORS[r.cls] }))} value={report.cls} onChange={setCls} />
-        ) : undefined
-      }
+      subtitle={`${live ? `Through lap ${live.lap} · ` : ""}${report.cls} · ${report.rows.length} drivers`}
+      above={reports.length > 1 ? <ClassChips classes={reports.map((r) => r.cls)} value={report.cls} onChange={setCls} colors={CLASS_COLORS} /> : undefined}
       onOpen={(it) => setFocusNum(Number(it.row.carKey))}
       below={
         <p className="m-0 text-[12px] leading-relaxed" style={{ color: PC.muted }}>

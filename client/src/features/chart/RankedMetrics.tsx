@@ -1,7 +1,7 @@
 /**
  * Comparing a class on a phone (mobile redesign): instead of a wide table or a card per row, one
- * number at a time, ranked, with a bar for where each sits in the class. The Driver Report first;
- * Pits and Strategy can take the same parts.
+ * number at a time, ranked, with a bar for where each sits in the class. The Driver Report, Pits
+ * and Strategy (their rows drivers or cars) all use it; a row's tap can open its detail in a sheet.
  *
  *   [Avg lap] [Best] [Consistency] [Pace vs class] [Clean air] …   which number (swipe the list too)
  *   ┌ Your car ─────────────────────────────┐
@@ -15,7 +15,7 @@
  *
  * Bars run from the class's worst (short) to its best (full), so "better" is always longer.
  */
-import { useMemo, useRef, useState, type ReactNode, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from "react";
 import { Sheet, SHEET } from "../../components/Sheet";
 import { ChipRow, PC } from "./phone-cards";
 
@@ -51,10 +51,13 @@ function standings<R>(items: RankedItem<R>[], m: RankedMetric<R>) {
   const worst = valued[valued.length - 1]?.v;
   const span = best !== undefined && worst !== undefined ? Math.abs(worst - best) : 0;
   const out = new Map<string, { rank: number; v: number; share: number; pct: number }>();
+  // Equal values share a rank (two cars on 3 stops are both 1st), and so a percentile.
+  let rankAt = 0;
   valued.forEach((x, i) => {
+    if (i === 0 || x.v !== valued[i - 1].v) rankAt = i;
     const share = span > 0 ? 1 - Math.abs(x.v - best!) / span : 1;
-    const pct = valued.length > 1 ? Math.round(100 * (1 - i / (valued.length - 1))) : 100;
-    out.set(x.it.id, { rank: i + 1, v: x.v, share, pct });
+    const pct = valued.length > 1 ? Math.round(100 * (1 - rankAt / (valued.length - 1))) : 100;
+    out.set(x.it.id, { rank: rankAt + 1, v: x.v, share, pct });
   });
   return { order: valued.map((x) => x.it), place: out, count: valued.length };
 }
@@ -176,14 +179,73 @@ function VersusSheet<R>({ open, onClose, items, metrics, all }: { open: boolean;
   );
 }
 
+const TURN_KEY = "rt.rotateHinted";
+
+/**
+ * A phone with a turn arrow, beside the view's title: sideways shows the full table. On the first
+ * visit it turns twice; a tap says what it means.
+ */
+function RotateHint() {
+  const [animate] = useState(() => {
+    try {
+      if (localStorage.getItem(TURN_KEY) === "1") return false;
+      localStorage.setItem(TURN_KEY, "1");
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const [say, setSay] = useState(false);
+  useEffect(() => {
+    if (!say) return;
+    const t = setTimeout(() => setSay(false), 3000);
+    return () => clearTimeout(t);
+  }, [say]);
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        aria-label="Turn the phone sideways for the full table"
+        onClick={() => setSay((v) => !v)}
+        data-ranked="rotate"
+        className="-my-1.5 -mr-2 flex h-11 w-11 items-center justify-center rounded-full active:bg-white/10"
+        style={{ color: PC.muted }}
+      >
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {/* The phone, upright, turning to sideways; two arrows round it say "turn". */}
+          <g className={animate ? "animate-phone-turn" : undefined} style={{ transformBox: "fill-box" }}>
+            <rect x="8.25" y="5" width="7.5" height="14" rx="1.5" />
+            <path d="M11 16.6h2" />
+          </g>
+          <path d="M15.2 2.6a9.6 9.6 0 0 1 6.2 6.2" />
+          <path d="M21.6 6.2l-.2 2.6-2.5-.8" />
+          <path d="M8.8 21.4a9.6 9.6 0 0 1-6.2-6.2" />
+          <path d="M2.4 17.8l.2-2.6 2.5.8" />
+        </svg>
+      </button>
+      {say && (
+        <div role="status" className="absolute right-0 top-full z-20 mt-1 w-max max-w-[220px] rounded-lg px-3 py-2 text-[12px] shadow-lg" style={{ background: "rgba(18,18,42,0.96)", border: `1px solid ${SHEET.border}`, color: SHEET.text }}>
+          Turn the phone sideways for the full table.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The class buttons for a ranked view: slim, one row. */
+export function ClassChips({ classes, value, onChange, colors }: { classes: string[]; value: string; onChange: (c: string) => void; colors: Record<string, string> }) {
+  return <ChipRow slim label="Class" items={classes.map((c) => ({ key: c, label: c, color: colors[c] }))} value={value} onChange={onChange} />;
+}
+
 export function RankedMetrics<R>({
   items,
-  metrics,
+  metrics: allMetrics,
   title,
   subtitle,
   above,
   below,
   onOpen,
+  detail,
 }: {
   items: RankedItem<R>[];
   metrics: RankedMetric<R>[];
@@ -195,13 +257,23 @@ export function RankedMetrics<R>({
   below?: ReactNode;
   /** A row's tap outside comparing (make its car the focus car). */
   onOpen?: (item: RankedItem<R>) => void;
+  /** A row's tap outside comparing opens this in a sheet (a car's stops, its stints). */
+  detail?: (item: RankedItem<R>, close: () => void) => { title: ReactNode; body: ReactNode };
 }) {
+  // Only the numbers the class has values for: a race without timed stops has no "Time lost".
+  const metrics = useMemo(() => {
+    const had = allMetrics.filter((m) => items.some((it) => m.value(it.row) !== null));
+    return had.length ? had : allMetrics.slice(0, 1);
+  }, [allMetrics, items]);
   const [metricKey, setMetricKey] = useState(metrics[0]?.key ?? "");
   const metric = metrics.find((m) => m.key === metricKey) ?? metrics[0];
   const idx = metrics.indexOf(metric);
   const { order, place, count } = useMemo(() => standings(items, metric), [items, metric]);
   const missing = items.filter((it) => !place.has(it.id));
   const mine = items.filter((it) => it.mine);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = openId ? items.find((it) => it.id === openId) : undefined;
+  const openDetail = opened && detail ? detail(opened, () => setOpenId(null)) : null;
 
   // Comparing: hold a row (or press Compare) to start, then tap to add or drop, up to three.
   const [picking, setPicking] = useState(false);
@@ -252,7 +324,10 @@ export function RankedMetrics<R>({
           onClick={() => {
             if (hold.current?.fired) return;
             if (picking) toggle(it.id);
-            else onOpen?.(it);
+            else {
+              onOpen?.(it);
+              if (detail) setOpenId(it.id);
+            }
           }}
           className="relative flex min-h-[52px] w-full items-center gap-2 overflow-hidden rounded-lg px-2 text-left"
           style={{ background: on ? "rgba(244,140,52,0.16)" : "transparent", outline: it.mine ? `1px solid ${PC.accent}` : undefined, outlineOffset: -1 }}
@@ -291,22 +366,28 @@ export function RankedMetrics<R>({
   };
 
   return (
-    <div className="px-3 pb-24 pt-3" style={{ color: PC.text }} data-ranked="view">
-      <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
-      {subtitle && (
-        <p className="m-0 mt-0.5 text-[13px]" style={{ color: PC.muted }}>
-          {subtitle}
-        </p>
-      )}
-      {above && <div className="mt-3">{above}</div>}
+    <div className="px-3 pb-24 pt-2.5" style={{ color: PC.text }} data-ranked="view">
+      {/* The heading in two short lines, the turn-sideways symbol beside it. */}
+      <div className="flex items-start gap-2" data-ranked="head">
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 truncate text-[16px] font-semibold leading-tight">{title}</h2>
+          {subtitle && (
+            <p className="m-0 mt-0.5 truncate text-[12px]" style={{ color: PC.muted }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+        <RotateHint />
+      </div>
+      {above && <div className="mt-2.5">{above}</div>}
       {mine.length > 0 && (
         <div className="mt-3">
           <PercentileCard items={mine} metrics={metrics} all={items} />
         </div>
       )}
-      <div className="sticky top-0 z-10 -mx-3 mt-3 px-3 pb-2 pt-2" style={{ background: PC.bg }}>
-        <ChipRow label="Rank by" items={metrics.map((m) => ({ key: m.key, label: m.label }))} value={metric.key} onChange={setMetricKey} />
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[12px]" style={{ color: PC.muted }}>
+      <div className="sticky top-0 z-10 -mx-3 mt-2 px-3 pb-1 pt-2" style={{ background: PC.bg }}>
+        <ChipRow slim label="Rank by" items={metrics.map((m) => ({ key: m.key, label: m.label }))} value={metric.key} onChange={setMetricKey} />
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-[12px]" style={{ color: PC.muted }}>
           <span className="min-w-0 truncate">
             {metric.note ?? (metric.better === "low" ? "Lowest first" : "Highest first")} · {count} ranked
           </span>
@@ -346,6 +427,11 @@ export function RankedMetrics<R>({
             Compare {picked.length} side by side
           </button>
         </div>
+      )}
+      {detail && (
+        <Sheet open={!!openDetail} onClose={() => setOpenId(null)} title={openDetail?.title ?? ""}>
+          <div data-ranked="detail">{openDetail?.body}</div>
+        </Sheet>
       )}
       <VersusSheet open={versus} onClose={() => setVersus(false)} items={picked.map((id) => items.find((it) => it.id === id)!).filter(Boolean)} metrics={metrics} all={items} />
     </div>

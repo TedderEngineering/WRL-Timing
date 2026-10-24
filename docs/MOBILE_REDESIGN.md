@@ -158,7 +158,7 @@ On a phone the race row has **Race cards** right after Story (`features/share/Ra
 ## Comparing a class on a phone: ranked metrics
 
 Neither a card per row (hard to compare) nor the laptop table (too wide) suits a phone. Upright, the
-Driver Report uses `RankedMetrics.tsx`; Pits and Strategy can take the same parts.
+Driver Report, Pits and Strategy all use `RankedMetrics.tsx` (rows are drivers, or cars).
 
 - **Your car's drivers first.** A percentile strip per metric (Baseball Savant style): a bar from the
   class's worst to its best, with a bubble at the driver's percentile, orange at the front and red at
@@ -170,3 +170,13 @@ Driver Report uses `RankedMetrics.tsx`; Pits and Strategy can take the same part
 - **Compare.** Hold a row, or press Compare, then tap up to three; "Compare 3 side by side" opens a
   sheet with the metrics down, the drivers across, and the best of each row in orange with its rank.
 - **Sideways:** the full laptop table, scrolling sideways inside its box with the driver column fixed.
+- **Compact heading.** Title and one short line ("GTU · 10 drivers"), a turn-sideways symbol on the
+  right (it turns twice on the first visit, `rt.rotateHinted`; a tap says what it means), and the
+  class and "Rank by" chips drawn 32 px tall with 44 px touch areas.
+- **Pits:** Time lost, Best stop, Worst stop, Pit lane, Stops, Places (gained over pit cycles),
+  Finish. A row's tap opens the car's stops in a sheet: averages, the stop chips, each stop, and
+  View on the trace.
+- **Strategy:** Finish, Score, Avg pace, Best lap, Pit time, Stops, Avg stint, Longest stint, Yellow
+  stops. A row's tap opens the stint map, each stint and each stop; the class insights sit under the
+  list.
+- Equal values share a rank and a percentile; a metric no car in the class has is left out.
