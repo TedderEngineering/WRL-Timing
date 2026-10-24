@@ -462,7 +462,7 @@ export function RaceDetailPage() {
 
   // Phone views: every view in one row that scrolls sideways (Trace · Story · Pits · Pit cycle · Laps ·
   // Gaps · Head-to-head · Strategy · Drivers), with short names; the row nudges once on a first visit.
-  const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps", drivers: "Drivers" };
+  const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Times", drivers: "Drivers" };
   const phoneTabs = tabs.map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label }));
 
   /** A Share button in the lap details: the Race cards view, on that driver's card. */

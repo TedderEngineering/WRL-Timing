@@ -3,9 +3,7 @@ import type { RaceChartData, AnnotationData } from "@shared/types";
 import { classStopCycle, type StopRow } from "./pit-stops";
 import { carNo } from "./car-number";
 import { useIsCompact } from "../../lib/breakpoint";
-import { RowCard, SortBar, StatGrid, PC } from "./phone-cards";
 
-const SORT_NAMES: Record<SortKey, string> = { pitLoss: "Pit loss", pitRoad: "Time in pit lane", inLap: "In-lap number", car: "Car number" };
 
 interface PitCyclePanelProps {
   data: RaceChartData;
@@ -76,17 +74,17 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
   }
 
   const ord = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"}`;
-  const cell = "px-1 py-1.5 tabular-nums";
+  const cell = compact ? "px-1 py-2.5 tabular-nums" : "px-1 py-1.5 tabular-nums";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className={compact ? "flex flex-col" : "flex-1 flex flex-col overflow-hidden"}>
       <div className="px-4 pb-2 pt-1 text-[12px]" style={{ color: "rgba(255,255,255,0.55)" }}>
         {cycle.cycleOrdinal
           ? `${cycle.cls} pit cycle ${cycle.cycleOrdinal} · laps ${cycle.firstLap}–${cycle.lastLap}`
           : `Every ${cycle.cls} car's ${ord(cycle.stopNumber)} stop · laps ${cycle.firstLap}–${cycle.lastLap}`}
       </div>
       {/* Summary */}
-      <div className={`grid gap-2 border-b px-4 pb-3 ${compact ? "grid-cols-2 gap-y-3" : "grid-cols-4"}`} style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+      <div className={`grid gap-2 border-b px-4 pb-3 grid-cols-4`} style={{ borderColor: "rgba(255,255,255,0.08)" }}>
         <SummaryBox label="Your pit loss" value={focusRow ? secToDisplay(focusRow.timing.totalPitLoss) : "—"} />
         <SummaryBox label="Cycle avg" value={secToDisplay(avgPitLoss)} />
         <SummaryBox label="Best stop" value={bestRow ? secToDisplay(bestRow.timing.totalPitLoss) : "—"} sub={bestRow ? `#${carNo(data, bestRow.carNum)}` : undefined} />
@@ -94,44 +92,8 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
       </div>
 
       {/* Table: fits the side panel; only the rows scroll (no visible scrollbar) */}
-      <div className="no-scrollbar flex-1 overflow-y-auto">
-        {compact ? (
-          <div className="flex flex-col gap-2 px-3 pt-3">
-            <SortBar
-              options={(["pitLoss", "pitRoad", "inLap", "car"] as SortKey[]).map((k) => ({ key: k, label: SORT_NAMES[k] }))}
-              value={sortKey}
-              dir={sortAsc ? "asc" : "desc"}
-              onChange={(k) => { setSortKey(k); setSortAsc(true); }}
-              onFlip={() => setSortAsc((a) => !a)}
-            />
-            {[...sorted.filter((r) => r.isFocus), ...sorted.filter((r) => !r.isFocus)].map((row) => {
-              const mine = focusRow?.timing.totalPitLoss;
-              const theirs = row.timing.totalPitLoss;
-              const lossColor = row.isFocus || typeof mine !== "number" || typeof theirs !== "number" ? PC.text : theirs <= mine ? "#4ade80" : "#f87171";
-              return (
-                <RowCard key={`${row.carNum}-${row.pitLap}`} focus={row.isFocus}>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-[15px] font-bold" style={{ color: row.isFocus ? PC.accent : PC.text }}>#{carNo(data, row.carNum)}</span>
-                    <span className="min-w-0 flex-1 truncate text-[14px]" style={{ color: PC.soft }}>{row.team}</span>
-                    <span className="shrink-0 text-[12px]" style={{ color: PC.muted }}>Loss</span>
-                    <span className="shrink-0 font-mono text-[15px] font-bold" style={{ color: lossColor }}>{secToDisplay(row.timing.totalPitLoss)}</span>
-                  </div>
-                  <StatGrid
-                    stats={[
-                      { label: `In-lap ${row.pitLap}`, value: secToDisplay(row.timing.inLapTime) },
-                      { label: "Pit lane", value: secToDisplay(row.timing.pitRoadTime) },
-                      { label: "Out-lap", value: `${secToDisplay(row.outLap)}${row.outLapWhole ? "*" : ""}` },
-                    ]}
-                  />
-                  <div className="mt-1.5 text-[12px]" style={{ color: PC.muted }}>
-                    Green-flag average {secToDisplay(row.timing.avgGreenLapTime)}
-                  </div>
-                </RowCard>
-              );
-            })}
-          </div>
-        ) : (
-        <table className="w-full table-fixed text-[11px]">
+      <div className={compact ? "" : "no-scrollbar flex-1 overflow-y-auto"}>
+        <table className={`w-full table-fixed ${compact ? "text-[12px]" : "text-[11px]"}`}>
           <colgroup>
             <col style={{ width: "13%" }} />
             <col style={{ width: "11%" }} />
@@ -175,7 +137,6 @@ export function PitCyclePanel({ data, annotations, focusNum, activeLap }: PitCyc
             })}
           </tbody>
         </table>
-        )}
         <div className={`px-3 pb-3 pt-2 leading-relaxed ${compact ? "text-[12px]" : "text-[10px]"}`} style={{ color: "rgba(255,255,255,0.4)" }}>
           {sorted.some((r) => r.timing.source === "facts")
             ? "Pit = official time in the pit lane, where the timing has it. Loss = time lost against the car's green-flag pace; under a caution, against cars on track then (it can come out ahead)."
@@ -208,7 +169,7 @@ function SortHeader({ label, sortKey, current, arrow, onClick }: {
 }) {
   return (
     <th
-      className="text-left px-1 py-2 font-medium cursor-pointer select-none hover:text-white transition-colors"
+      className="text-left px-1 py-3 font-medium cursor-pointer select-none hover:text-white transition-colors sm:py-2"
       style={{ color: current === sortKey ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.4)" }}
       onClick={() => onClick(sortKey)}
     >

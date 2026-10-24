@@ -114,7 +114,8 @@ export function PhoneAnalysisTab({
         </button>
       </div>
       {/* Each panel scrolls its own list */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t" style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
+      {/* Pit cycle: the summary and the table scroll together; the other panels scroll their own lists. */}
+      <div className={`flex min-h-0 flex-1 flex-col border-t ${kind === "cycle" ? "overflow-y-auto" : "overflow-hidden"}`} style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
         {kind === "cycle" ? (
           <PitCyclePanel data={data} annotations={annotations} focusNum={focusNum} activeLap={cycleLap} />
         ) : kind === "gaps" ? (

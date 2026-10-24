@@ -8,7 +8,8 @@
  *   │        the card image      │  ← swipe sideways for the next card
  *   └───────────────────────────┘
  *   [ ⇪  Share ]                   the phone's share sheet: Messages, WhatsApp, Instagram,
- *   [ Copy image ] [ Save ] [ Copy link ]                    Facebook, X, email, AirDrop…
+ *                                  Facebook, X, email, AirDrop, copy the image or the link…
+ *   (Copy image · Save · Copy link only where there is no share sheet for images)
  *
  * Seeing the finished card is what makes people send it (peak-end), so the card is the screen's
  * content, not a link under a list. The share sheet carries the image and a link to the race
@@ -173,6 +174,15 @@ export function RaceCardsView({
   );
 
   const [current, setCurrent] = useState(0);
+  // A share sheet that takes images (phones): Share is the one button.
+  const [canShareFiles] = useState(() => {
+    try {
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      return typeof nav.share === "function" && !!nav.canShare?.({ files: [new File([""], "card.png", { type: "image/png" })] });
+    } catch {
+      return false;
+    }
+  });
   const strip = useRef<HTMLDivElement>(null);
   const blobs = useRef(new Map<string, Blob>());
   const [, bump] = useState(0);
@@ -253,7 +263,9 @@ export function RaceCardsView({
         <ShareIcon />
         {blob ? `Share ${slide?.kind === "car_race" ? "the race card" : `${slide?.chip}'s card`}` : "Making the card…"}
       </button>
-      <div className="flex gap-2">
+      {/* The phone's share sheet already copies the image or the link and saves it: these
+          show only where a browser has no share sheet for images. */}
+      {!canShareFiles && <div className="flex gap-2">
         <button type="button" onClick={copy} disabled={!blob} data-touch-44 className={secondary} style={{ borderColor: C.border, color: C.text }}>
           Copy image
         </button>
@@ -263,7 +275,7 @@ export function RaceCardsView({
         <button type="button" onClick={copyLink} data-touch-44 className={secondary} style={{ borderColor: C.border, color: C.text }}>
           Copy link
         </button>
-      </div>
+      </div>}
 
     </div>
   );
