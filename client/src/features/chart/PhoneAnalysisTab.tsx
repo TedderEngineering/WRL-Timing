@@ -13,6 +13,7 @@ import { stopsOf } from "./pit-stops";
 import { TraceControls } from "./TraceControls";
 import { CHART_STYLE } from "./constants";
 import type { TraceView } from "./trace-view";
+import { CollapsingBars, useChromeHidden } from "../../lib/hideOnScroll";
 
 const STEP = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#cbd5e1] active:bg-white/10 disabled:opacity-30";
 
@@ -67,6 +68,7 @@ export function PhoneAnalysisTab({
   // The selected lap, or the nearest lap the focus car ran before it.
   const lap = activeLap === null ? fallback : (laps.filter((l) => l <= activeLap).pop() ?? first);
   const idx = laps.indexOf(lap);
+  const chromeHidden = useChromeHidden();
   const go = (l: number | undefined) => l !== undefined && setActiveLap(l);
 
   // Pit cycle: the line steps stop to stop (the focus car's in-laps), not lap to lap. With no
@@ -85,6 +87,8 @@ export function PhoneAnalysisTab({
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ background: CHART_STYLE.bg, color: CHART_STYLE.text }}>
+      {/* The car pill and the lap line slide away with the page's bars while you scroll down. */}
+      <CollapsingBars hidden={chromeHidden}>
       <TraceControls data={data} focusNum={focusNum} onFocus={setFocusNum} classView={classView} compSet={compSet} view={view} phoneSlot={phoneSlot} />
       <div className="flex h-11 shrink-0 items-center px-1" data-phone-shell="analysis-lap">
         <button type="button" aria-label={kind === "cycle" ? "Previous stop" : "Previous lap"} className={STEP} disabled={atStart} onClick={prev}>
@@ -113,7 +117,7 @@ export function PhoneAnalysisTab({
           <Chevron dir="right" />
         </button>
       </div>
-      {/* Each panel scrolls its own list */}
+      </CollapsingBars>
       {/* Pit cycle: the summary and the table scroll together; the other panels scroll their own lists. */}
       <div className={`flex min-h-0 flex-1 flex-col border-t ${kind === "cycle" ? "overflow-y-auto" : "overflow-hidden"}`} style={{ background: CHART_STYLE.card, borderColor: CHART_STYLE.border }}>
         {kind === "cycle" ? (

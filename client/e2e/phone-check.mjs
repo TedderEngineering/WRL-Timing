@@ -84,6 +84,7 @@ const RULES = [
   { id: "race-cards-swipe", test: (m) => m.page !== "race:cards" || (m.cards?.afterSwipe && !/race$/.test(m.cards.afterSwipe)), say: (m) => `after a swipe the chosen card is ${m.cards?.afterSwipe}` },
   { id: "events-opens-on-my-cars", test: (m) => m.page !== "events" || m.eventsScope === "My cars", say: (m) => `Events opens on ${m.eventsScope}` },
   { id: "app-targets-44", test: (m) => m.race || m.page === "home" || m.smallTargets === 0, say: (m) => `controls under 44 px: ${m.smallList.join(", ")}` },
+  { id: "bars-slide-away-on-scroll", test: (m) => !m.hide || m.hide.error === "nothing to scroll" || (m.hide.down < 0 && m.hide.up >= 0), say: (m) => `header top before/down/up: ${JSON.stringify(m.hide)}` },
   { id: "race-header-one-line", test: (m) => !m.race || (m.raceHeader !== null && m.raceHeader <= 60), say: (m) => `race header is ${m.raceHeader} px tall` },
 ];
 /** 30% of the 812 px design screen. */
@@ -184,6 +185,31 @@ async function zoomShown(page) {
   return m ? { range: +m[2] - +m[1], full: +m[3] - 1 } : null;
 }
 
+/** Scrolling a view down slides the bars away; scrolling back up brings them back. */
+async function hideOnScroll(page) {
+  const scroller = async (by) =>
+    page.evaluate((by) => {
+      const el = [...document.querySelectorAll("*")].find((e) => {
+        const s = getComputedStyle(e);
+        return (s.overflowY === "auto" || s.overflowY === "scroll") && e.scrollHeight - e.clientHeight > 300 && e.getClientRects().length && !e.closest("[data-lap-sheet]");
+      });
+      if (!el) return false;
+      el.scrollBy({ top: by });
+      return true;
+    }, by);
+  const header = async () => Math.round((await page.locator("[data-phone-shell='race-header']").first().boundingBox())?.y ?? 999);
+  const before = await header();
+  if (!(await scroller(200))) return { error: "nothing to scroll" };
+  await page.waitForTimeout(150);
+  await scroller(200);
+  await page.waitForTimeout(400);
+  const down = await header();
+  await scroller(-60);
+  await page.waitForTimeout(400);
+  const up = await header();
+  return { before, down, up };
+}
+
 /** Race cards: the first card drawn, its Share button on screen and live, and a swipe to the next card. */
 async function raceCards(page) {
   await page.locator("[data-race-card] img").first().waitFor({ timeout: 15_000 });
@@ -275,6 +301,7 @@ async function main() {
         if (pg.chart) await page.locator("canvas:visible").first().waitFor({ timeout: 15_000 }).catch(() => {});
         await page.waitForTimeout(1200);
         const m = await page.evaluate(measure);
+        if (pg.name === "race:strategy" || pg.name === "race:gaps") m.hide = await hideOnScroll(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "race:cards") m.cards = await raceCards(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
         if (pg.name === "dashboard") m.swipe = await swipeCars(page).catch((e) => String(e.message).slice(0, 120));
         if (pg.chart) m.g = await gestures(page).catch((e) => ({ error: String(e.message).slice(0, 120) }));
