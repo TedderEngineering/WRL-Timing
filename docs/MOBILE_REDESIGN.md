@@ -120,3 +120,17 @@ privacy, Tedder Engineering) live in Me.
 
 The phone check's stand-in API now follows two cars and lists thirty race weekends. On a 390 px
 phone, Events goes from 6,215 px to one screen.
+
+## Race cards view
+
+On a phone the race row has **Race cards** right after Story (`features/share/RaceCardsView.tsx`).
+
+- **What it shows:** the car's race card, then one card per driver (from the car-card endpoint's list,
+  else the timing's), drawn as the images they are. Choose one with the chips, or swipe the cards
+  sideways.
+- **Share:** under each card, one 52 px **Share** button opens the phone's share sheet with the image
+  and a tagged link to the race (Messages, WhatsApp, Instagram, Facebook, X, email, AirDrop…).
+  Copy image, Save and Copy link sit beside it.
+- **From the lap details:** "Share race cards", and each driver's **Share** button, open this view on
+  that card through `RaceCardsContext`. On laptops and RaceTrace Live the old share links stay.
+- **Sideways:** the card sits on the left and the buttons on the right.

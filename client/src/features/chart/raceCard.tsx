@@ -10,6 +10,7 @@
  *
  * Facts only, as on the page; nothing about how other cars did beyond the trace itself.
  */
+import { useOpenRaceCards } from "../share/raceCardsContext";
 import { createContext, useContext } from "react";
 import type { AnnotationData, RaceChartData } from "@shared/types";
 import { drawText, makeShareCard, roundRect, type Box, type SiteStyle } from "@/features/share";
@@ -119,8 +120,26 @@ export function makeRaceCarCard(data: RaceChartData, annotations: AnnotationData
  */
 export function ShareCarImageButton({ data, annotations, carNum }: { data: RaceChartData; annotations: AnnotationData | null; carNum: number }) {
   const meta = useContext(RaceMetaContext);
+  const openCards = useOpenRaceCards();
   const car = data.cars[String(carNum)];
   if (!meta || !car) return null;
+  // Phones: the Race cards view, where the car's and its drivers' cards are shown and shared.
+  if (openCards) {
+    return (
+      <button
+        type="button"
+        onClick={() => openCards()}
+        data-share-open="car"
+        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border-2 text-[15px] font-bold"
+        style={{ borderColor: "#F48C34", color: "#F48C34", background: "rgba(244,140,52,0.08)" }}
+      >
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+        </svg>
+        Share race cards
+      </button>
+    );
+  }
   return (
     <ShareRaceCarCardButton
       raceId={meta.id}

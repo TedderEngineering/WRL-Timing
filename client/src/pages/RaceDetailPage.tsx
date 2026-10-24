@@ -22,6 +22,8 @@ import { Sheet } from "../components/Sheet";
 import { PhoneViewTabs } from "../components/PhoneViewTabs";
 import { ChartGestureSheet } from "../features/chart/ChartGestureHelp";
 import { PhoneAnalysisTab } from "../features/chart/PhoneAnalysisTab";
+import { RaceCardsView } from "../features/share/RaceCardsView";
+import { RaceCardsContext } from "../features/share/raceCardsContext";
 import { useIsCompact, useIsLandscapePhone } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
@@ -64,9 +66,9 @@ export function RaceDetailPage() {
   const [hasStories, setHasStories] = useState<boolean | null>(null);
   // `?tab=` opens a tab directly (dashboard links: tab=pitanalysis); otherwise the user's default tab.
   // Gaps and Head-to-head are views of their own on a phone only (PhoneAnalysisTab).
-  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers" | "gaps" | "h2h" | "cycle">(() => {
+  const [activeTab, setActiveTab] = useState<"position" | "story" | "laptimes" | "strategy" | "pitanalysis" | "drivers" | "gaps" | "h2h" | "cycle" | "cards">(() => {
     const t = searchParams.get("tab");
-    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers" || t === "gaps" || t === "h2h" || t === "cycle") return t;
+    if (t === "laptimes" || t === "strategy" || t === "pitanalysis" || t === "position" || t === "story" || t === "drivers" || t === "gaps" || t === "h2h" || t === "cycle" || t === "cards") return t;
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
@@ -79,9 +81,11 @@ export function RaceDetailPage() {
   const [raceMenuOpen, setRaceMenuOpen] = useState(false);
   const [gesturesOpen, setGesturesOpen] = useState(false);
   const [h2hRival, setH2hRival] = useState<number | undefined>(undefined);
+  // Race cards: the card to open on (a driver's Share button in the lap details).
+  const [cardStart, setCardStart] = useState<string | null>(null);
   // Wider than a phone, Gaps and Head-to-head open beside the chart instead.
   useEffect(() => {
-    if (!compact && (activeTab === "gaps" || activeTab === "h2h" || activeTab === "cycle")) setActiveTab("position");
+    if (!compact && (activeTab === "gaps" || activeTab === "h2h" || activeTab === "cycle" || activeTab === "cards")) setActiveTab("position");
   }, [compact, activeTab]);
   // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
   const tabChosen = useRef(!!searchParams.get("tab"));
@@ -422,6 +426,8 @@ export function RaceDetailPage() {
   const tabs = [
     { id: "position" as const, label: "Position Trace", locked: false },
     ...(hasStories ? [{ id: "story" as const, label: "Story", locked: false }] : []),
+    // Phones: the car's and its drivers' share cards, early in the row (mobile redesign).
+    ...(compact ? [{ id: "cards" as const, label: "Race cards", locked: false }] : []),
     { id: "pitanalysis" as const, label: "Pit Stops", locked: !isTeam },
     ...(compact ? [{ id: "cycle" as const, label: "Pit cycle", locked: !isTeam }] : []),
     { id: "laptimes" as const, label: "Lap Times", locked: !isTeam },
@@ -459,6 +465,12 @@ export function RaceDetailPage() {
   const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps", drivers: "Drivers" };
   const phoneTabs = tabs.map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label }));
 
+  /** A Share button in the lap details: the Race cards view, on that driver's card. */
+  const openRaceCards = (driver?: string) => {
+    setCardStart(driver ?? null);
+    selectTab("cards");
+  };
+
   /** Back to where the person came from in RaceTrace, or to the event list on a fresh visit. */
   const goBack = () => {
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
@@ -474,7 +486,7 @@ export function RaceDetailPage() {
       <ShareRaceButton raceId={id!} raceName={raceMeta.name} className={actionClass} style={actionStyle} />
       {/* The open tab as a PDF; a Team tab only for those who can open it. */}
       {/* Gaps and Head-to-head (phone views) have no PDF of their own. */}
-      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && activeTab !== "gaps" && activeTab !== "h2h" && activeTab !== "cycle" && (
+      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && activeTab !== "gaps" && activeTab !== "h2h" && activeTab !== "cycle" && activeTab !== "cards" && (
         <DownloadPdfButton
           tab={activeTab}
           input={{
@@ -518,6 +530,7 @@ export function RaceDetailPage() {
   return withSidebar(
     // The race's name, track and date for share images drawn from inside the chart panels.
     <RaceMetaContext.Provider value={{ id: id!, name: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date) }}>
+    <RaceCardsContext.Provider value={compact ? openRaceCards : null}>
     {/* Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
         parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar. */}
     <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
@@ -759,6 +772,25 @@ export function RaceDetailPage() {
         </div>
       )}
 
+      {compact && activeTab === "cards" && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <RaceCardsView
+            raceId={id!}
+            raceName={raceMeta.name}
+            data={data}
+            annotations={annotations}
+            focusNum={focusNum}
+            setFocusNum={handleFocusChange}
+            classView={classView}
+            compSet={compSet}
+            view={traceView}
+            phoneSlot={landscape ? carSlot : null}
+            landscape={landscape}
+            startAt={cardStart}
+          />
+        </div>
+      )}
+
       {compact && (activeTab === "gaps" || activeTab === "h2h" || activeTab === "cycle") && (
         <div className="flex min-h-0 flex-1 flex-col">
           <PhoneAnalysisTab
@@ -797,6 +829,7 @@ export function RaceDetailPage() {
       )}
 
     </div>
+    </RaceCardsContext.Provider>
     </RaceMetaContext.Provider>
   );
 }
