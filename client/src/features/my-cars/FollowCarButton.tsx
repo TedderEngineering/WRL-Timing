@@ -18,11 +18,14 @@ export function FollowCarButton({
   carNumber,
   onFollowed,
   style,
+  className,
 }: {
   raceId: string;
   carNumber: string;
   onFollowed?: (carNumbers: string[]) => void;
   style?: React.CSSProperties;
+  /** Replaces the button's own classes, and lets it fill its row (the phone race menu). */
+  className?: string;
 }) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -96,14 +99,14 @@ export function FollowCarButton({
   };
 
   return (
-    <span className="inline-flex flex-col items-start">
+    <span className={className ? "flex w-full flex-col items-stretch" : "inline-flex flex-col items-start"}>
       <button
         type="button"
         onClick={toggle}
         disabled={busy}
         aria-pressed={!!mine}
         title={mine ? "Stop following this car (Settings → My cars lists them all)" : "Follow this car in every race it runs"}
-        className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm disabled:opacity-60"
+        className={className ?? "flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm disabled:opacity-60"}
         style={style}
       >
         <span aria-hidden style={{ color: mine ? "#4ade80" : undefined }}>{mine ? "✓" : "+"}</span>

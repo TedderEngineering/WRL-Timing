@@ -1,6 +1,6 @@
 import { carKey } from "../features/chart/car-number";
 import { useChartDefaults } from "../features/chart/chart-defaults";
-import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate, Navigate, Link } from "react-router-dom";
 import { FollowCarButton } from "../features/my-cars/FollowCarButton";
 import { ShareRaceButton } from "../features/share/ShareRaceButton";
 import { RaceMetaContext } from "../features/chart/raceCard";
@@ -18,8 +18,29 @@ import { StoryTab } from "../features/chart/StoryTab";
 import { api, fetchEvents, fetchEvent } from "../lib/api";
 import { hasTeamAccess } from "../lib/utils";
 import EventSidebar from "../components/EventSidebar";
+import { Sheet } from "../components/Sheet";
+import { useIsCompact } from "../lib/breakpoint";
 import { useState, useEffect, useRef, useCallback } from "react";
 // EmptyChartState no longer needed — auto-loads first event on mount
+
+/** A full-width, 48 px row in the phone race menu and More sheet. */
+const phoneRow = "flex min-h-[48px] w-full items-center gap-2 rounded-lg border px-4 text-[15px]";
+
+function LockIcon() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-label="Team plan">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+    </svg>
+  );
+}
+
+function TeamTag() {
+  return (
+    <span className="rounded px-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ background: "#1e1e38", color: "#9a9ab4" }}>
+      Team
+    </span>
+  );
+}
 
 /** Redirect /races/:id → /chart?race=:id for bookmarked URLs */
 export function RaceDetailRedirect() {
@@ -61,6 +82,13 @@ export function RaceDetailPage() {
     return chartDefaults.tab;
   });
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
+  // Phones (mobile redesign, PR 2): one-line header with a race menu, and a More sheet.
+  const compact = useIsCompact();
+  const navigate = useNavigate();
+  const [raceMenuOpen, setRaceMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  // A view the person asked for (?tab= in the link, or a tap) is never replaced by a default.
+  const tabChosen = useRef(!!searchParams.get("tab"));
 
   // ── Auto-load most recent event + first race when no URL params ──
   useEffect(() => {
@@ -192,6 +220,14 @@ export function RaceDetailPage() {
   useEffect(() => {
     if (hasStories === false && activeTab === "story") setActiveTab("position");
   }, [hasStories, activeTab]);
+
+  // Phones open on the race's story when it has one (plan decision M2): it answers "how did my
+  // car do, and why" in words. A view chosen in Settings → Chart defaults, a ?tab= link or a tap wins.
+  useEffect(() => {
+    if (!compact || tabChosen.current || hasStories !== true || chartDefaults.tab !== "position") return;
+    tabChosen.current = true;
+    setActiveTab("story");
+  }, [compact, hasStories, chartDefaults.tab]);
 
   // Open on the user's own car rather than the winner, once per race (the user's later picks win),
   // unless their chart defaults say to always open on the winner.
@@ -396,6 +432,89 @@ export function RaceDetailPage() {
   ];
   const RT = { line: "#1e1e38", border: "#3a3a5c", card: "#12122a", text: "#e0e0e8", soft: "#cbd5e1", muted: "#9a9ab4", accent: "#F48C34" };
 
+  type TabId = (typeof tabs)[number]["id"];
+  /** Opens a view, or says it is part of the Team plan. */
+  const selectTab = (tabId: TabId) => {
+    if (tabs.find((t) => t.id === tabId)?.locked) {
+      setLockedMsg(tabId);
+      return;
+    }
+    tabChosen.current = true;
+    setLockedMsg(null);
+    setActiveTab(tabId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tabId === "position") next.delete("tab");
+      else next.set("tab", tabId);
+      return next;
+    }, { replace: true });
+  };
+
+  // Phone views (mobile redesign, PR 2): Story · Trace · Pits · Laps · More. Strategy and the
+  // Driver Report open from More, so no view is ever hidden off the edge of the screen.
+  const PHONE_LABEL: Partial<Record<TabId, string>> = { position: "Trace", pitanalysis: "Pits", laptimes: "Laps" };
+  const MORE_IDS: TabId[] = ["strategy", "drivers"];
+  const moreTabs = tabs.filter((t) => MORE_IDS.includes(t.id));
+  const moreActive = MORE_IDS.includes(activeTab);
+  const phoneTabs: { id: TabId | "more"; label: string; locked: boolean }[] = [
+    ...tabs.filter((t) => !MORE_IDS.includes(t.id)).map((t) => ({ ...t, label: PHONE_LABEL[t.id] ?? t.label })),
+    { id: "more", label: moreActive ? (moreTabs.find((t) => t.id === activeTab)?.label ?? "More") : "More", locked: false },
+  ];
+
+  /** Back to where the person came from in RaceTrace, or to the event list on a fresh visit. */
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate("/races");
+  };
+
+  // Share, PDF, Follow and Star: a row in the laptop header, the race menu's rows on a phone.
+  const actionClass = compact ? phoneRow : "flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm";
+  const actionStyle = { borderColor: RT.border, background: RT.card, color: RT.text };
+  const raceActions = (
+    <>
+      <ShareRaceButton raceId={id!} raceName={raceMeta.name} className={actionClass} style={actionStyle} />
+      {/* The open tab as a PDF; a Team tab only for those who can open it. */}
+      {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && (
+        <DownloadPdfButton
+          tab={activeTab}
+          input={{
+            raceId: id!,
+            data,
+            annotations,
+            focusNum,
+            meta: { raceName: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date), preparedFor: user?.email ?? null },
+          }}
+          choices={
+            activeTab === "story" && focusNum > 0 && data.cars[String(focusNum)]
+              ? [
+                  { scope: "race", label: "Whole race" },
+                  { scope: "focus", label: `#${data.cars[String(focusNum)].label ?? focusNum} only` },
+                ]
+              : undefined
+          }
+          className={actionClass}
+          style={actionStyle}
+        />
+      )}
+      {focusNum > 0 && data.cars[String(focusNum)] && (
+        <FollowCarButton
+          raceId={id!}
+          carNumber={data.cars[String(focusNum)].label ?? String(data.cars[String(focusNum)].num ?? focusNum)}
+          onFollowed={focusFollowed}
+          className={compact ? `${phoneRow} disabled:opacity-60` : undefined}
+          style={actionStyle}
+        />
+      )}
+      {isAuthenticated && (
+        <button type="button" onClick={handleFavorite} aria-pressed={isFavorited} className={actionClass} style={actionStyle}>
+          <span style={{ color: isFavorited ? "#fab219" : RT.muted }}>{isFavorited ? "★" : "☆"}</span>
+          {isFavorited ? "Starred" : "Star race"}
+        </button>
+      )}
+    </>
+  );
+
   // ── Render ──────────────────────────────────────────────────────
   return withSidebar(
     // The race's name, track and date for share images drawn from inside the chart panels.
@@ -403,140 +522,190 @@ export function RaceDetailPage() {
     {/* Fills the window: on a phone the page scrolls as one; from md up nothing scrolls but the
         parts that hold lists (side panel, Pit Stops, Strategy), each without a visible scrollbar. */}
     <div className="flex h-full flex-col overflow-y-auto custom-scroll md:overflow-hidden" style={{ background: "#0b0b18", color: RT.text }}>
-      {/* Header (mockup F1): breadcrumb, race, status, star */}
-      <section className="flex shrink-0 flex-col gap-1.5 px-3 pt-2.5 sm:px-6 sm:pt-3">
-        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: RT.muted }}>
-          {/* Phone: the event list opens as a drawer */}
-          <button
-            type="button"
-            onClick={() => setMobileDrawerOpen(true)}
-            className="-ml-1 flex min-h-[32px] items-center gap-1 rounded px-1 md:hidden"
-            style={{ color: RT.soft }}
-            aria-label="Open the event list"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Races
-          </button>
-          <span aria-hidden className="md:hidden">·</span>
-          <Link to="/races" className="hover:underline" style={{ color: RT.muted }}>
-            Events
-          </Link>
-          <span aria-hidden>/</span>
-          <span className="rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
-            {raceMeta.series.replace(/_/g, " ")}
-          </span>
-          <span>{raceMeta.season}</span>
-        </nav>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="m-0 text-xl font-semibold sm:text-2xl">{raceMeta.name}</h1>
-          <span className="text-sm" style={{ color: RT.soft }}>
-            {raceMeta.track} · {dateStr}
-          </span>
-          {resultsStatus && (
-            <span
-              className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
-              style={resultsStatus === "provisional" ? { borderColor: "#fab219", color: "#fab219" } : { borderColor: "#4ade80", color: "#4ade80" }}
-              title={resultsStatus === "provisional" ? "Finishing positions may still change." : "Official results."}
-            >
-              {resultsStatus === "provisional" ? "Provisional" : "Official"}
-            </span>
-          )}
-          <span className="flex-1" />
-          <ShareRaceButton
-            raceId={id!}
-            raceName={raceMeta.name}
-            className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
-            style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
-          />
-          {/* The open tab as a PDF; a Team tab only for those who can open it. */}
-          {!tabs.find((t) => t.id === activeTab)?.locked && (activeTab !== "story" || hasStories) && (
-            <DownloadPdfButton
-              tab={activeTab}
-              input={{
-                raceId: id!,
-                data,
-                annotations,
-                focusNum,
-                meta: { raceName: raceMeta.name, track: raceMeta.track, date: String(raceMeta.date), preparedFor: user?.email ?? null },
-              }}
-              choices={
-                activeTab === "story" && focusNum > 0 && data.cars[String(focusNum)]
-                  ? [
-                      { scope: "race", label: "Whole race" },
-                      { scope: "focus", label: `#${data.cars[String(focusNum)].label ?? focusNum} only` },
-                    ]
-                  : undefined
-              }
-              className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
-              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
-            />
-          )}
-          {focusNum > 0 && data.cars[String(focusNum)] && (
-            <FollowCarButton
-              raceId={id!}
-              carNumber={data.cars[String(focusNum)].label ?? String(data.cars[String(focusNum)].num ?? focusNum)}
-              onFollowed={focusFollowed}
-              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
-            />
-          )}
-          {isAuthenticated && (
+      {compact ? (
+        <>
+          {/* Phone header (mobile redesign, PR 2): one line. Back, the race, its results status,
+              and the race menu (Share, PDF, Follow, Star, this weekend's other races). */}
+          <section data-phone-shell="race-header" className="flex min-h-[48px] shrink-0 items-center gap-1 pl-1 pr-1" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+            <button type="button" onClick={goBack} aria-label="Back" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ color: RT.text }}>
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="m-0 min-w-0 flex-1 truncate text-base font-semibold">{raceMeta.name}</h1>
+            {resultsStatus && (
+              <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: resultsStatus === "provisional" ? "#fab219" : "#4ade80" }}>
+                <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: "currentColor" }} />
+                {resultsStatus === "provisional" ? "Provisional" : "Official"}
+              </span>
+            )}
             <button
               type="button"
-              onClick={handleFavorite}
-              aria-pressed={isFavorited}
-              className="flex min-h-[36px] items-center gap-1.5 rounded-md border px-3 text-sm"
-              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
+              onClick={() => setRaceMenuOpen(true)}
+              aria-label="Race menu: share, PDF, follow, star"
+              aria-haspopup="dialog"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+              style={{ color: RT.text }}
             >
-              <span style={{ color: isFavorited ? "#fab219" : RT.muted }}>{isFavorited ? "★" : "☆"}</span>
-              {isFavorited ? "Starred" : "Star race"}
+              <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <circle cx="5" cy="12" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="19" cy="12" r="1.8" />
+              </svg>
             </button>
-          )}
-        </div>
-      </section>
+          </section>
 
-      {/* Race views */}
-      <nav aria-label="Race views" className="no-scrollbar mt-0.5 flex shrink-0 gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
+          {/* Kept mounted while closed: the Follow button opens the race on the user's own car. */}
+          <Sheet open={raceMenuOpen} onClose={() => setRaceMenuOpen(false)} title={raceMeta.name} keepMounted>
+            <p className="m-0 text-sm" style={{ color: RT.soft }}>
+              {raceMeta.track} · {dateStr}
+            </p>
+            <p className="m-0 mt-0.5 text-sm" style={{ color: RT.muted }}>
+              {raceMeta.series.replace(/_/g, " ")} {raceMeta.season}
+              {resultsStatus ? ` · ${resultsStatus === "provisional" ? "Provisional results" : "Official results"}` : ""}
+            </p>
+            <div className="mt-4 flex flex-col gap-2">{raceActions}</div>
             <button
-              key={tab.id}
               type="button"
-              aria-current={isActive ? "page" : undefined}
               onClick={() => {
-                if (tab.locked) {
-                  setLockedMsg(tab.id);
-                  return;
-                }
-                setLockedMsg(null);
-                setActiveTab(tab.id);
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  if (tab.id === "position") next.delete("tab");
-                  else next.set("tab", tab.id);
-                  return next;
-                }, { replace: true });
+                setRaceMenuOpen(false);
+                setMobileDrawerOpen(true);
               }}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm"
-              style={{
-                color: isActive ? RT.text : RT.muted,
-                fontWeight: isActive ? 600 : 400,
-                borderBottom: `2px solid ${isActive ? RT.accent : "transparent"}`,
-                marginBottom: -1,
-              }}
+              className={phoneRow}
+              style={{ borderColor: RT.border, background: RT.card, color: RT.text }}
             >
-              {tab.label}
-              {tab.locked && (
-                <span className="rounded px-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: RT.line, color: RT.muted }}>
-                  Team
-                </span>
-              )}
+              Other races this weekend
             </button>
-          );
-        })}
-      </nav>
+            <Link to="/races" className={phoneRow} style={{ borderColor: RT.border, background: RT.card, color: RT.text }}>
+              All events
+            </Link>
+          </Sheet>
+
+          {/* Five slots, none hidden: Story · Trace · Pits · Laps · More (Strategy, Driver Report) */}
+          <nav aria-label="Race views" data-phone-shell="race-views" className="flex shrink-0 border-b" style={{ borderColor: RT.line }}>
+            {phoneTabs.map((tab) => {
+              const isActive = tab.id === "more" ? moreActive : activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={isActive ? "page" : undefined}
+                  aria-haspopup={tab.id === "more" ? "dialog" : undefined}
+                  onClick={() => (tab.id === "more" ? setMoreOpen(true) : selectTab(tab.id))}
+                  className="flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1 px-1 text-sm"
+                  style={{
+                    color: isActive ? RT.text : RT.muted,
+                    fontWeight: isActive ? 600 : 400,
+                    borderBottom: `2px solid ${isActive ? RT.accent : "transparent"}`,
+                    marginBottom: -1,
+                  }}
+                >
+                  <span className="truncate">{tab.label}</span>
+                  {tab.locked && <LockIcon />}
+                </button>
+              );
+            })}
+          </nav>
+
+          <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title="More views">
+            <div className="flex flex-col gap-2">
+              {moreTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={activeTab === tab.id ? "page" : undefined}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    selectTab(tab.id);
+                  }}
+                  className={phoneRow}
+                  style={{ borderColor: activeTab === tab.id ? RT.accent : RT.border, background: RT.card, color: RT.text }}
+                >
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {tab.locked && <TeamTag />}
+                </button>
+              ))}
+            </div>
+          </Sheet>
+        </>
+      ) : (
+        <>
+        {/* Header (mockup F1): breadcrumb, race, status, star */}
+        <section className="flex shrink-0 flex-col gap-1.5 px-3 pt-2.5 sm:px-6 sm:pt-3">
+          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[13px]" style={{ color: RT.muted }}>
+            {/* Phone: the event list opens as a drawer */}
+            <button
+              type="button"
+              onClick={() => setMobileDrawerOpen(true)}
+              className="-ml-1 flex min-h-[32px] items-center gap-1 rounded px-1 md:hidden"
+              style={{ color: RT.soft }}
+              aria-label="Open the event list"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Races
+            </button>
+            <span aria-hidden className="md:hidden">·</span>
+            <Link to="/races" className="hover:underline" style={{ color: RT.muted }}>
+              Events
+            </Link>
+            <span aria-hidden>/</span>
+            <span className="rounded border px-1.5 text-[11px] font-semibold tracking-[0.04em]" style={{ borderColor: RT.border, color: RT.text }}>
+              {raceMeta.series.replace(/_/g, " ")}
+            </span>
+            <span>{raceMeta.season}</span>
+          </nav>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="m-0 text-xl font-semibold sm:text-2xl">{raceMeta.name}</h1>
+            <span className="text-sm" style={{ color: RT.soft }}>
+              {raceMeta.track} · {dateStr}
+            </span>
+            {resultsStatus && (
+              <span
+                className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                style={resultsStatus === "provisional" ? { borderColor: "#fab219", color: "#fab219" } : { borderColor: "#4ade80", color: "#4ade80" }}
+                title={resultsStatus === "provisional" ? "Finishing positions may still change." : "Official results."}
+              >
+                {resultsStatus === "provisional" ? "Provisional" : "Official"}
+              </span>
+            )}
+            <span className="flex-1" />
+            {raceActions}
+          </div>
+        </section>
+
+        {/* Race views */}
+        <nav aria-label="Race views" className="no-scrollbar mt-0.5 flex shrink-0 gap-1 overflow-x-auto border-b px-2 sm:px-6" style={{ borderColor: RT.line }}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => selectTab(tab.id)}
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm"
+                style={{
+                  color: isActive ? RT.text : RT.muted,
+                  fontWeight: isActive ? 600 : 400,
+                  borderBottom: `2px solid ${isActive ? RT.accent : "transparent"}`,
+                  marginBottom: -1,
+                }}
+              >
+                {tab.label}
+                {tab.locked && (
+                  <span className="rounded px-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: RT.line, color: RT.muted }}>
+                    Team
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        </>
+      )}
 
       {pitFacts && user?.role === "ADMIN" && searchParams.get("facts") && (
         <div className="mx-3 mt-3 inline-flex shrink-0 items-center gap-2 self-start rounded-lg border px-3 py-2 text-sm sm:mx-6" style={{ background: RT.card, borderColor: RT.line, color: RT.muted }}>

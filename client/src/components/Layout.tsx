@@ -13,6 +13,8 @@ import { ShareRaceTraceButton } from "../features/share/ShareRaceTrace";
 import { noteShareArrival } from "../features/share/shareLink";
 import { noteAlertArrival } from "../features/my-cars/alerts";
 import { FullscreenButton, useFullscreen } from "../lib/fullscreen";
+import { useIsCompact } from "../lib/breakpoint";
+import { AppBar } from "./AppBar";
 
 /** RaceTrace's links for the shared profile menu. */
 function RaceTraceUserMenu() {
@@ -42,7 +44,8 @@ function MobileMenu() {
   const navigate = useNavigate();
 
   return (
-    <div className="lg:hidden">
+    // From 640 px to 1024 px; phones use the bottom bar's Me place instead.
+    <div className="hidden sm:block lg:hidden">
       <button
         onClick={() => setOpen(!open)}
         className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -149,13 +152,19 @@ export function Layout() {
   const appPage = pathname === "/chart" || pathname.startsWith("/live/") || pathname.startsWith("/qualifying/");
   // Full screen: the browser's bars and the taskbar hidden, and this top bar and the live banner too.
   const full = useFullscreen();
+  // Phones (mobile redesign, PR 2): a race screen fills the screen with its own one-line header
+  // and back arrow, so the site bar and live banner step aside; every other page gets the
+  // bottom bar (AppBar) in place of the hamburger menu.
+  const compact = useIsCompact();
+  const raceScreen = compact && pathname === "/chart";
+  const showBar = compact && !raceScreen && !full;
 
   return (
     <SupportProvider>
-    <div className={appPage ? "h-dvh flex flex-col overflow-hidden pb-safe" : "min-h-screen flex flex-col"}>
+    <div className={appPage ? `h-dvh flex flex-col overflow-hidden${showBar ? "" : " pb-safe"}` : "min-h-screen flex flex-col"}>
       {/* Navigation */}
       {full && <FullscreenButton on floating />}
-      <header className={`${full ? "hidden " : ""}sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800`}>
+      <header className={`${full || raceScreen ? "hidden " : ""}sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800`}>
         <nav className="container-page flex items-center justify-between h-16 gap-2 sm:gap-3" aria-label="Main">
           {/* The same brand block as Finding Grip's header (GripLayout.tsx): Tedder logo | app mark + name.
               Phones get a smaller Tedder logo and tighter spacing so the name and coffee button fit. */}
@@ -192,8 +201,8 @@ export function Layout() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Below 1024px, as on Finding Grip: the compact header with the coffee entry as an icon. */}
-            <FullscreenButton on={full} />
-            <CoffeeIconButton className="lg:hidden" />
+            <FullscreenButton on={full} className="hidden sm:flex" />
+            <CoffeeIconButton className="hidden sm:grid lg:hidden" />
             {/* Desktop auth */}
             <div className="hidden lg:flex items-center gap-3">
               <SupportLink />
@@ -221,7 +230,7 @@ export function Layout() {
           </div>
         </nav>
       </header>
-      {!full && <LiveBanner />}
+      {!full && !raceScreen && <LiveBanner />}
 
       {/* Page content */}
       <main className={appPage ? "flex-1 min-h-0" : "flex-1"}>
@@ -247,6 +256,8 @@ export function Layout() {
           </div>
         </div>
       </footer>}
+
+      {showBar && <AppBar />}
     </div>
     </SupportProvider>
   );
