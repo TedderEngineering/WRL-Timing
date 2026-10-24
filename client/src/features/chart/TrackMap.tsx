@@ -168,6 +168,22 @@ export function TrackMap({
   const hits = useRef<{ key: number; x: number; y: number; r: number }[]>([]);
   /** Each car's recent green lap time (live-battles.ts recentPace, as the Trend column), for who is closing. */
   const greenPace = useMemo(() => new Map(Object.keys(data.cars).map((k) => [Number(k), recentPace(data, Number(k)).now])), [data]);
+  /** The cars-closing panel on or off (kept on this device); its ticks on the track go with the key's "closing" chip. */
+  const [closingOn, setClosingOn] = useState(() => {
+    try {
+      return localStorage.getItem(CLOSING_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const pickClosingOn = (on: boolean) => {
+    setClosingOn(on);
+    try {
+      localStorage.setItem(CLOSING_KEY, on ? "on" : "off");
+    } catch {
+      /* private window: for this visit only */
+    }
+  };
   /** Who is closing on the focus car (worked out each second), for the markers drawn on the track. */
   const closingRef = useRef<Closing[]>([]);
   // The map turned to suit the viewer (map-rotate.ts): dragged with the mouse, or 45° at a time
@@ -704,7 +720,7 @@ export function TrackMap({
   // The cars that will catch the focus car within its next lap (closing.ts): listed on the map,
   // and where each gets there marked on the track.
   const closing = track ? closingOnFocus({ places, focusKey: focusNum, len: track.len, pace: (k) => greenPace.get(k) ?? null, caution: isCaution(flag) }) : [];
-  closingRef.current = hidden.has("closing") ? [] : closing;
+  closingRef.current = closingOn && !hidden.has("closing") ? closing : [];
   const closingShown = !!track && !isCaution(flag) && places.some((p) => p.key === focusNum && !p.inPit) && greenPace.get(focusNum) != null;
 
   return (
@@ -728,7 +744,28 @@ export function TrackMap({
           />
           {track && <TurnButtons angle={angle} readout={readout} onTurn={turnTo} />}
           {track && <FlagBadge flag={flag} />}
-          {closingShown && !hidden.has("closing") && <ClosingPanel data={data} focusNum={focusNum} closing={closing} />}
+          {closingShown &&
+            (closingOn ? (
+              <ClosingPanel
+                data={data}
+                focusNum={focusNum}
+                closing={closing}
+                onMap={!hidden.has("closing")}
+                onToggleMap={() => toggleLayer("closing")}
+                onClose={() => pickClosingOn(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => pickClosingOn(true)}
+                className="absolute bottom-2 left-2 flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider backdrop-blur-sm hover:bg-white/10"
+                style={{ borderColor: "#3a3a5c", background: OVER_BG, color: C.muted }}
+                title="Show the cars closing on the focus car within its lap"
+                aria-label="Show the cars closing on the focus car"
+              >
+                Closing ▸
+              </button>
+            ))}
           {!track && (
             <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm" style={{ color: C.muted }}>
               {trackMissing ? "The track map appears once the timing has learned the circuit from a few clean laps." : "Loading the track map…"}
@@ -962,7 +999,7 @@ function MapKey({
         "closing",
         <span className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "#fab219" }} />,
         "closing on focus car",
-        "The cars that will catch the focus car within its next lap, listed on the map, and where each gets to it marked on the track."
+        "Where each car closing on the focus car will catch it within its next lap, marked on the track (the list is on the map, bottom left)."
       )}
       {caution &&
         chip(
@@ -1002,7 +1039,24 @@ function soonText(s: number): string {
  * soonest first, each with how long until it gets there; its place on the track is marked on the
  * map. One quiet line when no one is closing.
  */
-function ClosingPanel({ data, focusNum, closing }: { data: RaceChartData; focusNum: number; closing: Closing[] }) {
+function ClosingPanel({
+  data,
+  focusNum,
+  closing,
+  onMap,
+  onToggleMap,
+  onClose,
+}: {
+  data: RaceChartData;
+  focusNum: number;
+  closing: Closing[];
+  /** Where each car gets there is marked on the track. */
+  onMap: boolean;
+  onToggleMap: () => void;
+  /** Fold the panel away (a small "Closing" button brings it back). */
+  onClose: () => void;
+}) {
+  const iconBtn = "flex h-5 w-5 items-center justify-center rounded hover:bg-white/10";
   const shown = closing.slice(0, 4);
   const num = carNo(data, focusNum);
   const tip =
@@ -1012,6 +1066,29 @@ function ClosingPanel({ data, focusNum, closing }: { data: RaceChartData; focusN
       <div className="flex items-center gap-1 px-2 pt-1 font-semibold uppercase tracking-wider" style={{ color: closing.length ? "#fab219" : C.muted, paddingBottom: closing.length ? 2 : 4 }}>
         {closing.length ? `Closing on #${num}` : "No one closing"}
         <InfoTip label="Closing on the focus car" text={tip} />
+        <span className="ml-auto flex items-center gap-0.5 pl-2">
+          <button
+            type="button"
+            onClick={onToggleMap}
+            aria-pressed={onMap}
+            className={iconBtn}
+            style={{ color: onMap ? "#fab219" : C.muted }}
+            title={onMap ? "Hide where they catch it on the track" : "Mark where they catch it on the track"}
+            aria-label={onMap ? "Hide the marks on the track" : "Mark them on the track"}
+          >
+            {/* A tick across a stretch of track. */}
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" aria-hidden>
+              <path d="M2 11c3-5 9-5 12 0" strokeWidth={2.5} opacity={0.45} />
+              <path d="M8 3v9" strokeWidth={2.2} />
+              {!onMap && <path d="M2 2l12 12" strokeWidth={1.6} />}
+            </svg>
+          </button>
+          <button type="button" onClick={onClose} className={iconBtn} style={{ color: C.muted }} title="Turn off the cars closing" aria-label="Turn off the cars closing">
+            <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden>
+              <path d="M2 2l8 8M10 2l-8 8" />
+            </svg>
+          </button>
+        </span>
       </div>
       {shown.length > 0 && (
         <ul className="m-0 list-none px-1 pb-1">
@@ -1102,6 +1179,9 @@ function TurnButtons({ angle, readout, onTurn }: { angle: number; readout: React
     </div>
   );
 }
+
+/** The cars-closing panel on the map, on or off, kept on this device. */
+const CLOSING_KEY = "rt.live.closingPanel";
 
 /** Where the Live Crossing Order is measured from, kept on this device. */
 const CROSS_FROM_KEY = "rt.live.crossingFrom";
